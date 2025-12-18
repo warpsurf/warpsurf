@@ -1,0 +1,83 @@
+## OS / editor / tooling
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+
+## Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+## Env / secrets (never commit)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Common secret material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+*.mobileprovision
+
+## Dependencies
+node_modules/
+**/node_modules/
+
+## Build artifacts / outputs
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+coverage/
+**/coverage/
+.nyc_output/
+
+## Vite / TS / bundlers caches
+.vite/
+**/.vite/
+*.tsbuildinfo
+**/*.tsbuildinfo
+.parcel-cache/
+**/.parcel-cache/
+.eslintcache
+**/.eslintcache
+**/node_modules/.cache/
+
+## Turborepo
+.turbo/
+**/.turbo/
+
+## Package manager / misc
+.pnpm-store/
+**/.pnpm-store/
+*.tgz
+
+## Husky (generated helper folder)
+.husky/_/
+
+## Browser extension packaging outputs
+*.crx
+*.xpi
+web-ext-artifacts/
+*.zip
+
+## Local scratch / temp
+*.tmp
+*.temp
+tmp/
+temp/

@@ -1,0 +1,512 @@
+/* Global typography */
+:root {
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --fs-11: 11px;
+  --fs-13: 13px;
+  --fs-15: 15px;
+  --fs-18: 18px;
+  --lh-tight: 1.35;
+  --lh-base: 1.45;
+  --transition-fast: 150ms;
+  --transition-popover: 200ms;
+  --accent: 133, 77, 255; /* default violet */
+  --wallpaper-a1: 0.16;
+  --wallpaper-a2: 0.14;
+}
+
+body, .panel-card, .panel-card * {
+  font-family: var(--font-sans);
+}
+
+button, a {
+  transition: all var(--transition-fast) ease-out;
+}
+
+button:focus-visible, a:focus-visible {
+  outline: 2px solid #8b5cf6; /* violet-500 default ring */
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.high-contrast .liquid-glass,
+.high-contrast .liquid-chip,
+.high-contrast .panel-card,
+.high-contrast .glass-header {
+  background: rgba(255,255,255,0.02) !important;
+  border-color: rgba(0,0,0,0.4) !important;
+  box-shadow: none !important;
+}
+.high-contrast .dark-mode-bg,
+.high-contrast .dark-mode-text,
+.high-contrast .dark-mode-border { filter: none; }
+
+/* Remove unused classes: .App, .App-logo, .App-header */
+
+code {
+  background: rgba(226, 232, 240, 0.6);
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  color: #4c1d95; /* violet-900 */
+}
+
+/* Dark mode support for code */
+@media (prefers-color-scheme: dark) {
+  code {
+    background: rgba(15, 23, 42, 0.6);
+    color: #a78bfa; /* violet-400 */
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3f4f6; /* gray-100 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #a78bfa; /* violet-400 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8b5cf6; /* violet-500 */
+}
+
+/* Dark mode scrollbar */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #7c3aed; /* violet-600 */
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #8b5cf6; /* violet-500 */
+  }
+}
+
+/* Used classes from the component */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.0rem 0.75rem;
+  background-color: transparent;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.25);
+}
+
+/* Dark mode header border */
+@media (prefers-color-scheme: dark) {
+  .header {
+    border-bottom: 1px solid rgba(124, 58, 237, 0.35);
+  }
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+}
+
+.header-icons {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Prevent header action buttons from wrapping and overlapping during resize */
+.header .shrink-0 {
+  flex-shrink: 0;
+}
+
+.header-icon {
+  color: #6b7280; /* gray-500 */
+  cursor: pointer;
+  transition: color 0.2s ease;
+  opacity: 0.9;
+}
+
+.header-icon:hover {
+  color: #111827; /* gray-900 */
+  opacity: 1;
+}
+
+.send-button {
+  color: #8b5cf6; /* violet-500 */
+  cursor: pointer;
+  transition: color 0.2s ease;
+  opacity: 0.9;
+}
+
+.send-button:hover {
+  color: #7c3aed; /* violet-600 */
+  opacity: 1;
+}
+
+.send-button:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Add these styles to your existing CSS */
+.scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+/* Optional: Style the scrollbar for webkit browsers */
+.scrollbar-gutter-stable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-gutter-stable::-webkit-scrollbar-track {
+  background: #f3f4f6;  /* gray-100 */
+}
+
+.scrollbar-gutter-stable::-webkit-scrollbar-thumb {
+  background: #a78bfa;  /* violet-400 */
+  border-radius: 4px;
+}
+
+.scrollbar-gutter-stable::-webkit-scrollbar-thumb:hover {
+  background: #8b5cf6;  /* violet-500 */
+}
+
+/* Dark mode scrollbar for scrollbar-gutter-stable */
+@media (prefers-color-scheme: dark) {
+  .scrollbar-gutter-stable::-webkit-scrollbar-track {
+    background: #1e293b;  /* slate-800 */
+  }
+  
+  .scrollbar-gutter-stable::-webkit-scrollbar-thumb {
+    background: #7c3aed;  /* violet-600 */
+  }
+  
+  .scrollbar-gutter-stable::-webkit-scrollbar-thumb:hover {
+    background: #8b5cf6;  /* violet-500 */
+  }
+
+/* Card aesthetic for container */
+.panel-card { backdrop-filter: blur(6px); }
+
+/* Liquid Glass styles */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .liquid-glass {
+    background: rgba(15, 23, 42, 0.48); /* slightly paler */
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.glass-header {
+  background: linear-gradient(to bottom, rgba(255,255,255,0.24), rgba(255,255,255,0.10));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(0,0,0,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  .glass-header {
+    background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+}
+
+.liquid-chip {
+  background: linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.14));
+  border: 1px solid rgba(0,0,0,0.08);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  .liquid-chip {
+    background: linear-gradient(to bottom, rgba(148, 163, 184, 0.18), rgba(148,163,184,0.10));
+    border-color: rgba(255,255,255,0.10);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+}
+
+.liquid-bubble {
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+}
+}
+
+/* Ensure virtualized list containers can shrink within flex layouts */
+.messages-scroll { min-height: 0; }
+
+/* Dark mode text and background colors */
+@media (prefers-color-scheme: dark) {
+  .dark-mode-text {
+    color: #e2e8f0 !important; /* slate-200 */
+  }
+  
+  .dark-mode-bg {
+    background-color: #1e293b !important; /* slate-800 */
+  }
+  
+  .dark-mode-border {
+    border-color: #475569 !important; /* slate-600 */
+  }
+}
+
+/* Phase icon animations (planner, processing, refiner, workers) */
+@keyframes phase-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.phase-pulse { animation: phase-pulse 1.4s ease-in-out infinite; }
+
+@keyframes phase-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.phase-spin { animation: phase-spin 2.4s linear infinite; }
+
+@keyframes phase-twinkle {
+  0%, 100% { opacity: 0.9; filter: drop-shadow(0 0 0 rgba(255,255,255,0)); transform: translateY(0) scale(1); }
+  50% { opacity: 1; filter: drop-shadow(0 0 2px rgba(255,255,255,0.6)); transform: translateY(-1px) scale(1.05); }
+}
+.phase-twinkle { animation: phase-twinkle 1.6s ease-in-out infinite; }
+
+@keyframes phase-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.phase-bob { animation: phase-bob 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-pulse, .phase-spin, .phase-twinkle, .phase-bob { animation: none !important; }
+}
+
+/* Minimal top-down fish that swim across the panel */
+.fish {
+  position: absolute;
+  pointer-events: none;
+  will-change: left, transform;
+}
+
+.fish .fish-inner {
+  position: relative;
+  width: 28px;
+  height: 14px;
+  animation: fish-bob 3.6s ease-in-out infinite;
+}
+
+.fish-sm .fish-inner { width: 22px; height: 11px; }
+.fish-lg .fish-inner { width: 36px; height: 18px; }
+
+.fish-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--fish-color, #38bdf8);
+  opacity: 0.18;
+}
+
+/* Tail triangles (right/left variants per direction) */
+.fish-tail { position: absolute; top: 50%; transform: translateY(-50%); }
+.fish-md .fish-tail-right { right: -8px; border-left: 8px solid var(--fish-color, #38bdf8); border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+.fish-sm .fish-tail-right { right: -6px; border-left: 6px solid var(--fish-color, #38bdf8); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+.fish-lg .fish-tail-right { right: -9px; border-left: 9px solid var(--fish-color, #38bdf8); border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+
+.fish-md .fish-tail-left { left: -8px; border-right: 8px solid var(--fish-color, #38bdf8); border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+.fish-sm .fish-tail-left { left: -6px; border-right: 6px solid var(--fish-color, #38bdf8); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+.fish-lg .fish-tail-left { left: -9px; border-right: 9px solid var(--fish-color, #38bdf8); border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+
+/* Color accents (light/dark tuned) */
+.fish--blue { --fish-color: #38bdf8; }
+.fish--teal { --fish-color: #2dd4bf; }
+.fish--amber { --fish-color: #fbbf24; }
+.fish--violet { --fish-color: #a78bfa; }
+@media (prefers-color-scheme: dark) {
+  .fish--blue { --fish-color: #7dd3fc; }
+  .fish--teal { --fish-color: #5eead4; }
+  .fish--amber { --fish-color: #fcd34d; }
+  .fish--violet { --fish-color: #c4b5fd; }
+}
+
+/* Swim paths (left↔right across the panel) */
+@keyframes swim-right {
+  0% { left: -30%; }
+  100% { left: 110%; }
+}
+@keyframes swim-left {
+  0% { left: 110%; }
+  100% { left: -30%; }
+}
+
+.swim-right { animation-name: swim-right; animation-timing-function: linear; animation-iteration-count: infinite; }
+.swim-left { animation-name: swim-left; animation-timing-function: linear; animation-iteration-count: infinite; }
+.swim-slow { animation-duration: 28s; }
+.swim-slower { animation-duration: 34s; }
+.swim-fast { animation-duration: 22s; }
+
+/* Gentle bobbing/tilt to simulate swimming */
+@keyframes fish-bob {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(1.2deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fish, .fish .fish-inner { animation: none !important; }
+}
+
+/* Discrete toggle slider */
+.toggle-bar,
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(148,163,184,0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.toggle-bar:hover,
+.toggle-slider:hover {
+  background: rgba(148,163,184,0.4);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.toggle-on {
+  background: rgba(34,197,94,0.6);
+  border-color: rgba(34,197,94,0.3);
+}
+
+.toggle-on:hover {
+  background: rgba(34,197,94,0.7);
+}
+
+.toggle-on .toggle-knob { 
+  transform: translateX(14px);
+}
+
+.toggle-off {
+  background: rgba(148,163,184,0.3);
+  border-color: rgba(148,163,184,0.3);
+}
+
+.toggle-off:hover {
+  background: rgba(148,163,184,0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  .toggle-bar, .toggle-slider { 
+    background: rgba(71,85,105,0.4);
+    border-color: rgba(148,163,184,0.2);
+  }
+  
+  .toggle-bar:hover,
+  .toggle-slider:hover {
+    background: rgba(71,85,105,0.5);
+  }
+  
+  .toggle-knob {
+    background: #e2e8f0;
+    border-color: rgba(255,255,255,0.1);
+  }
+  
+  .toggle-on { 
+    background: rgba(34,197,94,0.6);
+    border-color: rgba(34,197,94,0.4);
+  }
+  
+  .toggle-on:hover {
+    background: rgba(34,197,94,0.7);
+  }
+  
+  .toggle-off { 
+    background: rgba(71,85,105,0.4);
+    border-color: rgba(148,163,184,0.2);
+  }
+  
+  .toggle-off:hover {
+    background: rgba(71,85,105,0.5);
+  }
+}
+
+/* Discrete range slider styles */
+.discrete-slider::-webkit-slider-thumb {
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+}
+
+.discrete-slider::-webkit-slider-thumb:hover {
+  border-color: #64748b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.discrete-slider::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+}
+
+.discrete-slider::-moz-range-thumb:hover {
+  border-color: #64748b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  .discrete-slider::-webkit-slider-thumb {
+    background: #e2e8f0;
+    border-color: #64748b;
+  }
+  
+  .discrete-slider::-webkit-slider-thumb:hover {
+    border-color: #94a3b8;
+  }
+  
+  .discrete-slider::-moz-range-thumb {
+    background: #e2e8f0;
+    border-color: #64748b;
+  }
+  
+  .discrete-slider::-moz-range-thumb:hover {
+    border-color: #94a3b8;
+  }
+}

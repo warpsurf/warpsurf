@@ -1,0 +1,40 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalEnv": ["__STORE__"],
+  "daemon": false,
+  "tasks": {
+    "ready": {
+      "dependsOn": ["^ready"],
+      "outputs": ["dist/**", "build/**"]
+    },
+    "dev": {
+      "dependsOn": ["ready"],
+      "outputs": ["dist/**", "build/**", "i18n/locales/**"],
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["../../dist/**", "dist/**", "build/**"],
+      "cache": false
+    },
+    "type-check": {
+      "cache": false
+    },
+    "lint": {
+      "cache": false
+    },
+    "prettier": {
+      "cache": false
+    },
+    "clean:bundle": {
+      "dependsOn": ["^clean:bundle"],
+      "cache": false
+    },
+    "clean": {
+      "dependsOn": ["^clean"],
+      "cache": false
+    }
+  }
+}

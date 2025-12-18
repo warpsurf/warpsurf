@@ -1,0 +1,306 @@
+import { z } from 'zod';
+
+export interface ActionSchema {
+  name: string;
+  description: string;
+  schema: z.ZodType;
+}
+
+export const doneActionSchema: ActionSchema = {
+  name: 'done',
+  description: 'Complete task',
+  schema: z.object({
+    text: z.string(),
+    success: z.boolean(),
+  }),
+};
+
+// Basic Navigation Actions
+export const searchGoogleActionSchema: ActionSchema = {
+  name: 'search_google',
+  description:
+    'Search Google with a query. Query should be concrete and specific, like a human would search.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    query: z.string(),
+  }),
+};
+
+export const extractGoogleResultsActionSchema: ActionSchema = {
+  name: 'extract_google_results',
+  description:
+    'Extract Google search results from current SERP as list of {title, url} objects. Use after search or on Google results page.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .default(10)
+      .describe('maximum number of results to return (1-20)'),
+  }),
+};
+
+export const goToUrlActionSchema: ActionSchema = {
+  name: 'go_to_url',
+  description: 'Navigate to URL in the current tab',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    url: z.string(),
+  }),
+};
+
+export const goBackActionSchema: ActionSchema = {
+  name: 'go_back',
+  description: 'Go back to the previous page',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+  }),
+};
+
+export const clickElementActionSchema: ActionSchema = {
+  name: 'click_element',
+  description: 'Click element by index',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().describe('index of the element'),
+    xpath: z.string().nullable().optional().describe('xpath of the element'),
+  }),
+};
+
+export const inputTextActionSchema: ActionSchema = {
+  name: 'input_text',
+  description: 'Type text into input fields. Works for all text inputs including Google Docs, form fields, and rich text editors.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().describe('index of the element'),
+    text: z.string().describe('text to input'),
+    xpath: z.string().nullable().optional().describe('xpath of the element'),
+  }),
+};
+
+// Tab Management Actions
+export const switchTabActionSchema: ActionSchema = {
+  name: 'switch_tab',
+  description: 'Switch to tab by tab id',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    tab_id: z.number().int().describe('id of the tab to switch to'),
+  }),
+};
+
+export const openTabActionSchema: ActionSchema = {
+  name: 'open_tab',
+  description: 'Open URL in new tab',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    url: z.string().describe('url to open'),
+  }),
+};
+
+export const closeTabActionSchema: ActionSchema = {
+  name: 'close_tab',
+  description: 'Close tab by tab id',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    tab_id: z.number().int().describe('id of the tab'),
+  }),
+};
+
+// Content Actions, not used currently
+// export const extractContentActionSchema: ActionSchema = {
+//   name: 'extract_content',
+//   description:
+//     'Extract page content to retrieve specific information from the page, e.g. all company names, a specific description, all information about, links with companies in structured format or simply links',
+//   schema: z.object({
+//     goal: z.string(),
+//   }),
+// };
+
+// Cache Actions
+export const cacheContentActionSchema: ActionSchema = {
+  name: 'cache_content',
+  description: 'Cache what you have found so far from the current page for future use',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    content: z.string().describe('content to cache'),
+  }),
+};
+
+export const scrollToPercentActionSchema: ActionSchema = {
+  name: 'scroll_to_percent',
+  description:
+    'Scrolls to a particular vertical percentage of the document or an element. If no index of element is specified, scroll the whole document.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    yPercent: z.number().int().describe('percentage to scroll to - min 0, max 100; 0 is top, 100 is bottom'),
+    index: z.number().int().nullable().optional().describe('index of the element'),
+  }),
+};
+
+export const scrollToTopActionSchema: ActionSchema = {
+  name: 'scroll_to_top',
+  description: 'Scroll the document in the window or an element to the top',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().nullable().optional().describe('index of the element'),
+  }),
+};
+
+export const scrollToBottomActionSchema: ActionSchema = {
+  name: 'scroll_to_bottom',
+  description: 'Scroll the document in the window or an element to the bottom',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().nullable().optional().describe('index of the element'),
+  }),
+};
+
+export const previousPageActionSchema: ActionSchema = {
+  name: 'previous_page',
+  description:
+    'Scroll the document in the window or an element to the previous page. If no index is specified, scroll the whole document.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().nullable().optional().describe('index of the element'),
+  }),
+};
+
+export const nextPageActionSchema: ActionSchema = {
+  name: 'next_page',
+  description:
+    'Scroll the document in the window or an element to the next page. If no index is specified, scroll the whole document.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().nullable().optional().describe('index of the element'),
+  }),
+};
+
+export const scrollToTextActionSchema: ActionSchema = {
+  name: 'scroll_to_text',
+  description: 'If you dont find something which you want to interact with in current viewport, try to scroll to it',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    text: z.string().describe('text to scroll to'),
+    nth: z
+      .number()
+      .int()
+      .min(1)
+      .default(1)
+      .describe('which occurrence of the text to scroll to (1-indexed, default: 1)'),
+  }),
+};
+
+export const sendKeysActionSchema: ActionSchema = {
+  name: 'send_keys',
+  description:
+    'Send strings of special keys like Backspace, Insert, PageDown, Delete, Enter. Shortcuts such as `Control+o`, `Control+Shift+T` are supported as well. This gets used in keyboard press. Be aware of different operating systems and their shortcuts',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    keys: z.string().describe('keys to send'),
+  }),
+};
+
+export const getDropdownOptionsActionSchema: ActionSchema = {
+  name: 'get_dropdown_options',
+  description: 'Get all options from a native dropdown',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().describe('index of the dropdown element'),
+  }),
+};
+
+export const selectDropdownOptionActionSchema: ActionSchema = {
+  name: 'select_dropdown_option',
+  description: 'Select dropdown option for interactive element index by the text of the option you want to select',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    index: z.number().int().describe('index of the dropdown element'),
+    text: z.string().describe('text of the option'),
+  }),
+};
+
+export const waitActionSchema: ActionSchema = {
+  name: 'wait',
+  description: 'Wait for x seconds default 3, do NOT use this action unless user asks to wait explicitly',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    seconds: z.number().int().default(3).describe('amount of seconds'),
+  }),
+};
+
+// Human-in-the-loop control
+export const requestUserControlActionSchema: ActionSchema = {
+  name: 'request_user_control',
+  description:
+    'Pause execution and request human intervention. Use when the user asked to review/confirm/oversee a step. Include a clear reason.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    reason: z.string().default('').describe('why user control is needed'),
+    tab_id: z.number().int().nullable().optional().describe('target tab id to take control of (optional)'),
+  }),
+};
+
+// Content extraction: URL/page to Markdown/Text (fast, non-interactive)
+export const extractPageMarkdownActionSchema: ActionSchema = {
+  name: 'extract_page_markdown',
+  description:
+    'Extract readable content from current page as Markdown/Text. Use for reading/QA tasks, not for interactive tasks (forms, login, purchases). Must navigate to page first.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    selector: z.string().optional().describe('optional CSS selector to narrow extraction region'),
+    prefer: z.enum(['markdown', 'readability', 'auto']).default('markdown').describe('extraction strategy preference'),
+    format: z.enum(['markdown', 'text']).default('markdown').describe('output format'),
+    max_chars: z
+      .number()
+      .int()
+      .min(500)
+      .max(500000)
+      .default(200000)
+      .describe('truncate extracted content to at most this many characters'),
+  }),
+};
+
+// Jump-to-target actions (bypass slow incremental scrolling)
+export const scrollToSelectorActionSchema: ActionSchema = {
+  name: 'scroll_to_selector',
+  description: 'Scroll the page so that the first or nth match of the CSS selector is centered in view.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    selector: z.string().describe('CSS selector to locate target element'),
+    nth: z.number().int().min(1).default(1).describe('1-indexed occurrence to target (default: 1)'),
+  }),
+};
+
+export const clickSelectorActionSchema: ActionSchema = {
+  name: 'click_selector',
+  description: 'Click the first or nth match of the CSS selector.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    selector: z.string().describe('CSS selector to locate clickable element'),
+    nth: z.number().int().min(1).default(1).describe('1-indexed occurrence to click (default: 1)'),
+  }),
+};
+
+export const findAndClickTextActionSchema: ActionSchema = {
+  name: 'find_and_click_text',
+  description:
+    'Find a clickable element by its visible text (link/button/etc.) and click it. Use for jump-to-target by text.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    text: z.string().describe('text to search for'),
+    exact: z.boolean().default(false).describe('exact match vs substring (default: substring)'),
+    case_sensitive: z.boolean().default(false).describe('case sensitivity (default: false)'),
+    nth: z.number().int().min(1).default(1).describe('1-indexed occurrence to click (default: 1)'),
+  }),
+};
+
+export const quickTextScanActionSchema: ActionSchema = {
+  name: 'quick_text_scan',
+  description: 'Return a compact plain-text snapshot of the page body for fast keyword scan (non-interactive).',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    max_chars: z.number().int().min(200).max(50000).default(3000).describe('truncate to this many characters'),
+  }),
+};

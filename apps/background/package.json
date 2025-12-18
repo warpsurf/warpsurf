@@ -1,0 +1,57 @@
+{
+  "name": "@warpsurf/background",
+  "version": "1.0.3",
+  "description": "Warpsurf background service worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean:node_modules": "pnpx rimraf node_modules",
+    "clean:turbo": "rimraf .turbo",
+    "clean": "pnpm clean:turbo && pnpm clean:node_modules",
+    "build": "vite build",
+    "dev": "cross-env __DEV__=true vite build --mode development",
+    "test": "vitest run",
+    "lint": "eslint ./ --ext .ts,.js,.tsx,.jsx",
+    "lint:fix": "pnpm lint --fix",
+    "prettier": "prettier . --write --ignore-path ../.prettierignore",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.59.0",
+    "@extension/schema-utils": "workspace:*",
+    "@extension/shared": "workspace:*",
+    "@extension/storage": "workspace:*",
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/anthropic": "0.3.21",
+    "@langchain/cerebras": "^0.0.1",
+    "@langchain/core": "0.3.57",
+    "@langchain/deepseek": "^0.0.2",
+    "@langchain/google-genai": "0.2.10",
+    "@langchain/groq": "^0.2.2",
+    "@langchain/ollama": "0.2.1",
+    "@langchain/openai": "0.5.12",
+    "@langchain/xai": "^0.0.3",
+    "groq-sdk": "^0.30.0",
+    "jsonrepair": "^3.12.0",
+    "openai": "^5.12.2",
+    "puppeteer-core": "24.31.0",
+    "webextension-polyfill": "^0.12.0",
+    "zod": "3.25.58",
+    "zod-to-json-schema": "^3.24.5"
+  },
+  "overrides": {
+    "@langchain/core": "0.3.57"
+  },
+  "devDependencies": {
+    "@extension/dev-utils": "workspace:*",
+    "@extension/hmr": "workspace:*",
+    "@extension/tsconfig": "workspace:*",
+    "@extension/vite-config": "workspace:*",
+    "@laynezh/vite-plugin-lib-assets": "^0.6.1",
+    "@types/ws": "^8.5.13",
+    "cross-env": "^7.0.3",
+    "deepmerge": "^4.3.1",
+    "magic-string": "^0.30.10",
+    "ts-loader": "^9.5.1"
+  }
+}

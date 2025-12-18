@@ -1,0 +1,204 @@
+import { createChatModel } from '@src/workflows/models/factory';
+import { agentModelStore, AgentNameEnum, getDefaultDisplayNameFromProviderId, generalSettingsStore } from '@extension/storage';
+import { getAllProvidersDecrypted } from '@src/crypto';
+import { createLogger } from '@src/log';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { SystemPrompt } from './auto-prompt';
+import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
+import { getChatHistoryForSession } from '@src/workflows/shared/utils/chat-history';
+
+const logger = createLogger('AutoWorkflow');
+
+export type AutoAction = 'request_more_info' | 'chat' | 'search' | 'agent';
+
+export interface AutoResult {
+  action: AutoAction;
+  confidence: number;
+  reasoning?: string;
+}
+
+/**
+ * Analyzes user requests to determine the most appropriate workflow.
+ * Routes tasks to Chat, Search, or Agent workflows based on complexity and requirements.
+ */
+export class AutoWorkflow {
+  private autoLLM: BaseChatModel | null = null;
+
+  async initialize(): Promise<void> {
+    try {
+      logger.info('Starting auto service initialization...');
+      
+      const providers = await getAllProvidersDecrypted();
+      logger.info(`Found ${Object.keys(providers).length} providers:`, Object.keys(providers));
+      
+      if (Object.keys(providers).length === 0) {
+        logger.warning('No LLM providers configured for auto');
+        return;
+      }
+
+      const agentModels = await agentModelStore.getAllAgentModels();
+      logger.info(`Found agent models:`, Object.keys(agentModels));
+      
+      let autoModel = agentModels[AgentNameEnum.Auto];
+      let modelSource = 'dedicated auto model';
+      
+      if (!autoModel) {
+        logger.info('No auto model configured, falling back to planner model');
+        autoModel = agentModels[AgentNameEnum.AgentPlanner];
+        modelSource = 'planner model fallback';
+        
+        if (!autoModel) {
+          logger.warning('No planner model available for auto fallback');
+          return;
+        }
+      }
+      
+      logger.info(`Using ${modelSource} for auto:`, autoModel);
+
+      const autoProviderConfig = providers[autoModel.provider];
+      if (!autoProviderConfig) {
+        logger.warning(`Provider '${getDefaultDisplayNameFromProviderId(autoModel.provider)}' not found`);
+        return;
+      }
+
+      this.autoLLM = createChatModel(autoProviderConfig, autoModel);
+      logger.info(`Auto service initialized successfully using ${modelSource}`);
+    } catch (error) {
+      logger.error('Failed to initialize auto service:', error);
+    }
+  }
+
+  async triageRequest(request: string, sessionId?: string): Promise<AutoResult> {
+    logger.info(`Auto request: "${request}"`);
+    
+    // If LLM is not initialized, try to initialize it now
+    if (!this.autoLLM) {
+      logger.info('Auto LLM not initialized, attempting to initialize...');
+      await this.initialize();
+    }
+    
+    // If still no LLM available, use fallback logic
+    if (!this.autoLLM) {
+      logger.warning('Auto LLM not available, using fallback logic');
+      return this.fallbackTriage(request);
+    }
+
+    const systemPrompt = `${SystemPrompt}
+
+Here is the request:
+${request}`;
+
+    // Get timeout from settings
+    const settings = await generalSettingsStore.getSettings();
+    const timeoutMs = (settings.responseTimeoutSeconds ?? 120) * 1000;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      // Build messages with chat history context
+      const messages: BaseMessage[] = [new SystemMessage(systemPrompt)];
+      
+      // Inject chat history if session ID is available
+      if (sessionId) {
+        const historyBlock = await getChatHistoryForSession(sessionId, {
+          latestTaskText: request,
+          stripUserRequestTags: true,
+          maxTurns: 4
+        });
+        if (historyBlock) {
+          messages.push(new SystemMessage(historyBlock));
+        }
+      }
+      
+      messages.push(new HumanMessage(request));
+
+      logger.debug(`Starting Auto API Request for: ${request}`);
+
+      const response = await this.autoLLM.invoke(messages, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      // Log token usage with the session ID
+      const taskId = sessionId || globalTokenTracker.getCurrentTaskId() || 'unknown';
+      const modelName = (this.autoLLM as any)?.modelName || (this.autoLLM as any)?.model || 'unknown';
+      logLLMUsage(response, { taskId, role: 'auto', modelName, inputMessages: messages });
+      
+      logger.info(`Raw auto response: ${response.content}`);
+      
+      if (typeof response.content === 'string') {
+        // Try to parse JSON from the response
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          logger.info(`Parsed auto result: ${JSON.stringify(parsed)}`);
+          if (parsed.action && ['request_more_info', 'chat', 'search', 'agent'].includes(parsed.action)) {
+            // Enforce no 'request_more_info' usage
+            const normalizedAction = parsed.action === 'request_more_info' ? 'chat' : parsed.action;
+            return {
+              action: normalizedAction as AutoAction,
+              confidence: parsed.confidence || 0.8,
+              reasoning: parsed.reasoning
+            };
+          }
+        }
+      }
+
+      // Fallback to browser_use if parsing fails
+      logger.warning('Failed to parse auto response, using fallback');
+      return this.fallbackTriage(request);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (timedOut) {
+        logger.warning('Auto request timed out, using fallback');
+      } else {
+        const msg = String(error?.message || error);
+        if (msg.includes('abort')) {
+          logger.info('Auto request cancelled');
+        } else {
+          logger.error('Auto request failed:', error);
+        }
+      }
+      return this.fallbackTriage(request);
+    }
+  }
+
+  private fallbackTriage(request: string): AutoResult {
+    // Simple keyword-based fallback logic
+    const lowerRequest = request.toLowerCase();
+    
+    // Check for current/news related queries FIRST (higher priority)
+    if (lowerRequest.includes('current') || lowerRequest.includes('latest') || 
+        lowerRequest.includes('news') || lowerRequest.includes('today') || 
+        lowerRequest.includes('weather')) {
+      return {
+        action: 'search',
+        confidence: 0.7,
+        reasoning: 'Detected as requiring current information based on keywords'
+      };
+    }
+    
+    // Check for simple questions SECOND (lower priority)
+    if (lowerRequest.includes('what is') || lowerRequest.includes('who is') || 
+        lowerRequest.includes('explain') || lowerRequest.includes('define') || 
+        lowerRequest.includes('how does') || lowerRequest.includes('why')) {
+      return {
+        action: 'chat',
+        confidence: 0.7,
+        reasoning: 'Detected as a simple question based on keywords'
+      };
+    }
+    
+    // Default to browser use for complex tasks
+    return {
+      action: 'agent',
+      confidence: 0.5,
+      reasoning: 'Defaulting to browser use for potentially complex task'
+    };
+  }
+}
+
