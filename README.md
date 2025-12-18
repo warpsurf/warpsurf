@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="#installation"><img src="https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Extension"/></a>
+  <a href="https://chromewebstore.google.com/detail/warpsurf/ekmohjijmhcdpgficcolmennloeljhod"><img src="https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Extension"/></a>
   <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="License"/></a>
 </p>
 
@@ -127,7 +127,7 @@ These demos give a flavour of some of the features and capabilities of warpsurf.
 
 warpsurf has only been tested in a Chrome browser.
 
-1. Visit the [Chrome Web Store]()
+1. Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/warpsurf/ekmohjijmhcdpgficcolmennloeljhod)
 2. Click **"Add to Chrome"**
 3. Pin the extension for easy access
 
