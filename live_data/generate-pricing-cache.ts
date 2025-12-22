@@ -1,12 +1,12 @@
 #!/usr/bin/env npx tsx
 /**
  * Generate static pricing cache from Helicone and OpenRouter APIs
- * 
+ *
  * Usage: pnpm generate-pricing-cache
- * 
+ *
  * This script fetches current model lists and pricing from external APIs
  * and writes them to apps/background/src/utils/pricing-cache.ts
- * 
+ *
  * Data Sources:
  * - Helicone: https://helicone.ai/api/llm-costs (no API key required)
  * - OpenRouter: https://openrouter.ai/api/v1/models (no API key required)
@@ -34,22 +34,24 @@ interface OpenRouterModel {
   pricing?: { prompt: string; completion: string };
 }
 
-async function fetchHeliconeData(provider: string): Promise<{ models: string[]; pricing: Record<string, { inputPerToken: number; outputPerToken: number }> }> {
+async function fetchHeliconeData(
+  provider: string,
+): Promise<{ models: string[]; pricing: Record<string, { inputPerToken: number; outputPerToken: number }> }> {
   try {
     const res = await fetch(`https://helicone.ai/api/llm-costs?provider=${provider}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    
+
     const models = [...new Set(data.data.map((m: HeliconeModel) => m.model))] as string[];
     const pricing: Record<string, { inputPerToken: number; outputPerToken: number }> = {};
-    
+
     for (const entry of data.data as HeliconeModel[]) {
       pricing[entry.model] = {
         inputPerToken: entry.input_cost_per_1m / 1_000_000,
         outputPerToken: entry.output_cost_per_1m / 1_000_000,
       };
     }
-    
+
     return { models, pricing };
   } catch (e) {
     console.error(`Failed to fetch Helicone data for ${provider}:`, e);
@@ -57,35 +59,44 @@ async function fetchHeliconeData(provider: string): Promise<{ models: string[]; 
   }
 }
 
-async function fetchOpenRouterData(): Promise<{ groups: Array<{ id: string; displayName: string; models: string[] }>; pricing: Record<string, { inputPerToken: number; outputPerToken: number }> }> {
+async function fetchOpenRouterData(): Promise<{
+  groups: Array<{ id: string; displayName: string; models: string[] }>;
+  pricing: Record<string, { inputPerToken: number; outputPerToken: number }>;
+}> {
   try {
     const res = await fetch('https://openrouter.ai/api/v1/models');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    
+
     const groupMap = new Map<string, string[]>();
     const pricing: Record<string, { inputPerToken: number; outputPerToken: number }> = {};
-    
+
     const PROVIDER_NAMES: Record<string, string> = {
-      openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google',
-      'meta-llama': 'Meta Llama', mistralai: 'Mistral', 'x-ai': 'xAI',
-      deepseek: 'DeepSeek', cohere: 'Cohere', perplexity: 'Perplexity',
+      openai: 'OpenAI',
+      anthropic: 'Anthropic',
+      google: 'Google',
+      'meta-llama': 'Meta Llama',
+      mistralai: 'Mistral',
+      'x-ai': 'xAI',
+      deepseek: 'DeepSeek',
+      cohere: 'Cohere',
+      perplexity: 'Perplexity',
     };
-    
+
     for (const model of data.data as OpenRouterModel[]) {
       if (model.id.endsWith(':free') || model.id.includes(':extended')) continue;
-      
+
       const providerId = model.id.includes('/') ? model.id.split('/')[0] : 'other';
       if (!groupMap.has(providerId)) groupMap.set(providerId, []);
       groupMap.get(providerId)!.push(model.id);
-      
+
       const inputCost = parseFloat(model.pricing?.prompt || '0');
       const outputCost = parseFloat(model.pricing?.completion || '0');
       if (!isNaN(inputCost) && !isNaN(outputCost)) {
         pricing[model.id] = { inputPerToken: inputCost, outputPerToken: outputCost };
       }
     }
-    
+
     const groups = Array.from(groupMap.entries())
       .map(([id, models]) => ({
         id,
@@ -93,7 +104,7 @@ async function fetchOpenRouterData(): Promise<{ groups: Array<{ id: string; disp
         models: models.sort(),
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    
+
     return { groups, pricing };
   } catch (e) {
     console.error('Failed to fetch OpenRouter data:', e);
@@ -103,10 +114,13 @@ async function fetchOpenRouterData(): Promise<{ groups: Array<{ id: string; disp
 
 async function main() {
   console.log('Fetching pricing data from APIs...\n');
-  
+
   // Fetch Helicone data for each provider
-  const heliconeData: Record<string, { models: string[]; pricing: Record<string, { inputPerToken: number; outputPerToken: number }> }> = {};
-  
+  const heliconeData: Record<
+    string,
+    { models: string[]; pricing: Record<string, { inputPerToken: number; outputPerToken: number }> }
+  > = {};
+
   for (const provider of HELICONE_PROVIDERS) {
     console.log(`Fetching Helicone data for ${provider}...`);
     const data = await fetchHeliconeData(provider);
@@ -114,15 +128,17 @@ async function main() {
     heliconeData[mappedName] = data;
     console.log(`  → ${data.models.length} models, ${Object.keys(data.pricing).length} with pricing`);
   }
-  
+
   // Fetch OpenRouter data
   console.log('\nFetching OpenRouter data...');
   const openRouterData = await fetchOpenRouterData();
-  console.log(`  → ${openRouterData.groups.length} providers, ${Object.keys(openRouterData.pricing).length} models with pricing`);
-  
+  console.log(
+    `  → ${openRouterData.groups.length} providers, ${Object.keys(openRouterData.pricing).length} models with pricing`,
+  );
+
   // Generate the cache file
   const generatedAt = new Date().toISOString();
-  
+
   const fileContent = `/**
  * Static pricing cache - bundled with extension for offline/privacy mode
  * 
@@ -155,17 +171,21 @@ export interface CachedPricingData {
 }
 
 // Cache generated on ${generatedAt.split('T')[0]} - Update by running: pnpm generate-pricing-cache
-export const CACHED_PRICING_DATA: CachedPricingData = ${JSON.stringify({
-    generatedAt,
-    version: 1,
-    helicone: heliconeData,
-    openRouter: openRouterData,
-  }, null, 2)};
+export const CACHED_PRICING_DATA: CachedPricingData = ${JSON.stringify(
+    {
+      generatedAt,
+      version: 1,
+      helicone: heliconeData,
+      openRouter: openRouterData,
+    },
+    null,
+    2,
+  )};
 `;
 
-  const outputPath = path.join(__dirname, '../apps/background/src/utils/pricing-cache.ts');
+  const outputPath = path.join(import.meta.dirname, '../apps/background/src/utils/pricing-cache.ts');
   fs.writeFileSync(outputPath, fileContent);
-  
+
   console.log(`\n✓ Cache written to ${outputPath}`);
   console.log(`  Generated at: ${generatedAt}`);
 }

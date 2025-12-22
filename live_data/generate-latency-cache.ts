@@ -41,7 +41,7 @@ export const LATENCY_DATABASE: Record<string, LatencyEntry> = {};
 }
 
 async function main() {
-  const outputPath = path.join(__dirname, '../apps/background/src/utils/latency-database.ts');
+  const outputPath = path.join(import.meta.dirname, '../apps/background/src/utils/latency-database.ts');
   fs.writeFileSync(outputPath, generateFileContent());
   console.log(`[generate-latency-cache] Wrote defaults to ${outputPath}`);
 }
