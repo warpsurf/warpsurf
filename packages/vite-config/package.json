@@ -1,6 +1,6 @@
 {
   "name": "@extension/vite-config",
-  "version": "1.18.3",
+  "version": "1.0.4",
   "description": "chrome extension - vite base configuration",
   "main": "index.mjs",
   "type": "module",

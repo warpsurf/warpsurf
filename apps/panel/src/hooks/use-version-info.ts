@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Minor changes to multi-agent system prompts.';
+  const releaseNotes = 'Fixes to search model selection and response formatting.';
 
   useEffect(() => {
     try {
