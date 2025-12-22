@@ -44,7 +44,7 @@ export class NativeAnthropicChatModel {
         const anthropicMessages = this.toAnthropicMessages(chatMessages);
 
         const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
-        
+
         const retries = Math.max(0, this.maxRetries ?? 5);
         let resp: any = null;
         let text: string = '';
@@ -81,15 +81,32 @@ export class NativeAnthropicChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw (lastError || new Error('Failed to obtain response text from Anthropic'));
+          throw lastError || new Error('Failed to obtain response text from Anthropic');
         }
         let parsed: any = undefined;
         try {
           parsed = JSON.parse(text);
         } catch (_) {
-          // Fall back: return text under response key
-          parsed = { response: text };
+          // Try to extract JSON from text (handles code blocks, preambles, etc.)
+          const extracted = this.extractJsonObject(text);
+          parsed = extracted ?? { response: text };
         }
+
+        // Handle nested JSON case: if response field contains JSON string, try to extract it
+        if (parsed && typeof parsed === 'object' && typeof (parsed as any).response === 'string') {
+          const nestedJson = this.extractJsonObject((parsed as any).response as string);
+          if (nestedJson && typeof nestedJson.response === 'string') {
+            parsed = nestedJson;
+          }
+        }
+
+        // Normalize expected fields for compatibility
+        if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.response !== 'string') parsed.response = text;
+          if (typeof parsed.done !== 'boolean') parsed.done = true;
+          if (!('search_queries' in parsed)) parsed.search_queries = [];
+        }
+
         // Include usage data for token tracking
         return { parsed, raw: { content: text }, response_metadata: { usage: resp?.usage } };
       },
@@ -144,7 +161,7 @@ export class NativeAnthropicChatModel {
       }
     }
     if (!text || text.trim().length === 0) {
-      throw (lastError || new Error('Failed to obtain response text from Anthropic'));
+      throw lastError || new Error('Failed to obtain response text from Anthropic');
     }
     return { content: text };
   }
@@ -157,12 +174,18 @@ export class NativeAnthropicChatModel {
       if (Array.isArray(c)) {
         try {
           const texts = c
-            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string') ? p.text : '')
+            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string' ? p.text : ''))
             .filter(Boolean);
           return texts.join('\n');
-        } catch { return JSON.stringify(c); }
+        } catch {
+          return JSON.stringify(c);
+        }
       }
-      try { return JSON.stringify(c); } catch { return String(c ?? ''); }
+      try {
+        return JSON.stringify(c);
+      } catch {
+        return String(c ?? '');
+      }
     };
     for (const m of messages) {
       const hasRole = m && typeof (m as any).role === 'string';
@@ -239,5 +262,27 @@ export class NativeAnthropicChatModel {
     }
     return '';
   }
-}
 
+  private extractJsonObject(text: string): Record<string, unknown> | null {
+    try {
+      // Try to find JSON in markdown code blocks
+      const fence = text.match(/```json[\s\S]*?```/i) || text.match(/```[\s\S]*?```/);
+      let candidate = fence ? fence[0] : text;
+      candidate = candidate
+        .replace(/```json/i, '')
+        .replace(/```/g, '')
+        .trim();
+
+      // Find the outermost JSON object
+      const firstBrace = candidate.indexOf('{');
+      const lastBrace = candidate.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonSlice = candidate.slice(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonSlice) as Record<string, unknown>;
+      }
+      return JSON.parse(candidate) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+}
