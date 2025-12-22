@@ -24,7 +24,6 @@ import { AgentModelsSection } from './agent-models-section';
 import { SingleModelSection } from './single-model-section';
 import { isOpenAIOModel } from './primitives';
 import {
-  supportsNativeSearch,
   getAgentDisplayName,
   getAgentDescription,
   getAgentSectionColor,
@@ -43,9 +42,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
   const [selectedModels, setSelectedModels] = useState<Record<AgentNameEnum, string>>(createInitialSelectedModels);
-  const [modelParameters, setModelParameters] = useState<Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }>>(createInitialModelParameters);
-  const [reasoningEffort, setReasoningEffort] = useState<Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>>(createInitialReasoningEffort);
-  const [webSearchEnabled, setWebSearchEnabled] = useState<Record<AgentNameEnum, boolean>>(createInitialWebSearchEnabled);
+  const [modelParameters, setModelParameters] =
+    useState<Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }>>(createInitialModelParameters);
+  const [reasoningEffort, setReasoningEffort] =
+    useState<Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>>(createInitialReasoningEffort);
+  const [webSearchEnabled, setWebSearchEnabled] =
+    useState<Record<AgentNameEnum, boolean>>(createInitialWebSearchEnabled);
 
   const [availableModels, setAvailableModels] = useState<
     Array<{ provider: string; providerName: string; model: string }>
@@ -59,7 +61,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
   // Guardrail override: allow showing models without pricing data
   const [showAllModels, setShowAllModels] = useState<boolean>(true);
 
-  
   // Global model selection (apply same model to all visible agent roles)
   const [globalModelValue, setGlobalModelValue] = useState<string>('');
 
@@ -159,18 +160,20 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
   // Clean up orphaned agent models (referencing deleted providers)
   useEffect(() => {
     if (Object.keys(providers).length === 0) return;
-    
+
     const cleanupOrphanedModels = async () => {
       const agentModels = await agentModelStore.getAllAgentModels();
       for (const [agentName, config] of Object.entries(agentModels)) {
         if (config && !providers[config.provider]) {
-          console.warn(`[AgentSettings] Resetting orphaned ${agentName} model (provider ${config.provider} no longer exists)`);
+          console.warn(
+            `[AgentSettings] Resetting orphaned ${agentName} model (provider ${config.provider} no longer exists)`,
+          );
           await agentModelStore.resetAgentModel(agentName as AgentNameEnum);
           setSelectedModels(prev => ({ ...prev, [agentName as AgentNameEnum]: '' }));
         }
       }
     };
-    
+
     cleanupOrphanedModels();
   }, [providers]);
 
@@ -200,14 +203,15 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       // Use providers from state (which gets updated on storage changes)
       for (const [provider, config] of Object.entries(providers)) {
         if (!config?.apiKey) continue; // Skip providers without API keys
-        
+
         const providerModels =
           config.modelNames || llmProviderModelNames[provider as keyof typeof llmProviderModelNames] || [];
 
         // Filter for pricing only when override is OFF
-        const modelsWithPricing = (costCalculatorReady && !showAllModels)
-          ? providerModels.filter(model => hasModelPricing(model))
-          : providerModels;
+        const modelsWithPricing =
+          costCalculatorReady && !showAllModels
+            ? providerModels.filter(model => hasModelPricing(model))
+            : providerModels;
 
         models.push(
           ...modelsWithPricing.map(model => ({
@@ -253,10 +257,16 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       let firstProviderId: string | null = null;
       let firstCreatedAt = Number.POSITIVE_INFINITY;
       for (const [pid, cfg] of providerEntries) {
-        const created = (cfg && (cfg as any).createdAt) ? Number((cfg as any).createdAt) : Date.now();
-        if (created < firstCreatedAt) { firstCreatedAt = created; firstProviderId = pid; }
+        const created = cfg && (cfg as any).createdAt ? Number((cfg as any).createdAt) : Date.now();
+        if (created < firstCreatedAt) {
+          firstCreatedAt = created;
+          firstProviderId = pid;
+        }
       }
-      if (!firstProviderId) { setHasAppliedInitialDefaults(true); return; }
+      if (!firstProviderId) {
+        setHasAppliedInitialDefaults(true);
+        return;
+      }
 
       const cfg = providers[firstProviderId];
       const type = cfg?.type as ProviderTypeEnum | undefined;
@@ -275,11 +285,18 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           defaultModel = undefined;
       }
 
-      if (!defaultModel) { setHasAppliedInitialDefaults(true); return; }
+      if (!defaultModel) {
+        setHasAppliedInitialDefaults(true);
+        return;
+      }
 
       // Verify the provider actually supports the model
-      const providerModels = cfg?.modelNames || llmProviderModelNames[firstProviderId as keyof typeof llmProviderModelNames] || [];
-      if (!providerModels.includes(defaultModel)) { setHasAppliedInitialDefaults(true); return; }
+      const providerModels =
+        cfg?.modelNames || llmProviderModelNames[firstProviderId as keyof typeof llmProviderModelNames] || [];
+      if (!providerModels.includes(defaultModel)) {
+        setHasAppliedInitialDefaults(true);
+        return;
+      }
 
       const value = `${firstProviderId}>${defaultModel}`;
       const targets: AgentNameEnum[] = [
@@ -317,7 +334,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       await generalSettingsStore.updateSettings({ [key]: value });
 
       const latestSettings = await generalSettingsStore.getSettings();
-      
+
       // Debug: Verify settings were saved correctly for planner/validator toggles
       if (key === 'enablePlanner' || key === 'enableValidator') {
         console.log(`[Settings] Updated ${key}:`, {
@@ -326,7 +343,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           match: (latestSettings as any)[key] === value,
         });
       }
-      
+
       setSettings(latestSettings);
     } catch (error) {
       console.error('Error updating setting:', error);
@@ -364,7 +381,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           }));
         }
 
-        const shouldEnableWebSearch = agentName === AgentNameEnum.Search ? true : (webSearchEnabled[agentName] || false);
+        const shouldEnableWebSearch = agentName === AgentNameEnum.Search ? true : webSearchEnabled[agentName] || false;
         if (agentName === AgentNameEnum.Search && !webSearchEnabled[agentName]) {
           setWebSearchEnabled(prev => ({ ...prev, [agentName]: true }));
         }
@@ -408,7 +425,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     }
   };
 
-  const handleParameterChange = async (agentName: AgentNameEnum, paramName: 'temperature' | 'maxOutputTokens', value: number) => {
+  const handleParameterChange = async (
+    agentName: AgentNameEnum,
+    paramName: 'temperature' | 'maxOutputTokens',
+    value: number,
+  ) => {
     const newParameters = {
       ...modelParameters[agentName],
       [paramName]: value,
@@ -459,32 +480,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         AgentNameEnum.Estimator,
       ];
 
-      // Determine fallback for Search if chosen model doesn't support native search
-      let fallbackSearchModelValue: string | null = null;
-      const providerConfig = providers[provider];
-      if (!supportsNativeSearch(providerConfig, model)) {
-        const compatible = availableModels.find(m =>
-          m.provider === provider && supportsNativeSearch(providers[m.provider], m.model),
-        );
-        fallbackSearchModelValue = compatible ? `${compatible.provider}>${compatible.model}` : null;
-      }
-
       for (const agent of agentList) {
-        if (agent === AgentNameEnum.Search && !supportsNativeSearch(providerConfig, model)) {
-          if (fallbackSearchModelValue) {
-            await handleModelChange(agent, fallbackSearchModelValue);
-          } else {
-            // No search-compatible fallback found - reset to avoid orphaned config
-            console.warn(`[Global Model] No search-compatible model found. Resetting Search model.`);
-            await agentModelStore.resetAgentModel(AgentNameEnum.Search);
-            setSelectedModels(prev => ({ ...prev, [AgentNameEnum.Search]: '' }));
-          }
-          continue;
-        }
         await handleModelChange(agent, globalModelValue);
       }
-
-      
     } catch (error) {
       console.error('Error applying global model to all agents:', error);
     }
@@ -497,7 +495,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     <ModelSelect
       isDarkMode={isDarkMode}
       agentName={agentName}
-      providers={providers}
       availableModels={availableModels}
       selectedValue={selectedModels[agentName] || ''}
       modelParameters={modelParameters[agentName]}
@@ -506,12 +503,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       getAgentDisplayName={getAgentDisplayName}
       getAgentDescription={getAgentDescription}
       getAgentSectionColor={getSectionColor}
-      supportsNativeSearch={supportsNativeSearch}
       hasModelPricing={hasModelPricing}
       onChangeModel={handleModelChange}
       onChangeParameter={handleParameterChange}
       onChangeReasoning={handleReasoningEffortChange}
-      webSearchEnabled={webSearchEnabled[agentName] || false}
     />
   );
 
@@ -527,29 +522,28 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       <GlobalSettings
         isDarkMode={isDarkMode}
         availableModels={availableModels}
-        providers={providers}
         globalModelValue={globalModelValue}
         onChangeGlobalModel={setGlobalModelValue}
         applyToAll={applyGlobalModelToAll}
         showAllModels={showAllModels}
         hasModelPricing={hasModelPricing}
-        supportsNativeSearch={supportsNativeSearch}
         responseTimeoutSeconds={settings.responseTimeoutSeconds ?? 120}
-        onChangeTimeout={(seconds) => updateSetting('responseTimeoutSeconds', seconds)}
+        onChangeTimeout={seconds => updateSetting('responseTimeoutSeconds', seconds)}
       />
       {/* Auto Section */}
-      <div className={`rounded-xl border ${getSectionColor(AgentNameEnum.Auto)} p-5 text-left shadow-sm backdrop-blur-md`} style={{ order: 2 }}>
+      <div
+        className={`rounded-xl border ${getSectionColor(AgentNameEnum.Auto)} p-5 text-left shadow-sm backdrop-blur-md`}
+        style={{ order: 2 }}>
         <h2 className={`mb-4 text-lg font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
           <span className="inline-flex items-center gap-2">
-            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-black/70 text-white' : 'bg-black text-white'}`}>
+            <span
+              className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-black/70 text-white' : 'bg-black text-white'}`}>
               <FaRandom className="h-3.5 w-3.5" />
             </span>
             <span>Auto</span>
           </span>
         </h2>
-        <div className="space-y-4">
-          {renderModelSelect(AgentNameEnum.Auto)}
-        </div>
+        <div className="space-y-4">{renderModelSelect(AgentNameEnum.Auto)}</div>
       </div>
 
       {/* Chat Section */}
@@ -557,7 +551,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         isDarkMode={isDarkMode}
         title="Chat"
         agent={AgentNameEnum.Chat}
-        providers={providers}
         availableModels={availableModels}
         selectedValue={selectedModels[AgentNameEnum.Chat] || ''}
         modelParameters={modelParameters[AgentNameEnum.Chat]}
@@ -566,12 +559,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         getAgentDisplayName={getAgentDisplayName}
         getAgentDescription={getAgentDescription}
         getAgentSectionColor={getSectionColor}
-        supportsNativeSearch={supportsNativeSearch}
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
         onChangeReasoning={handleReasoningEffortChange}
-        webSearchEnabled={webSearchEnabled[AgentNameEnum.Chat] || false}
       />
 
       {/* Search Section */}
@@ -579,7 +570,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         isDarkMode={isDarkMode}
         title="Search"
         agent={AgentNameEnum.Search}
-        providers={providers}
         availableModels={availableModels}
         selectedValue={selectedModels[AgentNameEnum.Search] || ''}
         modelParameters={modelParameters[AgentNameEnum.Search]}
@@ -588,24 +578,20 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         getAgentDisplayName={getAgentDisplayName}
         getAgentDescription={getAgentDescription}
         getAgentSectionColor={getSectionColor}
-        supportsNativeSearch={supportsNativeSearch}
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
         onChangeReasoning={handleReasoningEffortChange}
-        webSearchEnabled={webSearchEnabled[AgentNameEnum.Search] || false}
-      >
-        <div className={`mt-4 rounded-md px-3 py-2 text-xs ${isDarkMode ? 'bg-slate-700/50 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
-          <strong>Note:</strong> Not all models support native web search. Models with native search include: OpenAI search-preview & o-series/gpt-5 models, Anthropic Claude 3.5+, Google Gemini (all), and xAI Grok models. For OpenRouter and custom providers, search capability depends on the underlying model.
-        </div>
-      </SingleModelSection>
+      />
 
-      
       {/* Agent & Multi-Agent Section (Navigator, Planner, Validator) */}
-      <div className={`rounded-xl border ${getSectionColor(AgentNameEnum.AgentNavigator)} p-5 text-left shadow-sm backdrop-blur-md`} style={{ order: 5 }}>
+      <div
+        className={`rounded-xl border ${getSectionColor(AgentNameEnum.AgentNavigator)} p-5 text-left shadow-sm backdrop-blur-md`}
+        style={{ order: 5 }}>
         <h2 className={`mb-4 text-lg font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
           <span className="inline-flex items-center gap-2">
-            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-amber-400/70 text-white' : 'bg-amber-300 text-white'}`}>
+            <span
+              className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-amber-400/70 text-white' : 'bg-amber-300 text-white'}`}>
               <FaRobot className="h-3.5 w-3.5" />
             </span>
             <span>Agent & Multi-Agent</span>
@@ -617,9 +603,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Steps
-                </h4>
+                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Steps</h4>
                 <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Step limit per task (1-50)
                 </p>
@@ -736,8 +720,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="group relative inline-flex items-center gap-1 pb-1">
                     Use Vision
-                    <span className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>?</span>
-                    <span className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      ?
+                    </span>
+                    <span
+                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
                       Enable visual understanding
                     </span>
                   </span>
@@ -761,8 +749,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="group relative inline-flex items-center gap-1 pb-1">
                     Use Vision for Planner
-                    <span className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>?</span>
-                    <span className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      ?
+                    </span>
+                    <span
+                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
                       Allow planner to use screenshots
                     </span>
                   </span>
@@ -780,21 +772,25 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className="toggle-knob" />
               </button>
             </div>
-
           </div>
 
           {/* Planner & Validator Settings - Full Width Sections */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             {/* Single-Agent Workflow Box */}
-            <div className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
+            <div
+              className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
               <h4 className={`text-base font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                 🤖 Single-Agent Workflow
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Planner</span>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Plans before navigation</p>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Planner
+                    </span>
+                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Plans before navigation
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -807,7 +803,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Validator</span>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Validator
+                    </span>
                     <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Validates task output</p>
                   </div>
                   <button
@@ -823,14 +821,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             </div>
 
             {/* Multi-Agent Workflow Box */}
-            <div className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
+            <div
+              className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
               <h4 className={`text-base font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                 🤖🤖 Multi-Agent Workflow
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Planner</span>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Planner
+                    </span>
                     <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Each worker plans</p>
                   </div>
                   <button
@@ -844,7 +845,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Validator</span>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Validator
+                    </span>
                     <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Each worker validates</p>
                   </div>
                   <button
@@ -867,8 +870,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="group relative inline-flex items-center gap-1 pb-1">
                     Show Tab Previews
-                    <span className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>?</span>
-                    <span className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      ?
+                    </span>
+                    <span
+                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
                       Show low-FPS tab mirroring in chat UI
                     </span>
                   </span>
@@ -880,7 +887,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               <button
                 type="button"
                 onClick={() => updateSetting('showTabPreviews' as any, !((settings as any).showTabPreviews ?? true))}
-                className={`toggle-slider ${(settings as any).showTabPreviews ?? true ? 'toggle-on' : 'toggle-off'}`}
+                className={`toggle-slider ${((settings as any).showTabPreviews ?? true) ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={(settings as any).showTabPreviews ?? true}
                 aria-label="Show Tab Previews toggle">
                 <span className="toggle-knob" />
@@ -891,7 +898,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
         {/* Multi-Agent Settings */}
         <div className="mt-6 space-y-4">
-          <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Multi-Agent Settings</h3>
+          <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Multi-Agent Settings
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center justify-between">
               <div>
@@ -918,11 +927,18 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         <div className="mt-6 space-y-4">
           <div className="mb-2 flex items-center gap-3 text-sm">
             <label className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>
-              <input type="checkbox" className="mr-2" checked={showAllModels} onChange={e => setShowAllModels(e.target.checked)} />
+              <input
+                type="checkbox"
+                className="mr-2"
+                checked={showAllModels}
+                onChange={e => setShowAllModels(e.target.checked)}
+              />
               Show all models (include ones with cost unknown)
             </label>
             {!showAllModels && (
-              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Models without Helicone pricing are hidden. Enable to override.</span>
+              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                Models without Helicone pricing are hidden. Enable to override.
+              </span>
             )}
           </div>
           {/* <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Agent Models</h3> */}
@@ -930,7 +946,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             isDarkMode={isDarkMode}
             sectionTitle="Agent Models"
             agents={[AgentNameEnum.AgentPlanner, AgentNameEnum.AgentNavigator, AgentNameEnum.AgentValidator]}
-            providers={providers}
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
@@ -939,9 +954,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
             getAgentSectionColor={getSectionColor}
-            supportsNativeSearch={supportsNativeSearch}
             hasModelPricing={hasModelPricing}
-            webSearchEnabled={webSearchEnabled}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeReasoning={handleReasoningEffortChange}
@@ -950,7 +963,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             isDarkMode={isDarkMode}
             sectionTitle="Multi-Agent Models"
             agents={[AgentNameEnum.MultiagentPlanner, AgentNameEnum.MultiagentRefiner, AgentNameEnum.MultiagentWorker]}
-            providers={providers}
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
@@ -959,9 +971,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
             getAgentSectionColor={getSectionColor}
-            supportsNativeSearch={supportsNativeSearch}
             hasModelPricing={hasModelPricing}
-            webSearchEnabled={webSearchEnabled}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeReasoning={handleReasoningEffortChange}
@@ -975,7 +985,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             isDarkMode={isDarkMode}
             sectionTitle="History Context Summarization"
             agents={[AgentNameEnum.HistorySummariser]}
-            providers={providers}
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
@@ -984,14 +993,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
             getAgentSectionColor={getSectionColor}
-            supportsNativeSearch={supportsNativeSearch}
             hasModelPricing={hasModelPricing}
-            webSearchEnabled={webSearchEnabled}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeReasoning={handleReasoningEffortChange}
-            colorOverride={isDarkMode ? 'border-green-700/40 bg-green-900/20' : 'border-green-300/60 bg-green-50/60'}
-          >
+            colorOverride={isDarkMode ? 'border-green-700/40 bg-green-900/20' : 'border-green-300/60 bg-green-50/60'}>
             <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Configure how browser history is processed and sent to the AI for summarization.
             </p>
@@ -1005,10 +1011,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                   min={1}
                   max={168}
                   value={settings.historySummaryWindowHours || 24}
-                  onChange={e => updateSetting('historySummaryWindowHours', Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)))}
+                  onChange={e =>
+                    updateSetting(
+                      'historySummaryWindowHours',
+                      Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)),
+                    )
+                  }
                   className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>How far back to fetch (1-168)</p>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                  How far back to fetch (1-168)
+                </p>
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1020,10 +1033,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                   max={50000}
                   step={100}
                   value={settings.historySummaryMaxRawItems || 1000}
-                  onChange={e => updateSetting('historySummaryMaxRawItems', Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)))}
+                  onChange={e =>
+                    updateSetting(
+                      'historySummaryMaxRawItems',
+                      Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)),
+                    )
+                  }
                   className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>From browser API (100-50,000)</p>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                  From browser API (100-50,000)
+                </p>
               </div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1035,10 +1055,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                   max={2000}
                   step={50}
                   value={settings.historySummaryMaxProcessedItems || 50}
-                  onChange={e => updateSetting('historySummaryMaxProcessedItems', Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)))}
+                  onChange={e =>
+                    updateSetting(
+                      'historySummaryMaxProcessedItems',
+                      Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)),
+                    )
+                  }
                   className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>After dedup/filter (50-2,000)</p>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                  After dedup/filter (50-2,000)
+                </p>
               </div>
             </div>
           </AgentModelsSection>
@@ -1051,7 +1078,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             isDarkMode={isDarkMode}
             sectionTitle="Workflow Estimation Model"
             agents={[AgentNameEnum.Estimator]}
-            providers={providers}
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
@@ -1060,9 +1086,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
             getAgentSectionColor={getSectionColor}
-            supportsNativeSearch={supportsNativeSearch}
             hasModelPricing={hasModelPricing}
-            webSearchEnabled={webSearchEnabled}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeReasoning={handleReasoningEffortChange}
@@ -1070,7 +1094,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           />
         </div>
       </div>
-
     </section>
   );
 };

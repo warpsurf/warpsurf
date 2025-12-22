@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
 import { cn } from './primitives';
 import { ModelSelect } from './model-select';
-import type { AgentNameEnum, ProviderConfig } from '@extension/storage';
+import type { AgentNameEnum } from '@extension/storage';
 
 interface AgentModelsSectionProps {
   isDarkMode: boolean;
   sectionTitle: string;
   agents: AgentNameEnum[];
-  providers: Record<string, ProviderConfig>;
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedModels: Record<AgentNameEnum, string>;
   modelParameters: Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }>;
@@ -16,24 +15,46 @@ interface AgentModelsSectionProps {
   getAgentDisplayName: (agent: AgentNameEnum) => string;
   getAgentDescription: (agent: AgentNameEnum) => string;
   getAgentSectionColor: (agent: AgentNameEnum) => string;
-  supportsNativeSearch: (providerConfig: ProviderConfig | undefined, modelName: string) => boolean;
   hasModelPricing: (modelName: string) => boolean;
-  webSearchEnabled: Record<AgentNameEnum, boolean>;
   onChangeModel: (agent: AgentNameEnum, value: string) => Promise<void> | void;
-  onChangeParameter: (agent: AgentNameEnum, param: 'temperature' | 'maxOutputTokens', value: number) => Promise<void> | void;
+  onChangeParameter: (
+    agent: AgentNameEnum,
+    param: 'temperature' | 'maxOutputTokens',
+    value: number,
+  ) => Promise<void> | void;
   onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => Promise<void> | void;
   children?: ReactNode;
   colorOverride?: string;
 }
 
 export function AgentModelsSection(props: AgentModelsSectionProps) {
-  const { isDarkMode, sectionTitle, agents, providers, availableModels, selectedModels, modelParameters, reasoningEffort, showAllModels, getAgentDisplayName, getAgentDescription, getAgentSectionColor, supportsNativeSearch, hasModelPricing, webSearchEnabled, onChangeModel, onChangeParameter, onChangeReasoning, children, colorOverride } = props;
+  const {
+    isDarkMode,
+    sectionTitle,
+    agents,
+    availableModels,
+    selectedModels,
+    modelParameters,
+    reasoningEffort,
+    showAllModels,
+    getAgentDisplayName,
+    getAgentDescription,
+    getAgentSectionColor,
+    hasModelPricing,
+    onChangeModel,
+    onChangeParameter,
+    onChangeReasoning,
+    children,
+    colorOverride,
+  } = props;
 
   const defaultColor = isDarkMode ? 'border-slate-700/70 bg-slate-800/60' : 'border-white/20 bg-white/40';
-  
+
   return (
     <div className={cn('rounded-xl border p-5 text-left shadow-sm backdrop-blur-md', colorOverride || defaultColor)}>
-      <h3 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>{sectionTitle}</h3>
+      <h3 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
+        {sectionTitle}
+      </h3>
       {children}
       {agents.length > 0 && (
         <div className="space-y-4">
@@ -42,7 +63,6 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
               key={agent}
               isDarkMode={isDarkMode}
               agentName={agent}
-              providers={providers}
               availableModels={availableModels}
               selectedValue={selectedModels[agent] || ''}
               modelParameters={modelParameters[agent]}
@@ -51,12 +71,10 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
               getAgentDisplayName={getAgentDisplayName}
               getAgentDescription={getAgentDescription}
               getAgentSectionColor={getAgentSectionColor}
-              supportsNativeSearch={supportsNativeSearch}
               hasModelPricing={hasModelPricing}
               onChangeModel={onChangeModel}
               onChangeParameter={onChangeParameter}
               onChangeReasoning={onChangeReasoning}
-              webSearchEnabled={webSearchEnabled[agent] || false}
             />
           ))}
         </div>
@@ -64,5 +82,3 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
     </div>
   );
 }
-
-

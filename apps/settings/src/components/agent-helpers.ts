@@ -2,65 +2,11 @@
  * Agent Helpers
  * Shared utilities for agent settings components
  */
-import { AgentNameEnum, ProviderTypeEnum, type ProviderConfig } from '@extension/storage';
+import { AgentNameEnum } from '@extension/storage';
 
-// Models that have native web search capability per provider
-export const ANTHROPIC_SEARCH_MODELS = new Set<string>([
-  'claude-opus-4-1-20250805',
-  'claude-opus-4-20250514',
-  'claude-sonnet-4-20250514',
-  'claude-3-7-sonnet-20250219',
-  'claude-3-5-sonnet-latest',
-  'claude-3-5-haiku-latest',
-]);
-
-export const OPENAI_SEARCH_MODELS = new Set<string>([
-  'gpt-4o-search-preview',
-  'gpt-4o-mini-search-preview',
-]);
-
-// OpenAI models that use Responses API with web_search tool support
-// Matches: o1, o3, o4-mini, gpt-5, gpt-5-mini, gpt-5.1, etc.
-export const OPENAI_RESPONSES_API_PATTERN = /^o\d|^o-|^gpt-5/;
-
-// Grok (xAI) models that support Live Search
-// All Grok models support Live Search via search_parameters
-export const GROK_SEARCH_MODELS = new Set<string>([
-  'grok-4',
-  'grok-4-fast',
-  'grok-3',
-  'grok-3-fast',
-  'grok-3-mini',
-  'grok-3-mini-fast',
-  'grok-2',
-  'grok-2-mini',
-  'grok-beta',
-]);
-
-/**
- * Check if a model supports native web search for the given provider
- */
-export function supportsNativeSearch(providerConfig: ProviderConfig | undefined, modelName: string): boolean {
-  if (!providerConfig) return false;
-  switch (providerConfig.type as ProviderTypeEnum) {
-    case ProviderTypeEnum.Gemini:
-      // All Gemini models support Google Search grounding
-      return true;
-    case ProviderTypeEnum.Anthropic:
-      return ANTHROPIC_SEARCH_MODELS.has(modelName);
-    case ProviderTypeEnum.OpenAI:
-      // Search-preview models via Chat Completions, or o-series/gpt-5* via Responses API
-      return OPENAI_SEARCH_MODELS.has(modelName) || OPENAI_RESPONSES_API_PATTERN.test(modelName);
-    case ProviderTypeEnum.Grok:
-      return GROK_SEARCH_MODELS.has(modelName);
-    case ProviderTypeEnum.OpenRouter:
-    case ProviderTypeEnum.CustomOpenAI:
-      // Allow all models - search capability depends on underlying model/provider
-      return true;
-    default:
-      return false;
-  }
-}
+/** Warning message for web search compatibility (shown when selecting models for Search) */
+export const WEB_SEARCH_COMPATIBILITY_WARNING =
+  '⚠️ Web search compatibility varies by model. Queries may fail for unsupported models.';
 
 /**
  * Get human-readable display name for an agent
@@ -141,9 +87,7 @@ export function getAgentSectionColor(agentName: AgentNameEnum, isDarkMode: boole
   switch (agentName) {
     case AgentNameEnum.Auto:
       // Auto: very pale black
-      return isDarkMode
-        ? 'border-white/10 bg-white/5 backdrop-blur-md'
-        : 'border-black/10 bg-black/5 backdrop-blur-md';
+      return isDarkMode ? 'border-white/10 bg-white/5 backdrop-blur-md' : 'border-black/10 bg-black/5 backdrop-blur-md';
     case AgentNameEnum.Chat:
       // Chat: very pale violet
       return isDarkMode
@@ -206,7 +150,10 @@ export function createInitialSelectedModels(): Record<AgentNameEnum, string> {
 /**
  * Create initial model parameters state
  */
-export function createInitialModelParameters(): Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }> {
+export function createInitialModelParameters(): Record<
+  AgentNameEnum,
+  { temperature: number; maxOutputTokens: number }
+> {
   return createAgentStateMap(() => ({ temperature: 0, maxOutputTokens: 8192 }));
 }
 
@@ -223,4 +170,3 @@ export function createInitialReasoningEffort(): Record<AgentNameEnum, 'low' | 'm
 export function createInitialWebSearchEnabled(): Record<AgentNameEnum, boolean> {
   return createAgentStateMap(false);
 }
-

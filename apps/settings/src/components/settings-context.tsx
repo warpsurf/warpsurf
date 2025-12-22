@@ -5,12 +5,7 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { type ProviderConfig, type AgentNameEnum } from '@extension/storage';
-import {
-  getAgentDisplayName,
-  getAgentDescription,
-  getAgentSectionColor,
-  supportsNativeSearch,
-} from './agent-helpers';
+import { getAgentDisplayName, getAgentDescription, getAgentSectionColor } from './agent-helpers';
 import { hasModelPricing } from '../../../background/src/utils/cost-calculator';
 
 interface SettingsContextValue {
@@ -20,7 +15,6 @@ interface SettingsContextValue {
   getAgentDisplayName: typeof getAgentDisplayName;
   getAgentDescription: typeof getAgentDescription;
   getSectionColor: (agent: AgentNameEnum) => string;
-  supportsNativeSearch: typeof supportsNativeSearch;
   hasModelPricing: typeof hasModelPricing;
 }
 
@@ -40,10 +34,9 @@ export function SettingsProvider({ children, isDarkMode, providers }: SettingsPr
       getAgentDisplayName,
       getAgentDescription,
       getSectionColor: (agent: AgentNameEnum) => getAgentSectionColor(agent, isDarkMode),
-      supportsNativeSearch,
       hasModelPricing,
     }),
-    [isDarkMode, providers]
+    [isDarkMode, providers],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
@@ -68,4 +61,3 @@ export function useSettings(): SettingsContextValue {
 export function useSettingsOptional(): SettingsContextValue | null {
   return useContext(SettingsContext);
 }
-
