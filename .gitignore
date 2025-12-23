@@ -4,6 +4,7 @@ Thumbs.db
 .idea/
 .vscode/
 .cursor/
+versions/
 
 ## Logs
 *.log
@@ -38,6 +39,7 @@ node_modules/
 
 ## Build artifacts / outputs
 dist/
+dist-zip/
 **/dist/
 build/
 **/build/
