@@ -29,9 +29,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2025-12-22 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2025-12-23 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2025-12-22T21:34:22.839Z',
+  generatedAt: '2025-12-23T16:54:14.718Z',
   version: 1,
   helicone: {
     openai: {
@@ -1249,6 +1249,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         models: ['bytedance/ui-tars-1.5-7b'],
       },
       {
+        id: 'bytedance-seed',
+        displayName: 'Bytedance-seed',
+        models: ['bytedance-seed/seed-1.6', 'bytedance-seed/seed-1.6-flash'],
+      },
+      {
         id: 'cohere',
         displayName: 'Cohere',
         models: [
@@ -1398,7 +1403,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'minimax',
         displayName: 'Minimax',
-        models: ['minimax/minimax-01', 'minimax/minimax-m1', 'minimax/minimax-m2'],
+        models: ['minimax/minimax-01', 'minimax/minimax-m1', 'minimax/minimax-m2', 'minimax/minimax-m2.1'],
       },
       {
         id: 'mistralai',
@@ -1705,9 +1710,21 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'bytedance-seed/seed-1.6-flash': {
+        inputPerToken: 7.5e-8,
+        outputPerToken: 3e-7,
+      },
+      'bytedance-seed/seed-1.6': {
+        inputPerToken: 2.5e-7,
+        outputPerToken: 0.000002,
+      },
+      'minimax/minimax-m2.1': {
+        inputPerToken: 3e-7,
+        outputPerToken: 0.0000012,
+      },
       'z-ai/glm-4.7': {
-        inputPerToken: 4.4e-7,
-        outputPerToken: 0.00000174,
+        inputPerToken: 4e-7,
+        outputPerToken: 0.0000015,
       },
       'google/gemini-3-flash-preview': {
         inputPerToken: 5e-7,
@@ -1786,8 +1803,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 4.1e-7,
       },
       'deepseek/deepseek-v3.2': {
-        inputPerToken: 2.39e-7,
-        outputPerToken: 3.78e-7,
+        inputPerToken: 2.24e-7,
+        outputPerToken: 3.2e-7,
       },
       'prime-intellect/intellect-3': {
         inputPerToken: 2e-7,
@@ -2673,29 +2690,29 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 4e-7,
         outputPerToken: 4e-7,
       },
-      'anthropic/claude-3.5-haiku': {
-        inputPerToken: 8e-7,
-        outputPerToken: 0.000004,
-      },
       'anthropic/claude-3.5-haiku-20241022': {
         inputPerToken: 8e-7,
         outputPerToken: 0.000004,
       },
-      'anthropic/claude-3.5-sonnet': {
-        inputPerToken: 0.000006,
-        outputPerToken: 0.00003,
+      'anthropic/claude-3.5-haiku': {
+        inputPerToken: 8e-7,
+        outputPerToken: 0.000004,
       },
       'anthracite-org/magnum-v4-72b': {
         inputPerToken: 0.000003,
         outputPerToken: 0.000005,
       },
-      'mistralai/ministral-3b': {
-        inputPerToken: 4e-8,
-        outputPerToken: 4e-8,
+      'anthropic/claude-3.5-sonnet': {
+        inputPerToken: 0.000006,
+        outputPerToken: 0.00003,
       },
       'mistralai/ministral-8b': {
         inputPerToken: 1e-7,
         outputPerToken: 1e-7,
+      },
+      'mistralai/ministral-3b': {
+        inputPerToken: 4e-8,
+        outputPerToken: 4e-8,
       },
       'qwen/qwen-2.5-7b-instruct': {
         inputPerToken: 4e-8,
@@ -2705,11 +2722,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.0000012,
         outputPerToken: 0.0000012,
       },
-      'inflection/inflection-3-productivity': {
+      'inflection/inflection-3-pi': {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
-      'inflection/inflection-3-pi': {
+      'inflection/inflection-3-productivity': {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
@@ -2717,17 +2734,17 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.7e-7,
         outputPerToken: 4.3e-7,
       },
-      'meta-llama/llama-3.2-90b-vision-instruct': {
-        inputPerToken: 3.5e-7,
-        outputPerToken: 4e-7,
+      'meta-llama/llama-3.2-3b-instruct': {
+        inputPerToken: 2e-8,
+        outputPerToken: 2e-8,
       },
       'meta-llama/llama-3.2-1b-instruct': {
         inputPerToken: 2.7e-8,
         outputPerToken: 2e-7,
       },
-      'meta-llama/llama-3.2-3b-instruct': {
-        inputPerToken: 2e-8,
-        outputPerToken: 2e-8,
+      'meta-llama/llama-3.2-90b-vision-instruct': {
+        inputPerToken: 3.5e-7,
+        outputPerToken: 4e-7,
       },
       'meta-llama/llama-3.2-11b-vision-instruct': {
         inputPerToken: 4.9e-8,
@@ -2789,27 +2806,27 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000004,
         outputPerToken: 0.000004,
       },
-      'meta-llama/llama-3.1-70b-instruct': {
-        inputPerToken: 4e-7,
-        outputPerToken: 4e-7,
+      'meta-llama/llama-3.1-8b-instruct': {
+        inputPerToken: 2e-8,
+        outputPerToken: 3e-8,
       },
       'meta-llama/llama-3.1-405b-instruct': {
         inputPerToken: 0.0000035,
         outputPerToken: 0.0000035,
       },
-      'meta-llama/llama-3.1-8b-instruct': {
-        inputPerToken: 2e-8,
-        outputPerToken: 3e-8,
+      'meta-llama/llama-3.1-70b-instruct': {
+        inputPerToken: 4e-7,
+        outputPerToken: 4e-7,
       },
       'mistralai/mistral-nemo': {
         inputPerToken: 2e-8,
         outputPerToken: 4e-8,
       },
-      'openai/gpt-4o-mini': {
+      'openai/gpt-4o-mini-2024-07-18': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
-      'openai/gpt-4o-mini-2024-07-18': {
+      'openai/gpt-4o-mini': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
@@ -2829,13 +2846,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 2.5e-8,
         outputPerToken: 8e-8,
       },
-      'mistralai/mistral-7b-instruct-v0.3': {
-        inputPerToken: 2e-7,
-        outputPerToken: 2e-7,
-      },
       'mistralai/mistral-7b-instruct': {
         inputPerToken: 2.8e-8,
         outputPerToken: 5.4e-8,
+      },
+      'mistralai/mistral-7b-instruct-v0.3': {
+        inputPerToken: 2e-7,
+        outputPerToken: 2e-7,
       },
       'microsoft/phi-3-mini-128k-instruct': {
         inputPerToken: 1e-7,
@@ -2845,10 +2862,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000001,
         outputPerToken: 0.000001,
       },
-      'openai/gpt-4o': {
-        inputPerToken: 0.0000025,
-        outputPerToken: 0.00001,
-      },
       'meta-llama/llama-guard-2-8b': {
         inputPerToken: 2e-7,
         outputPerToken: 2e-7,
@@ -2857,13 +2870,17 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000005,
         outputPerToken: 0.000015,
       },
-      'meta-llama/llama-3-8b-instruct': {
-        inputPerToken: 3e-8,
-        outputPerToken: 6e-8,
+      'openai/gpt-4o': {
+        inputPerToken: 0.0000025,
+        outputPerToken: 0.00001,
       },
       'meta-llama/llama-3-70b-instruct': {
         inputPerToken: 3e-7,
         outputPerToken: 4e-7,
+      },
+      'meta-llama/llama-3-8b-instruct': {
+        inputPerToken: 3e-8,
+        outputPerToken: 6e-8,
       },
       'mistralai/mixtral-8x22b-instruct': {
         inputPerToken: 0.000002,
@@ -2889,13 +2906,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000002,
         outputPerToken: 0.000006,
       },
-      'openai/gpt-4-turbo-preview': {
-        inputPerToken: 0.00001,
-        outputPerToken: 0.00003,
-      },
       'openai/gpt-3.5-turbo-0613': {
         inputPerToken: 0.000001,
         outputPerToken: 0.000002,
+      },
+      'openai/gpt-4-turbo-preview': {
+        inputPerToken: 0.00001,
+        outputPerToken: 0.00003,
       },
       'mistralai/mistral-tiny': {
         inputPerToken: 2.5e-7,
@@ -2925,13 +2942,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
       },
-      'mistralai/mistral-7b-instruct-v0.1': {
-        inputPerToken: 1.1e-7,
-        outputPerToken: 1.9e-7,
-      },
       'openai/gpt-3.5-turbo-instruct': {
         inputPerToken: 0.0000015,
         outputPerToken: 0.000002,
+      },
+      'mistralai/mistral-7b-instruct-v0.1': {
+        inputPerToken: 1.1e-7,
+        outputPerToken: 1.9e-7,
       },
       'openai/gpt-3.5-turbo-16k': {
         inputPerToken: 0.000003,
@@ -2953,13 +2970,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.00003,
         outputPerToken: 0.00006,
       },
-      'openai/gpt-3.5-turbo': {
-        inputPerToken: 5e-7,
-        outputPerToken: 0.0000015,
-      },
       'openai/gpt-4': {
         inputPerToken: 0.00003,
         outputPerToken: 0.00006,
+      },
+      'openai/gpt-3.5-turbo': {
+        inputPerToken: 5e-7,
+        outputPerToken: 0.0000015,
       },
     },
   },
