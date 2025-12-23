@@ -123,15 +123,31 @@ These demos give a flavour of some of the features and capabilities of warpsurf.
 
 ## Installation & Usage
 
-### Chrome Web Store (Recommended)
-
 warpsurf has only been tested in a Chrome browser.
+
+### Option 1: Chrome Web Store (quick)
 
 1. Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/warpsurf/ekmohjijmhcdpgficcolmennloeljhod)
 2. Click **"Add to Chrome"**
 3. Pin the extension for easy access
 
-### Manual Installation (Developer Mode)
+### Option 2: GitHub Release (most recent warpsurf version)
+
+#### Download
+Download the `v1.0.X.zip` file from the latest warpsurf [GitHub release](https://github.com/warpsurf/warpsurf/releases).
+
+#### Install
+1. Unzip `v1.0.X.zip`.
+2. Navigate to chrome://extensions
+3. Enable "Developer mode"
+4. Click "Load unpacked"
+5. Select the unzipped folder folder
+
+#### Updates
+1. Repeat the Download and Installation instructions.
+2. At chrome://extensions, click 'Update' and click the refresh icon on the warpsurf listing.
+
+### Option 3: Manual GitHub Installation (most recent codebase)
 
 ```bash
 # Clone this repository
