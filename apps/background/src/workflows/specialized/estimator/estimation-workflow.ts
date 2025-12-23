@@ -1,6 +1,6 @@
 /**
  * LLM-based Workflow Estimator
- * 
+ *
  * Uses an LLM to generate workflow plans with duration and cost estimates.
  */
 
@@ -48,32 +48,32 @@ export class LLMWorkflowEstimator implements IEstimator {
 
   /**
    * Estimate workflow using the LLM
-   * 
+   *
    * @param task - User's task description
    * @param context - Optional context (for future trajectory-based estimation)
    * @returns Promise resolving to workflow estimation
    */
   async estimateWorkflow(task: string, context?: any): Promise<WorkflowEstimation> {
     logger.info(`Starting workflow estimation for task: "${task}"`);
-    
+
     const startTime = Date.now();
-    
+
     try {
       // Build messages with chat history context
       const messages: BaseMessage[] = [new SystemMessage(EstimationSystemPrompt)];
-      
+
       // Inject chat history if session ID is available
       if (this.currentTaskId) {
         const historyBlock = await getChatHistoryForSession(this.currentTaskId, {
           latestTaskText: task,
           stripUserRequestTags: true,
-          maxTurns: 6
+          maxTurns: 6,
         });
         if (historyBlock) {
           messages.push(new SystemMessage(historyBlock));
         }
       }
-      
+
       messages.push(new HumanMessage(`Please estimate the workflow for this task:\n\n${task}`));
 
       // Set up token tracking for this estimation call
@@ -93,10 +93,10 @@ export class LLMWorkflowEstimator implements IEstimator {
         globalTokenTracker.setCurrentTaskId(prevTaskId || 'unknown');
         globalTokenTracker.setCurrentRole(prevRole);
       }
-      
+
       const elapsedMs = Date.now() - startTime;
       logger.info(`LLM estimation completed in ${elapsedMs}ms`);
-      
+
       // Log the API call for session logs
       try {
         const inputMessages = messages.map(m => ({
@@ -113,14 +113,14 @@ export class LLMWorkflowEstimator implements IEstimator {
       } catch (e) {
         logger.error('Failed to log estimator usage:', e);
       }
-      
+
       // Parse response
       const estimation = this.parseEstimationResponse(response.content);
-      
+
       // NOTE: Do NOT add model latency here - the LLM estimates already include implicit latency
       // The latency will be added dynamically in the UI when users compare models
       // This prevents double-counting and allows accurate model-to-model comparisons
-      
+
       // Calculate estimation cost (based on response token usage if available)
       let estimationCost = 0;
       try {
@@ -141,27 +141,24 @@ export class LLMWorkflowEstimator implements IEstimator {
       } catch (e) {
         logger.error('Failed to calculate estimation cost:', e);
       }
-      
+
       // Add summary
-      const summary = summarizeEstimation(
-        estimation.steps,
-        this.modelName,
-        this.provider,
-        estimationCost,
-      );
-      
+      const summary = summarizeEstimation(estimation.steps, this.modelName, this.provider, estimationCost);
+
       const result: WorkflowEstimation = {
         steps: estimation.steps,
         summary,
       };
-      
+
       // Use safe cost formatting - handle potential null/NaN from JSON serialization
-      const costStr = (summary.estimated_cost_usd != null && !isNaN(summary.estimated_cost_usd)) 
-        ? `~$${summary.estimated_cost_usd.toFixed(3)}` 
-        : 'cost unavailable';
-      logger.info(`Estimation complete: ${result.steps.length} steps, ~${Math.round(summary.total_agent_duration_s || 0)}s (base LLM estimate), ${costStr}`);
-      logger.info('Note: AA latency will be added dynamically in UI based on selected model');
-      
+      const costStr =
+        summary.estimated_cost_usd != null && !isNaN(summary.estimated_cost_usd)
+          ? `~$${summary.estimated_cost_usd.toFixed(3)}`
+          : 'cost unavailable';
+      logger.info(
+        `Estimation complete: ${result.steps.length} steps, ~${Math.round(summary.total_agent_duration_s || 0)}s (base LLM estimate), ${costStr}`,
+      );
+
       return result;
     } catch (error) {
       logger.error('Workflow estimation failed:', error);
@@ -172,7 +169,7 @@ export class LLMWorkflowEstimator implements IEstimator {
 
   /**
    * Parse the LLM response into a structured estimation
-   * 
+   *
    * @param content - Raw LLM response content
    * @returns Parsed estimation response
    */
@@ -185,24 +182,28 @@ export class LLMWorkflowEstimator implements IEstimator {
       } else {
         jsonStr = JSON.stringify(content);
       }
-      
+
       // Try to extract JSON from response
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in response');
       }
-      
+
       const parsed = JSON.parse(jsonMatch[0]);
-      
+
       // Validate structure
       if (!parsed.steps || !Array.isArray(parsed.steps)) {
         throw new Error('Invalid response structure: missing steps array');
       }
-      
+
       // Validate each step
       for (const step of parsed.steps) {
-        if (!step.title || typeof step.web_agent_duration_s !== 'number' || 
-            typeof step.human_duration_s !== 'number' || typeof step.num_tokens !== 'number') {
+        if (
+          !step.title ||
+          typeof step.web_agent_duration_s !== 'number' ||
+          typeof step.human_duration_s !== 'number' ||
+          typeof step.num_tokens !== 'number'
+        ) {
           throw new Error('Invalid step structure');
         }
         // Ensure positive values
@@ -210,7 +211,7 @@ export class LLMWorkflowEstimator implements IEstimator {
         step.human_duration_s = Math.max(1, Math.round(step.human_duration_s));
         step.num_tokens = Math.max(100, Math.round(step.num_tokens));
       }
-      
+
       logger.info(`Parsed ${parsed.steps.length} steps from LLM response`);
       return parsed as EstimationLLMResponse;
     } catch (error) {
@@ -221,13 +222,13 @@ export class LLMWorkflowEstimator implements IEstimator {
 
   /**
    * Generate a fallback estimation when the LLM fails
-   * 
+   *
    * @param task - User's task description
    * @returns Minimal fallback estimation
    */
   private getFallbackEstimation(task: string): WorkflowEstimation {
     logger.error('Using fallback estimation');
-    
+
     // Create a simple single-step fallback
     const steps = [
       {
@@ -237,10 +238,9 @@ export class LLMWorkflowEstimator implements IEstimator {
         num_tokens: 5000,
       },
     ];
-    
+
     const summary = summarizeEstimation(steps, this.modelName, this.provider, 0);
-    
+
     return { steps, summary };
   }
 }
-
