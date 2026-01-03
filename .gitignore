@@ -83,3 +83,6 @@ web-ext-artifacts/
 *.temp
 tmp/
 temp/
+
+## Misc
+DEVELOPMENT.md
