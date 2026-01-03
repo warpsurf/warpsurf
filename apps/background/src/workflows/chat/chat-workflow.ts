@@ -1,16 +1,16 @@
-import { BaseAgent, type BaseAgentOptions, type ExtraAgentOptions } from '../shared/base-agent';
 import { createLogger } from '@src/log';
 import { z } from 'zod';
-import type { AgentOutput } from '../shared/agent-types';
+import type { AgentContext, AgentOutput } from '../shared/agent-types';
 import { Actors, ExecutionState } from '@src/workflows/shared/event/types';
 import { isAbortedError, isTimeoutError } from '../shared/agent-errors';
 import { systemPrompt } from './chat-prompt';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
+import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
+import { calculateCost } from '@src/utils/cost-calculator';
 
 const logger = createLogger('ChatWorkflow');
 
-// Define Zod schema for chat output
 export const chatOutputSchema = z.object({
   response: z.string(),
   done: z.boolean(),
@@ -20,13 +20,16 @@ export type ChatOutput = z.infer<typeof chatOutputSchema>;
 
 /**
  * Simple question-answering workflow without browser interaction.
- * Uses LLM for direct text responses to user queries.
+ * Uses streaming LLM responses for real-time display.
  */
-export class ChatWorkflow extends BaseAgent<typeof chatOutputSchema, ChatOutput> {
+export class ChatWorkflow {
   private currentTask?: string;
+  private chatLLM: any;
+  private context: AgentContext;
 
-  constructor(options: BaseAgentOptions, extraOptions?: Partial<ExtraAgentOptions>) {
-    super(chatOutputSchema, options, { ...extraOptions, id: 'Chat' });
+  constructor(chatLLM: any, context: AgentContext) {
+    this.chatLLM = chatLLM;
+    this.context = context;
   }
 
   setTask(task: string) {
@@ -35,75 +38,90 @@ export class ChatWorkflow extends BaseAgent<typeof chatOutputSchema, ChatOutput>
 
   async execute(): Promise<AgentOutput<ChatOutput>> {
     try {
-      // Emit STEP_START event for loading indicator
-      this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_START, 'Processing request...');
+      this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_START, 'Processing...');
 
-      // Get the current task
-      if (!this.currentTask) {
-        throw new Error('No current task set');
+      if (!this.currentTask) throw new Error('No task set');
+
+      const messages = buildLLMMessagesWithHistory(systemPrompt, await this.getSessionMessages(), this.currentTask, {
+        stripUserRequestTags: true,
+      });
+
+      const streamId = `chat_${Date.now()}`;
+      let response = '';
+      let usage: any = null;
+
+      for await (const chunk of this.chatLLM.invokeStreaming(messages, this.context.controller.signal)) {
+        if (chunk.done) {
+          usage = chunk.usage;
+          break;
+        }
+        response += chunk.text;
+        await this.context.emitStreamChunk(Actors.CHAT, chunk.text, streamId);
       }
-      logger.info('Current task:', this.currentTask);
+      await this.context.emitStreamChunk(Actors.CHAT, '', streamId, true);
 
-      // Build messages using shared Chat History builder
-      let sessionMsgs: any[] = [];
-      try {
-        const session = await chatHistoryStore.getSession(this.context.taskId);
-        sessionMsgs = Array.isArray(session?.messages) ? session!.messages : [];
-      } catch {}
-      const llmMessages = buildLLMMessagesWithHistory(
-        systemPrompt,
-        sessionMsgs as any,
-        this.currentTask,
-        { stripUserRequestTags: true }
-      );
+      // Log token usage
+      this.logTokenUsage(usage);
 
-      const modelOutput = await this.invoke(llmMessages);
-      if (!modelOutput) {
-        throw new Error('Failed to get response from LLM');
-      }
-
-      logger.info('Raw model output:', JSON.stringify(modelOutput));
-      
-      // Handle case where response might not be in expected format
-      let responseText = modelOutput.response;
-      if (!responseText && typeof modelOutput === 'string') {
-        responseText = modelOutput;
-      }
-      
-      if (!responseText) {
-        throw new Error('No response text found in model output');
-      }
-
-      // Emit the response as a CHAT message that will be displayed
-      logger.info('Emitting STEP_OK event with response:', responseText);
-      this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_OK, responseText);
-      logger.info('Chat response generated:', responseText);
-
-      return {
-        id: this.id,
-        result: modelOutput,
-      };
+      return { id: 'Chat', result: { response, done: true } };
     } catch (error) {
-      // 1. Check timeout FIRST - we track this separately since SDK just says "aborted"
       if (isTimeoutError(error)) {
         const msg = error instanceof Error ? error.message : 'Response timed out';
-        logger.error(`Chat timeout: ${msg}`);
         this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_FAIL, msg);
-        return { id: this.id, error: msg };
+        return { id: 'Chat', error: msg };
       }
-
-      // 2. Check user cancellation - deliberate action, not an error
       if (isAbortedError(error)) {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
-        return { id: this.id, error: 'cancelled' } as any;
+        return { id: 'Chat', error: 'cancelled' };
       }
-
-      // 3. All other errors - propagate the actual provider error message
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Chat processing failed: ${errorMessage}`);
+      logger.error(`Chat failed: ${errorMessage}`);
       this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_FAIL, errorMessage);
-      return { id: this.id, error: errorMessage };
+      return { id: 'Chat', error: errorMessage };
+    }
+  }
+
+  private async getSessionMessages(): Promise<any[]> {
+    try {
+      const session = await chatHistoryStore.getSession(this.context.taskId);
+      return session?.messages ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  private logTokenUsage(usage: any): void {
+    if (!usage) return;
+    try {
+      const taskId = this.context?.taskId;
+      if (!taskId) return;
+
+      const inputTokens = Number(usage.prompt_tokens || usage.input_tokens || 0);
+      const outputTokens = Number(usage.completion_tokens || usage.output_tokens || 0);
+      const totalTokens = inputTokens + outputTokens;
+      if (totalTokens === 0) return;
+
+      const modelName = this.chatLLM?.modelName || 'unknown';
+      const cost = calculateCost(modelName, inputTokens, outputTokens);
+
+      const tokenUsage: TokenUsage = {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        thoughtTokens: 0,
+        webSearchCount: 0,
+        timestamp: Date.now(),
+        provider: 'Chat',
+        modelName,
+        cost,
+        taskId,
+        role: 'chat',
+      };
+
+      const callId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      globalTokenTracker.addTokenUsage(callId, tokenUsage);
+    } catch (e) {
+      logger.debug('logTokenUsage error', e);
     }
   }
 }
-

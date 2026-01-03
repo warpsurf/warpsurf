@@ -41,7 +41,7 @@ export class NativeGeminiChatModel {
 
         // Build request per Google SDK suggested structure
         const model = this.client.getGenerativeModel({ model: this.modelName });
-        
+
         // Models don't have access to context - removed incorrect wrapper
 
         // Gemini does not support using tools together with responseMimeType: 'application/json'
@@ -65,9 +65,9 @@ export class NativeGeminiChatModel {
         };
 
         const { signal } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
-        
+
         // Models don't have access to context
-        
+
         const retries = Math.max(0, this.maxRetries ?? 5);
         let resp: any = null;
         let text: string = '';
@@ -93,7 +93,7 @@ export class NativeGeminiChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw (lastError || new Error('Failed to obtain response text from Gemini'));
+          throw lastError || new Error('Failed to obtain response text from Gemini');
         }
 
         // Note: Actual token logging is handled by llm-fetch-logger.ts to prevent duplicates
@@ -155,11 +155,11 @@ export class NativeGeminiChatModel {
       },
       tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,
     };
-    
+
     // Models don't have access to context - removed incorrect wrapper
-    
+
     // Models don't have access to context
-    
+
     const retries = Math.max(0, this.maxRetries ?? 5);
     let text: string = '';
     let lastError: any = null;
@@ -184,7 +184,7 @@ export class NativeGeminiChatModel {
       }
     }
     if (!text || text.trim().length === 0) {
-      throw (lastError || new Error('Failed to obtain response text from Gemini'));
+      throw lastError || new Error('Failed to obtain response text from Gemini');
     }
 
     // Note: Actual token logging is handled by llm-fetch-logger.ts to prevent duplicates
@@ -199,12 +199,18 @@ export class NativeGeminiChatModel {
       if (Array.isArray(c)) {
         try {
           const texts = c
-            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string') ? p.text : '')
+            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string' ? p.text : ''))
             .filter(Boolean);
           return texts.join('\n');
-        } catch { return JSON.stringify(c); }
+        } catch {
+          return JSON.stringify(c);
+        }
       }
-      try { return JSON.stringify(c); } catch { return String(c ?? ''); }
+      try {
+        return JSON.stringify(c);
+      } catch {
+        return String(c ?? '');
+      }
     };
     for (const m of messages) {
       const hasRole = m && typeof (m as any).role === 'string';
@@ -278,7 +284,10 @@ export class NativeGeminiChatModel {
       // Strip common code fences
       const fenceMatch = text.match(/```json[\s\S]*?```/i) || text.match(/```[\s\S]*?```/);
       let candidate = fenceMatch ? fenceMatch[0] : text;
-      candidate = candidate.replace(/```json/i, '').replace(/```/g, '').trim();
+      candidate = candidate
+        .replace(/```json/i, '')
+        .replace(/```/g, '')
+        .trim();
       // Find first JSON object if extra prose remains
       const firstBrace = candidate.indexOf('{');
       const lastBrace = candidate.lastIndexOf('}');
@@ -292,5 +301,38 @@ export class NativeGeminiChatModel {
       return null;
     }
   }
-}
 
+  async *invokeStreaming(
+    messages: BaseMessage[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
+    const { system, chatMessages } = this.splitSystem(messages);
+    const model = this.client.getGenerativeModel({ model: this.modelName });
+
+    const result = await model.generateContentStream({
+      contents: this.toGeminiContents(chatMessages),
+      systemInstruction: system || undefined,
+      generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxTokens },
+    });
+
+    // Iterate through the stream
+    for await (const chunk of result.stream) {
+      // Check abort signal
+      if (signal?.aborted) {
+        throw new Error('AbortError: request was aborted');
+      }
+      const text = chunk.text();
+      if (text) yield { text, done: false };
+    }
+
+    // Get usage from the aggregated response
+    const response = await result.response;
+    const usage = response.usageMetadata
+      ? {
+          input_tokens: response.usageMetadata.promptTokenCount,
+          output_tokens: response.usageMetadata.candidatesTokenCount,
+        }
+      : null;
+    yield { text: '', done: true, usage };
+  }
+}

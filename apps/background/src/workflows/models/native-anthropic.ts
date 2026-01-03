@@ -285,4 +285,41 @@ export class NativeAnthropicChatModel {
       return null;
     }
   }
+
+  async *invokeStreaming(
+    messages: BaseMessage[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
+    const { system, chatMessages } = this.splitSystem(messages);
+
+    // Use the stream() method for more reliable streaming
+    const stream = this.client.messages.stream(
+      {
+        model: this.modelName,
+        max_tokens: this.maxTokens,
+        temperature: this.temperature,
+        system: system || undefined,
+        messages: this.toAnthropicMessages(chatMessages),
+      },
+      { signal },
+    );
+
+    // Process text events as they arrive
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+        yield { text: event.delta.text, done: false };
+      }
+    }
+
+    // Get final message with usage after stream completes
+    const finalMessage = await stream.finalMessage();
+    const usage = finalMessage.usage
+      ? {
+          input_tokens: finalMessage.usage.input_tokens,
+          output_tokens: finalMessage.usage.output_tokens,
+        }
+      : null;
+
+    yield { text: '', done: true, usage };
+  }
 }

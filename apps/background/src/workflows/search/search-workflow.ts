@@ -1,30 +1,23 @@
-import { BaseAgent, type BaseAgentOptions, type ExtraAgentOptions } from '../shared/base-agent';
 import { createLogger } from '@src/log';
 import { z } from 'zod';
-import type { AgentOutput } from '../shared/agent-types';
+import type { AgentContext, AgentOutput } from '../shared/agent-types';
 import { Actors, ExecutionState } from '@src/workflows/shared/event/types';
 import { isAbortedError, isTimeoutError } from '../shared/agent-errors';
 import { systemPrompt } from './search-prompt';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
+import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
+import { calculateCost } from '@src/utils/cost-calculator';
 
 const logger = createLogger('SearchWorkflow');
 
-// Define Zod schema for search output
 export const searchOutputSchema = z.object({
   response: z.string(),
   done: z.boolean(),
   search_queries: z.array(z.string()).nullable().optional(),
   sources: z
     .array(
-      z.union([
-        z.string(),
-        z.object({
-          url: z.string(),
-          title: z.string().optional(),
-          author: z.string().optional(),
-        }),
-      ]),
+      z.union([z.string(), z.object({ url: z.string(), title: z.string().optional(), author: z.string().optional() })]),
     )
     .nullable()
     .optional(),
@@ -34,13 +27,16 @@ export type SearchOutput = z.infer<typeof searchOutputSchema>;
 
 /**
  * Question-answering workflow with web search capabilities.
- * Retrieves current information from the web before generating LLM responses.
+ * Uses streaming LLM responses for real-time display.
  */
-export class SearchWorkflow extends BaseAgent<typeof searchOutputSchema, SearchOutput> {
+export class SearchWorkflow {
   private currentTask?: string;
+  private chatLLM: any;
+  private context: AgentContext;
 
-  constructor(options: BaseAgentOptions, extraOptions?: Partial<ExtraAgentOptions>) {
-    super(searchOutputSchema, options, { ...extraOptions, id: 'Search' });
+  constructor(chatLLM: any, context: AgentContext) {
+    this.chatLLM = chatLLM;
+    this.context = context;
   }
 
   setTask(task: string) {
@@ -49,105 +45,90 @@ export class SearchWorkflow extends BaseAgent<typeof searchOutputSchema, SearchO
 
   async execute(): Promise<AgentOutput<SearchOutput>> {
     try {
-      // Emit STEP_START event for loading indicator
-      this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_START, 'Searching and processing...');
+      this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_START, 'Searching...');
 
-      // Get the actual user task directly instead of searching through complex navigator messages
-      if (!this.currentTask) {
-        throw new Error('No current task set for search');
-      }
+      if (!this.currentTask) throw new Error('No task set');
 
-      logger.info('=== Search Input ===');
-      logger.info('User task:', this.currentTask);
-
-      // Build messages using shared Chat History builder
-      let sessionMsgs: any[] = [];
-      try {
-        const session = await chatHistoryStore.getSession(this.context.taskId);
-        sessionMsgs = Array.isArray(session?.messages) ? session!.messages : [];
-      } catch {}
-      const llmMessages = buildLLMMessagesWithHistory(
-        systemPrompt,
-        sessionMsgs as any,
-        this.currentTask,
-        { stripUserRequestTags: true }
-      );
-
-      logger.info('=== Search Messages Being Sent ===');
-      logger.info('System prompt length:', systemPrompt.length);
-      logger.info('User message content:', this.currentTask);
-      logger.info('Total messages:', llmMessages.length);
-
-      const modelOutput = await this.invoke(llmMessages);
-      if (!modelOutput) {
-        throw new Error('Failed to get response from search');
-      }
-
-      logger.info('=== Search Output ===');
-      logger.info('Raw model output:', JSON.stringify(modelOutput));
-      
-      // Handle case where response might not be in expected format
-      let responseText = modelOutput.response;
-      if (!responseText && typeof modelOutput === 'string') {
-        responseText = modelOutput;
-      }
-      
-      if (!responseText) {
-        throw new Error('No response text found in model output');
-      }
-
-      // Emit the response as a SEARCH message that will be displayed, including optional search queries
-      const maybeQueries = (modelOutput as any)?.search_queries as string[] | undefined;
-      const maybeSources = (modelOutput as any)?.sources as Array<string | { url: string; title?: string; author?: string }> | undefined;
-      const sourceUrls: string[] = Array.isArray(maybeSources)
-        ? maybeSources
-            .map(s => (typeof s === 'string' ? s : s?.url))
-            .filter((u): u is string => typeof u === 'string' && !!u)
-        : [];
-      const sourceItems = Array.isArray(maybeSources)
-        ? maybeSources
-            .map(s =>
-              typeof s === 'string'
-                ? { url: s as string, title: undefined, author: undefined }
-                : { url: s.url, title: s.title, author: s.author },
-            )
-            .filter(it => !!it.url)
-        : [];
-      this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_OK, responseText, {
-        message: JSON.stringify({
-          type: 'search_metadata',
-          searchQueries: Array.isArray(maybeQueries) ? maybeQueries : [],
-          sourceUrls,
-          sourceItems,
-        })
+      const messages = buildLLMMessagesWithHistory(systemPrompt, await this.getSessionMessages(), this.currentTask, {
+        stripUserRequestTags: true,
       });
-      logger.info('Search response generated successfully');
 
-      return {
-        id: this.id,
-        result: modelOutput,
-      };
+      const streamId = `search_${Date.now()}`;
+      let response = '';
+      let usage: any = null;
+
+      for await (const chunk of this.chatLLM.invokeStreaming(messages, this.context.controller.signal)) {
+        if (chunk.done) {
+          usage = chunk.usage;
+          break;
+        }
+        response += chunk.text;
+        await this.context.emitStreamChunk(Actors.SEARCH, chunk.text, streamId);
+      }
+      await this.context.emitStreamChunk(Actors.SEARCH, '', streamId, true);
+
+      // Log token usage
+      this.logTokenUsage(usage);
+
+      return { id: 'Search', result: { response, done: true, search_queries: [] } };
     } catch (error) {
-      // 1. Check timeout FIRST - we track this separately since SDK just says "aborted"
       if (isTimeoutError(error)) {
         const msg = error instanceof Error ? error.message : 'Response timed out';
-        logger.error(`Search timeout: ${msg}`);
         this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_FAIL, msg);
-        return { id: this.id, error: msg };
+        return { id: 'Search', error: msg };
       }
-
-      // 2. Check user cancellation - deliberate action, not an error
       if (isAbortedError(error)) {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
-        return { id: this.id, error: 'cancelled' } as any;
+        return { id: 'Search', error: 'cancelled' };
       }
-
-      // 3. All other errors - propagate the actual provider error message
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Search processing failed: ${errorMessage}`);
+      logger.error(`Search failed: ${errorMessage}`);
       this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_FAIL, errorMessage);
-      return { id: this.id, error: errorMessage };
+      return { id: 'Search', error: errorMessage };
+    }
+  }
+
+  private async getSessionMessages(): Promise<any[]> {
+    try {
+      const session = await chatHistoryStore.getSession(this.context.taskId);
+      return session?.messages ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  private logTokenUsage(usage: any): void {
+    if (!usage) return;
+    try {
+      const taskId = this.context?.taskId;
+      if (!taskId) return;
+
+      const inputTokens = Number(usage.prompt_tokens || usage.input_tokens || 0);
+      const outputTokens = Number(usage.completion_tokens || usage.output_tokens || 0);
+      const totalTokens = inputTokens + outputTokens;
+      if (totalTokens === 0) return;
+
+      const modelName = this.chatLLM?.modelName || 'unknown';
+      const cost = calculateCost(modelName, inputTokens, outputTokens);
+
+      const tokenUsage: TokenUsage = {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        thoughtTokens: 0,
+        webSearchCount: 0,
+        timestamp: Date.now(),
+        provider: 'Search',
+        modelName,
+        cost,
+        taskId,
+        role: 'search',
+      };
+
+      const callId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      globalTokenTracker.addTokenUsage(callId, tokenUsage);
+    } catch (e) {
+      logger.debug('logTokenUsage error', e);
     }
   }
 }
-

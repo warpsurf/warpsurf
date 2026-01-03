@@ -192,7 +192,12 @@ export class NativeOpenRouterChatModel {
     const detectRole = (m: any): 'system' | 'user' | 'assistant' | 'tool' => {
       try {
         const explicitRole = m && typeof m === 'object' && typeof m.role === 'string' ? (m.role as string) : '';
-        if (explicitRole === 'system' || explicitRole === 'user' || explicitRole === 'assistant' || explicitRole === 'tool') {
+        if (
+          explicitRole === 'system' ||
+          explicitRole === 'user' ||
+          explicitRole === 'assistant' ||
+          explicitRole === 'tool'
+        ) {
           return explicitRole as any;
         }
         const role = (m as any).constructor?.name;
@@ -216,7 +221,10 @@ export class NativeOpenRouterChatModel {
     try {
       const fence = text.match(/```json[\s\S]*?```/i) || text.match(/```[\s\S]*?```/);
       let candidate = fence ? fence[0] : text;
-      candidate = candidate.replace(/```json/i, '').replace(/```/g, '').trim();
+      candidate = candidate
+        .replace(/```json/i, '')
+        .replace(/```/g, '')
+        .trim();
       const firstBrace = candidate.indexOf('{');
       const lastBrace = candidate.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -228,5 +236,29 @@ export class NativeOpenRouterChatModel {
       return null;
     }
   }
-}
 
+  async *invokeStreaming(
+    messages: BaseMessage[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
+    const stream = await this.client.chat.completions.create(
+      {
+        model: this.modelName,
+        messages: this.toOpenAIMessages(messages),
+        max_tokens: this.maxTokens,
+        temperature: this.temperature,
+        stream: true,
+        stream_options: { include_usage: true },
+      } as any,
+      { signal },
+    );
+
+    let usage: any = null;
+    for await (const chunk of stream) {
+      if (chunk.usage) usage = chunk.usage;
+      const text = chunk.choices?.[0]?.delta?.content;
+      if (text) yield { text, done: false };
+    }
+    yield { text: '', done: true, usage };
+  }
+}

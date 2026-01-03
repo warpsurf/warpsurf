@@ -26,7 +26,11 @@ export class NativeOpenAIChatModel {
 
   constructor(args: NativeOpenAIArgs) {
     this.modelName = args.model;
-    this.client = new OpenAI({ apiKey: args.apiKey, baseURL: args.baseUrl, defaultHeaders: args.defaultHeaders } as any);
+    this.client = new OpenAI({
+      apiKey: args.apiKey,
+      baseURL: args.baseUrl,
+      defaultHeaders: args.defaultHeaders,
+    } as any);
     this.temperature = args.temperature;
     this.maxTokens = args.maxTokens;
     this.webSearchEnabled = !!args.webSearch;
@@ -72,9 +76,9 @@ export class NativeOpenAIChatModel {
           if (system) {
             body.instructions = system;
           }
-          
+
           // Models don't have access to context - removed incorrect wrapper
-          
+
           const retries = Math.max(0, this.maxRetries ?? 5);
           let resp: any = null;
           let lastError: any = null;
@@ -91,7 +95,9 @@ export class NativeOpenAIChatModel {
                 try {
                   // Fallback: attach under text as format (older SDKs)
                   delete body.response_format;
-                  body.text = { format: { type: 'json_schema', json_schema: { name: schemaName, schema, strict: true } } } as any;
+                  body.text = {
+                    format: { type: 'json_schema', json_schema: { name: schemaName, schema, strict: true } },
+                  } as any;
                   resp = await (this.client as any).responses.create(body, { signal });
                 } catch (_err2: any) {
                   try {
@@ -122,11 +128,12 @@ export class NativeOpenAIChatModel {
             }
           }
           if (!resp) {
-            throw (lastError || new Error('OpenAI Responses API failed'));
+            throw lastError || new Error('OpenAI Responses API failed');
           }
           const text = this.extractResponsesText(resp);
           // Get usage for Responses API
-          const usage = (resp as any)?.usage || (resp as any)?.response?.usage || (resp as any)?.response?.usage_metadata;
+          const usage =
+            (resp as any)?.usage || (resp as any)?.response?.usage || (resp as any)?.response?.usage_metadata;
           let parsed: any = undefined;
           // Try strict parse, then loose extraction for JSON embedded in text
           try {
@@ -160,9 +167,9 @@ export class NativeOpenAIChatModel {
         } else {
           chatBody.temperature = this.temperature;
         }
-        
+
         // Models don't have access to context - removed incorrect wrapper
-        
+
         const retries = Math.max(0, this.maxRetries ?? 5);
         let resp: any = null;
         let text: string = '';
@@ -188,10 +195,14 @@ export class NativeOpenAIChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw (lastError || new Error('Failed to obtain response text from OpenAI Chat Completions'));
+          throw lastError || new Error('Failed to obtain response text from OpenAI Chat Completions');
         }
         let parsed: any = undefined;
-        try { parsed = JSON.parse(text); } catch { parsed = { response: text }; }
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = { response: text };
+        }
         if (parsed && typeof parsed === 'object') {
           if (typeof parsed.response !== 'string') parsed.response = text;
           if (typeof parsed.done !== 'boolean') parsed.done = true;
@@ -219,9 +230,9 @@ export class NativeOpenAIChatModel {
       if (system) {
         body.instructions = system;
       }
-      
+
       // Models don't have access to context - removed incorrect wrapper
-      
+
       const resp: any = await (this.client as any).responses.create(body, { signal });
       const text = this.extractResponsesText(resp);
       return { content: text };
@@ -240,9 +251,9 @@ export class NativeOpenAIChatModel {
     } else {
       chatBody.temperature = this.temperature;
     }
-    
+
     // Models don't have access to context - removed incorrect wrapper
-    
+
     const resp = await this.client.chat.completions.create(chatBody as any, { signal });
     const text = resp.choices?.[0]?.message?.content || '';
     return { content: text };
@@ -272,8 +283,13 @@ export class NativeOpenAIChatModel {
 
     const detectRole = (m: any): 'system' | 'user' | 'assistant' | 'tool' => {
       try {
-        const explicitRole = (m && typeof m === 'object' && typeof m.role === 'string') ? (m.role as string) : '';
-        if (explicitRole === 'system' || explicitRole === 'user' || explicitRole === 'assistant' || explicitRole === 'tool') {
+        const explicitRole = m && typeof m === 'object' && typeof m.role === 'string' ? (m.role as string) : '';
+        if (
+          explicitRole === 'system' ||
+          explicitRole === 'user' ||
+          explicitRole === 'assistant' ||
+          explicitRole === 'tool'
+        ) {
           return explicitRole as any;
         }
         const role = (m as any).constructor?.name;
@@ -320,10 +336,18 @@ export class NativeOpenAIChatModel {
 
     const input: any[] = [];
     for (const m of messages) {
-      const explicitRole = (m && typeof (m as any).role === 'string') ? (m as any).role : '';
+      const explicitRole = m && typeof (m as any).role === 'string' ? (m as any).role : '';
       const roleName = (m as any).constructor?.name;
       const contentParts = transformContent((m as any).content);
-      const mapped = explicitRole || (roleName === 'SystemMessage' ? 'system' : roleName === 'HumanMessage' ? 'user' : roleName === 'AIMessage' ? 'assistant' : 'user');
+      const mapped =
+        explicitRole ||
+        (roleName === 'SystemMessage'
+          ? 'system'
+          : roleName === 'HumanMessage'
+            ? 'user'
+            : roleName === 'AIMessage'
+              ? 'assistant'
+              : 'user');
       input.push({ role: mapped, content: contentParts });
     }
     return input;
@@ -337,12 +361,18 @@ export class NativeOpenAIChatModel {
       if (Array.isArray(c)) {
         try {
           const texts = c
-            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string') ? p.text : '')
+            .map((p: any) => (p && typeof p === 'object' && typeof p.text === 'string' ? p.text : ''))
             .filter(Boolean);
           return texts.join('\n');
-        } catch { return JSON.stringify(c); }
+        } catch {
+          return JSON.stringify(c);
+        }
       }
-      try { return JSON.stringify(c); } catch { return String(c ?? ''); }
+      try {
+        return JSON.stringify(c);
+      } catch {
+        return String(c ?? '');
+      }
     };
     for (const m of messages) {
       const hasRole = m && typeof (m as any).role === 'string';
@@ -379,7 +409,7 @@ export class NativeOpenAIChatModel {
     if (Array.isArray(out)) {
       // Flatten any text fields
       for (const item of out) {
-        const content = (item?.content && Array.isArray(item.content)) ? item.content : undefined;
+        const content = item?.content && Array.isArray(item.content) ? item.content : undefined;
         if (content) {
           for (const c of content) {
             if (typeof c?.text === 'string') return c.text;
@@ -396,7 +426,10 @@ export class NativeOpenAIChatModel {
     try {
       const fence = text.match(/```json[\s\S]*?```/i) || text.match(/```[\s\S]*?```/);
       let candidate = fence ? fence[0] : text;
-      candidate = candidate.replace(/```json/i, '').replace(/```/g, '').trim();
+      candidate = candidate
+        .replace(/```json/i, '')
+        .replace(/```/g, '')
+        .trim();
       const firstBrace = candidate.indexOf('{');
       const lastBrace = candidate.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -408,5 +441,36 @@ export class NativeOpenAIChatModel {
       return null;
     }
   }
-}
 
+  async *invokeStreaming(
+    messages: BaseMessage[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
+    const payload = this.toOpenAIMessages(messages);
+
+    // Build request body - only include temperature for models that support it
+    const body: any = {
+      model: this.modelName,
+      messages: payload,
+      max_completion_tokens: this.maxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+
+    // Reasoning models (o1, o3, gpt-5) and search-preview models don't support temperature
+    if (!this.shouldUseResponsesAPI() && !this.isSearchPreviewModel()) {
+      body.temperature = this.temperature;
+    }
+
+    const stream = (await this.client.chat.completions.create(body as any, { signal })) as any;
+
+    let usage: any = null;
+    for await (const chunk of stream as AsyncIterable<any>) {
+      // Capture usage from final chunk
+      if (chunk.usage) usage = chunk.usage;
+      const text = chunk.choices?.[0]?.delta?.content;
+      if (text) yield { text, done: false };
+    }
+    yield { text: '', done: true, usage };
+  }
+}
