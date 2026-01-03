@@ -9,4 +9,6 @@ export { default as CodeBlock } from './code-block';
 export { default as MarkdownRenderer } from './markdown-renderer';
 export { default as AvailableChatSection } from './available-chat-section';
 export { default as ExampleUses } from './example-uses';
+export { default as TabContextSelector } from './tab-context-selector';
+export type { TabInfo } from './tab-context-selector';
 export type { JobSummary, MessageMetadata, TraceItem, WorkerItem, InlinePreview, InlinePreviewBatch } from './types';

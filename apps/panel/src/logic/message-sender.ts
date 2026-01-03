@@ -50,7 +50,9 @@ export function createMessageSender(deps: MessageSenderDeps) {
 
   async function handleReplay(historySessionId: string): Promise<void> {
     try {
-      try { deps.resetRunState?.(); } catch {}
+      try {
+        deps.resetRunState?.();
+      } catch {}
       if (isHistoricalSession()) {
         // historical session gate is not the same as replay enabled; leave behavior to panel UX
       }
@@ -94,7 +96,11 @@ export function createMessageSender(deps: MessageSenderDeps) {
         task: historyData.task,
       });
 
-      appendMessage({ actor: Actors.SYSTEM, content: `Starting replay of task:\n\n"${historyData.task}"`, timestamp: Date.now() });
+      appendMessage({
+        actor: Actors.SYSTEM,
+        content: `Starting replay of task:\n\n"${historyData.task}"`,
+        timestamp: Date.now(),
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       appendMessage({ actor: Actors.SYSTEM, content: `Replay failed: ${errorMessage}`, timestamp: Date.now() });
@@ -114,7 +120,11 @@ export function createMessageSender(deps: MessageSenderDeps) {
       if (command.startsWith('/replay ')) {
         const parts = command.split(' ').filter(p => p.trim() !== '');
         if (parts.length !== 2) {
-          appendMessage({ actor: Actors.SYSTEM, content: 'Invalid replay command format. Usage: /replay <historySessionId>', timestamp: Date.now() });
+          appendMessage({
+            actor: Actors.SYSTEM,
+            content: 'Invalid replay command format. Usage: /replay <historySessionId>',
+            timestamp: Date.now(),
+          });
           return true;
         }
         await handleReplay(parts[1]);
@@ -131,13 +141,15 @@ export function createMessageSender(deps: MessageSenderDeps) {
     }
   }
 
-  return async function handleSendMessage(text: string, agentType?: string) {
-    logger.log('handleSendMessage', text, agentType);
+  return async function handleSendMessage(text: string, agentType?: string, contextTabIds?: number[]) {
+    logger.log('handleSendMessage', text, agentType, contextTabIds);
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
     // Ensure per-run UI state is reset so each run gets a fresh root message and trace
-    try { deps.resetRunState?.(); } catch {}
+    try {
+      deps.resetRunState?.();
+    } catch {}
 
     let finalAgentType: any = agentType;
     if (!finalAgentType || finalAgentType === 'auto') {
@@ -211,13 +223,14 @@ export function createMessageSender(deps: MessageSenderDeps) {
           taskId: sessionIdRef.current,
           tabId,
           agentType: finalAgentType,
+          contextTabIds,
         });
         logger.log('follow_up_task sent', text, tabId, sessionIdRef.current, finalAgentType);
         setCurrentTaskAgentType(finalAgentType || null);
         try {
           if (sessionIdRef.current) {
             const current = chatSessions.find(s => s.id === sessionIdRef.current);
-            await chatHistoryStore.updateTitle(sessionIdRef.current, (current?.title) || '');
+            await chatHistoryStore.updateTitle(sessionIdRef.current, current?.title || '');
             await loadChatSessions();
           }
         } catch {}
@@ -235,6 +248,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
           tabId,
           agentType: finalAgentType,
           maxWorkersOverride,
+          contextTabIds,
         });
         logger.log('new_task sent', text, tabId, sessionIdRef.current, finalAgentType);
         setCurrentTaskAgentType(finalAgentType || null);
@@ -249,5 +263,3 @@ export function createMessageSender(deps: MessageSenderDeps) {
     }
   };
 }
-
-

@@ -24,6 +24,8 @@ export default class BrowserContext {
   private _rootTabId: number | null = null;
   // Optional preferred tab group id for immediate grouping of newly created tabs
   private _preferredGroupId: number | null = null;
+  // Context tabs provided by user to be added to agent's tab group
+  private _contextTabIds: number[] = [];
 
   constructor(config: Partial<BrowserContextConfig> & { forceNewTab?: boolean } = {}) {
     const { forceNewTab, ...browserConfig } = config;
@@ -53,17 +55,68 @@ export default class BrowserContext {
     this._currentTabId = tabId;
   }
 
-  
-
   /**
    * Hint the context to place newly created tabs into the specified Chrome tab group.
    * Passing null clears the hint.
+   * Also moves any context tabs into this group.
    */
   public setPreferredGroupId(groupId: number | null | undefined): void {
     if (typeof groupId === 'number' && groupId >= 0) {
       this._preferredGroupId = groupId;
+      // Move context tabs into the group
+      this.moveContextTabsToGroup(groupId);
     } else {
       this._preferredGroupId = null;
+    }
+  }
+
+  /**
+   * Set context tabs that should be added to the agent's tab group.
+   * These tabs are registered as owned and the first one is set as the current tab
+   * so the agent starts working there instead of creating a new tab.
+   */
+  public setContextTabs(tabIds: number[]): void {
+    this._contextTabIds = tabIds.filter(id => typeof id === 'number' && id > 0);
+    // Register context tabs as owned so the agent can interact with them
+    for (const tabId of this._contextTabIds) {
+      this.registerOwnedTab(tabId);
+    }
+    // Set the first context tab as the current tab so the agent starts there
+    if (this._contextTabIds.length > 0) {
+      this._currentTabId = this._contextTabIds[0];
+      logger.info(`Set current tab to first context tab: ${this._currentTabId}`);
+    }
+    logger.debug(`Set ${this._contextTabIds.length} context tabs:`, this._contextTabIds);
+  }
+
+  /**
+   * Get the context tab IDs.
+   */
+  public getContextTabIds(): number[] {
+    return [...this._contextTabIds];
+  }
+
+  /**
+   * Move context tabs into the specified group.
+   */
+  private async moveContextTabsToGroup(groupId: number): Promise<void> {
+    if (this._contextTabIds.length === 0) return;
+
+    try {
+      // Filter to tabs that still exist
+      const validTabIds: number[] = [];
+      for (const tabId of this._contextTabIds) {
+        if (await tabExists(tabId)) {
+          validTabIds.push(tabId);
+        }
+      }
+
+      if (validTabIds.length > 0) {
+        await chrome.tabs.group({ tabIds: validTabIds, groupId });
+        logger.info(`Moved ${validTabIds.length} context tabs to group ${groupId}`);
+      }
+    } catch (e) {
+      logger.error('Failed to move context tabs to group:', e);
     }
   }
 
@@ -126,7 +179,7 @@ export default class BrowserContext {
     logger.debug(`cleanup called - detaching from ${this._attachedPages.size} pages`);
     try {
       // Only try to remove highlights if we have a valid current tab
-      if (this._currentTabId && await tabExists(this._currentTabId)) {
+      if (this._currentTabId && (await tabExists(this._currentTabId))) {
         const currentPage = await this.getCurrentPage();
         await currentPage?.removeHighlight();
       }
@@ -137,7 +190,7 @@ export default class BrowserContext {
         logger.warning('Error removing highlight during cleanup:', error.message);
       }
     }
-    
+
     // detach all pages
     for (const page of this._attachedPages.values()) {
       try {
@@ -157,7 +210,7 @@ export default class BrowserContext {
         }
       }
     }
-    
+
     // Always clear the maps even if detaching fails
     this._attachedPages.clear();
     this._currentTabId = null;
@@ -216,7 +269,9 @@ export default class BrowserContext {
       const page = await this._getOrCreatePage(activeTab);
       await this.attachPage(page);
       this._currentTabId = activeTab.id || null;
-      try { await this.resolveVisibleGroupId(); } catch {}
+      try {
+        await this.resolveVisibleGroupId();
+      } catch {}
       return page;
     }
 
@@ -247,7 +302,9 @@ export default class BrowserContext {
         // Non-worker mode: return the page object without attachment (will use chrome.tabs.update flows)
         return page;
       }
-      try { await this.resolveVisibleGroupId(); } catch {}
+      try {
+        await this.resolveVisibleGroupId();
+      } catch {}
       return page;
     }
 
@@ -263,7 +320,7 @@ export default class BrowserContext {
       }
       throw new Error('Current tab no longer exists');
     }
-    
+
     return existingPage;
   }
 
@@ -365,13 +422,13 @@ export default class BrowserContext {
         throw new Error(`Tab ${tabId} is not owned by this worker context`);
       }
     }
-    
+
     // Verify tab exists before proceeding
     const tab = await tabExists(tabId);
     if (!tab) {
       throw new Error(`No tab with id: ${tabId}`);
     }
-    
+
     await this.waitForTabEvents(tabId, { waitForUpdate: false, waitForActivation: false });
 
     const page = await this._getOrCreatePage(tab);
@@ -417,7 +474,7 @@ export default class BrowserContext {
       // Re-throw other errors
       throw error;
     }
-    
+
     if (!page) {
       await this.openTab(url);
       return;
@@ -445,7 +502,9 @@ export default class BrowserContext {
     const updatedPage = await this._getOrCreatePage(updatedTab, true);
     await this.attachPage(updatedPage);
     this._currentTabId = tabId;
-    try { await this.resolveVisibleGroupId(); } catch {}
+    try {
+      await this.resolveVisibleGroupId();
+    } catch {}
   }
 
   public async openTab(url: string): Promise<Page> {
@@ -456,7 +515,7 @@ export default class BrowserContext {
     // Tab created in current window (user is always in a valid window via side panel)
     const tab = await chrome.tabs.create({ url, active: false });
     if (!tab.id) throw new Error('No tab ID available');
-    
+
     // Add to preferred/current group if known
     if (typeof this._preferredGroupId === 'number') {
       try {
@@ -473,10 +532,12 @@ export default class BrowserContext {
         }
       } catch {}
     }
-    
-    try { this._newTabCreated = tab.id; } catch {}
+
+    try {
+      this._newTabCreated = tab.id;
+    } catch {}
     if (this._forceNewTab) this._ownedTabIds.add(tab.id);
-    
+
     try {
       await this.waitForTabEvents(tab.id, { waitForUpdate: true, waitForActivation: false });
     } catch {}
@@ -485,7 +546,9 @@ export default class BrowserContext {
     const page = await this._getOrCreatePage(updatedTab);
     await this.attachPage(page);
     this._currentTabId = tab.id;
-    try { await this.resolveVisibleGroupId(); } catch {}
+    try {
+      await this.resolveVisibleGroupId();
+    } catch {}
 
     return page;
   }
@@ -618,7 +681,7 @@ export default class BrowserContext {
       throw error;
     }
   }
-  
+
   public getAndClearNewTabCreated(): number | null {
     const tabId = this._newTabCreated;
     this._newTabCreated = null;
@@ -636,5 +699,3 @@ export default class BrowserContext {
     } catch {}
   }
 }
-
-
