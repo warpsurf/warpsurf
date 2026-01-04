@@ -37,11 +37,27 @@ export interface MessageListProps {
 }
 
 export default memo(function MessageList({
-  messages, isDarkMode = false, compactMode = false, jobSummaries = {}, metadataByMessageId = {},
-  onRetryRequest, inlinePreview, inlinePreviewBatch = [], onOpenPreviewTab, onTakeControl,
-  isAgentWorking = false, isPaused = false, isPreviewCollapsed = false, onTogglePreviewCollapsed,
-  activeAggregateMessageId = null, pinnedMessageIds, scrollParent, pendingEstimation,
-  availableModelsForEstimation, onApproveEstimation, onCancelEstimation,
+  messages,
+  isDarkMode = false,
+  compactMode = false,
+  jobSummaries = {},
+  metadataByMessageId = {},
+  onRetryRequest,
+  inlinePreview,
+  inlinePreviewBatch = [],
+  onOpenPreviewTab,
+  onTakeControl,
+  isAgentWorking = false,
+  isPaused = false,
+  isPreviewCollapsed = false,
+  onTogglePreviewCollapsed,
+  activeAggregateMessageId = null,
+  pinnedMessageIds,
+  scrollParent,
+  pendingEstimation,
+  availableModelsForEstimation,
+  onApproveEstimation,
+  onCancelEstimation,
 }: MessageListProps) {
   const lastAgentIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -73,41 +89,86 @@ export default memo(function MessageList({
 
   return (
     <div className="h-full max-w-full">
-      <Virtuoso style={{ height: '100%' }} data={messages} customScrollParent={scrollParent || undefined} itemContent={(index, message) => {
-        const messageId = `${message.timestamp}-${message.actor}`;
-        const rootMeta = activeAggregateMessageId ? metadataByMessageId[activeAggregateMessageId] : undefined;
-        const isCurrentRunRoot = activeAggregateMessageId === messageId;
-        const hasAnyPreview = !!(inlinePreview || inlinePreviewBatch?.length);
-        const isFallbackLastAgent = !activeAggregateMessageId && hasAnyPreview && (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
-        const showPreviewHere = isCurrentRunRoot || isFallbackLastAgent;
-        const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
-        const agentColorHex = metadata?.agentColor || (activeAggregateMessageId === messageId ? inlinePreview?.color : undefined);
-        const showDivider = shouldShowDateDivider(message.timestamp, index > 0 ? messages[index - 1].timestamp : undefined);
-        const messageBlockProps = {
-          message, isSameActor: index > 0 && messages[index - 1].actor === message.actor, isDarkMode,
-          compactMode: showPreviewHere ? false : compactMode, jobSummary: jobSummaries[messageId], metadata,
-          isAgentAggregate: !!metadata?.traceItems, onRetryRequest, agentColorHex,
-          isAgentWorking: isAgentWorking && !metadata?.isCompleted && (activeAggregateMessageId ? isCurrentRunRoot : isFallbackLastAgent),
-          onTakeControl, pinnedMessageIds, pendingEstimation, availableModelsForEstimation, onApproveEstimation, onCancelEstimation,
-        };
+      <Virtuoso
+        style={{ height: '100%' }}
+        data={messages}
+        customScrollParent={scrollParent || undefined}
+        itemContent={(index, message) => {
+          const messageId = `${message.timestamp}-${message.actor}`;
+          const rootMeta = activeAggregateMessageId ? metadataByMessageId[activeAggregateMessageId] : undefined;
+          const isCurrentRunRoot = activeAggregateMessageId === messageId;
+          const hasAnyPreview = !!(inlinePreview || inlinePreviewBatch?.length);
+          const isFallbackLastAgent =
+            !activeAggregateMessageId &&
+            hasAnyPreview &&
+            (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
+          const showPreviewHere = isCurrentRunRoot || isFallbackLastAgent;
+          const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
+          const agentColorHex =
+            metadata?.agentColor || (activeAggregateMessageId === messageId ? inlinePreview?.color : undefined);
+          const showDivider = shouldShowDateDivider(
+            message.timestamp,
+            index > 0 ? messages[index - 1].timestamp : undefined,
+          );
+          const messageBlockProps = {
+            message,
+            isSameActor: index > 0 && messages[index - 1].actor === message.actor,
+            isDarkMode,
+            compactMode: showPreviewHere ? false : compactMode,
+            jobSummary: jobSummaries[messageId],
+            metadata,
+            isAgentAggregate: !!metadata?.traceItems,
+            onRetryRequest,
+            agentColorHex,
+            isAgentWorking:
+              isAgentWorking &&
+              !metadata?.isCompleted &&
+              (activeAggregateMessageId ? isCurrentRunRoot : isFallbackLastAgent),
+            onTakeControl,
+            pinnedMessageIds,
+            pendingEstimation,
+            availableModelsForEstimation,
+            onApproveEstimation,
+            onCancelEstimation,
+          };
 
-        return showPreviewHere ? (
-          <div className="space-y-2">
-            {showDivider && <DateDivider timestamp={message.timestamp} />}
-            <div className="flex gap-2">
-              <div className="w-2/3"><MessageBlock {...messageBlockProps} /></div>
-              <div className="w-1/3">
-                <PreviewPanel inlinePreview={inlinePreview || metadata?.finalPreview || null} inlinePreviewBatch={inlinePreviewBatch?.length ? inlinePreviewBatch : metadata?.finalPreviewBatch || []} agentColorHex={agentColorHex} isPaused={isPaused} isPreviewCollapsed={isPreviewCollapsed} fpsText={fpsText} isDarkMode={isDarkMode} onTogglePreviewCollapsed={onTogglePreviewCollapsed} onOpenPreviewTab={onOpenPreviewTab} onTakeControl={onTakeControl} />
+          const isUserMessage = message.actor === Actors.USER;
+          const prevIsUser = index > 0 && messages[index - 1].actor === Actors.USER;
+          const needsExtraSpace = index > 0 && isUserMessage !== prevIsUser;
+
+          return showPreviewHere ? (
+            <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+              {showDivider && <DateDivider timestamp={message.timestamp} />}
+              <div className="flex gap-2">
+                <div className="flex-1 min-w-0">
+                  <MessageBlock {...messageBlockProps} hasPreviewPanel />
+                </div>
+                <div className="w-1/3 flex-shrink-0">
+                  <PreviewPanel
+                    inlinePreview={inlinePreview || metadata?.finalPreview || null}
+                    inlinePreviewBatch={
+                      inlinePreviewBatch?.length ? inlinePreviewBatch : metadata?.finalPreviewBatch || []
+                    }
+                    agentColorHex={agentColorHex}
+                    isPaused={isPaused}
+                    isPreviewCollapsed={isPreviewCollapsed}
+                    fpsText={fpsText}
+                    isDarkMode={isDarkMode}
+                    onTogglePreviewCollapsed={onTogglePreviewCollapsed}
+                    onOpenPreviewTab={onOpenPreviewTab}
+                    onTakeControl={onTakeControl}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {showDivider && <DateDivider timestamp={message.timestamp} />}
-            <MessageBlock {...messageBlockProps} />
-          </div>
-        );
-      }} />
+          ) : (
+            <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+              {showDivider && <DateDivider timestamp={message.timestamp} />}
+              <MessageBlock {...messageBlockProps} />
+            </div>
+          );
+        }}
+      />
     </div>
   );
 });
