@@ -11,7 +11,8 @@ type BaseChatModel = any;
 
 // create a chat model based on the agent name, the model name and provider
 export function createChatModel(providerConfig: ProviderConfig, modelConfig: ModelConfig): BaseChatModel {
-  const temperature = (modelConfig.parameters?.temperature ?? 0.1) as number;
+  // Temperature is undefined when user wants provider's default; only pass through if explicitly set
+  const temperature = modelConfig.parameters?.temperature as number | undefined;
   const maxTokens = (modelConfig.parameters?.maxOutputTokens ?? 8192) as number;
 
   switch (modelConfig.provider) {
@@ -21,7 +22,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         model: modelConfig.modelName,
         apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl,
-        temperature: (modelConfig.parameters?.temperature ?? 0.1) as number,
+        temperature,
         maxTokens,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
@@ -91,4 +92,3 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     }
   }
 }
-

@@ -1,4 +1,4 @@
-import { ModelComboBox, SliderWithNumber, LabelWithTooltip, cn } from './primitives';
+import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn } from './primitives';
 import { AgentNameEnum } from '@extension/storage';
 import { isOpenAIOModel } from './primitives';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
@@ -8,7 +8,7 @@ interface ModelSelectProps {
   agentName: AgentNameEnum;
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedValue: string;
-  modelParameters: { temperature: number; maxOutputTokens: number };
+  modelParameters: { temperature: number | undefined; maxOutputTokens: number };
   reasoningEffortValue?: 'low' | 'medium' | 'high';
   showAllModels: boolean;
   getAgentDisplayName: (agent: AgentNameEnum) => string;
@@ -16,7 +16,11 @@ interface ModelSelectProps {
   getAgentSectionColor: (agent: AgentNameEnum) => string;
   hasModelPricing: (modelName: string) => boolean;
   onChangeModel: (agent: AgentNameEnum, value: string) => void;
-  onChangeParameter: (agent: AgentNameEnum, param: 'temperature' | 'maxOutputTokens', value: number) => void;
+  onChangeParameter: (
+    agent: AgentNameEnum,
+    param: 'temperature' | 'maxOutputTokens',
+    value: number | undefined,
+  ) => void;
   onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => void;
 }
 
@@ -95,17 +99,14 @@ export function ModelSelect(props: ModelSelectProps) {
             isDarkMode={isDarkMode}
             htmlFor={`${agentName}-temperature`}
             label="Temperature"
-            tooltip="Controls randomness of outputs"
+            tooltip="Controls randomness of outputs. Leave as default to use the provider's recommended temperature."
           />
-          <SliderWithNumber
+          <TemperatureControl
             isDarkMode={isDarkMode}
             id={`${agentName}-temperature`}
-            min={0}
-            max={2}
-            step={0.01}
             value={modelParameters.temperature}
             onChange={v => onChangeParameter(agentName, 'temperature', v)}
-            ariaLabel={`${agentName} temperature number input`}
+            ariaLabel={`${agentName} temperature input`}
           />
         </div>
 

@@ -9,7 +9,7 @@ interface AgentModelsSectionProps {
   agents: AgentNameEnum[];
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedModels: Record<AgentNameEnum, string>;
-  modelParameters: Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }>;
+  modelParameters: Record<AgentNameEnum, { temperature: number | undefined; maxOutputTokens: number }>;
   reasoningEffort: Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>;
   showAllModels: boolean;
   getAgentDisplayName: (agent: AgentNameEnum) => string;
@@ -20,7 +20,7 @@ interface AgentModelsSectionProps {
   onChangeParameter: (
     agent: AgentNameEnum,
     param: 'temperature' | 'maxOutputTokens',
-    value: number,
+    value: number | undefined,
   ) => Promise<void> | void;
   onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => Promise<void> | void;
   children?: ReactNode;

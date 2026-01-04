@@ -149,12 +149,14 @@ export function createInitialSelectedModels(): Record<AgentNameEnum, string> {
 
 /**
  * Create initial model parameters state
+ * Temperature is undefined by default, meaning "use provider's default temperature"
+ * Users can explicitly set a temperature value if desired
  */
 export function createInitialModelParameters(): Record<
   AgentNameEnum,
-  { temperature: number; maxOutputTokens: number }
+  { temperature: number | undefined; maxOutputTokens: number }
 > {
-  return createAgentStateMap(() => ({ temperature: 0, maxOutputTokens: 8192 }));
+  return createAgentStateMap(() => ({ temperature: undefined, maxOutputTokens: 8192 }));
 }
 
 /**

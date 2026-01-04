@@ -64,7 +64,8 @@ export class NativeOpenRouterChatModel {
           model: this.modelName,
           messages: payload,
           max_tokens: this.maxTokens,
-          temperature: this.temperature,
+          // Only include temperature if explicitly set; omit to use provider default
+          ...(this.temperature !== undefined && { temperature: this.temperature }),
           response_format: responseFormat,
           ...(rest as object),
         };
@@ -130,7 +131,8 @@ export class NativeOpenRouterChatModel {
       model: this.modelName,
       messages: payload,
       max_tokens: this.maxTokens,
-      temperature: this.temperature,
+      // Only include temperature if explicitly set; omit to use provider default
+      ...(this.temperature !== undefined && { temperature: this.temperature }),
       ...(rest as object),
     };
 
@@ -246,7 +248,8 @@ export class NativeOpenRouterChatModel {
         model: this.modelName,
         messages: this.toOpenAIMessages(messages),
         max_tokens: this.maxTokens,
-        temperature: this.temperature,
+        // Only include temperature if explicitly set; omit to use provider default
+        ...(this.temperature !== undefined && { temperature: this.temperature }),
         stream: true,
         stream_options: { include_usage: true },
       } as any,

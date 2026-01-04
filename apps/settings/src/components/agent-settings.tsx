@@ -12,7 +12,6 @@ import {
   AgentNameEnum,
   llmProviderModelNames,
   ProviderTypeEnum,
-  getDefaultAgentModelParams,
   DEFAULT_GENERAL_SETTINGS,
   type GeneralSettingsConfig,
   type ProviderConfig,
@@ -43,7 +42,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
   const [selectedModels, setSelectedModels] = useState<Record<AgentNameEnum, string>>(createInitialSelectedModels);
   const [modelParameters, setModelParameters] =
-    useState<Record<AgentNameEnum, { temperature: number; maxOutputTokens: number }>>(createInitialModelParameters);
+    useState<Record<AgentNameEnum, { temperature: number | undefined; maxOutputTokens: number }>>(
+      createInitialModelParameters,
+    );
   const [reasoningEffort, setReasoningEffort] =
     useState<Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>>(createInitialReasoningEffort);
   const [webSearchEnabled, setWebSearchEnabled] =
@@ -125,15 +126,15 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           const config = await agentModelStore.getAgentModel(agent);
           if (config) {
             models[agent] = `${config.provider}>${config.modelName}`;
-            if (config.parameters?.temperature !== undefined || config.parameters?.maxOutputTokens !== undefined) {
-              setModelParameters(prev => ({
-                ...prev,
-                [agent]: {
-                  temperature: (config.parameters?.temperature as number) ?? prev[agent].temperature,
-                  maxOutputTokens: (config.parameters?.maxOutputTokens as number) ?? prev[agent].maxOutputTokens,
-                },
-              }));
-            }
+            // Load temperature (may be undefined for provider default) and maxOutputTokens
+            setModelParameters(prev => ({
+              ...prev,
+              [agent]: {
+                // Temperature can be undefined (provider default) or a number
+                temperature: config.parameters?.temperature as number | undefined,
+                maxOutputTokens: (config.parameters?.maxOutputTokens as number) ?? prev[agent].maxOutputTokens,
+              },
+            }));
             if (config.reasoningEffort) {
               setReasoningEffort(prev => ({
                 ...prev,
@@ -355,7 +356,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
     console.log(`[handleModelChange] Setting ${agentName} model: provider=${provider}, model=${model}`);
 
-    const newParameters = getDefaultAgentModelParams(provider, agentName);
+    // When changing models, reset to provider defaults (temperature undefined = use provider default)
+    const newParameters = {
+      temperature: undefined as number | undefined, // Use provider's default temperature
+      maxOutputTokens: 8192,
+    };
 
     setModelParameters(prev => ({
       ...prev,
@@ -385,10 +390,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         if (agentName === AgentNameEnum.Search && !webSearchEnabled[agentName]) {
           setWebSearchEnabled(prev => ({ ...prev, [agentName]: true }));
         }
+
+        // Only include maxOutputTokens in saved parameters (temperature undefined = provider default)
         await agentModelStore.setAgentModel(agentName, {
           provider,
           modelName: model,
-          parameters: newParameters,
+          parameters: { maxOutputTokens: newParameters.maxOutputTokens },
           reasoningEffort: isOpenAIOModel(model) ? reasoningEffort[agentName] || 'medium' : undefined,
           webSearch: shouldEnableWebSearch,
         });
@@ -428,7 +435,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
   const handleParameterChange = async (
     agentName: AgentNameEnum,
     paramName: 'temperature' | 'maxOutputTokens',
-    value: number,
+    value: number | undefined,
   ) => {
     const newParameters = {
       ...modelParameters[agentName],
@@ -445,10 +452,18 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         const [provider, model] = selectedModels[agentName].split('>');
 
         if (provider) {
+          // Build parameters object, omitting undefined temperature to use provider default
+          const parametersToSave: Record<string, unknown> = {
+            maxOutputTokens: newParameters.maxOutputTokens,
+          };
+          if (newParameters.temperature !== undefined) {
+            parametersToSave.temperature = newParameters.temperature;
+          }
+
           await agentModelStore.setAgentModel(agentName, {
             provider,
             modelName: model,
-            parameters: newParameters,
+            parameters: parametersToSave,
             reasoningEffort: reasoningEffort[agentName],
             webSearch: webSearchEnabled[agentName] || false,
           });

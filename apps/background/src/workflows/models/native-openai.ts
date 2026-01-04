@@ -164,7 +164,8 @@ export class NativeOpenAIChatModel {
         // Only include sampling params for models that accept them; add web search options for preview
         if (this.isSearchPreviewModel()) {
           chatBody.web_search_options = {};
-        } else {
+        } else if (this.temperature !== undefined) {
+          // Only include temperature if explicitly set; omit to use provider default
           chatBody.temperature = this.temperature;
         }
 
@@ -248,7 +249,8 @@ export class NativeOpenAIChatModel {
     // For search-preview via Chat Completions: add web_search_options and omit sampling params
     if (this.isSearchPreviewModel()) {
       chatBody.web_search_options = {};
-    } else {
+    } else if (this.temperature !== undefined) {
+      // Only include temperature if explicitly set; omit to use provider default
       chatBody.temperature = this.temperature;
     }
 

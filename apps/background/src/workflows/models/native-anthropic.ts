@@ -55,7 +55,8 @@ export class NativeAnthropicChatModel {
               {
                 model: this.modelName,
                 max_tokens: this.maxTokens,
-                temperature: this.temperature,
+                // Only include temperature if explicitly set; omit to use provider default
+                ...(this.temperature !== undefined && { temperature: this.temperature }),
                 system: system || undefined,
                 messages: anthropicMessages,
                 ...(rest as object),
@@ -127,7 +128,8 @@ export class NativeAnthropicChatModel {
           {
             model: this.modelName,
             max_tokens: this.maxTokens,
-            temperature: this.temperature,
+            // Only include temperature if explicitly set; omit to use provider default
+            ...(this.temperature !== undefined && { temperature: this.temperature }),
             system: system || undefined,
             messages: anthropicMessages,
             tools: this.webSearchEnabled

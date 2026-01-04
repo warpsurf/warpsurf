@@ -1,7 +1,13 @@
 import { StorageEnum } from '../base/enums';
 import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
-import { type AgentNameEnum, llmProviderFallbackModelNames, llmProviderDefaultModels, llmProviderDefaultWebSearch, ProviderTypeEnum } from './types';
+import {
+  type AgentNameEnum,
+  llmProviderFallbackModelNames,
+  llmProviderDefaultModels,
+  llmProviderDefaultWebSearch,
+  ProviderTypeEnum,
+} from './types';
 import type { EncryptedData } from '../crypto/types';
 
 export interface ProviderConfig {
@@ -112,8 +118,9 @@ export function getDefaultProviderConfig(providerId: string): ProviderConfig {
 }
 
 export function getDefaultAgentModelParams(providerId: string, agentName: AgentNameEnum): Record<string, number> {
-  // UI-driven; provide a neutral fallback only if UI hasn't saved yet
-  return { temperature: 0.0 };
+  // Return empty object - let provider APIs use their own default temperature
+  // Temperature is only included when user explicitly sets it
+  return {};
 }
 
 export function getDefaultAgentModel(providerId: string, agentName: AgentNameEnum): string | undefined {
@@ -137,7 +144,8 @@ function ensureBackwardCompatibility(providerId: string, config: ProviderConfig)
     updatedConfig.type = getProviderTypeByProviderId(providerId);
   }
   if (!updatedConfig.modelNames) {
-    updatedConfig.modelNames = llmProviderFallbackModelNames[providerId as keyof typeof llmProviderFallbackModelNames] || [];
+    updatedConfig.modelNames =
+      llmProviderFallbackModelNames[providerId as keyof typeof llmProviderFallbackModelNames] || [];
   }
   if (!updatedConfig.createdAt) {
     updatedConfig.createdAt = new Date('03/04/2025').getTime();

@@ -52,7 +52,8 @@ export class NativeGeminiChatModel {
           contents,
           systemInstruction: system || undefined,
           generationConfig: {
-            temperature: this.temperature,
+            // Only include temperature if explicitly set; omit to use provider default
+            ...(this.temperature !== undefined && { temperature: this.temperature }),
             maxOutputTokens: this.maxTokens,
             ...(useStructuredHints
               ? {
@@ -150,7 +151,8 @@ export class NativeGeminiChatModel {
       contents,
       systemInstruction: system || undefined,
       generationConfig: {
-        temperature: this.temperature,
+        // Only include temperature if explicitly set; omit to use provider default
+        ...(this.temperature !== undefined && { temperature: this.temperature }),
         maxOutputTokens: this.maxTokens,
       },
       tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,

@@ -44,7 +44,9 @@ function validateModelConfig(config: ModelConfig) {
 }
 
 function getNeutralParameters(): Record<string, unknown> {
-  return { temperature: 0.0 };
+  // Return empty object - let provider APIs use their own default temperature
+  // Users can explicitly set temperature if desired; undefined means "use provider default"
+  return {};
 }
 
 export const agentModelStore: AgentModelStorage = {
