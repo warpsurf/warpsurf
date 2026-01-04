@@ -74,6 +74,10 @@ interface ChatInputProps {
   isStopping?: boolean;
 }
 
+const MIN_HEIGHT = 40;
+const MAX_HEIGHT = 200;
+const DEFAULT_HEIGHT = 56;
+
 export default function ChatInput({
   onSendMessage,
   onStopTask,
@@ -96,8 +100,12 @@ export default function ChatInput({
   const [handbackText, setHandbackText] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<WorkflowType>(WorkflowType.AUTO);
   const [contextTabIds, setContextTabIds] = useState<number[]>([]);
+  const [textareaHeight, setTextareaHeight] = useState(DEFAULT_HEIGHT);
+  const [isResizing, setIsResizing] = useState(false);
   const isSendButtonDisabled = useMemo(() => disabled || text.trim() === '', [disabled, text]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resizeStartY = useRef(0);
+  const resizeStartHeight = useRef(0);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const slashItems = useMemo(
@@ -135,13 +143,6 @@ export default function ChatInput({
     if (detectedAgent && detectedAgent !== selectedAgent) {
       setSelectedAgent(detectedAgent);
     }
-
-    // Resize textarea
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
-    }
   };
 
   // Expose a method to set content from outside
@@ -158,14 +159,32 @@ export default function ChatInput({
     }
   }, [setAgentSelector]);
 
-  // Initial resize when component mounts
+  // Resize handle drag handlers
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+      resizeStartY.current = e.clientY;
+      resizeStartHeight.current = textareaHeight;
+    },
+    [textareaHeight],
+  );
+
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
-    }
-  }, []);
+    if (!isResizing) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = resizeStartY.current - e.clientY;
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeStartHeight.current + delta));
+      setTextareaHeight(newHeight);
+    };
+    const handleMouseUp = () => setIsResizing(false);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -248,6 +267,20 @@ export default function ChatInput({
       className={`overflow-visible rounded-xl border transition-colors liquid-glass ${disabled ? 'cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'} ${isDarkMode ? '' : ''}`}
       aria-label="Chat input form">
       <div className="flex flex-col overflow-hidden rounded-xl">
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          className={`flex justify-center py-1 cursor-ns-resize group ${isDarkMode ? 'hover:bg-slate-700/50' : 'hover:bg-gray-100'}`}>
+          <div
+            className={`w-8 h-1 rounded-full transition-colors ${
+              isResizing
+                ? 'bg-violet-400'
+                : isDarkMode
+                  ? 'bg-slate-600 group-hover:bg-slate-500'
+                  : 'bg-gray-300 group-hover:bg-gray-400'
+            }`}
+          />
+        </div>
         <textarea
           ref={textareaRef}
           value={text}
@@ -255,7 +288,7 @@ export default function ChatInput({
           onKeyDown={handleKeyDown}
           disabled={disabled}
           aria-disabled={disabled}
-          rows={5}
+          style={{ height: textareaHeight }}
           className={`w-full resize-none border-none p-2 focus:outline-none ${
             disabled
               ? isDarkMode
