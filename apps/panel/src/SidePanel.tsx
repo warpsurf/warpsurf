@@ -44,7 +44,14 @@ const SidePanel = () => {
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null);
   const [hasProviders, setHasProviders] = useState<boolean | null>(null);
-  const [sessionStats, setSessionStats] = useState({ totalRequests: 0, totalInputTokens: 0, totalOutputTokens: 0, totalLatency: 0, totalCost: 0, avgLatencyPerRequest: 0 });
+  const [sessionStats, setSessionStats] = useState({
+    totalRequests: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalLatency: 0,
+    totalCost: 0,
+    avgLatencyPerRequest: 0,
+  });
   const [compactMode, setCompactMode] = useState(true);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [showInlineWorkflow, setShowInlineWorkflow] = useState<boolean>(false);
@@ -58,8 +65,8 @@ const SidePanel = () => {
   const [historyContextLoading, setHistoryContextLoading] = useState(false);
   const [historyJustCompleted, setHistoryJustCompleted] = useState(false);
   const [tokenLog, setTokenLog] = useState<Array<any>>([]);
-  const [requestSummaries, setRequestSummaries] = useState<{[messageId: string]: any}>({});
-  const [messageMetadata, setMessageMetadata] = useState<{[messageId: string]: any}>({});
+  const [requestSummaries, setRequestSummaries] = useState<{ [messageId: string]: any }>({});
+  const [messageMetadata, setMessageMetadata] = useState<{ [messageId: string]: any }>({});
   const [displayHighlights, setDisplayHighlights] = useState<boolean>(false);
   const [useVisionState, setUseVisionState] = useState<boolean>(false);
   const [showTabPreviews, setShowTabPreviews] = useState<boolean>(true);
@@ -91,11 +98,11 @@ const SidePanel = () => {
   const [agentSettingsOpen, setAgentSettingsOpen] = useState<boolean>(false);
   const [feedbackMenuOpen, setFeedbackMenuOpen] = useState<boolean>(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(false);
-  
+
   const isDarkMode = useDarkMode();
   const { showToast } = useToast();
   const { ensureAgentOrdinal } = useAgentOrdinals();
-  
+
   // Refs
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
@@ -126,14 +133,31 @@ const SidePanel = () => {
   // Refs for cancellation state management (confirmation-based stop with timeout escalation)
   const isCancellingRef = useRef<boolean>(false);
   const cancelTimeoutRef = useRef<number | null>(null);
-  
+
   const logger = useMemo(() => createLogger(portRef), []);
   const { extensionVersion, releaseNotes } = useVersionInfo();
-  const { firstRunAccepted, disablePerChatWarnings, resetPerChatAcceptance, promptPerChatIfEnabled, ensurePerChatBeforeNewSession, firstRunModal, livePricingModal, perChatModal } = useDisclaimerGates(isDarkMode);
-  const { hasAcceptedHistoryPrivacy, promptHistoryPrivacy, resetHistoryPrivacy, historyPrivacyModal } = useHistoryPrivacyGate(isDarkMode);
-  
+  const {
+    firstRunAccepted,
+    disablePerChatWarnings,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    ensurePerChatBeforeNewSession,
+    firstRunModal,
+    livePricingModal,
+    perChatModal,
+  } = useDisclaimerGates(isDarkMode);
+  const { hasAcceptedHistoryPrivacy, promptHistoryPrivacy, resetHistoryPrivacy, historyPrivacyModal } =
+    useHistoryPrivacyGate(isDarkMode);
+
   // Chat history
-  const { chatSessions, loadChatSessions, handleSessionSelect: handleSessionSelectHook, handleSessionDelete, handleSessionBookmark: handleSessionBookmarkFromHook, renameSession } = useChatHistory({
+  const {
+    chatSessions,
+    loadChatSessions,
+    handleSessionSelect: handleSessionSelectHook,
+    handleSessionDelete,
+    handleSessionBookmark: handleSessionBookmarkFromHook,
+    renameSession,
+  } = useChatHistory({
     logger,
     setMessages,
     setCurrentSessionId,
@@ -149,70 +173,290 @@ const SidePanel = () => {
     showToast,
     setFavoritePrompts,
   });
-  
+
   // Event setup (appendMessage, taskEventHandler, panelHandlers)
   const { appendMessage, resetRunState, panelHandlers } = useEventSetup({
-    portRef, sessionIdRef, agentTraceRootIdRef, agentTraceActiveRef, lastAgentMessageRef, jobActiveRef, laneColorByLaneRef, processedJobSummariesRef, taskIdToRootIdRef, lastAgentMessageByTaskRef, closableTaskIdsRef, workflowEndedRef, cancelSummaryTargetsRef, runStartedAtRef, lastUserPromptRef, historyCompletedTimerRef, setInputTextRef,
+    portRef,
+    sessionIdRef,
+    agentTraceRootIdRef,
+    agentTraceActiveRef,
+    lastAgentMessageRef,
+    jobActiveRef,
+    laneColorByLaneRef,
+    processedJobSummariesRef,
+    taskIdToRootIdRef,
+    lastAgentMessageByTaskRef,
+    closableTaskIdsRef,
+    workflowEndedRef,
+    cancelSummaryTargetsRef,
+    runStartedAtRef,
+    lastUserPromptRef,
+    historyCompletedTimerRef,
+    setInputTextRef,
     // Cancellation state refs
-    isCancellingRef, cancelTimeoutRef,
-    logger, showToast, ensureAgentOrdinal, chatSessions, incognitoMode,
-    setMessages, setIsJobActive, setShowStopButton, setIsHistoricalSession, setHasFirstPreview,
-    setMirrorPreview, setMirrorPreviewBatch, setWorkerTabGroups, setShowCloseTabs,
-    setIsFollowUpMode, setInputEnabled, setIsReplaying, setIsAgentModeActive,
-    setActiveAggregateMessageId, setIsPaused, setAgentTraceRootId, setMessageMetadata,
-    setRequestSummaries, setSessionStats, setPendingEstimation, setHistoryContextActive,
-    setHistoryContextLoading, setHistoryJustCompleted, setShowInlineWorkflow, setTokenLog,
+    isCancellingRef,
+    cancelTimeoutRef,
+    logger,
+    showToast,
+    ensureAgentOrdinal,
+    chatSessions,
+    incognitoMode,
+    setMessages,
+    setIsJobActive,
+    setShowStopButton,
+    setIsHistoricalSession,
+    setHasFirstPreview,
+    setMirrorPreview,
+    setMirrorPreviewBatch,
+    setWorkerTabGroups,
+    setShowCloseTabs,
+    setIsFollowUpMode,
+    setInputEnabled,
+    setIsReplaying,
+    setIsAgentModeActive,
+    setActiveAggregateMessageId,
+    setIsPaused,
+    setAgentTraceRootId,
+    setMessageMetadata,
+    setRequestSummaries,
+    setSessionStats,
+    setPendingEstimation,
+    setHistoryContextActive,
+    setHistoryContextLoading,
+    setHistoryJustCompleted,
+    setShowInlineWorkflow,
+    setTokenLog,
     setIsStopping,
-    currentTaskAgentType, workerTabGroups, messages, mirrorPreviewBatch, recalculatedEstimation,
+    currentTaskAgentType,
+    workerTabGroups,
+    messages,
+    mirrorPreviewBatch,
+    recalculatedEstimation,
   });
-  
-  const { setupConnection, stopConnection, sendMessage } = useBackgroundConnection({ portRef, sessionIdRef, logger, appendMessage, handlers: panelHandlers });
-  
+
+  const { setupConnection, stopConnection, sendMessage } = useBackgroundConnection({
+    portRef,
+    sessionIdRef,
+    logger,
+    appendMessage,
+    handlers: panelHandlers,
+  });
+
   // All handlers
   const {
-    handleNewChat, handleStopTask, handleClearChat, handlePauseTask, handleResumeTask,
-    handleLoadHistory, handleLoadDashboard, handleBackToChat, handleSessionSelect,
-    handleSessionBookmark, handleBookmarkSelect, handleBookmarkDelete, handleBookmarkReorder,
-    handlePinMessage, handleQuoteMessage, handleOpenApiKeys, handleOpenWorkflowSettings,
-    handleRefreshHistoryContext, handlePaletteSelect, handleKillSwitch,
+    handleNewChat,
+    handleStopTask,
+    handleClearChat,
+    handlePauseTask,
+    handleResumeTask,
+    handleLoadHistory,
+    handleLoadDashboard,
+    handleBackToChat,
+    handleSessionSelect,
+    handleSessionBookmark,
+    handleBookmarkSelect,
+    handleBookmarkDelete,
+    handleBookmarkReorder,
+    handlePinMessage,
+    handleQuoteMessage,
+    handleOpenApiKeys,
+    handleOpenWorkflowSettings,
+    handleRefreshHistoryContext,
+    handlePaletteSelect,
+    handleKillSwitch,
   } = usePanelHandlers({
-    portRef, sessionIdRef, agentSettingsRef, setInputTextRef, setSelectedAgentRef, processedJobSummariesRef, lastAgentMessageRef, agentTraceActiveRef,
+    portRef,
+    sessionIdRef,
+    agentSettingsRef,
+    setInputTextRef,
+    setSelectedAgentRef,
+    processedJobSummariesRef,
+    lastAgentMessageRef,
+    agentTraceActiveRef,
     // Cancellation state refs
-    isCancellingRef, cancelTimeoutRef,
-    logger, showToast, stopConnection, setupConnection, appendMessage, loadChatSessions, handleSessionSelectHook, handleSessionBookmarkFromHook, resetPerChatAcceptance, promptPerChatIfEnabled,
-    setMessages, setCurrentSessionId, setShowDashboard, setForceChatView, setInputEnabled,
-    setShowStopButton, setIsFollowUpMode, setIsAgentModeActive, setCurrentTaskAgentType,
-    setAgentTraceRootId, setMessageMetadata, setShowCloseTabs, setIsPaused, setMirrorPreview,
-    setMirrorPreviewBatch, setHasFirstPreview, setSessionStats, setRequestSummaries,
-    setIsHistoricalSession, setPinnedMessageIds, setActiveAggregateMessageId, setShowHistory,
-    setIsJobActive, setShowPopulations, setFavoritePrompts, setAgentSettingsOpen,
-    setHistoryContextLoading, setPaletteOpen, setIsStopping,
-    workerTabGroups, currentTaskAgentType, pinnedMessageIds,
+    isCancellingRef,
+    cancelTimeoutRef,
+    logger,
+    showToast,
+    stopConnection,
+    setupConnection,
+    appendMessage,
+    loadChatSessions,
+    handleSessionSelectHook,
+    handleSessionBookmarkFromHook,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    setMessages,
+    setCurrentSessionId,
+    setShowDashboard,
+    setForceChatView,
+    setInputEnabled,
+    setShowStopButton,
+    setIsFollowUpMode,
+    setIsAgentModeActive,
+    setCurrentTaskAgentType,
+    setAgentTraceRootId,
+    setMessageMetadata,
+    setShowCloseTabs,
+    setIsPaused,
+    setMirrorPreview,
+    setMirrorPreviewBatch,
+    setHasFirstPreview,
+    setSessionStats,
+    setRequestSummaries,
+    setIsHistoricalSession,
+    setPinnedMessageIds,
+    setActiveAggregateMessageId,
+    setShowHistory,
+    setIsJobActive,
+    setShowPopulations,
+    setFavoritePrompts,
+    setAgentSettingsOpen,
+    setHistoryContextLoading,
+    setPaletteOpen,
+    setIsStopping,
+    workerTabGroups,
+    currentTaskAgentType,
+    pinnedMessageIds,
   });
-  
+
   // Effects (initialization, keyboard, cleanup, etc.)
   usePanelEffects({
-    portRef, sessionIdRef, isReplayingRef, jobActiveRef, isAgentModeActiveRef, promptedOnOpenRef, historyCompletedTimerRef, panelRef, messagesEndRef,
-    logger, stopConnection,
-    setPaletteOpen, setFishMenuOpen, setAgentSettingsOpen, setFeedbackMenuOpen, setMoreMenuOpen, setHasConfiguredModels, setHasProviders, setReplayEnabled, setDisplayHighlights, setUseVisionState, setShowTabPreviews, setUseFullPlanningPipeline, setEnablePlanner, setEnableValidator, setFavoritePrompts, setShowJumpToLatest, setShowEmergencyStop,
-    currentSessionId, isReplaying, isJobActive, isAgentModeActive, messages, firstRunAccepted, disablePerChatWarnings, isFollowUpMode, isHistoricalSession, showTabPreviews,
-    resetPerChatAcceptance, promptPerChatIfEnabled,
+    portRef,
+    sessionIdRef,
+    isReplayingRef,
+    jobActiveRef,
+    isAgentModeActiveRef,
+    promptedOnOpenRef,
+    historyCompletedTimerRef,
+    panelRef,
+    messagesEndRef,
+    logger,
+    stopConnection,
+    setPaletteOpen,
+    setFishMenuOpen,
+    setAgentSettingsOpen,
+    setFeedbackMenuOpen,
+    setMoreMenuOpen,
+    setHasConfiguredModels,
+    setHasProviders,
+    setReplayEnabled,
+    setDisplayHighlights,
+    setUseVisionState,
+    setShowTabPreviews,
+    setUseFullPlanningPipeline,
+    setEnablePlanner,
+    setEnableValidator,
+    setFavoritePrompts,
+    setShowJumpToLatest,
+    setShowEmergencyStop,
+    currentSessionId,
+    isReplaying,
+    isJobActive,
+    isAgentModeActive,
+    messages,
+    firstRunAccepted,
+    disablePerChatWarnings,
+    isFollowUpMode,
+    isHistoricalSession,
+    showTabPreviews,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
   });
-  
+
   // Message sender
-  let handleSendMessage = useMemo(() => createMessageSender({
-    logger, ensurePerChatBeforeNewSession, isFollowUpMode: () => isFollowUpMode, isHistoricalSession: () => isHistoricalSession, incognitoMode: () => incognitoMode,
-    sessionIdRef, setCurrentSessionId, setInputEnabled, setShowStopButton, appendMessage: (m: any, sid?: string | null) => appendMessage(m, sid), lastUserPromptRef, setupConnection, stopConnection, portRef, sendMessage: (p: any) => sendMessage(p), setCurrentTaskAgentType, chatSessions, loadChatSessions: async () => {}, createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11), resetRunState,
-  }), [logger, ensurePerChatBeforeNewSession, isFollowUpMode, isHistoricalSession, incognitoMode, sessionIdRef, setCurrentSessionId, setInputEnabled, setShowStopButton, appendMessage, lastUserPromptRef, setupConnection, stopConnection, portRef, sendMessage, setCurrentTaskAgentType, chatSessions, resetRunState]);
-  
-  const handleReplay = useMemo(() => async (historySessionId: string) => {
-    const sender = createMessageSender({
-      logger, ensurePerChatBeforeNewSession, isFollowUpMode: () => isFollowUpMode, isHistoricalSession: () => isHistoricalSession, incognitoMode: () => incognitoMode,
-      sessionIdRef, setCurrentSessionId, setInputEnabled, setShowStopButton, appendMessage: (m: any, sid?: string | null) => appendMessage(m, sid), lastUserPromptRef, setupConnection, stopConnection, portRef, sendMessage: (p: any) => sendMessage(p), setCurrentTaskAgentType, chatSessions, loadChatSessions: async () => {}, createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11),
-    });
-    await (sender as any)(`/replay ${historySessionId}`);
-  }, [logger, ensurePerChatBeforeNewSession, isFollowUpMode, isHistoricalSession, incognitoMode, sessionIdRef, setCurrentSessionId, setInputEnabled, setShowStopButton, appendMessage, lastUserPromptRef, setupConnection, stopConnection, portRef, sendMessage, setCurrentTaskAgentType, chatSessions]);
-  
+  let handleSendMessage = useMemo(
+    () =>
+      createMessageSender({
+        logger,
+        ensurePerChatBeforeNewSession,
+        isFollowUpMode: () => isFollowUpMode,
+        isHistoricalSession: () => isHistoricalSession,
+        incognitoMode: () => incognitoMode,
+        sessionIdRef,
+        setCurrentSessionId,
+        setInputEnabled,
+        setShowStopButton,
+        appendMessage: (m: any, sid?: string | null) => appendMessage(m, sid),
+        lastUserPromptRef,
+        setupConnection,
+        stopConnection,
+        portRef,
+        sendMessage: (p: any) => sendMessage(p),
+        setCurrentTaskAgentType,
+        chatSessions,
+        loadChatSessions: async () => {},
+        createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11),
+        resetRunState,
+      }),
+    [
+      logger,
+      ensurePerChatBeforeNewSession,
+      isFollowUpMode,
+      isHistoricalSession,
+      incognitoMode,
+      sessionIdRef,
+      setCurrentSessionId,
+      setInputEnabled,
+      setShowStopButton,
+      appendMessage,
+      lastUserPromptRef,
+      setupConnection,
+      stopConnection,
+      portRef,
+      sendMessage,
+      setCurrentTaskAgentType,
+      chatSessions,
+      resetRunState,
+    ],
+  );
+
+  const handleReplay = useMemo(
+    () => async (historySessionId: string) => {
+      const sender = createMessageSender({
+        logger,
+        ensurePerChatBeforeNewSession,
+        isFollowUpMode: () => isFollowUpMode,
+        isHistoricalSession: () => isHistoricalSession,
+        incognitoMode: () => incognitoMode,
+        sessionIdRef,
+        setCurrentSessionId,
+        setInputEnabled,
+        setShowStopButton,
+        appendMessage: (m: any, sid?: string | null) => appendMessage(m, sid),
+        lastUserPromptRef,
+        setupConnection,
+        stopConnection,
+        portRef,
+        sendMessage: (p: any) => sendMessage(p),
+        setCurrentTaskAgentType,
+        chatSessions,
+        loadChatSessions: async () => {},
+        createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11),
+      });
+      await (sender as any)(`/replay ${historySessionId}`);
+    },
+    [
+      logger,
+      ensurePerChatBeforeNewSession,
+      isFollowUpMode,
+      isHistoricalSession,
+      incognitoMode,
+      sessionIdRef,
+      setCurrentSessionId,
+      setInputEnabled,
+      setShowStopButton,
+      appendMessage,
+      lastUserPromptRef,
+      setupConnection,
+      stopConnection,
+      portRef,
+      sendMessage,
+      setCurrentTaskAgentType,
+      chatSessions,
+    ],
+  );
+
   // Computed values
   const computedLaneInfo = useMemo(() => {
     try {
@@ -223,7 +467,9 @@ const SidePanel = () => {
       const defaultColor = '#A78BFA';
       const rootId = agentTraceRootIdRef.current;
       const meta: any = rootId ? messageMetadata[rootId] : null;
-      const mapping: Array<{ workerId: string; sessionId: string }> = Array.isArray(meta?.workerSessionMap) ? meta.workerSessionMap : [];
+      const mapping: Array<{ workerId: string; sessionId: string }> = Array.isArray(meta?.workerSessionMap)
+        ? meta.workerSessionMap
+        : [];
       const groupByWorkerId = new Map();
       for (const m of mapping) {
         const g = workerTabGroups.find((x: any) => String(x.taskId) === String(m.sessionId));
@@ -234,60 +480,116 @@ const SidePanel = () => {
         if (!(lane in lanes)) {
           const label = `Web Agent ${lane + 1}`;
           const mapped = groupByWorkerId.get(String(lane + 1));
-          const groupColor = mapped?.color || workerTabGroups.find((g: any) => String(g?.name || '').trim().endsWith(String(lane + 1)))?.color;
-          let finalColor = groupColor && groupColor !== defaultColor ? groupColor : (laneColorByLaneRef.current.get(lane) || defaultColor);
-          try { laneColorByLaneRef.current.set(lane, finalColor); } catch {}
+          const groupColor =
+            mapped?.color ||
+            workerTabGroups.find((g: any) =>
+              String(g?.name || '')
+                .trim()
+                .endsWith(String(lane + 1)),
+            )?.color;
+          let finalColor =
+            groupColor && groupColor !== defaultColor
+              ? groupColor
+              : laneColorByLaneRef.current.get(lane) || defaultColor;
+          try {
+            laneColorByLaneRef.current.set(lane, finalColor);
+          } catch {}
           lanes[lane] = { label, color: finalColor };
         }
       }
       return lanes;
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   }, [messageMetadata, workerTabGroups]);
-  
+
   return (
     <>
-      <div ref={panelRef} className={`relative panel-card liquid-glass flex h-screen flex-col overflow-hidden rounded-2xl ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
+      <div
+        ref={panelRef}
+        className={`relative panel-card liquid-glass flex h-screen flex-col overflow-hidden rounded-2xl ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
         <div className="pointer-events-none absolute inset-0 z-0">
-          <div className={`${isDarkMode ? 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(245,158,11,var(--wallpaper-a2)),transparent)]' : 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(13,148,136,var(--wallpaper-a2)),transparent)]'}`}></div>
+          <div
+            className={`${isDarkMode ? 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(245,158,11,var(--wallpaper-a2)),transparent)]' : 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(13,148,136,var(--wallpaper-a2)),transparent)]'}`}></div>
         </div>
         {hasProviders !== null && hasConfiguredModels !== null && (!hasProviders || !hasConfiguredModels) && (
           <div className="absolute top-16 left-1/2 z-20 w-[90%] max-w-2xl -translate-x-1/2">
-            <SetupChecklist hasProviders={!!hasProviders} hasAgentModels={!!hasConfiguredModels} isDarkMode={isDarkMode} onOpenApiKeys={handleOpenApiKeys} onOpenWorkflowSettings={handleOpenWorkflowSettings} />
+            <SetupChecklist
+              hasProviders={!!hasProviders}
+              hasAgentModels={!!hasConfiguredModels}
+              isDarkMode={isDarkMode}
+              onOpenApiKeys={handleOpenApiKeys}
+              onOpenWorkflowSettings={handleOpenWorkflowSettings}
+            />
           </div>
         )}
         <FishOverlay ref={fishRef} panelRef={panelRef} />
         {viewDisplayMode ? (
           <DisplayMode
-            feedOnClick={feedOnClick} setFeedOnClick={setFeedOnClick}
-            previousFeedOnClickRef={previousFeedOnClickRef} onBack={() => setViewDisplayMode(false)}
-            onAddFish={() => fishRef.current?.addFish()} onAddShark={() => fishRef.current?.addShark()}
+            feedOnClick={feedOnClick}
+            setFeedOnClick={setFeedOnClick}
+            previousFeedOnClickRef={previousFeedOnClickRef}
+            onBack={() => setViewDisplayMode(false)}
+            onAddFish={() => fishRef.current?.addFish()}
+            onAddShark={() => fishRef.current?.addShark()}
             onFeed={(amount, x, y) => {
               if (typeof x === 'number' && typeof y === 'number') fishRef.current?.dropFoodAtClientPosition(x, y);
               else fishRef.current?.scatterFood(amount);
             }}
-            onWave={() => fishRef.current?.triggerWave()} onClear={() => fishRef.current?.clearAll()}
+            onWave={() => fishRef.current?.triggerWave()}
+            onClear={() => fishRef.current?.clearAll()}
           />
         ) : null}
-        <div className={`relative z-10 flex h-full flex-col ${viewDisplayMode ? 'hidden' : ''}`} onClick={(e) => { try { const t = e.target as HTMLElement; if (!panelRef.current || t.closest('button, a, input, textarea, [role="button"], [role="menu"]') || t.closest('.liquid-bubble')) return; if (feedOnClick) fishRef.current?.dropFoodAtClientPosition(e.clientX, e.clientY); } catch {}}}>
+        <div
+          className={`relative z-10 flex h-full flex-col ${viewDisplayMode ? 'hidden' : ''}`}
+          onClick={e => {
+            try {
+              const t = e.target as HTMLElement;
+              if (
+                !panelRef.current ||
+                t.closest('button, a, input, textarea, [role="button"], [role="menu"]') ||
+                t.closest('.liquid-bubble')
+              )
+                return;
+              if (feedOnClick) fishRef.current?.dropFoodAtClientPosition(e.clientX, e.clientY);
+            } catch {}
+          }}>
           <header className="header glass-header sticky top-0 z-10">
-            {(showHistory || showPopulations || viewDisplayMode) ? (
-              <button type="button" onClick={() => { handleBackToChat(false); if (viewDisplayMode) setFeedOnClick(previousFeedOnClickRef.current); setViewDisplayMode(false); }} className={`${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'} cursor-pointer`}>← Back</button>
+            {showHistory || showPopulations || viewDisplayMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  handleBackToChat(false);
+                  if (viewDisplayMode) setFeedOnClick(previousFeedOnClickRef.current);
+                  setViewDisplayMode(false);
+                }}
+                className={`${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'} cursor-pointer`}>
+                ← Back
+              </button>
             ) : (
-              <div className="flex w-full items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex w-full items-center justify-between gap-1">
+                <div className="flex items-center gap-1">
                   <Branding isDarkMode={isDarkMode} extensionVersion={extensionVersion} releaseNotes={releaseNotes} />
                   {(historyContextLoading || historyJustCompleted) && (
-                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${historyContextLoading ? isDarkMode ? 'bg-gray-900/30 text-gray-400 border border-gray-700/50' : 'bg-gray-50 text-gray-500 border border-gray-300' : isDarkMode ? 'bg-green-900/30 text-green-300 border border-green-700/50' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                    <div
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${historyContextLoading ? (isDarkMode ? 'bg-gray-900/30 text-gray-400 border border-gray-700/50' : 'bg-gray-50 text-gray-500 border border-gray-300') : isDarkMode ? 'bg-green-900/30 text-green-300 border border-green-700/50' : 'bg-green-50 text-green-700 border border-green-200'}`}>
                       {historyContextLoading ? (
                         <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
                         </svg>
                       ) : (
                         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
                         </svg>
                       )}
                       <span>{historyContextLoading ? 'Summarising history...' : 'History summarised'}</span>
@@ -295,80 +597,178 @@ const SidePanel = () => {
                   )}
                 </div>
                 <HeaderActions
-                  isDarkMode={isDarkMode} onNewChat={handleNewChat} onLoadHistory={handleLoadHistory}
-                  onLoadDashboard={handleLoadDashboard} agentSettingsOpen={agentSettingsOpen}
-                  setAgentSettingsOpen={setAgentSettingsOpen} feedbackMenuOpen={feedbackMenuOpen}
-                  setFeedbackMenuOpen={setFeedbackMenuOpen} fishMenuOpen={fishMenuOpen}
-                  setFishMenuOpen={setFishMenuOpen} onFishAdd={() => fishRef.current?.addFish()}
-                  onSharkAdd={() => fishRef.current?.addShark()} onFeedingTime={() => fishRef.current?.scatterFood(28)}
-                  onTriggerWave={() => fishRef.current?.triggerWave()} onShowPopulations={() => setShowPopulations(true)}
-                  feedOnClick={feedOnClick} setFeedOnClick={setFeedOnClick}
-                  onViewDisplay={() => { previousFeedOnClickRef.current = feedOnClick; setFeedOnClick(true); setViewDisplayMode(true); }}
-                  onRefreshHistoryContext={handleRefreshHistoryContext} onEmergencyStopToggle={setShowEmergencyStop}
-                  hasAcceptedHistoryPrivacy={hasAcceptedHistoryPrivacy} promptHistoryPrivacy={promptHistoryPrivacy}
+                  isDarkMode={isDarkMode}
+                  onNewChat={handleNewChat}
+                  onLoadHistory={handleLoadHistory}
+                  onLoadDashboard={handleLoadDashboard}
+                  agentSettingsOpen={agentSettingsOpen}
+                  setAgentSettingsOpen={setAgentSettingsOpen}
+                  feedbackMenuOpen={feedbackMenuOpen}
+                  setFeedbackMenuOpen={setFeedbackMenuOpen}
+                  fishMenuOpen={fishMenuOpen}
+                  setFishMenuOpen={setFishMenuOpen}
+                  onFishAdd={() => fishRef.current?.addFish()}
+                  onSharkAdd={() => fishRef.current?.addShark()}
+                  onFeedingTime={() => fishRef.current?.scatterFood(28)}
+                  onTriggerWave={() => fishRef.current?.triggerWave()}
+                  onShowPopulations={() => setShowPopulations(true)}
+                  feedOnClick={feedOnClick}
+                  setFeedOnClick={setFeedOnClick}
+                  onViewDisplay={() => {
+                    previousFeedOnClickRef.current = feedOnClick;
+                    setFeedOnClick(true);
+                    setViewDisplayMode(true);
+                  }}
+                  onRefreshHistoryContext={handleRefreshHistoryContext}
+                  onEmergencyStopToggle={setShowEmergencyStop}
+                  hasAcceptedHistoryPrivacy={hasAcceptedHistoryPrivacy}
+                  promptHistoryPrivacy={promptHistoryPrivacy}
                   resetHistoryPrivacy={resetHistoryPrivacy}
                 />
               </div>
             )}
           </header>
           <Suspense fallback={null}>
-            <CommandPalette isOpen={paletteOpen} isDarkMode={isDarkMode} onClose={() => setPaletteOpen(false)} onSelect={handlePaletteSelect} />
+            <CommandPalette
+              isOpen={paletteOpen}
+              isDarkMode={isDarkMode}
+              onClose={() => setPaletteOpen(false)}
+              onSelect={handlePaletteSelect}
+            />
           </Suspense>
-          <WorkflowGraphSection isDarkMode={isDarkMode} graph={(messageMetadata as any)?.__workflowGraph || null} laneInfo={computedLaneInfo} showInline={showInlineWorkflow} setShowInline={(v) => setShowInlineWorkflow(typeof v === 'function' ? v(showInlineWorkflow) : v)} onOpenFullScreen={() => setShowWorkflowModal(true)} />
-          
+          <WorkflowGraphSection
+            isDarkMode={isDarkMode}
+            graph={(messageMetadata as any)?.__workflowGraph || null}
+            laneInfo={computedLaneInfo}
+            showInline={showInlineWorkflow}
+            setShowInline={v => setShowInlineWorkflow(typeof v === 'function' ? v(showInlineWorkflow) : v)}
+            onOpenFullScreen={() => setShowWorkflowModal(true)}
+          />
+
           {showPopulations ? (
             <div className="flex-1 overflow-hidden min-h-0">
               <PopulationChart fishRef={fishRef} isDarkMode={isDarkMode} onBack={() => setShowPopulations(false)} />
             </div>
           ) : showHistory ? (
             <div className="flex-1 overflow-hidden min-h-0">
-              <ChatHistoryList sessions={chatSessions} onSessionSelect={handleSessionSelect} onSessionDelete={handleSessionDelete} onSessionBookmark={handleSessionBookmark} visible={true} isDarkMode={isDarkMode} onRenameSession={async (sessionId, newTitle) => { try { await renameSession(sessionId, newTitle); } catch (e) { logger.error('Rename failed', e); }}} />
+              <ChatHistoryList
+                sessions={chatSessions}
+                onSessionSelect={handleSessionSelect}
+                onSessionDelete={handleSessionDelete}
+                onSessionBookmark={handleSessionBookmark}
+                visible={true}
+                isDarkMode={isDarkMode}
+                onRenameSession={async (sessionId, newTitle) => {
+                  try {
+                    await renameSession(sessionId, newTitle);
+                  } catch (e) {
+                    logger.error('Rename failed', e);
+                  }
+                }}
+              />
             </div>
           ) : showDashboard ? (
             <div className="flex-1 overflow-hidden min-h-0">
-              <AgentDashboard isDarkMode={isDarkMode} onBack={handleBackToChat} onSelectSession={handleSessionSelect} chatSessions={chatSessions} />
+              <AgentDashboard
+                isDarkMode={isDarkMode}
+                onBack={handleBackToChat}
+                onSelectSession={handleSessionSelect}
+                chatSessions={chatSessions}
+              />
             </div>
           ) : (
             <ChatScreen
-              isDarkMode={isDarkMode} messages={messages} inputEnabled={inputEnabled} showStopButton={showStopButton}
-              isPaused={isPaused} isHistoricalSession={isHistoricalSession} currentSessionId={currentSessionId}
-              forceChatView={forceChatView} compactMode={compactMode} sessionStats={sessionStats}
-              requestSummaries={requestSummaries} messageMetadata={messageMetadata} mirrorPreview={mirrorPreview}
-              mirrorPreviewBatch={mirrorPreviewBatch} hasFirstPreview={hasFirstPreview}
-              isPreviewCollapsed={isPreviewCollapsed} agentTraceRootId={agentTraceRootId}
-              pendingEstimation={pendingEstimation} availableModelsForEstimation={availableModelsForEstimation}
-              showJumpToLatest={showJumpToLatest} showCloseTabs={showCloseTabs} workerTabGroups={workerTabGroups}
-              pinnedMessageIds={pinnedMessageIds} currentTaskAgentType={currentTaskAgentType} isJobActive={isJobActive}
-              tokenLog={tokenLog} useFullPlanningPipeline={useFullPlanningPipeline} enablePlanner={enablePlanner}
-              enableValidator={enableValidator} useVisionState={useVisionState} hasConfiguredModels={hasConfiguredModels}
-              favoritePrompts={favoritePrompts} replayEnabled={replayEnabled} showEmergencyStop={showEmergencyStop}
+              isDarkMode={isDarkMode}
+              messages={messages}
+              inputEnabled={inputEnabled}
+              showStopButton={showStopButton}
+              isPaused={isPaused}
+              isHistoricalSession={isHistoricalSession}
+              currentSessionId={currentSessionId}
+              forceChatView={forceChatView}
+              compactMode={compactMode}
+              sessionStats={sessionStats}
+              requestSummaries={requestSummaries}
+              messageMetadata={messageMetadata}
+              mirrorPreview={mirrorPreview}
+              mirrorPreviewBatch={mirrorPreviewBatch}
+              hasFirstPreview={hasFirstPreview}
+              isPreviewCollapsed={isPreviewCollapsed}
+              agentTraceRootId={agentTraceRootId}
+              pendingEstimation={pendingEstimation}
+              availableModelsForEstimation={availableModelsForEstimation}
+              showJumpToLatest={showJumpToLatest}
+              showCloseTabs={showCloseTabs}
+              workerTabGroups={workerTabGroups}
+              pinnedMessageIds={pinnedMessageIds}
+              currentTaskAgentType={currentTaskAgentType}
+              isJobActive={isJobActive}
+              tokenLog={tokenLog}
+              useFullPlanningPipeline={useFullPlanningPipeline}
+              enablePlanner={enablePlanner}
+              enableValidator={enableValidator}
+              useVisionState={useVisionState}
+              hasConfiguredModels={hasConfiguredModels}
+              favoritePrompts={favoritePrompts}
+              replayEnabled={replayEnabled}
+              showEmergencyStop={showEmergencyStop}
               isStopping={isStopping}
-              logger={logger} portRef={portRef} sessionIdRef={sessionIdRef} agentTraceRootIdRef={agentTraceRootIdRef}
-              panelRef={panelRef} messagesEndRef={messagesEndRef} setInputTextRef={setInputTextRef}
-              setSelectedAgentRef={setSelectedAgentRef} setIsPreviewCollapsed={setIsPreviewCollapsed}
-              setSelectedEstimationModel={setSelectedEstimationModel} setRecalculatedEstimation={setRecalculatedEstimation}
-              setPendingEstimation={setPendingEstimation} setShowCloseTabs={setShowCloseTabs}
-              setWorkerTabGroups={setWorkerTabGroups} handleSendMessage={handleSendMessage}
-              handleStopTask={handleStopTask} handlePauseTask={handlePauseTask} handleResumeTask={handleResumeTask}
-              handleReplay={handleReplay} handleClearChat={handleClearChat} handleBookmarkSelect={handleBookmarkSelect}
+              logger={logger}
+              portRef={portRef}
+              sessionIdRef={sessionIdRef}
+              agentTraceRootIdRef={agentTraceRootIdRef}
+              panelRef={panelRef}
+              messagesEndRef={messagesEndRef}
+              setInputTextRef={setInputTextRef}
+              setSelectedAgentRef={setSelectedAgentRef}
+              setIsPreviewCollapsed={setIsPreviewCollapsed}
+              setSelectedEstimationModel={setSelectedEstimationModel}
+              setRecalculatedEstimation={setRecalculatedEstimation}
+              setPendingEstimation={setPendingEstimation}
+              setShowCloseTabs={setShowCloseTabs}
+              setWorkerTabGroups={setWorkerTabGroups}
+              handleSendMessage={handleSendMessage}
+              handleStopTask={handleStopTask}
+              handlePauseTask={handlePauseTask}
+              handleResumeTask={handleResumeTask}
+              handleReplay={handleReplay}
+              handleClearChat={handleClearChat}
+              handleBookmarkSelect={handleBookmarkSelect}
               handleBookmarkAdd={async (title: string, content: string, agentType?: any) => {
-                const safe = (v: string) => ['auto', 'chat', 'search', 'agent', 'multiagent'].includes(v) ? v as any : 'agent';
+                const safe = (v: string) =>
+                  ['auto', 'chat', 'search', 'agent', 'multiagent'].includes(v) ? (v as any) : 'agent';
                 await favoritesStorage.addPrompt(title, content, agentType ? safe(String(agentType)) : undefined);
                 setFavoritePrompts(await favoritesStorage.getAllPrompts());
               }}
               handleBookmarkUpdate={async (id: number, title: string, content: string, agentType?: any) => {
-                const safe = (v: string) => ['auto', 'chat', 'search', 'agent', 'multiagent'].includes(v) ? v as any : 'agent';
-                await favoritesStorage.updatePrompt(id, title, content, agentType ? safe(String(agentType)) : undefined);
+                const safe = (v: string) =>
+                  ['auto', 'chat', 'search', 'agent', 'multiagent'].includes(v) ? (v as any) : 'agent';
+                await favoritesStorage.updatePrompt(
+                  id,
+                  title,
+                  content,
+                  agentType ? safe(String(agentType)) : undefined,
+                );
                 setFavoritePrompts(await favoritesStorage.getAllPrompts());
               }}
-              handleBookmarkDelete={handleBookmarkDelete} handleBookmarkReorder={handleBookmarkReorder}
-              handlePinMessage={handlePinMessage} handleQuoteMessage={handleQuoteMessage}
-              appendMessage={appendMessage} setupConnection={setupConnection} handleKillSwitch={handleKillSwitch}
+              handleBookmarkDelete={handleBookmarkDelete}
+              handleBookmarkReorder={handleBookmarkReorder}
+              handlePinMessage={handlePinMessage}
+              handleQuoteMessage={handleQuoteMessage}
+              appendMessage={appendMessage}
+              setupConnection={setupConnection}
+              handleKillSwitch={handleKillSwitch}
             />
           )}
         </div>
       </div>
-      {showWorkflowModal && (messageMetadata as any)?.__workflowGraph && <WorkflowGraphModal graph={(messageMetadata as any).__workflowGraph} laneInfo={computedLaneInfo} onClose={() => setShowWorkflowModal(false)} />}
+      {showWorkflowModal && (messageMetadata as any)?.__workflowGraph && (
+        <WorkflowGraphModal
+          graph={(messageMetadata as any).__workflowGraph}
+          laneInfo={computedLaneInfo}
+          onClose={() => setShowWorkflowModal(false)}
+        />
+      )}
       {firstRunModal}
       {livePricingModal}
       {perChatModal}
