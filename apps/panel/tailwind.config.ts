@@ -13,7 +13,7 @@ export default {
         },
       },
       animation: {
-        progress: 'progress 1.5s infinite ease-in-out',
+        progress: 'progress 4.5s infinite ease-in-out',
       },
     },
   },
