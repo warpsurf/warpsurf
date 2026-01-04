@@ -246,6 +246,26 @@ code {
 }
 }
 
+/* Make markdown content's last element inline so chip/timestamp flows after it */
+.inline-md-content {
+  display: inline;
+}
+.inline-md-content > * {
+  display: inline;
+}
+.inline-md-content p:last-of-type,
+.inline-md-content > *:last-child {
+  display: inline;
+}
+.inline-md-content p {
+  display: inline;
+  margin: 0;
+}
+.inline-md-content p + p::before {
+  content: '\A\A';
+  white-space: pre;
+}
+
 /* Ensure virtualized list containers can shrink within flex layouts */
 .messages-scroll { min-height: 0; }
 
