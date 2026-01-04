@@ -114,7 +114,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           onClick={() => setIsExpanded(!isExpanded)}
           className={`flex items-center gap-1.5 text-sm font-medium ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-900'}`}>
           <FaChevronRight className={`h-3 w-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-          Frequently Used
+          Frequently used
         </button>
         {isExpanded && (
           <button

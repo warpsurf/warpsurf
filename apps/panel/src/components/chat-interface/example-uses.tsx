@@ -68,7 +68,7 @@ export default function ExampleUses({ onSelect, isDarkMode = false, defaultExpan
         onClick={() => setIsExpanded(!isExpanded)}
         className={`mb-2 flex w-full items-center gap-1.5 text-sm font-medium ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-900'}`}>
         <FaChevronRight className={`h-3 w-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-        Example Uses
+        Example uses
       </button>
       {isExpanded && (
         <>
