@@ -33,7 +33,7 @@ interface HeaderActionsProps {
   resetHistoryPrivacy?: () => Promise<void>;
 }
 
-const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
+const HeaderActions: React.FC<HeaderActionsProps> = props => {
   const [useVision, setUseVision] = useState(false);
   const [showTabPreviews, setShowTabPreviews] = useState(true);
   const [enableHistoryContext, setEnableHistoryContext] = useState(false);
@@ -70,7 +70,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
   const vCount = Math.max(0, Math.min(7, props.visibleActionsCountOverride ?? visibleActionsCount));
 
   type ActionKey = 'newChat' | 'history' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings';
-  const actionOrder: ActionKey[] = ['newChat', 'history', 'dashboard', 'agentSettings', 'feedback', 'fish', 'settings'];
+  const actionOrder: ActionKey[] = ['settings', 'newChat', 'history', 'dashboard', 'agentSettings', 'feedback', 'fish'];
   const hiddenKeys: ActionKey[] = actionOrder.slice(vCount);
 
   useEffect(() => {
@@ -98,8 +98,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
         type="button"
         aria-hidden="true"
         className={`liquid-chip inline-flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}
-        style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }}
-      >
+        style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }}>
         <FiMoreHorizontal className="h-4 w-4" />
         <span>More</span>
         <FiChevronDown className="h-3.5 w-3.5" />
@@ -107,84 +106,152 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
 
       {/* Hidden measurement clones */}
       <div aria-hidden="true" className="absolute -z-10 opacity-0 pointer-events-none" style={{ visibility: 'hidden' }}>
+        <div ref={setMeasureRef('settings')} className="inline-flex flex-shrink-0">
+          <button
+            type="button"
+            className={`header-icon ${props.isDarkMode ? 'text-gray-400 rounded-md p-1' : 'text-gray-600 rounded-md p-1'}`}>
+            <FiSettings size={20} />
+          </button>
+        </div>
         <div ref={setMeasureRef('newChat')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>New Chat</button>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+            New Chat
+          </button>
         </div>
         <div ref={setMeasureRef('history')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Previous Chats</button>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+            Previous Chats
+          </button>
         </div>
         <div ref={setMeasureRef('dashboard')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Agent Dashboard</button>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+            Agent Dashboard
+          </button>
         </div>
         <div ref={setMeasureRef('agentSettings')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+          <button
+            type="button"
+            className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
             <FaRobot className="h-4 w-4" />
             <span>Agent Settings</span>
             <FiChevronDown className="h-3.5 w-3.5" />
           </button>
         </div>
         <div ref={setMeasureRef('feedback')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`liquid-chip flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+          <button
+            type="button"
+            className={`liquid-chip flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
             <span>Feedback</span>
             <FiChevronDown className="h-3.5 w-3.5" />
           </button>
         </div>
         <div ref={setMeasureRef('fish')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+          <button
+            type="button"
+            className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
             <FaFish className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div ref={setMeasureRef('settings')} className="inline-flex flex-shrink-0">
-          <button type="button" className={`header-icon ${props.isDarkMode ? 'text-gray-400 rounded-md p-1' : 'text-gray-600 rounded-md p-1'}`}>
-            <FiSettings size={20} />
-          </button>
-        </div>
+      </div>
+
+      {/* Settings */}
+      <div
+        ref={setActionRef('settings')}
+        className="inline-flex flex-shrink-0"
+        style={{ display: vCount >= 1 ? 'inline-flex' : 'none' }}>
+        <button
+          type="button"
+          onClick={() => chrome.runtime.openOptionsPage()}
+          className={`header-icon transition-colors ${props.isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10 rounded-md p-1' : 'text-gray-600 hover:text-gray-900 hover:bg-black/5 rounded-md p-1'} cursor-pointer`}>
+          <FiSettings size={20} />
+        </button>
       </div>
 
       {/* New Chat */}
-      <div ref={setActionRef('newChat')} className="inline-flex flex-shrink-0" style={{ display: vCount >= 1 ? 'inline-flex' : 'none' }}>
-        <button type="button" onClick={props.onNewChat} className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>New Chat</button>
+      <div
+        ref={setActionRef('newChat')}
+        className="inline-flex flex-shrink-0"
+        style={{ display: vCount >= 2 ? 'inline-flex' : 'none' }}>
+        <button
+          type="button"
+          onClick={props.onNewChat}
+          className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
+          New Chat
+        </button>
       </div>
 
       {/* Previous Chats */}
-      <div ref={setActionRef('history')} className="inline-flex flex-shrink-0" style={{ display: vCount >= 2 ? 'inline-flex' : 'none' }}>
-        <button type="button" onClick={props.onLoadHistory} className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>Previous Chats</button>
+      <div
+        ref={setActionRef('history')}
+        className="inline-flex flex-shrink-0"
+        style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
+        <button
+          type="button"
+          onClick={props.onLoadHistory}
+          className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
+          Previous Chats
+        </button>
       </div>
 
       {/* Agent Dashboard */}
-      <div ref={setActionRef('dashboard')} className="inline-flex flex-shrink-0" style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
-        <button type="button" onClick={props.onLoadDashboard} className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>Agent Dashboard</button>
+      <div
+        ref={setActionRef('dashboard')}
+        className="inline-flex flex-shrink-0"
+        style={{ display: vCount >= 4 ? 'inline-flex' : 'none' }}>
+        <button
+          type="button"
+          onClick={props.onLoadDashboard}
+          className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
+          Agent Dashboard
+        </button>
       </div>
 
       {/* Agent settings dropdown */}
-      <div ref={setActionRef('agentSettings')} className="relative inline-block flex-shrink-0 group" style={{ display: vCount >= 4 ? 'inline-block' : 'none' }} data-dropdown>
+      <div
+        ref={setActionRef('agentSettings')}
+        className="relative inline-block flex-shrink-0 group"
+        style={{ display: vCount >= 5 ? 'inline-block' : 'none' }}
+        data-dropdown>
         <button
           type="button"
           onClick={() => props.setAgentSettingsOpen(!props.agentSettingsOpen)}
           className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}
           aria-haspopup="true"
-          aria-expanded={props.agentSettingsOpen}
-        >
+          aria-expanded={props.agentSettingsOpen}>
           <FaRobot className="h-4 w-4" />
           <span>Agent Settings</span>
           <FiChevronDown className="h-3.5 w-3.5" />
         </button>
         {props.agentSettingsOpen && (
-          <div role="menu" aria-label="Agent settings menu" className={`absolute right-0 top-full mt-1 w-64 rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}>
+          <div
+            role="menu"
+            aria-label="Agent settings menu"
+            className={`absolute right-0 top-full mt-1 w-64 rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}>
             <button
               type="button"
               onClick={async () => {
                 const next = !useVision;
                 setUseVision(next);
-                try { await generalSettingsStore.updateSettings({ useVision: next }); } catch {}
+                try {
+                  await generalSettingsStore.updateSettings({ useVision: next });
+                } catch {}
               }}
-              className={`flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
-              <div className="flex flex-col items-start"> 
+              className={`flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+              <div className="flex flex-col items-start">
                 <span>Use vision</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Provide agents with screenshots of current tab</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Provide agents with screenshots of current tab
+                </span>
               </div>
-              <span className={`ml-2 toggle-slider ${useVision ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+              <span className={`ml-2 toggle-slider ${useVision ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
             </button>
 
             <button
@@ -192,15 +259,20 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
               onClick={async () => {
                 const next = !showTabPreviews;
                 setShowTabPreviews(next);
-                try { await generalSettingsStore.updateSettings({ showTabPreviews: next }); } catch {}
+                try {
+                  await generalSettingsStore.updateSettings({ showTabPreviews: next });
+                } catch {}
               }}
-              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <div className="flex flex-col items-start">
                 <span>Show tab previews</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Show screenshots of agent tabs</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Show screenshots of agent tabs
+                </span>
               </div>
-              <span className={`ml-2 toggle-slider ${showTabPreviews ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+              <span className={`ml-2 toggle-slider ${showTabPreviews ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
             </button>
 
             <button
@@ -217,15 +289,20 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                 }
                 const next = !enableHistoryContext;
                 setEnableHistoryContext(next);
-                try { await generalSettingsStore.updateSettings({ enableHistoryContext: next }); } catch {}
+                try {
+                  await generalSettingsStore.updateSettings({ enableHistoryContext: next });
+                } catch {}
               }}
-              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <div className="flex flex-col items-start">
                 <span>Use history context</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Use browser history to help the agents</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Use browser history to help the agents
+                </span>
               </div>
-              <span className={`ml-2 toggle-slider ${enableHistoryContext ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+              <span className={`ml-2 toggle-slider ${enableHistoryContext ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
             </button>
 
             <button
@@ -233,15 +310,20 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
               onClick={async () => {
                 const next = !enableWorkflowEstimation;
                 setEnableWorkflowEstimation(next);
-                try { await generalSettingsStore.updateSettings({ enableWorkflowEstimation: next }); } catch {}
+                try {
+                  await generalSettingsStore.updateSettings({ enableWorkflowEstimation: next });
+                } catch {}
               }}
-              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <div className="flex flex-col items-start">
                 <span>Task estimation</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Estimate the time and cost of a task</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Estimate the time and cost of a task
+                </span>
               </div>
-              <span className={`ml-2 toggle-slider ${enableWorkflowEstimation ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+              <span className={`ml-2 toggle-slider ${enableWorkflowEstimation ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
             </button>
 
             <button
@@ -249,17 +331,22 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
               onClick={async () => {
                 const next = !showEmergencyStop;
                 setShowEmergencyStop(next);
-                try { await generalSettingsStore.updateSettings({ showEmergencyStop: next }); } catch {}
+                try {
+                  await generalSettingsStore.updateSettings({ showEmergencyStop: next });
+                } catch {}
                 // Also update parent state if callback provided
                 if (props.onEmergencyStopToggle) props.onEmergencyStopToggle(next);
               }}
-              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <div className="flex flex-col items-start">
                 <span>Emergency stop button</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Instantly terminate all workflows</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Instantly terminate all workflows
+                </span>
               </div>
-              <span className={`ml-2 toggle-slider ${showEmergencyStop ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+              <span className={`ml-2 toggle-slider ${showEmergencyStop ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
             </button>
 
             <div className={`my-2 border-t ${props.isDarkMode ? 'border-slate-700' : 'border-gray-200'}`} />
@@ -276,11 +363,12 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                   console.error('[HeaderActions] Handler NOT provided!');
                 }
               }}
-              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}
-            >
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <div className="flex flex-col items-start">
                 <span>Refresh history context</span>
-                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Refresh browser history context</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Refresh browser history context
+                </span>
               </div>
               <FaHistory className="h-3.5 w-3.5" />
             </button>
@@ -289,70 +377,99 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
       </div>
 
       {/* Feedback */}
-      <div ref={setActionRef('feedback')} className="relative inline-block flex-shrink-0 group" style={{ display: vCount >= 5 ? 'inline-block' : 'none' }} data-dropdown>
+      <div
+        ref={setActionRef('feedback')}
+        className="relative inline-block flex-shrink-0 group"
+        style={{ display: vCount >= 6 ? 'inline-block' : 'none' }}
+        data-dropdown>
         <button
           type="button"
           onClick={() => props.setFeedbackMenuOpen(!props.feedbackMenuOpen)}
           className={`liquid-chip flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}
           aria-haspopup="true"
-          aria-expanded={props.feedbackMenuOpen}
-        >
+          aria-expanded={props.feedbackMenuOpen}>
           <span>Feedback</span>
           <FiChevronDown className="h-3.5 w-3.5" />
         </button>
         {props.feedbackMenuOpen && (
           <div className="absolute right-0 top-full mt-1 z-50">
-            <FeedbackMenu isDarkMode={props.isDarkMode} open={props.feedbackMenuOpen} onToggleOpen={() => props.setFeedbackMenuOpen(!props.feedbackMenuOpen)} />
+            <FeedbackMenu
+              isDarkMode={props.isDarkMode}
+              open={props.feedbackMenuOpen}
+              onToggleOpen={() => props.setFeedbackMenuOpen(!props.feedbackMenuOpen)}
+            />
           </div>
         )}
       </div>
 
       {/* Fish */}
-      <div ref={setActionRef('fish')} className="relative inline-block flex-shrink-0 group" style={{ display: vCount >= 6 ? 'inline-block' : 'none' }} data-dropdown>
+      <div
+        ref={setActionRef('fish')}
+        className="relative inline-block flex-shrink-0 group"
+        style={{ display: vCount >= 7 ? 'inline-block' : 'none' }}
+        data-dropdown>
         <button
           type="button"
           onClick={() => props.setFishMenuOpen(!props.fishMenuOpen)}
           className={`liquid-chip flex items-center gap-2 rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}
           aria-haspopup="true"
-          aria-expanded={props.fishMenuOpen}
-        >
+          aria-expanded={props.fishMenuOpen}>
           <FaFish className="h-3.5 w-3.5" />
         </button>
         {props.fishMenuOpen && (
-          <div role="menu" aria-label="Fish menu" className={`absolute right-0 top-full mt-1 w-60 rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}>
-            <button type="button" onClick={props.onFishAdd} className={`flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+          <div
+            role="menu"
+            aria-label="Fish menu"
+            className={`absolute right-0 top-full mt-1 w-60 rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}>
+            <button
+              type="button"
+              onClick={props.onFishAdd}
+              className={`flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>Add Fish</span>
             </button>
-            <button type="button" onClick={props.onSharkAdd} className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+            <button
+              type="button"
+              onClick={props.onSharkAdd}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>Add Shark</span>
             </button>
-            <button type="button" onClick={props.onFeedingTime} className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+            <button
+              type="button"
+              onClick={props.onFeedingTime}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>Feeding Time</span>
             </button>
-            <button type="button" onClick={props.onTriggerWave} className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+            <button
+              type="button"
+              onClick={props.onTriggerWave}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>Trigger Wave</span>
             </button>
-            <button type="button" onClick={props.onShowPopulations} className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+            <button
+              type="button"
+              onClick={props.onShowPopulations}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>Populations</span>
             </button>
-            <button type="button" onClick={props.onViewDisplay} className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+            <button
+              type="button"
+              onClick={props.onViewDisplay}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               <span>View Display</span>
             </button>
             <div className="mt-2 flex items-center justify-between rounded px-3 py-2">
               <span>Feed on Click</span>
-              <button type="button" onClick={() => props.setFeedOnClick(!props.feedOnClick)} className={`toggle-slider ${props.feedOnClick ? 'toggle-on' : 'toggle-off'}`} aria-pressed={props.feedOnClick} aria-label="Feed on Click toggle">
+              <button
+                type="button"
+                onClick={() => props.setFeedOnClick(!props.feedOnClick)}
+                className={`toggle-slider ${props.feedOnClick ? 'toggle-on' : 'toggle-off'}`}
+                aria-pressed={props.feedOnClick}
+                aria-label="Feed on Click toggle">
                 <span className="toggle-knob" />
               </button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Settings */}
-      <div ref={setActionRef('settings')} className="inline-flex flex-shrink-0" style={{ display: vCount >= 7 ? 'inline-flex' : 'none' }}>
-        <button type="button" onClick={() => chrome.runtime.openOptionsPage()} className={`header-icon transition-colors ${props.isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10 rounded-md p-1' : 'text-gray-600 hover:text-gray-900 hover:bg-black/5 rounded-md p-1'} cursor-pointer`}>
-          <FiSettings size={20} />
-        </button>
       </div>
 
       {/* More menu trigger and menu stub (items still rendered in SidePanel for now) */}
@@ -365,8 +482,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
             aria-haspopup="true"
             aria-expanded={moreMenuOpen}
             aria-label="More options"
-            title="More options"
-          >
+            title="More options">
             <FiMoreHorizontal className="h-4 w-4" />
             <span>More</span>
             <FiChevronDown className="h-3.5 w-3.5" />
@@ -376,32 +492,48 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
             <div
               role="menu"
               aria-label="More menu"
-              className={`absolute right-0 top-full mt-1 w-72 max-h-80 overflow-y-auto rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}
-            >
+              className={`absolute right-0 top-full mt-1 w-72 max-h-80 overflow-y-auto rounded-md border p-2 text-sm shadow-lg z-50 ${props.isDarkMode ? 'border-slate-700 bg-slate-800/95 text-slate-200' : 'border-gray-200 bg-white/95 text-gray-800'}`}>
+              {hiddenKeys.includes('settings') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    chrome.runtime.openOptionsPage();
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>
+                  Settings
+                </button>
+              )}
               {hiddenKeys.includes('newChat') && (
                 <button
                   type="button"
-                  onClick={() => { props.onNewChat(); setMoreMenuOpen(false); }}
-                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}
-                >
+                  onClick={() => {
+                    props.onNewChat();
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>
                   New Chat
                 </button>
               )}
               {hiddenKeys.includes('history') && (
                 <button
                   type="button"
-                  onClick={() => { props.onLoadHistory(); setMoreMenuOpen(false); }}
-                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}
-                >
+                  onClick={() => {
+                    props.onLoadHistory();
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
                   Previous Chats
                 </button>
               )}
               {hiddenKeys.includes('dashboard') && (
                 <button
                   type="button"
-                  onClick={() => { props.onLoadDashboard(); setMoreMenuOpen(false); }}
-                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}
-                >
+                  onClick={() => {
+                    props.onLoadDashboard();
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
                   Agent Dashboard
                 </button>
               )}
@@ -414,30 +546,40 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                     onClick={async () => {
                       const next = !useVision;
                       setUseVision(next);
-                      try { await generalSettingsStore.updateSettings({ useVision: next }); } catch {}
+                      try {
+                        await generalSettingsStore.updateSettings({ useVision: next });
+                      } catch {}
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Use vision</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Provide agents with screenshots of current tab</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Provide agents with screenshots of current tab
+                      </span>
                     </div>
-                    <span className={`ml-2 toggle-slider ${useVision ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+                    <span className={`ml-2 toggle-slider ${useVision ? 'toggle-on' : 'toggle-off'}`}>
+                      <span className="toggle-knob" />
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={async () => {
                       const next = !showTabPreviews;
                       setShowTabPreviews(next);
-                      try { await generalSettingsStore.updateSettings({ showTabPreviews: next }); } catch {}
+                      try {
+                        await generalSettingsStore.updateSettings({ showTabPreviews: next });
+                      } catch {}
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Show tab previews</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Show screenshots of agent tabs</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Show screenshots of agent tabs
+                      </span>
                     </div>
-                    <span className={`ml-2 toggle-slider ${showTabPreviews ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+                    <span className={`ml-2 toggle-slider ${showTabPreviews ? 'toggle-on' : 'toggle-off'}`}>
+                      <span className="toggle-knob" />
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -451,46 +593,61 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                       }
                       const next = !enableHistoryContext;
                       setEnableHistoryContext(next);
-                      try { await generalSettingsStore.updateSettings({ enableHistoryContext: next }); } catch {}
+                      try {
+                        await generalSettingsStore.updateSettings({ enableHistoryContext: next });
+                      } catch {}
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Use history context</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Use browser history to help the agents</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Use browser history to help the agents
+                      </span>
                     </div>
-                    <span className={`ml-2 toggle-slider ${enableHistoryContext ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+                    <span className={`ml-2 toggle-slider ${enableHistoryContext ? 'toggle-on' : 'toggle-off'}`}>
+                      <span className="toggle-knob" />
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={async () => {
                       const next = !enableWorkflowEstimation;
                       setEnableWorkflowEstimation(next);
-                      try { await generalSettingsStore.updateSettings({ enableWorkflowEstimation: next }); } catch {}
+                      try {
+                        await generalSettingsStore.updateSettings({ enableWorkflowEstimation: next });
+                      } catch {}
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Task estimation</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Estimate the time and cost of a task</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Estimate the time and cost of a task
+                      </span>
                     </div>
-                    <span className={`ml-2 toggle-slider ${enableWorkflowEstimation ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+                    <span className={`ml-2 toggle-slider ${enableWorkflowEstimation ? 'toggle-on' : 'toggle-off'}`}>
+                      <span className="toggle-knob" />
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={async () => {
                       const next = !showEmergencyStop;
                       setShowEmergencyStop(next);
-                      try { await generalSettingsStore.updateSettings({ showEmergencyStop: next }); } catch {}
+                      try {
+                        await generalSettingsStore.updateSettings({ showEmergencyStop: next });
+                      } catch {}
                       if (props.onEmergencyStopToggle) props.onEmergencyStopToggle(next);
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Emergency stop button</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Instantly terminate all workflows</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Instantly terminate all workflows
+                      </span>
                     </div>
-                    <span className={`ml-2 toggle-slider ${showEmergencyStop ? 'toggle-on' : 'toggle-off'}`}><span className="toggle-knob" /></span>
+                    <span className={`ml-2 toggle-slider ${showEmergencyStop ? 'toggle-on' : 'toggle-off'}`}>
+                      <span className="toggle-knob" />
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -500,11 +657,12 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                         props.onRefreshHistoryContext().catch(e => console.error('[HeaderActions] Handler error:', e));
                       }
                     }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}
-                  >
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
                     <div className="flex flex-col items-start">
                       <span>Refresh history context</span>
-                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Refresh browser history context</span>
+                      <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Refresh browser history context
+                      </span>
                     </div>
                     <FaHistory className="h-3.5 w-3.5" />
                   </button>
@@ -515,11 +673,19 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
                 <div className="mt-2 border-t pt-2">
                   <div className="px-3 pb-1 font-medium opacity-80">Feedback</div>
                   <div className="px-3 py-1 text-xs opacity-70">Feedback is greatly appreciated</div>
-                  <a href="https://github.com/warpsurf/warpsurf" target="_blank" rel="noopener noreferrer" className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex items-center gap-2 rounded px-3 py-2`}>
+                  <a
+                    href="https://github.com/warpsurf/warpsurf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex items-center gap-2 rounded px-3 py-2`}>
                     <RxDiscordLogo className="h-3.5 w-3.5" />
                     <span>Join discord community</span>
                   </a>
-                  <a href="https://github.com/warpsurf/warpsurf" target="_blank" rel="noopener noreferrer" className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex items-center gap-2 rounded px-3 py-2`}>
+                  <a
+                    href="https://github.com/warpsurf/warpsurf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex items-center gap-2 rounded px-3 py-2`}>
                     <RxGithubLogo className="h-3.5 w-3.5" />
                     <span>GitHub</span>
                   </a>
@@ -529,30 +695,65 @@ const HeaderActions: React.FC<HeaderActionsProps> = (props) => {
               {hiddenKeys.includes('fish') && (
                 <div className="mt-2 border-t pt-2">
                   <div className="px-3 pb-1 font-medium opacity-80">Marine</div>
-                  <button type="button" onClick={() => { props.onFishAdd(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>Add Fish</button>
-                  <button type="button" onClick={() => { props.onSharkAdd(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>Add Shark</button>
-                  <button type="button" onClick={() => { props.onFeedingTime(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>Feeding Time</button>
-                  <button type="button" onClick={() => { props.onTriggerWave(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>Trigger Wave</button>
-                  <button type="button" onClick={() => { props.onShowPopulations(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>Populations</button>
-                  <button type="button" onClick={() => { props.onViewDisplay(); }} className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>View Display</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onFishAdd();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>
+                    Add Fish
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onSharkAdd();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
+                    Add Shark
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onFeedingTime();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
+                    Feeding Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onTriggerWave();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
+                    Trigger Wave
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onShowPopulations();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
+                    Populations
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onViewDisplay();
+                    }}
+                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
+                    View Display
+                  </button>
                   <div className="mt-2 flex items-center justify-between rounded px-3 py-2">
                     <span>Feed on Click</span>
-                    <button type="button" onClick={() => props.setFeedOnClick(!props.feedOnClick)} className={`toggle-slider ${props.feedOnClick ? 'toggle-on' : 'toggle-off'}`} aria-pressed={props.feedOnClick} aria-label="Feed on Click toggle">
+                    <button
+                      type="button"
+                      onClick={() => props.setFeedOnClick(!props.feedOnClick)}
+                      className={`toggle-slider ${props.feedOnClick ? 'toggle-on' : 'toggle-off'}`}
+                      aria-pressed={props.feedOnClick}
+                      aria-label="Feed on Click toggle">
                       <span className="toggle-knob" />
                     </button>
                   </div>
-                </div>
-              )}
-
-              {hiddenKeys.includes('settings') && (
-                <div className="mt-2 border-t pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { chrome.runtime.openOptionsPage(); setMoreMenuOpen(false); }}
-                    className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}
-                  >
-                    Settings
-                  </button>
                 </div>
               )}
             </div>
