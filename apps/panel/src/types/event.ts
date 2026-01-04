@@ -41,6 +41,10 @@ export interface EventData {
   action?: string;
   /** Optional message for events that need to display messages */
   message?: string;
+  /** Streaming: unique ID for this stream session */
+  streamId?: string;
+  /** Streaming: true on final chunk */
+  isFinal?: boolean;
 }
 
 export class AgentEvent {

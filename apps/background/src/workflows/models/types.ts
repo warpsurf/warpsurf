@@ -71,3 +71,8 @@ export interface ModelConfig {
   parameters?: Record<string, unknown>;
 }
 
+/** Streaming response chunk */
+export interface StreamChunk {
+  text: string;
+  done: boolean;
+}

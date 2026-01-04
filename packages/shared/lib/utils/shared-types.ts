@@ -18,6 +18,7 @@ export enum ExecutionState {
   STEP_OK = 'step.ok',
   STEP_FAIL = 'step.fail',
   STEP_CANCEL = 'step.cancel',
+  STEP_STREAMING = 'step.streaming',
 
   // Action/Tool level states
   ACT_START = 'act.start',
@@ -29,7 +30,7 @@ export enum ExecutionState {
   TAB_CLOSED = 'tab.closed',
   TAB_NAVIGATED = 'tab.navigated',
   TAB_GROUP_UPDATED = 'tab.group_updated',
-  
+
   // Estimation level states
   ESTIMATION_PENDING = 'estimation.pending',
   ESTIMATION_APPROVED = 'estimation.approved',

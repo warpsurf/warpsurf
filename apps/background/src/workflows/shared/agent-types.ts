@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type BrowserContext from '@src/browser/context';
 import type MessageManager from '@src/workflows/shared/messages/service';
 import type { EventManager } from '@src/workflows/shared/event/event-bus';
-import { type Actors, type ExecutionState, AgentEvent } from '@src/workflows/shared/event/types';
+import { type Actors, ExecutionState, AgentEvent } from '@src/workflows/shared/event/types';
 import type { EventData } from '@src/workflows/shared/event/types';
 import { AgentStepHistory } from '@src/workflows/shared/step-history';
 import { DOMHistoryElement } from '@src/browser/dom/history/view';
@@ -107,6 +107,20 @@ export class AgentContext {
       ...additionalData,
     });
     await this.eventManager.emit(event);
+  }
+
+  async emitStreamChunk(actor: Actors, text: string, streamId: string, isFinal = false) {
+    await this.eventManager.emit(
+      new AgentEvent(actor, ExecutionState.STEP_STREAMING, {
+        taskId: this.taskId,
+        step: this.nSteps,
+        maxSteps: this.options.maxSteps,
+        details: text,
+        message: text,
+        streamId,
+        isFinal,
+      }),
+    );
   }
 
   async pause() {

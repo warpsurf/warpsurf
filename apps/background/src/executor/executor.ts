@@ -1,6 +1,12 @@
 type BaseChatModel = any;
 import { type ActionResult, AgentContext, type AgentOptions } from '@src/workflows/shared/agent-types';
-import { AgentNavigator, NavigatorActionRegistry, AgentPlanner, type PlannerOutput, AgentValidator } from '@src/workflows/agent';
+import {
+  AgentNavigator,
+  NavigatorActionRegistry,
+  AgentPlanner,
+  type PlannerOutput,
+  AgentValidator,
+} from '@src/workflows/agent';
 import { ChatWorkflow } from '@src/workflows/chat';
 import { SearchWorkflow } from '@src/workflows/search';
 import { NavigatorPrompt, PlannerPrompt, ValidatorPrompt } from '@src/workflows/agent';
@@ -57,7 +63,7 @@ export class Executor {
   private lastError?: any;
   private retainTokenLogs?: boolean;
   private hasRunBrowserUse: boolean = false;
-  
+
   public llmResponses: {
     auto: Array<{ request: string; response: any; timestamp: number }>;
     chat: Array<{ request: string; response: any; timestamp: number }>;
@@ -71,7 +77,7 @@ export class Executor {
     search: [],
     navigator: [],
     planner: [],
-    validator: []
+    validator: [],
   };
   constructor(
     task: string,
@@ -125,17 +131,9 @@ export class Executor {
       prompt: this.validatorPrompt,
     });
 
-    this.chat = new ChatWorkflow({
-      chatLLM: chatLLM,
-      context: context,
-      prompt: this.navigatorPrompt,
-    });
+    this.chat = new ChatWorkflow(chatLLM, context);
 
-    this.search = new SearchWorkflow({
-      chatLLM: searchLLM,
-      context: context,
-      prompt: this.navigatorPrompt,
-    });
+    this.search = new SearchWorkflow(searchLLM, context);
 
     this.autoService = new AutoWorkflow();
 
@@ -193,7 +191,11 @@ export class Executor {
         (this.context.messageManager as any).resetForSingleAgent?.(task, sysMsg);
       } catch {
         // Fallback: replace the current task in place
-        try { this.context.messageManager.setCurrentTask(task); } catch { this.context.messageManager.addNewTask(task); }
+        try {
+          this.context.messageManager.setCurrentTask(task);
+        } catch {
+          this.context.messageManager.addNewTask(task);
+        }
       }
       // Rebuild Chat History block for the latest task and insert after the system message
       try {
@@ -215,7 +217,7 @@ export class Executor {
       } catch {}
     }
     this.validatorPrompt.addFollowUpTask(task);
-    
+
     if (normalizedType) {
       this.manualAgentType = normalizedType;
       logger.info(`Updated manual agent type to: ${normalizedType}`);
@@ -232,24 +234,27 @@ export class Executor {
    */
   async addBrowserUseFollowUpTask(task: string): Promise<void> {
     this.tasks.push(task);
-    
+
     logger.info(`Adding browser-use follow-up task: ${task}`);
-    
+
     // Mark that this executor has run browser-use (in case it was previously another type)
     this.hasRunBrowserUse = true;
-    
+
     // Step 1: Remove ALL nano_user_request blocks
     try {
       const msgs: any[] = (this.context.messageManager as any).history?.messages || [];
       const USER_REQUEST_START = '<nano_user_request>';
       const USER_REQUEST_END = '</nano_user_request>';
-      
+
       // Find all messages containing nano_user_request and remove them (backwards to preserve indices)
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m = msgs[i]?.message;
-        if (m && typeof m.content === 'string' && 
-            m.content.includes(USER_REQUEST_START) && 
-            m.content.includes(USER_REQUEST_END)) {
+        if (
+          m &&
+          typeof m.content === 'string' &&
+          m.content.includes(USER_REQUEST_START) &&
+          m.content.includes(USER_REQUEST_END)
+        ) {
           logger.info(`Removing old task at index ${i}`);
           (this.context.messageManager as any).history.removeMessage(i);
         }
@@ -257,15 +262,15 @@ export class Executor {
     } catch (e) {
       logger.error('Failed to remove old task blocks:', e);
     }
-    
+
     // Step 2: Rebuild chat history with all completed messages
     try {
       const session = await chatHistoryStore.getSession(this.context.taskId);
       if (session && session.messages && session.messages.length > 0) {
         const latestTaskText = String(task || '').trim();
-        const block = buildChatHistoryBlock(session.messages as any, { 
-          latestTaskText, 
-          stripUserRequestTags: true 
+        const block = buildChatHistoryBlock(session.messages as any, {
+          latestTaskText,
+          stripUserRequestTags: true,
         });
         if (block && block.trim().length > 0) {
           logger.info(`Upserting chat history block, length: ${block.length}`);
@@ -275,7 +280,7 @@ export class Executor {
     } catch (e) {
       logger.error('Failed to rebuild chat history:', e);
     }
-    
+
     // Step 3: Add the NEW task (fresh, no stale currentTaskIndex issues)
     try {
       logger.info(`Adding new task: ${task}`);
@@ -284,15 +289,15 @@ export class Executor {
     } catch (error) {
       logger.error(`addNewTask failed: ${error}`);
     }
-    
+
     this.validatorPrompt.addFollowUpTask(task);
-    
+
     this.manualAgentType = 'agent';
     logger.info(`Updated manual agent type to: agent`);
-    
+
     // Filter action results (keep memory-included ones)
     this.context.actionResults = this.context.actionResults.filter(result => result.includeInMemory);
-    
+
     logger.info(`Browser-use follow-up task added successfully`);
   }
 
@@ -320,12 +325,11 @@ export class Executor {
     const task = this.tasks[this.tasks.length - 1];
     const jobStartTime = Date.now();
     const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType);
-    
+
     try {
       let autoAction: AutoAction;
-      
+
       if (this.manualAgentType && this.manualAgentType !== 'auto') {
-        
         switch (this.manualAgentType) {
           case 'chat':
             autoAction = 'chat';
@@ -350,23 +354,35 @@ export class Executor {
         autoAction = autoResult.action;
         workflowLogger.autoRouting(autoResult.action, autoResult.confidence);
       }
-      
+
       workflowLogger.workflowStart(autoAction);
-      
+
       switch (autoAction) {
         case 'chat':
-          this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, 'Processing as simple question - using direct LLM response');
+          this.context.emitEvent(
+            Actors.SYSTEM,
+            ExecutionState.TASK_START,
+            'Processing as simple question - using direct LLM response',
+          );
           await this.executeChatWorkflow();
           break;
-          
+
         case 'search':
-          this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, 'Processing as web search question - using LLM with web search');
+          this.context.emitEvent(
+            Actors.SYSTEM,
+            ExecutionState.TASK_START,
+            'Processing as web search question - using LLM with web search',
+          );
           await this.executeSearchWorkflow();
           break;
-          
+
         case 'agent':
         default:
-          this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, 'Processing as complex task - using browser automation');
+          this.context.emitEvent(
+            Actors.SYSTEM,
+            ExecutionState.TASK_START,
+            'Processing as complex task - using browser automation',
+          );
           await this.executeAgentWorkflow();
           break;
       }
@@ -376,7 +392,7 @@ export class Executor {
     } finally {
       const responsesSummary = this.getLLMResponsesSummary();
       const jobSummary = this.getJobSummary(jobStartTime);
-      
+
       if (this.lastError) {
         const errorMessage = this.lastError instanceof Error ? this.lastError.message : String(this.lastError);
         if (!errorMessage.toLowerCase().includes('abort')) {
@@ -391,10 +407,10 @@ export class Executor {
           jobSummary.totalLatency,
           jobSummary.totalCost,
           jobSummary.totalTokens,
-          currentTaskNum
+          currentTaskNum,
         );
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, 'Task completed successfully');
-        
+
         if (!this.retainTokenLogs) {
           globalTokenTracker.clearTokensForTask(this.context.taskId);
         }
@@ -402,47 +418,49 @@ export class Executor {
     }
   }
 
-  private async triageRequest(request: string): Promise<{ action: AutoAction; confidence: number; reasoning?: string }> {
+  private async triageRequest(
+    request: string,
+  ): Promise<{ action: AutoAction; confidence: number; reasoning?: string }> {
     this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_START, 'Analyzing request...');
-    
+
     try {
       const result = await this.autoService.triageRequest(request, this.context.taskId);
       // Enforce no 'request_more_info' downstream
       if (result.action === 'request_more_info') {
         result.action = 'chat';
       }
-      
+
       this.llmResponses.auto.push({
         request,
         response: result,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_OK, `Request categorized as: ${result.action}`);
-      
+
       return result;
     } catch (error) {
       const errorResponse = {
         action: 'agent' as AutoAction,
         confidence: 0.3,
         reasoning: 'Fallback due to auto failure',
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
-      
+
       this.llmResponses.auto.push({
         request,
         response: errorResponse,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_FAIL, `Auto failed: ${errorMessage}`);
-      
+
       // Return a fallback result
       return {
         action: 'agent',
         confidence: 0.3,
-        reasoning: 'Fallback due to auto failure'
+        reasoning: 'Fallback due to auto failure',
       };
     }
   }
@@ -453,30 +471,30 @@ export class Executor {
       const currentTask = this.tasks[this.tasks.length - 1];
       this.chat.setTask(currentTask);
       const result = await this.chat.execute();
-      
+
       this.llmResponses.chat.push({
         request: currentTask,
         response: result,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       if (result.error) {
         throw new Error(result.error);
       }
-      
+
       if (!result.result?.response) {
         throw new Error('No response from chat');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       const currentTask = this.tasks[this.tasks.length - 1];
       this.llmResponses.chat.push({
         request: currentTask,
         response: { error: errorMessage },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       logger.error(`Chat execution failed: ${errorMessage}`);
       // Re-throw to let the main finally block handle job summary
       throw error;
@@ -489,30 +507,30 @@ export class Executor {
       const currentTask = this.tasks[this.tasks.length - 1];
       this.search.setTask(currentTask);
       const result = await this.search.execute();
-      
+
       this.llmResponses.search.push({
         request: currentTask,
         response: result,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       if (result.error) {
         throw new Error(result.error);
       }
-      
+
       if (!result.result?.response) {
         throw new Error('No response from search');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       const currentTask = this.tasks[this.tasks.length - 1];
       this.llmResponses.search.push({
         request: currentTask,
         response: { error: errorMessage },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       logger.error(`Search execution failed: ${errorMessage}`);
       // Re-throw to let the main finally block handle job summary
       throw error;
@@ -522,14 +540,14 @@ export class Executor {
   private async executeAgentWorkflow(): Promise<void> {
     // Mark that this executor has run browser-use
     this.hasRunBrowserUse = true;
-    
+
     const context = this.context;
     context.nSteps = 0;
     const allowedMaxSteps = this.context.options.maxSteps;
 
     try {
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_START, 'Starting browser automation...');
-      
+
       let done = false;
       let step = 0;
       let validatorFailed = false;
@@ -543,15 +561,17 @@ export class Executor {
         if (step > 0) {
           workflowLogger.workflowStep(step + 1, allowedMaxSteps);
         }
-        
+
         if (await this.shouldStop()) {
           break;
         }
 
         // Check if planner is enabled
-        const isPlannerEnabled = !!(this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enablePlanner);
+        const isPlannerEnabled = !!(
+          this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enablePlanner
+        );
         const isPlanningStep = context.nSteps % context.options.planningInterval === 0 || validatorFailed;
-        
+
         // Debug: Log planner activation check on first step
         if (step === 0) {
           logger.info('[Planner] Activation check:', {
@@ -579,13 +599,13 @@ export class Executor {
           }
 
           const planOutput = await this.planner.execute();
-          
+
           this.llmResponses.planner.push({
             step: step,
             response: planOutput,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
-          
+
           if (planOutput.result) {
             const observation = wrapUntrustedContent(planOutput.result.observation);
             const plan: PlannerOutput = {
@@ -621,10 +641,12 @@ export class Executor {
         }
 
         // Break early if done and validator is not enabled
-        const isValidatorEnabled = !!(this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enableValidator);
+        const isValidatorEnabled = !!(
+          this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enableValidator
+        );
         if (done) {
           const useValidator = this.context.options.validateOutput && isValidatorEnabled;
-          
+
           // Debug: Log validator activation check when task is done
           logger.info('[Validator] Activation check:', {
             done,
@@ -634,22 +656,28 @@ export class Executor {
             enableValidator: this.generalSettings?.enableValidator,
             willRunValidator: useValidator,
           });
-          
+
           if (!useValidator) {
             break;
           }
         }
 
         // Validate output only when enabled (legacy full pipeline or explicit enableValidator)
-        if (done && this.context.options.validateOutput && isValidatorEnabled && !this.context.stopped && !this.context.paused) {
+        if (
+          done &&
+          this.context.options.validateOutput &&
+          isValidatorEnabled &&
+          !this.context.stopped &&
+          !this.context.paused
+        ) {
           const validatorOutput = await this.validator.execute();
-          
+
           this.llmResponses.validator.push({
             step: step,
             response: validatorOutput,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
-          
+
           if (validatorOutput.result?.is_valid) {
             break;
           }
@@ -666,7 +694,9 @@ export class Executor {
         // Prefer the final done action's text as the user-visible completion message
         let finalDoneText: string | undefined;
         try {
-          const results = Array.isArray((this.context as any).actionResults) ? (this.context as any).actionResults as Array<any> : [];
+          const results = Array.isArray((this.context as any).actionResults)
+            ? ((this.context as any).actionResults as Array<any>)
+            : [];
           for (let i = results.length - 1; i >= 0; i--) {
             const r = results[i];
             if (r && (r.isDone === true || typeof r.extractedContent === 'string')) {
@@ -712,13 +742,13 @@ export class Executor {
         return false;
       }
       const navOutput = await this.navigator.execute();
-      
+
       this.llmResponses.navigator.push({
         step: context.nSteps,
         response: navOutput,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       if (context.paused || context.stopped) {
         return false;
       }
@@ -840,10 +870,10 @@ export class Executor {
   async captureTabScreenshot(tabId: number): Promise<string | undefined> {
     try {
       logger.debug(`captureTabScreenshot called for tab ${tabId}`);
-      
+
       // Pre-check if tab exists
-      if (!await tabExists(tabId)) return undefined;
-      
+      if (!(await tabExists(tabId))) return undefined;
+
       // First check if this is the current page
       let currentPage;
       try {
@@ -852,7 +882,7 @@ export class Executor {
         // getCurrentPage can throw "No worker tab bound yet" - that's fine
         logger.debug(`captureTabScreenshot: Could not get current page: ${e?.message}`);
       }
-      
+
       if (currentPage && currentPage.tabId === tabId) {
         logger.debug(`Tab ${tabId} is the current page, using it directly`);
         // Ensure it's attached
@@ -874,7 +904,7 @@ export class Executor {
           throw e;
         }
       }
-      
+
       // Otherwise try to get the page by tab ID
       let page;
       try {
@@ -887,9 +917,9 @@ export class Executor {
         }
         throw e;
       }
-      
+
       logger.debug(`Got page for tab ${tabId}`);
-      
+
       // The page should already be attached by getPageByTabId, but verify
       if (!page.attached) {
         logger.debug(`Page for tab ${tabId} not attached, attempting to attach`);
@@ -908,7 +938,7 @@ export class Executor {
           throw e;
         }
       }
-      
+
       logger.debug(`Page attached for tab ${tabId}, taking screenshot`);
       try {
         const b64 = await page.takeScreenshot();
@@ -965,16 +995,27 @@ export class Executor {
       navigator: this.llmResponses.navigator.length,
       planner: this.llmResponses.planner.length,
       validator: this.llmResponses.validator.length,
-      total: Object.values(this.llmResponses).reduce((sum, responses) => sum + responses.length, 0)
+      total: Object.values(this.llmResponses).reduce((sum, responses) => sum + responses.length, 0),
     };
   }
 
   /**
    * Calculate total token usage and latency for this job using global token tracker
    */
-  getJobSummary(jobStartTime?: number): { totalInputTokens: number; totalOutputTokens: number; totalThoughtTokens: number; totalTokens: number; totalLatency: number; totalCost: number; apiCallCount: number; totalWebSearches: number; modelName?: string; provider?: string } {
+  getJobSummary(jobStartTime?: number): {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalThoughtTokens: number;
+    totalTokens: number;
+    totalLatency: number;
+    totalCost: number;
+    apiCallCount: number;
+    totalWebSearches: number;
+    modelName?: string;
+    provider?: string;
+  } {
     const taskTokens = globalTokenTracker.getTokensForTask(this.context.taskId);
-    
+
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalThoughtTokens = 0;
@@ -984,7 +1025,7 @@ export class Executor {
     let totalWebSearches = 0;
     let modelName: string | undefined;
     let provider: string | undefined;
-    
+
     if (taskTokens.length > 0) {
       // Calculate totals from global token tracker
       totalInputTokens = taskTokens.reduce((sum: number, usage: any) => sum + usage.inputTokens, 0);
@@ -1003,14 +1044,14 @@ export class Executor {
       }, 0);
       if (!hasAnyCost) totalCost = -1;
       totalWebSearches = taskTokens.reduce((sum: number, usage: any) => sum + (usage.webSearchCount || 0), 0);
-      
+
       // Extract model name and provider from the primary API call (usually the last/main one)
       if (taskTokens.length > 0) {
         const primaryUsage = taskTokens[taskTokens.length - 1]; // Use the last API call as primary
         modelName = primaryUsage.modelName;
         provider = primaryUsage.provider;
       }
-      
+
       // Calculate latency - use full job execution time if available, otherwise fall back to API call timing
       if (jobStartTime) {
         totalLatency = Date.now() - jobStartTime;
@@ -1029,7 +1070,7 @@ export class Executor {
       totalLatency = Date.now() - jobStartTime;
     }
 
-        return {
+    return {
       totalInputTokens,
       totalOutputTokens,
       totalThoughtTokens,
@@ -1039,7 +1080,7 @@ export class Executor {
       apiCallCount: taskTokens.length,
       totalWebSearches,
       modelName,
-      provider
+      provider,
     };
   }
 

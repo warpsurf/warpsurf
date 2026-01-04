@@ -17,7 +17,6 @@ export enum Actors {
 import { EventType, ExecutionState } from '@extension/shared/lib/utils';
 export { EventType, ExecutionState } from '@extension/shared/lib/utils';
 
-
 export interface EventData {
   /** Data associated with an event */
   taskId: string;
@@ -33,6 +32,10 @@ export interface EventData {
   action?: string;
   /** Optional message for events that need to display messages */
   message?: string;
+  /** Streaming: unique ID for this stream session */
+  streamId?: string;
+  /** Streaming: true on final chunk */
+  isFinal?: boolean;
 }
 
 export class AgentEvent {
@@ -52,4 +55,3 @@ export class AgentEvent {
 
 // The type of callback for event subscribers
 export type EventCallback = (event: AgentEvent) => Promise<void>;
-
