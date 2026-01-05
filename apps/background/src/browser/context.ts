@@ -578,7 +578,38 @@ export default class BrowserContext {
 
   public async getTabInfos(): Promise<TabInfo[]> {
     const tabs = await this.queryScopedTabs();
+    const seenIds = new Set(tabs.map(t => t.id));
     const tabInfos: TabInfo[] = [];
+
+    // Include context tabs that might not be in the same group yet
+    for (const ctxTabId of this._contextTabIds) {
+      if (!seenIds.has(ctxTabId)) {
+        try {
+          const ctxTab = await chrome.tabs.get(ctxTabId);
+          if (ctxTab) {
+            tabs.push(ctxTab);
+            seenIds.add(ctxTabId);
+          }
+        } catch {
+          // Tab may no longer exist, skip it
+        }
+      }
+    }
+
+    // Include owned tabs (for workers who create tabs during execution)
+    for (const ownedTabId of this._ownedTabIds) {
+      if (!seenIds.has(ownedTabId)) {
+        try {
+          const ownedTab = await chrome.tabs.get(ownedTabId);
+          if (ownedTab) {
+            tabs.push(ownedTab);
+            seenIds.add(ownedTabId);
+          }
+        } catch {
+          // Tab may no longer exist, skip it
+        }
+      }
+    }
 
     for (const tab of tabs) {
       if (tab.id && tab.url && tab.title) {
