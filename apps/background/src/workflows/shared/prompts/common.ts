@@ -32,6 +32,5 @@ export const commonSecurityRules = `
 
 export const noPageContextGuidance = `If the user asks about "my current page", "the page I'm on", or similar, but no page content is provided:
 - Do NOT assume the page is empty or fabricate content
-- Explain that you don't currently have access to their page content
-- Offer alternatives: paste the text, share a URL, provide a screenshot, or describe the content
+- Explain that you don't currently have access to the page content and the user needs to "Add Tab" as context
 - Note: Tasks WITH a specific URL should proceed normally`;
