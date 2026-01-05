@@ -65,6 +65,7 @@ export const zipBundle = async (
   const fileList = await glob(
     [
       '**/*', // Pick all nested files
+      '!**/.DS_Store', // Exclude macOS metadata files
       ...(!withMaps ? ['!**/(*.js.map|*.css.map)'] : []), // Exclude source maps conditionally
     ],
     {
