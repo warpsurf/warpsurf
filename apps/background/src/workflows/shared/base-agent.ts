@@ -4,7 +4,11 @@ import type { BasePrompt } from '@src/workflows/shared/prompts/base-prompt';
 type BaseMessage = any;
 import { createLogger } from '@src/log';
 import type { Action } from '@src/workflows/agent/actions/builder';
-import { convertInputMessages, extractJsonFromModelOutput, removeThinkTags } from '@src/workflows/shared/messages/utils';
+import {
+  convertInputMessages,
+  extractJsonFromModelOutput,
+  removeThinkTags,
+} from '@src/workflows/shared/messages/utils';
 import { isAbortedError, ResponseTimeoutError } from './agent-errors';
 import { convertZodToJsonSchema } from '@src/utils';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
@@ -23,21 +27,25 @@ interface TimeoutSignalResult {
 function createTimeoutSignal(userSignal: AbortSignal, timeoutMs: number): TimeoutSignalResult {
   const controller = new AbortController();
   let timedOut = false;
-  
+
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort(new ResponseTimeoutError(timeoutMs / 1000));
   }, timeoutMs);
-  
+
   // Abort if user cancels
-  userSignal.addEventListener('abort', () => {
-    clearTimeout(timeoutId);
-    controller.abort(userSignal.reason);
-  }, { once: true });
-  
+  userSignal.addEventListener(
+    'abort',
+    () => {
+      clearTimeout(timeoutId);
+      controller.abort(userSignal.reason);
+    },
+    { once: true },
+  );
+
   // Clean up timeout if controller aborts for other reasons
   controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
-  
+
   return {
     signal: controller.signal,
     isTimeout: () => timedOut,
@@ -145,7 +153,7 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
     const { signal, isTimeout, cleanup } = createTimeoutSignal(this.context.controller.signal, timeoutMs);
 
     // Use structured output when supported by the model wrapper; otherwise fall back
-    if (this.withStructuredOutput && typeof (this.chatLLM?.withStructuredOutput) === 'function') {
+    if (this.withStructuredOutput && typeof this.chatLLM?.withStructuredOutput === 'function') {
       // Convert Zod schema to JSON Schema to support native SDKs (OpenAI, Gemini, etc.)
       const jsonSchema = convertZodToJsonSchema(this.modelOutputSchema, this.modelOutputToolName, true);
       let structuredLlm: any;
@@ -178,8 +186,9 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
         } catch (error: any) {
           cleanup();
           const msg = String(error?.message || error);
-          const isAbortLike = msg.includes('signal is aborted') || msg.includes('Request aborted') || msg.includes('AbortError');
-          
+          const isAbortLike =
+            msg.includes('signal is aborted') || msg.includes('Request aborted') || msg.includes('AbortError');
+
           // If error looks like abort/timeout, check if we have real error info
           if (isAbortedError(error) || isAbortLike) {
             // User cancelled
@@ -193,7 +202,7 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
             // Some other abort (SDK internal?) - still report as abort
             throw new Error('AbortError: request was aborted');
           }
-          
+
           // Real API error - propagate immediately with actual message
           throw error;
         }
@@ -212,8 +221,9 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
     } catch (error: any) {
       cleanup();
       const msg = String(error?.message || error);
-      const isAbortLike = msg.includes('signal is aborted') || msg.includes('Request aborted') || msg.includes('AbortError');
-      
+      const isAbortLike =
+        msg.includes('signal is aborted') || msg.includes('Request aborted') || msg.includes('AbortError');
+
       // If error looks like abort/timeout, check why
       if (isAbortedError(error) || isAbortLike) {
         if (this.context.stopped) {
@@ -224,7 +234,7 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
         }
         throw new Error('AbortError: request was aborted');
       }
-      
+
       // Real API error - propagate immediately
       throw error;
     }
@@ -284,7 +294,7 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
       const metadata = response?.response_metadata || response?.raw?.response_metadata;
       const rawUsage = response?.raw?.usage_metadata;
       const directUsage = response?.usage_metadata;
-      
+
       // OpenAI/Anthropic format: token_usage or usage in metadata
       if (metadata?.token_usage || metadata?.usage) {
         const usage = metadata.token_usage || metadata.usage;
@@ -331,7 +341,7 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
       }
 
       // Cost is -1 (unavailable) if we don't have actual token counts from API
-      const cost = hasUsageData 
+      const cost = hasUsageData
         ? calculateCost(this.modelName, inputTokens, outputTokens + thoughtTokens, webSearchCount)
         : -1;
       const roleStamp = String(this.id || 'agent').replace(/-/g, '_');
@@ -340,8 +350,8 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
       const requestSummary = {
         messages: inputMessages.slice(-5).map((m: any) => ({
           role: m?._getType?.() || m?.role || 'unknown',
-          content: String(m?.content || '').slice(0, 2000)
-        }))
+          content: String(m?.content || ''),
+        })),
       };
 
       // Build response summary
