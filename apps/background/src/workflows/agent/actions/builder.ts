@@ -183,7 +183,10 @@ export class ActionBuilder {
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
       // Perform a direct Google search navigation without opening a blank/neutral page first
-      const encoded = String(input.query || '').trim().split(/\s+/g).join('+');
+      const encoded = String(input.query || '')
+        .trim()
+        .split(/\s+/g)
+        .join('+');
       const searchUrl = `https://www.google.com/search?q=${encoded}`;
       await context.browserContext.navigateTo(searchUrl);
       this.checkCancelled();
@@ -204,55 +207,56 @@ export class ActionBuilder {
     }, searchGoogleActionSchema);
     actions.push(searchGoogle);
 
-    const extractGoogleResults = new Action(
-      async (input: z.infer<typeof extractGoogleResultsActionSchema.schema>) => {
-        this.checkCancelled();
-        const context = this.context;
-        const intent = input.intent || `Extracting top Google results`;
-        context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+    const extractGoogleResults = new Action(async (input: z.infer<typeof extractGoogleResultsActionSchema.schema>) => {
+      this.checkCancelled();
+      const context = this.context;
+      const intent = input.intent || `Extracting top Google results`;
+      context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-        let list: Array<{ title: string; url: string }> = [];
-        let fromCache = false;
-        try {
-          const page = await context.browserContext.getCurrentPage();
-          const url = page.url().toLowerCase();
-          if (!/google\.[^/]+\/search/.test(url) && !/tbm=/.test(url)) {
-            // Not obviously on a Google SERP
-            context.emitEvent(
-              Actors.AGENT_NAVIGATOR,
-              ExecutionState.ACT_FAIL,
-              'Current page does not appear to be a Google results page; perform search first',
-            );
-            return new ActionResult({
-              error: 'Not on a Google SERP. Use search_google or navigate to Google results before extraction.',
-              includeInMemory: true,
-            });
-          }
-
-          const meta = await (page as any).getGoogleSearchResultsWithMeta?.(Math.max(1, Math.min(20, input.max_results || 10)))
-            ?? { items: await page.getGoogleSearchResults(Math.max(1, Math.min(20, input.max_results || 10))), fromCache: false };
-          list = meta.items;
-          fromCache = !!meta.fromCache;
-        } catch (e) {
-          const msg = `Failed to extract Google results: ${e instanceof Error ? e.message : String(e)}`;
-          context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_FAIL, msg);
-          return new ActionResult({ error: msg, includeInMemory: true });
+      let list: Array<{ title: string; url: string }> = [];
+      let fromCache = false;
+      try {
+        const page = await context.browserContext.getCurrentPage();
+        const url = page.url().toLowerCase();
+        if (!/google\.[^/]+\/search/.test(url) && !/tbm=/.test(url)) {
+          // Not obviously on a Google SERP
+          context.emitEvent(
+            Actors.AGENT_NAVIGATOR,
+            ExecutionState.ACT_FAIL,
+            'Current page does not appear to be a Google results page; perform search first',
+          );
+          return new ActionResult({
+            error: 'Not on a Google SERP. Use search_google or navigate to Google results before extraction.',
+            includeInMemory: true,
+          });
         }
 
-        // Canonical strict JSON payload for downstream workers
-        const payload = {
-          type: 'search_links',
-          links: list.map(({ title, url }) => ({ title, url })),
-          urls: list.map(({ url }) => url),
+        const meta = (await (page as any).getGoogleSearchResultsWithMeta?.(
+          Math.max(1, Math.min(20, input.max_results || 10)),
+        )) ?? {
+          items: await page.getGoogleSearchResults(Math.max(1, Math.min(20, input.max_results || 10))),
+          fromCache: false,
         };
-        const formatted = JSON.stringify(payload);
+        list = meta.items;
+        fromCache = !!meta.fromCache;
+      } catch (e) {
+        const msg = `Failed to extract Google results: ${e instanceof Error ? e.message : String(e)}`;
+        context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_FAIL, msg);
+        return new ActionResult({ error: msg, includeInMemory: true });
+      }
 
-        const msg = `Extracted ${list.length} Google results${fromCache ? ' (cached)' : ''}`;
-        context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-        return new ActionResult({ extractedContent: formatted, includeInMemory: !fromCache, success: true });
-      },
-      extractGoogleResultsActionSchema,
-    );
+      // Canonical strict JSON payload for downstream workers
+      const payload = {
+        type: 'search_links',
+        links: list.map(({ title, url }) => ({ title, url })),
+        urls: list.map(({ url }) => url),
+      };
+      const formatted = JSON.stringify(payload);
+
+      const msg = `Extracted ${list.length} Google results${fromCache ? ' (cached)' : ''}`;
+      context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
+      return new ActionResult({ extractedContent: formatted, includeInMemory: !fromCache, success: true });
+    }, extractGoogleResultsActionSchema);
     actions.push(extractGoogleResults);
 
     const goToUrl = new Action(async (input: z.infer<typeof goToUrlActionSchema.schema>) => {
@@ -276,7 +280,7 @@ export class ActionBuilder {
       } catch {}
       const msg2 = `Navigated to ${input.url}`;
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg2);
-      
+
       return new ActionResult({
         extractedContent: msg2,
         includeInMemory: true,
@@ -285,92 +289,88 @@ export class ActionBuilder {
     actions.push(goToUrl);
 
     // Extract readable content to Markdown/Text (non-interactive fast path)
-    const extractPageMarkdown = new Action(
-      async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
-        this.checkCancelled();
-        const context = this.context;
-        const intent = input.intent || 'Extracting readable page content';
-        context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+    const extractPageMarkdown = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
+      this.checkCancelled();
+      const context = this.context;
+      const intent = input.intent || 'Extracting readable page content';
+      context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-        const page = await context.browserContext.getCurrentPage();
-        const tabId = page.tabId;
+      const page = await context.browserContext.getCurrentPage();
+      const tabId = page.tabId;
 
-        const prefer = input.prefer || 'markdown';
-        const selector = input.selector && input.selector.trim().length > 0 ? input.selector : undefined;
-        const maxChars = typeof input.max_chars === 'number' ? input.max_chars : 20000;
-        const format = input.format || 'markdown';
+      const prefer = input.prefer || 'markdown';
+      const selector = input.selector && input.selector.trim().length > 0 ? input.selector : undefined;
+      const maxChars = typeof input.max_chars === 'number' ? input.max_chars : 20000;
+      const format = input.format || 'markdown';
 
-        let content = '';
-        let strategyUsed: 'readability' | 'markdown' | 'fallback' = 'markdown';
-        try {
-          // Strategy 1: Direct markdown extraction (clean, structured)
-          if (prefer === 'markdown' || prefer === 'auto') {
-            try {
-              const md = await getMarkdownContent(tabId, selector);
-              content = md || '';
-              if (content && content.trim().length > 100) {
-                strategyUsed = 'markdown';
-              }
-            } catch {}
-          }
-          
-          // Strategy 2: Readability fallback (if markdown insufficient)
-          if ((!content || content.trim().length < 100) && (prefer === 'readability' || prefer === 'auto')) {
-            try {
-              const r = await getReadabilityContent(tabId);
-              // Prefer textContent over HTML for readability
-              content = (r && (r.textContent || r.content)) || '';
-              if (content && content.trim().length > 0) {
-                strategyUsed = 'readability';
-              }
-            } catch {}
-          }
-        } catch (e) {
-          strategyUsed = 'fallback';
-          content = e instanceof Error ? e.message : String(e);
+      let content = '';
+      let strategyUsed: 'readability' | 'markdown' | 'fallback' = 'markdown';
+      try {
+        // Strategy 1: Direct markdown extraction (clean, structured)
+        if (prefer === 'markdown' || prefer === 'auto') {
+          try {
+            const md = await getMarkdownContent(tabId, selector);
+            content = md || '';
+            if (content && content.trim().length > 100) {
+              strategyUsed = 'markdown';
+            }
+          } catch {}
         }
 
-        if (format === 'text') {
-          content = content.replace(/```[\s\S]*?```/g, '').replace(/[\t ]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+        // Strategy 2: Readability fallback (if markdown insufficient)
+        if ((!content || content.trim().length < 100) && (prefer === 'readability' || prefer === 'auto')) {
+          try {
+            const r = await getReadabilityContent(tabId);
+            // Prefer textContent over HTML for readability
+            content = (r && (r.textContent || r.content)) || '';
+            if (content && content.trim().length > 0) {
+              strategyUsed = 'readability';
+            }
+          } catch {}
         }
+      } catch (e) {
+        strategyUsed = 'fallback';
+        content = e instanceof Error ? e.message : String(e);
+      }
 
-        let truncated = false;
-        if (content.length > maxChars) {
-          content = content.slice(0, maxChars) + '\n\n…[truncated]';
-          truncated = true;
-        }
+      if (format === 'text') {
+        content = content
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/[\t ]+/g, ' ')
+          .replace(/\n{3,}/g, '\n\n');
+      }
 
-        // Check if extraction actually got content
-        const gotContent = content.trim().length > 0;
-        const summary = gotContent 
-          ? `Extracted ${content.length} chars (${strategyUsed}${truncated ? ', truncated' : ''})` 
-          : `Extraction returned 0 characters (${strategyUsed} - page may not be loaded or main content not found)`;
-        
-        context.emitEvent(
-          Actors.AGENT_NAVIGATOR, 
-          gotContent ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, 
-          summary
-        );
+      let truncated = false;
+      if (content.length > maxChars) {
+        content = content.slice(0, maxChars) + '\n\n…[truncated]';
+        truncated = true;
+      }
 
-        // Format the result with appropriate status
-        if (!gotContent) {
-          return new ActionResult({
-            error: `Extraction failed: ${summary}. The page may still be loading, or no main content area was found. Try waiting for the page to load, scrolling to see content, or using a different extraction strategy.`,
-            includeInMemory: true,
-          });
-        }
+      // Check if extraction actually got content
+      const gotContent = content.trim().length > 0;
+      const summary = gotContent
+        ? `Extracted ${content.length} chars (${strategyUsed}${truncated ? ', truncated' : ''})`
+        : `Extraction returned 0 characters (${strategyUsed} - page may not be loaded or main content not found)`;
 
-        // Format the extracted content with clear metadata header
-        const metadataHeader = `Extraction completed successfully. Format: ${format}. Strategy: ${strategyUsed}. Length: ${content.length} characters${truncated ? ' (truncated)' : ''}.`;
-        const formattedContent = `${metadataHeader}\n\nExtracted content (${format}):\n${content}`;
+      context.emitEvent(Actors.AGENT_NAVIGATOR, gotContent ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, summary);
 
+      // Format the result with appropriate status
+      if (!gotContent) {
         return new ActionResult({
-          extractedContent: formattedContent,
-          includeInMemory: false,  // Don't persist in permanent memory - agent should process and use cache_content
+          error: `Extraction failed: ${summary}. The page may still be loading, or no main content area was found. Try waiting for the page to load, scrolling to see content, or using a different extraction strategy.`,
+          includeInMemory: true,
         });
-      },
-      extractPageMarkdownActionSchema,
-    );
+      }
+
+      // Format the extracted content with clear metadata header
+      const metadataHeader = `Extraction completed successfully. Format: ${format}. Strategy: ${strategyUsed}. Length: ${content.length} characters${truncated ? ' (truncated)' : ''}.`;
+      const formattedContent = `${metadataHeader}\n\nExtracted content (${format}):\n${content}`;
+
+      return new ActionResult({
+        extractedContent: formattedContent,
+        includeInMemory: false, // Don't persist in permanent memory - agent should process and use cache_content
+      });
+    }, extractPageMarkdownActionSchema);
     actions.push(extractPageMarkdown);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -456,7 +456,9 @@ export class ActionBuilder {
                 });
               } catch {}
               // Register ownership for worker contexts
-              try { this.context.browserContext.registerOwnedTab(Number(newTabId)); } catch {}
+              try {
+                this.context.browserContext.registerOwnedTab(Number(newTabId));
+              } catch {}
               // Just log it, don't switch
               logger.info(`New tab ${newTabId} opened but not switching to it`);
             }
@@ -516,126 +518,90 @@ export class ActionBuilder {
       this.checkCancelled();
       const intent = input.intent || `Opening ${input.url}`;
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
-      
-      // In worker mode (isolated contexts), prefer reusing the existing bound tab; otherwise create once.
-      if ((this.context.browserContext as any).isWorkerMode?.()) {
-        try {
-          const _ = await this.context.browserContext.getCurrentPage();
-          await this.context.browserContext.navigateTo(input.url);
-          this.checkCancelled();
-          const msg = `Opened ${input.url} in current tab`;
-          this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-          return new ActionResult({ extractedContent: msg, includeInMemory: true });
-        } catch (e: any) {
-          if (e && typeof e.message === 'string' && e.message === 'No worker tab bound yet') {
-            const page = await this.context.browserContext.openTab(input.url);
-            this.checkCancelled();
-            const msg = `Opened ${input.url} in new tab`;
-            this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-            this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.TAB_CREATED, `Created tab ${page.tabId}`, {
-              tabId: page.tabId,
-              taskId: this.context.taskId
-            });
-            return new ActionResult({ extractedContent: msg, includeInMemory: true });
-          }
-          throw e;
-        }
-      }
 
-      // Non-worker (single-agent/browser-use): preserve prior behavior of opening a new tab
+      // Always open a new tab - that's the purpose of this action.
+      // Use go_to_url if you want to navigate within the current tab.
       const page = await this.context.browserContext.openTab(input.url);
       this.checkCancelled();
       const msg = `Opened ${input.url} in new tab`;
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.TAB_CREATED, `Created tab ${page.tabId}`, {
         tabId: page.tabId,
-        taskId: this.context.taskId
+        taskId: this.context.taskId,
       });
       return new ActionResult({ extractedContent: msg, includeInMemory: true });
     }, openTabActionSchema);
     actions.push(openTab);
 
     // Jump-to-target: scroll_to_selector
-    const scrollToSelector = new Action(
-      async (input: z.infer<typeof scrollToSelectorActionSchema.schema>) => {
-        this.checkCancelled();
-        const intent = input.intent || `Scroll to selector '${input.selector}'`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+    const scrollToSelector = new Action(async (input: z.infer<typeof scrollToSelectorActionSchema.schema>) => {
+      this.checkCancelled();
+      const intent = input.intent || `Scroll to selector '${input.selector}'`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-        const page = await this.context.browserContext.getCurrentPage();
-        const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
-        const ok = await page.scrollToSelector(input.selector, nth);
-        const msg = ok
-          ? `Scrolled to selector '${input.selector}'${nth > 1 ? ` (#${nth})` : ''}`
-          : `Selector '${input.selector}' not found or not visible${nth > 1 ? ` (#${nth})` : ''}`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
-        return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
-      },
-      scrollToSelectorActionSchema,
-    );
+      const page = await this.context.browserContext.getCurrentPage();
+      const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
+      const ok = await page.scrollToSelector(input.selector, nth);
+      const msg = ok
+        ? `Scrolled to selector '${input.selector}'${nth > 1 ? ` (#${nth})` : ''}`
+        : `Selector '${input.selector}' not found or not visible${nth > 1 ? ` (#${nth})` : ''}`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
+      return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
+    }, scrollToSelectorActionSchema);
     actions.push(scrollToSelector);
 
     // Jump-to-target: click_selector
-    const clickSelector = new Action(
-      async (input: z.infer<typeof clickSelectorActionSchema.schema>) => {
-        this.checkCancelled();
-        const intent = input.intent || `Click selector '${input.selector}'`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+    const clickSelector = new Action(async (input: z.infer<typeof clickSelectorActionSchema.schema>) => {
+      this.checkCancelled();
+      const intent = input.intent || `Click selector '${input.selector}'`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-        const page = await this.context.browserContext.getCurrentPage();
-        const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
-        const ok = await page.clickSelector(input.selector, nth, this.context.options.useVision);
-        const msg = ok
-          ? `Clicked selector '${input.selector}'${nth > 1 ? ` (#${nth})` : ''}`
-          : `Selector '${input.selector}' not clickable${nth > 1 ? ` (#${nth})` : ''}`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
-        return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
-      },
-      clickSelectorActionSchema,
-    );
+      const page = await this.context.browserContext.getCurrentPage();
+      const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
+      const ok = await page.clickSelector(input.selector, nth, this.context.options.useVision);
+      const msg = ok
+        ? `Clicked selector '${input.selector}'${nth > 1 ? ` (#${nth})` : ''}`
+        : `Selector '${input.selector}' not clickable${nth > 1 ? ` (#${nth})` : ''}`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
+      return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
+    }, clickSelectorActionSchema);
     actions.push(clickSelector);
 
     // Jump-to-target: find_and_click_text
-    const findAndClickText = new Action(
-      async (input: z.infer<typeof findAndClickTextActionSchema.schema>) => {
-        this.checkCancelled();
-        const intent = input.intent || `Find and click text '${input.text}'`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+    const findAndClickText = new Action(async (input: z.infer<typeof findAndClickTextActionSchema.schema>) => {
+      this.checkCancelled();
+      const intent = input.intent || `Find and click text '${input.text}'`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-        const page = await this.context.browserContext.getCurrentPage();
-        const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
-        const ok = await page.findAndClickText(input.text, {
-          exact: !!input.exact,
-          caseSensitive: !!input.case_sensitive,
-          nth,
-          useVision: this.context.options.useVision,
-        });
-        const msg = ok
-          ? `Clicked element with text '${input.text}'${nth > 1 ? ` (#${nth})` : ''}`
-          : `Element with text '${input.text}' not found/clickable${nth > 1 ? ` (#${nth})` : ''}`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
-        return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
-      },
-      findAndClickTextActionSchema,
-    );
+      const page = await this.context.browserContext.getCurrentPage();
+      const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
+      const ok = await page.findAndClickText(input.text, {
+        exact: !!input.exact,
+        caseSensitive: !!input.case_sensitive,
+        nth,
+        useVision: this.context.options.useVision,
+      });
+      const msg = ok
+        ? `Clicked element with text '${input.text}'${nth > 1 ? ` (#${nth})` : ''}`
+        : `Element with text '${input.text}' not found/clickable${nth > 1 ? ` (#${nth})` : ''}`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ok ? ExecutionState.ACT_OK : ExecutionState.ACT_FAIL, msg);
+      return new ActionResult({ extractedContent: msg, includeInMemory: true, success: ok });
+    }, findAndClickTextActionSchema);
     actions.push(findAndClickText);
 
     // Quick text scan (fast, non-interactive)
-    const quickTextScan = new Action(
-      async (input: z.infer<typeof quickTextScanActionSchema.schema>) => {
-        this.checkCancelled();
-        const intent = input.intent || 'Quick text scan of page';
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
-        const page = await this.context.browserContext.getCurrentPage();
-        const text = await page.getVisiblePlainText();
-        const maxChars = typeof input.max_chars === 'number' ? input.max_chars : 3000;
-        const content = (text || '').slice(0, maxChars);
-        const msg = `Scanned ${content.length} chars`;
-        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-        return new ActionResult({ extractedContent: content, includeInMemory: true, success: true });
-      },
-      quickTextScanActionSchema,
-    );
+    const quickTextScan = new Action(async (input: z.infer<typeof quickTextScanActionSchema.schema>) => {
+      this.checkCancelled();
+      const intent = input.intent || 'Quick text scan of page';
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+      const page = await this.context.browserContext.getCurrentPage();
+      const text = await page.getVisiblePlainText();
+      const maxChars = typeof input.max_chars === 'number' ? input.max_chars : 3000;
+      const content = (text || '').slice(0, maxChars);
+      const msg = `Scanned ${content.length} chars`;
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
+      return new ActionResult({ extractedContent: content, includeInMemory: true, success: true });
+    }, quickTextScanActionSchema);
     actions.push(quickTextScan);
 
     const closeTab = new Action(async (input: z.infer<typeof closeTabActionSchema.schema>) => {
@@ -1006,32 +972,29 @@ export class ActionBuilder {
     actions.push(selectDropdownOption);
 
     // Request user control (Human-in-the-loop)
-    const requestUserControl = new Action(
-      async (input: z.infer<typeof requestUserControlActionSchema.schema>) => {
-        const intent = input.intent || 'Requesting human intervention';
-        const reason = input.reason || 'User oversight requested';
-        let tabId = input.tab_id ?? null;
-        try {
-          if (tabId === null) {
-            const page = await this.context.browserContext.getCurrentPage();
-            tabId = page?.tabId ?? null;
-          }
-        } catch {}
+    const requestUserControl = new Action(async (input: z.infer<typeof requestUserControlActionSchema.schema>) => {
+      const intent = input.intent || 'Requesting human intervention';
+      const reason = input.reason || 'User oversight requested';
+      let tabId = input.tab_id ?? null;
+      try {
+        if (tabId === null) {
+          const page = await this.context.browserContext.getCurrentPage();
+          tabId = page?.tabId ?? null;
+        }
+      } catch {}
 
-        // Emit pause event with message and optional tabId
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, intent, {
-          message: JSON.stringify({ type: 'request_user_control', reason, tabId }),
-          tabId: tabId ?? undefined,
-        });
+      // Emit pause event with message and optional tabId
+      this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, intent, {
+        message: JSON.stringify({ type: 'request_user_control', reason, tabId }),
+        tabId: tabId ?? undefined,
+      });
 
-        // Actually pause the executor loop
-        await this.context.pause();
+      // Actually pause the executor loop
+      await this.context.pause();
 
-        const msg = `Paused for human intervention${tabId ? ` on tab ${tabId}` : ''}: ${reason}`;
-        return new ActionResult({ extractedContent: msg, includeInMemory: true });
-      },
-      requestUserControlActionSchema,
-    );
+      const msg = `Paused for human intervention${tabId ? ` on tab ${tabId}` : ''}: ${reason}`;
+      return new ActionResult({ extractedContent: msg, includeInMemory: true });
+    }, requestUserControlActionSchema);
     actions.push(requestUserControl);
 
     return actions;
