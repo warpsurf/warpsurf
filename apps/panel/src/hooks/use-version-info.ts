@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Fixes to search model selection and response formatting.';
+  const releaseNotes =
+    'Added streaming to response generation, user-selectable tab context, default temperatures, improved UI, and more.';
 
   useEffect(() => {
     try {
