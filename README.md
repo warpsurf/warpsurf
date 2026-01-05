@@ -102,6 +102,7 @@ These demos give a flavour of some of the features and capabilities of warpsurf.
 | 🤖 **Agent** | Navigates and interacts with any webpage |
 | 🤖🤖 **Multi-Agent** | Orchestrate multiple agents for complex or parallelisable workflows |
 | 📑 **Tab Management** | Agents operate using their own tab groups |
+| 🪟 **Tab Context** | Select tabs to add as context in agent workflows |
 | 🔒 **Privacy** | Runs locally in your browser; your data stays with you |
 | 👁️ **Monitor** | Watch agents work in real-time with tab streaming |
 | 📈 **Usage Tracking** | Real-time token and cost statistics |
@@ -114,7 +115,6 @@ These demos give a flavour of some of the features and capabilities of warpsurf.
 
 | Feature | Description |
 |---------|-------------|
-| 🪟 **Tab Context** | Add the current tab's content and metadata as context in chat and workflows |
 | ♻️ **Trajectory Caching** | Cache past agent trajectories and use similarity search for in-context examples |
 | ⏰ **Background Tasks** | Run recurring or scheduled automations in the background |
 | 🧩 **Plan Editing** | Inspect and edit multi-agent task plans before and during execution |
