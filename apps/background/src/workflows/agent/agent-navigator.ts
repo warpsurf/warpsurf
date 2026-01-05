@@ -22,6 +22,7 @@ import { convertZodToJsonSchema, repairJsonString } from '@src/utils';
 import { HistoryTreeProcessor } from '@src/browser/dom/history/service';
 import { AgentStepRecord } from '@src/workflows/shared/step-history';
 import { type DOMHistoryElement } from '@src/browser/dom/history/view';
+import { globalTokenTracker } from '@src/utils/token-tracker';
 
 const logger = createLogger('AgentNavigator');
 
@@ -95,10 +96,14 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       // Stamp task and role for accurate logging
       const myTaskId = (this as any)?.context?.taskId;
       if (myTaskId) {
-        (globalThis as any)?.globalTokenTracker?.setCurrentTaskId?.(myTaskId);
+        globalTokenTracker.setCurrentTaskId(myTaskId);
+        // Log action schema once per session for session logs
+        // For workers, store under parent session so multi-agent logs include the schema
+        const parentSession = globalTokenTracker.getCurrentParentSession() || myTaskId;
+        globalTokenTracker.setSessionSchema(parentSession, this.jsonSchema);
       }
       const roleStamp = String(this.id || 'navigator').replace(/-/g, '_');
-      (globalThis as any)?.globalTokenTracker?.setCurrentRole?.(roleStamp);
+      globalTokenTracker.setCurrentRole(roleStamp);
 
       this.logger.debug('Navigator invoking', { model: this.modelName, messageCount: inputMessages.length });
 
@@ -156,7 +161,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       // Fallback: delegate to BaseAgent manual JSON extraction when structured output is not available
       return await super.invoke(inputMessages);
     } finally {
-      (globalThis as any)?.globalTokenTracker?.setCurrentRole?.(null);
+      globalTokenTracker.setCurrentRole(null);
     }
   }
 
@@ -187,7 +192,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
 
       // call the model to get the actions to take
       let inputMessages = messageManager.getMessages();
-      
+
       // Inject history context if available (for single agent workflow)
       try {
         const { getHistoryContextMessage } = await import('@src/workflows/shared/context/history-injector');
@@ -202,7 +207,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       } catch (err) {
         logger.error('Failed to inject history context:', err);
       }
-      
+
       // logger.info('Navigator input message', inputMessages[inputMessages.length - 1]);
 
       const modelOutput = await this.invoke(inputMessages);
@@ -230,7 +235,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       // (The agent saw them in the state message for this step, now it has responded, so we can clear them)
       if (this.context.actionResults.length > 0) {
         this.context.actionResults = this.context.actionResults.filter(
-          r => !r.extractedContent?.includes('Extraction completed successfully')
+          r => !r.extractedContent?.includes('Extraction completed successfully'),
         );
       }
 
@@ -338,7 +343,10 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
    * If extract_google_results is duplicated within the same step, insert a go_to_url to the next SERP page before a single extraction.
    * If the only action is extract_google_results and state signature matches last extraction, replace with next-page navigation + extraction.
    */
-  private async preprocessActions(actions: Record<string, unknown>[], state: BrowserState): Promise<Record<string, unknown>[]> {
+  private async preprocessActions(
+    actions: Record<string, unknown>[],
+    state: BrowserState,
+  ): Promise<Record<string, unknown>[]> {
     if (!Array.isArray(actions) || actions.length === 0) return actions;
 
     const url = state.url || '';
@@ -366,7 +374,9 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     if (sawDuplicateExtract && firstExtractIndex >= 0) {
       const nextUrl = this.computeNextSerpUrl(url);
       if (nextUrl) {
-        filtered.splice(firstExtractIndex, 0, { go_to_url: { intent: 'Go to next Google results page', url: nextUrl } });
+        filtered.splice(firstExtractIndex, 0, {
+          go_to_url: { intent: 'Go to next Google results page', url: nextUrl },
+        });
       }
     }
 
@@ -376,7 +386,8 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       const onlyOne = filtered.length === 1 ? Object.keys(filtered[0])[0] : '';
       if (onlyOne === 'extract_google_results' && this._lastSerpExtractSignature === stateSig) {
         const nextUrl = this.computeNextSerpUrl(url);
-        if (nextUrl) filtered = [{ go_to_url: { intent: 'Go to next Google results page', url: nextUrl } }, filtered[0]];
+        if (nextUrl)
+          filtered = [{ go_to_url: { intent: 'Go to next Google results page', url: nextUrl } }, filtered[0]];
       }
     }
 
@@ -432,7 +443,9 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     } catch (error: any) {
       // If no worker tab is bound yet, add a placeholder message
       if (error.message === 'No worker tab bound yet') {
-        const placeholderMsg = new HumanMessage('[Current state starts here]\nNo worker tab is currently bound. The agent needs to perform a navigation action first.');
+        const placeholderMsg = new HumanMessage(
+          '[Current state starts here]\nNo worker tab is currently bound. The agent needs to perform a navigation action first.',
+        );
         messageManager.addStateMessage(placeholderMsg);
         this.context.stateMessageAdded = true;
       } else {

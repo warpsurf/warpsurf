@@ -2,21 +2,30 @@
 // ---------- Generic text helpers ----------
 
 export function clampText(s: string): string {
-  try { return String(s || ''); } catch { return String(s || ''); }
+  try {
+    return String(s || '');
+  } catch {
+    return String(s || '');
+  }
 }
 
 export function getTextFromParts(parts: any[]): string {
   try {
     if (!Array.isArray(parts)) return '';
-    return parts.map((p: any) => {
-      if (!p) return '';
-      if (typeof p === 'string') return p;
-      if (typeof p.text === 'string') return p.text;
-      if (typeof p.input_text === 'string') return p.input_text;
-      if (p?.type === 'text' && typeof p?.text === 'string') return p.text; // Anthropic
-      return '';
-    }).filter(Boolean).join('\n');
-  } catch { return ''; }
+    return parts
+      .map((p: any) => {
+        if (!p) return '';
+        if (typeof p === 'string') return p;
+        if (typeof p.text === 'string') return p.text;
+        if (typeof p.input_text === 'string') return p.input_text;
+        if (p?.type === 'text' && typeof p?.text === 'string') return p.text; // Anthropic
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  } catch {
+    return '';
+  }
 }
 
 function isSystemishContent(content: string): boolean {
@@ -50,7 +59,9 @@ export function extractRequestTextFromMessages(messages: any[], defaultRole?: st
       else lines.push(`${role}: ${content}`);
     }
     return lines.filter(Boolean).join('\n');
-  } catch { return ''; }
+  } catch {
+    return '';
+  }
 }
 
 export function extractRequestText(req: any, defaultRole?: string): string {
@@ -72,7 +83,9 @@ export function extractRequestText(req: any, defaultRole?: string): string {
     if (typeof req.prompt === 'string') return req.prompt;
     if (typeof req.input === 'string') return req.input;
     return JSON.stringify(req, null, 2);
-  } catch { return JSON.stringify(req || {}); }
+  } catch {
+    return JSON.stringify(req || {});
+  }
 }
 
 export function extractResponseText(res: any): string {
@@ -100,7 +113,9 @@ export function extractResponseText(res: any): string {
     if (typeof res?.output_text === 'string') return res.output_text;
     if (typeof res?.text === 'string') return res.text;
     return JSON.stringify(res, null, 2);
-  } catch { return JSON.stringify(res || {}); }
+  } catch {
+    return JSON.stringify(res || {});
+  }
 }
 
 // ---------- Download handlers (ported from component) ----------
@@ -115,12 +130,23 @@ export function downloadPlan(port: chrome.runtime.Port | null, sessionIdRaw: str
     const once = (ev: any) => {
       try {
         if (ev?.type === 'combined_token_log' && String(ev?.sessionId || '') === sessionId) {
-          try { port.onMessage.removeListener(once); } catch {}
-          try { if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; } } catch {}
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
+          try {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+          } catch {}
           const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
-          knownWorkers = Array.isArray((ev as any)?.workerSessions) ? (ev as any).workerSessions as Array<{ sessionId: string; workerIndex: number }> : [];
+          knownWorkers = Array.isArray((ev as any)?.workerSessions)
+            ? ((ev as any).workerSessions as Array<{ sessionId: string; workerIndex: number }>)
+            : [];
 
-          const mainOnly = usages.filter(u => !knownWorkers.some(w => String(w.sessionId) === String(u?.sessionId || '')));
+          const mainOnly = usages.filter(
+            u => !knownWorkers.some(w => String(w.sessionId) === String(u?.sessionId || '')),
+          );
 
           const lines: string[] = [];
           lines.push(`# Main Messages for session ${sessionId}`);
@@ -140,7 +166,7 @@ export function downloadPlan(port: chrome.runtime.Port | null, sessionIdRaw: str
               const inTok = Number(u?.inputTokens || 0);
               const outTok = Number(u?.outputTokens || 0);
               const thoughtTok = Number(u?.thoughtTokens || 0);
-              const totalTok = Number(u?.totalTokens || (inTok + outTok));
+              const totalTok = Number(u?.totalTokens || inTok + outTok);
               const cost = typeof u?.cost === 'number' ? u.cost.toFixed(6) : String(u?.cost || 0);
               lines.push('');
               lines.push(`## Main • Step ${step} • ${ts}`);
@@ -175,16 +201,25 @@ export function downloadPlan(port: chrome.runtime.Port | null, sessionIdRaw: str
       } catch {}
     };
 
-    try { port.onMessage.addListener(once); } catch {}
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
     port.postMessage({ type: 'get_combined_token_log', sessionId });
     timeoutId = setTimeout(() => {
-      try { port.onMessage.removeListener(once); } catch {}
+      try {
+        port.onMessage.removeListener(once);
+      } catch {}
       console.warn('[Panel] Main messages (plan) download timed out after 10s');
     }, 10000);
   } catch {}
 }
 
-export function downloadWorkerMessages(port: chrome.runtime.Port | null, sessionIdRaw: string | null, agentTraceRootId: string | null, messageMetadata: any): void {
+export function downloadWorkerMessages(
+  port: chrome.runtime.Port | null,
+  sessionIdRaw: string | null,
+  agentTraceRootId: string | null,
+  messageMetadata: any,
+): void {
   try {
     if (!port || port.name !== 'side-panel-connection') return;
     const sessionId = String(sessionIdRaw || '');
@@ -194,8 +229,13 @@ export function downloadWorkerMessages(port: chrome.runtime.Port | null, session
     const once = (ev: any) => {
       try {
         if (ev?.type === 'combined_token_log' && String(ev?.sessionId || '') === sessionId) {
-          try { port.onMessage.removeListener(once); } catch {}
-          if (timeoutId) { clearTimeout(timeoutId); timeoutId = undefined; }
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
           const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
           knownWorkers = Array.isArray((ev as any)?.workerSessions) ? (ev as any).workerSessions : [];
 
@@ -219,10 +259,14 @@ export function downloadWorkerMessages(port: chrome.runtime.Port | null, session
           }
 
           const labels = Array.from(byLabel.keys()).sort((a, b) => {
-            if (a === 'Main') return -1; if (b === 'Main') return 1;
-            const aMatch = a.match(/^Worker (\d+)$/); const bMatch = b.match(/^Worker (\d+)$/);
+            if (a === 'Main') return -1;
+            if (b === 'Main') return 1;
+            const aMatch = a.match(/^Worker (\d+)$/);
+            const bMatch = b.match(/^Worker (\d+)$/);
             if (aMatch && bMatch) return Number(aMatch[1]) - Number(bMatch[1]);
-            if (aMatch) return -1; if (bMatch) return 1; return a.localeCompare(b);
+            if (aMatch) return -1;
+            if (bMatch) return 1;
+            return a.localeCompare(b);
           });
 
           const lines: string[] = [];
@@ -249,7 +293,7 @@ export function downloadWorkerMessages(port: chrome.runtime.Port | null, session
                 const inTok = Number(u?.inputTokens || 0);
                 const outTok = Number(u?.outputTokens || 0);
                 const thoughtTok = Number(u?.thoughtTokens || 0);
-                const totalTok = Number(u?.totalTokens || (inTok + outTok));
+                const totalTok = Number(u?.totalTokens || inTok + outTok);
                 const cost = typeof u?.cost === 'number' ? u.cost.toFixed(6) : String(u?.cost || 0);
                 lines.push(`### ${label} • Step ${step} • ${ts}`);
                 lines.push(`- provider: ${provider}`);
@@ -286,23 +330,33 @@ export function downloadWorkerMessages(port: chrome.runtime.Port | null, session
     };
 
     timeoutId = setTimeout(() => {
-      try { port.onMessage.removeListener(once); } catch {}
+      try {
+        port.onMessage.removeListener(once);
+      } catch {}
       console.warn('[Panel] Worker Messages download timed out after 10s');
     }, 10000);
 
-    try { port.onMessage.addListener(once); } catch {}
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
     port.postMessage({ type: 'get_combined_token_log', sessionId });
   } catch {}
 }
 
-export function downloadErrors(port: chrome.runtime.Port | null, sessionIdRaw: string | null, setErrorLogEntries: (entries: any[]) => void): void {
+export function downloadErrors(
+  port: chrome.runtime.Port | null,
+  sessionIdRaw: string | null,
+  setErrorLogEntries: (entries: any[]) => void,
+): void {
   try {
     if (!port || port.name !== 'side-panel-connection') return;
     const sessionId = String(sessionIdRaw || '');
     const once = (ev: any) => {
       try {
         if (ev?.type === 'error_log' && String(ev?.sessionId || '') === sessionId) {
-          try { port.onMessage.removeListener(once); } catch {}
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
           const entries: any[] = Array.isArray(ev?.data) ? ev.data : [];
           setErrorLogEntries(entries);
           const lines: string[] = [];
@@ -329,7 +383,9 @@ export function downloadErrors(port: chrome.runtime.Port | null, sessionIdRaw: s
         }
       } catch {}
     };
-    try { port.onMessage.addListener(once); } catch {}
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
     port.postMessage({ type: 'get_error_log', sessionId });
   } catch {}
 }
@@ -343,13 +399,37 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
     const once = (ev: any) => {
       try {
         if (ev?.type === 'combined_session_logs' && String(ev?.sessionId || '') === sessionId) {
-          try { port.onMessage.removeListener(once); } catch {}
-          if (timeoutId) { clearTimeout(timeoutId); timeoutId = undefined; }
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
           const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
+          const actionSchema = ev?.actionSchema || null;
           const lines: string[] = [];
           lines.push(`# Combined API Call Logs for session ${sessionId}`);
           lines.push('');
           lines.push(`Total calls: ${usages.length}`);
+
+          // Include action schema at the start if available
+          if (actionSchema) {
+            lines.push('');
+            lines.push('---');
+            lines.push('');
+            lines.push('## Action Schema');
+            lines.push('');
+            lines.push('The following JSON schema defines all available actions for the agent workflow:');
+            lines.push('');
+            lines.push('```json');
+            try {
+              lines.push(JSON.stringify(actionSchema, null, 2));
+            } catch {
+              lines.push(String(actionSchema));
+            }
+            lines.push('```');
+          }
 
           // Helper function to format a single log entry
           const formatLogEntry = (u: any, stepNum?: number, headingLevel: string = '###'): string[] => {
@@ -360,7 +440,7 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
             const role = String(u?.role || 'unknown');
             const inTok = Number(u?.inputTokens || 0);
             const outTok = Number(u?.outputTokens || 0);
-            const totalTok = Number(u?.totalTokens || (inTok + outTok));
+            const totalTok = Number(u?.totalTokens || inTok + outTok);
             const cost = typeof u?.cost === 'number' ? u.cost.toFixed(6) : String(u?.cost || 0);
             const stepPrefix = typeof stepNum === 'number' ? `Step ${stepNum} • ` : '';
             entryLines.push(`\n${headingLevel} ${stepPrefix}[${role}] ${provider} • ${model} • ${ts}`);
@@ -394,13 +474,13 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
               refiner: [],
               validator: [],
               workers: new Map(),
-              other: []
+              other: [],
             };
-            
+
             for (const u of logs) {
               const role = String(u?.role || 'unknown').toLowerCase();
               const workerIndex = Number(u?.workerIndex);
-              
+
               if (role.includes('estimator')) {
                 result.estimator.push(u);
               } else if (role.includes('planner')) {
@@ -513,7 +593,7 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
               lines.push('\n---');
               lines.push(`\n# Run ${runIdx}`);
               lines.push(`\n_${runUsages.length} API call(s) in this run_`);
-              
+
               const runLogs = categorizeLogsForRun(runUsages);
               outputRunLogs(runLogs, '##', '###');
             }
@@ -525,7 +605,7 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
               lines.push('\n---');
               lines.push('\n# Unassigned Logs');
               lines.push(`\n_${unassignedLogs.length} API call(s) without run assignment_`);
-              
+
               const unassignedRunLogs = categorizeLogsForRun(unassignedLogs);
               outputRunLogs(unassignedRunLogs, '##', '###');
             }
@@ -548,13 +628,15 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
       } catch {}
     };
 
-    try { port.onMessage.addListener(once); } catch {}
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
     port.postMessage({ type: 'get_combined_session_logs', sessionId });
     timeoutId = setTimeout(() => {
-      try { port.onMessage.removeListener(once); } catch {}
+      try {
+        port.onMessage.removeListener(once);
+      } catch {}
       console.warn('[Panel] combined_session_logs request timed out after 10s');
     }, 10000);
   } catch {}
 }
-
-

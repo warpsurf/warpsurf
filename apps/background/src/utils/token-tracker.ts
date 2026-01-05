@@ -22,7 +22,18 @@ export interface TokenUsage {
   // Workflow run index (1-based) to distinguish between multiple workflow runs in the same session
   workflowRunIndex?: number;
   // Logical role responsible for the call
-  role?: 'agent_planner' | 'agent_navigator' | 'agent_validator' | 'multiagent_planner' | 'multiagent_worker' | 'multiagent_refiner' | 'chat' | 'search' | 'auto' | 'system' | string;
+  role?:
+    | 'agent_planner'
+    | 'agent_navigator'
+    | 'agent_validator'
+    | 'multiagent_planner'
+    | 'multiagent_worker'
+    | 'multiagent_refiner'
+    | 'chat'
+    | 'search'
+    | 'auto'
+    | 'system'
+    | string;
   // Optional subtask id when available
   subtaskId?: number;
   // Optional raw payloads for logging (redacted where appropriate)
@@ -47,6 +58,8 @@ class TokenUsageTracker {
   private workflowRunIndices: Map<string, number> = new Map();
   // Current workflow run index for the active session
   private currentWorkflowRunIndex: number = 0;
+  // Store action schema per session (logged once at workflow start)
+  private sessionSchemas: Map<string, { schema: any; timestamp: number }> = new Map();
 
   setCurrentTaskId(taskId: string) {
     this.currentTaskId = taskId;
@@ -65,7 +78,7 @@ class TokenUsageTracker {
   }
 
   setCurrentSubtaskId(subtaskId: number | null) {
-    this.currentSubtaskId = (typeof subtaskId === 'number' && Number.isFinite(subtaskId)) ? subtaskId : null;
+    this.currentSubtaskId = typeof subtaskId === 'number' && Number.isFinite(subtaskId) ? subtaskId : null;
   }
 
   getCurrentSubtaskId(): number | null {
@@ -122,15 +135,30 @@ class TokenUsageTracker {
     this.currentWorkflowRunIndex = index;
   }
 
+  // Store action schema for a session (called once at workflow start)
+  setSessionSchema(sessionId: string, schema: any) {
+    if (!sessionId || !schema) return;
+    // Only store once per session - don't overwrite if already set
+    if (!this.sessionSchemas.has(sessionId)) {
+      this.sessionSchemas.set(sessionId, { schema, timestamp: Date.now() });
+      logger.debug('Stored action schema for session', { sessionId });
+    }
+  }
+
+  // Get action schema for a session
+  getSessionSchema(sessionId: string): { schema: any; timestamp: number } | null {
+    return this.sessionSchemas.get(sessionId) || null;
+  }
+
   addTokenUsage(apiCallId: string, usage: TokenUsage) {
     const taskId = usage.taskId || this.currentTaskId || 'unknown';
-    
+
     // CRITICAL: Resolve parent session for grouping
     // Priority: explicit workerToParent mapping > currentParentSession > taskId itself
     // currentParentSession is stable within a multi-agent workflow, so even if taskId is wrong
     // due to race conditions, the sessionId will be correct for querying
     const parentSessionId = this.workerToParent.get(taskId) || this.currentParentSession || taskId;
-    
+
     // Try to get workerIndex from multiple sources (thorough lookup)
     let workerIndex = usage.workerIndex;
     if (typeof workerIndex !== 'number') {
@@ -153,13 +181,11 @@ class TokenUsageTracker {
         }
       }
     }
-    
+
     // Get the workflow run index for this session
-    const workflowRunIndex = usage.workflowRunIndex || 
-      this.workflowRunIndices.get(parentSessionId) || 
-      this.currentWorkflowRunIndex || 
-      0;
-    
+    const workflowRunIndex =
+      usage.workflowRunIndex || this.workflowRunIndices.get(parentSessionId) || this.currentWorkflowRunIndex || 0;
+
     const stamped: TokenUsage = {
       ...usage,
       taskId,
@@ -167,9 +193,9 @@ class TokenUsageTracker {
       workerIndex,
       workflowRunIndex: workflowRunIndex > 0 ? workflowRunIndex : undefined,
       role: usage.role || (this.currentRole as any) || undefined,
-      subtaskId: typeof usage.subtaskId === 'number' ? usage.subtaskId : (this.currentSubtaskId || undefined),
+      subtaskId: typeof usage.subtaskId === 'number' ? usage.subtaskId : this.currentSubtaskId || undefined,
     };
-    
+
     // Always store in the single apiCallTokens map
     this.apiCallTokens.set(apiCallId, stamped);
   }
@@ -179,13 +205,13 @@ class TokenUsageTracker {
     // Use taskId for de-duplication scope - each agent call should be unique
     const taskScope = usage.taskId || this.currentTaskId || 'unknown';
     const scopedFingerprint = `${fingerprint}|task:${taskScope}`;
-    
+
     if (this.fingerprints.has(scopedFingerprint)) {
       logger.debug('addTokenUsageOnce: Duplicate fingerprint, skipping', { fingerprint: scopedFingerprint });
       return;
     }
     this.fingerprints.add(scopedFingerprint);
-    
+
     const apiCallId = this.generateApiCallId();
     this.addTokenUsage(apiCallId, usage);
   }
@@ -209,7 +235,7 @@ class TokenUsageTracker {
   clearTokensForTask(taskId: string) {
     this.workerIds.delete(taskId);
     this.workerToParent.delete(taskId);
-    
+
     // Clear tokens using same matching logic as getTokensForTask to ensure consistency
     const idsToDelete: string[] = [];
     for (const [id, usage] of this.apiCallTokens.entries()) {
@@ -220,7 +246,7 @@ class TokenUsageTracker {
     for (const id of idsToDelete) {
       this.apiCallTokens.delete(id);
     }
-    
+
     // Clear fingerprints scoped to this task
     const fingerprintsToDelete: string[] = [];
     for (const fp of this.fingerprints) {
@@ -268,7 +294,7 @@ class TokenUsageTracker {
   } {
     // Get all tokens for this session (main + workers via sessionId match)
     const allTokens = this.getTokensForTask(String(sessionId));
-    
+
     // Split into main (no workerIndex) and workers (has workerIndex)
     const main = allTokens.filter(u => !u.workerIndex);
     const workers: Record<number, TokenUsage[]> = {};
@@ -283,22 +309,26 @@ class TokenUsageTracker {
     // Compute totals (cost -1 means unavailable, only sum valid costs)
     const sum = (arr: TokenUsage[]) => {
       let hasAnyCost = false;
-      const result = arr.reduce((acc, u) => {
-        acc.inputTokens += Math.max(0, Number(u.inputTokens) || 0);
-        acc.outputTokens += Math.max(0, Number(u.outputTokens) || 0);
-        acc.totalTokens += Math.max(0, Number(u.totalTokens) || 0);
-        const uCost = Number(u.cost);
-        if (isFinite(uCost) && uCost >= 0) {
-          acc.cost += uCost;
-          hasAnyCost = true;
-        }
-        return acc;
-      }, { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 });
+      const result = arr.reduce(
+        (acc, u) => {
+          acc.inputTokens += Math.max(0, Number(u.inputTokens) || 0);
+          acc.outputTokens += Math.max(0, Number(u.outputTokens) || 0);
+          acc.totalTokens += Math.max(0, Number(u.totalTokens) || 0);
+          const uCost = Number(u.cost);
+          if (isFinite(uCost) && uCost >= 0) {
+            acc.cost += uCost;
+            hasAnyCost = true;
+          }
+          return acc;
+        },
+        { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 },
+      );
       if (!hasAnyCost) result.cost = -1;
       return result;
     };
 
-    const perWorker: Record<number, { inputTokens: number; outputTokens: number; totalTokens: number; cost: number }> = {};
+    const perWorker: Record<number, { inputTokens: number; outputTokens: number; totalTokens: number; cost: number }> =
+      {};
     for (const [k, arr] of Object.entries(workers)) {
       perWorker[Number(k)] = sum(arr);
     }
@@ -322,7 +352,7 @@ export function logLLMUsage(
     modelName: string;
     provider?: string;
     inputMessages?: any[];
-  }
+  },
 ): void {
   try {
     const { taskId, role, modelName, inputMessages } = options;
@@ -372,7 +402,7 @@ export function logLLMUsage(
     }
 
     // Cost is -1 (unavailable) if we don't have actual token counts from API
-    const cost = hasUsageData 
+    const cost = hasUsageData
       ? calculateCost(modelName, inputTokens, outputTokens + thoughtTokens, webSearchCount)
       : -1;
 
@@ -388,7 +418,13 @@ export function logLLMUsage(
       cost,
       taskId,
       role,
-      request: inputMessages ? { messages: inputMessages.slice(-3).map((m: any) => ({ role: m?.role, content: String(m?.content || '').slice(0, 1000) })) } : undefined,
+      request: inputMessages
+        ? {
+            messages: inputMessages
+              .slice(-3)
+              .map((m: any) => ({ role: m?.role, content: String(m?.content || '').slice(0, 1000) })),
+          }
+        : undefined,
       response: response?.content || response?.parsed || response,
     };
 
@@ -398,4 +434,3 @@ export function logLLMUsage(
     // Silent fail
   }
 }
-
