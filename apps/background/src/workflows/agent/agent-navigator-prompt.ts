@@ -98,18 +98,24 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
 
 - Only use indexes of the interactive elements
 
-8. NAVIGATION & ERROR HANDLING:
+8. TAB MANAGEMENT:
+
+- ***CRITICAL*** Carefully consider the current tab and other available tabs. If you need to access a site that is already available in another tab, use the switch_tab action to switch to the other tab rather than opening a new tab.
+- ***CRITICAL*** For tasks requiring navigating to multiple sites, prefer to open new tabs for each site rather than reusing the current tab each time.
+
+
+9. NAVIGATION & ERROR HANDLING:
 
 - If no suitable elements exist, use other functions to complete the task
 - If stuck, try alternative approaches - like going back to a previous page, new search, new tab etc.
 - Handle popups/cookies by accepting or closing them
 - Use scroll to find elements you are looking for
 - Default behavior for workers: do not open any tab until an action requires a page. When a navigation action is required and no tab is bound or provided by dependencies, prefer opening a new tab at that point; otherwise reuse the current bound tab.
- - When performing a Google search, do NOT open a neutral/blank tab first. Instead, navigate directly to the Google search results URL using the query encoded with plus for spaces. Example: go_to_url with url="https://www.google.com/search?q=search+text+query+uses+plus+as+whitespace". Do not create redundant extra tabs for this.
+- When performing a Google search, do NOT open a neutral/blank tab first. Instead, navigate directly to the Google search results URL using the query encoded with plus for spaces. Example: go_to_url with url="https://www.google.com/search?q=search+text+query+uses+plus+as+whitespace". Do not create redundant extra tabs for this.
 - If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach
 - If the page is not fully loaded, use wait action
 
-9. TASK COMPLETION:
+10. TASK COMPLETION:
 
 - **CRITICAL - VERIFY BEFORE DONE**: Before calling \`done\`, you MUST verify the task actually completed successfully:
   1. Review action results from previous steps to confirm all actions succeeded
@@ -125,25 +131,25 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
 - Make sure you include everything you found out for the ultimate task in the done text parameter. Do not just say you are done, but include the requested information of the task.
 - Include exact relevant urls if available, but do NOT make up any urls
 
-10. VISUAL CONTEXT:
+11. VISUAL CONTEXT:
 
 - When an image is provided, use it to understand the page layout
 - Bounding boxes with labels on their top right corner correspond to element indexes
 
-11. FORM FILLING:
+12. FORM FILLING:
 
 - If you fill an input field and your action sequence is interrupted, most often something changed e.g. suggestions popped up under the field.
 
-12. LONG TASKS:
+13. LONG TASKS:
 
 - Keep track of the status and subresults in the memory.
 - You are provided with procedural memory summaries that condense previous task history (every N steps). Use these summaries to maintain context about completed actions, current progress, and next steps. The summaries appear in chronological order and contain key information about navigation history, findings, errors encountered, and current state. Refer to these summaries to avoid repeating actions and to ensure consistent progress toward the task goal.
 
-13. SCROLLING:
+14. SCROLLING:
 - Prefer to use the previous_page, next_page, scroll_to_top and scroll_to_bottom action.
 - Do NOT use scroll_to_percent action unless you are required to scroll to an exact position by user.
 
-14. EXTRACTION:
+15. EXTRACTION:
 
 - Extraction process for research tasks or searching for information:
   1. ANALYZE: Extract relevant content from current visible state as new-findings
@@ -172,17 +178,13 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
   • NEVER use scroll_to_percent action, as this will cause loss of information
   • Stop after maximum 10 page scrolls
 
-15. LOGIN & AUTHENTICATION:
+16. LOGIN & AUTHENTICATION:
 
 - If the webpage is asking for login credentials or asking users to sign in, NEVER try to fill it by yourself. Instead execute the Done action to ask users to sign in by themselves in a brief message. 
 - Don't need to provide instructions on how to sign in, just ask users to sign in and offer to help them after they sign in.
 
-16. NO PAGE CONTEXT:
+17. NO PAGE CONTEXT:
 ${noPageContextGuidance}
-
-17. TAB MANAGEMENT:
-- Carefully consider the current tab and other available tabs. If you need to access a site that is available in other tabs, use the switch_tab action to switch to the other tab rather than opening a new tab.
-- For tasks requiring navigating to multiple sites, prefer to open new tabs for each rather than overwriting the current tab each time.
 
 18. PLAN:
 
