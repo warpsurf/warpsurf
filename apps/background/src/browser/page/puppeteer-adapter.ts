@@ -58,6 +58,12 @@ export class PuppeteerAdapter {
         this._cleanup();
       }
     }
+    // Explicitly detach Chrome debugger to remove the yellow "debugging" banner
+    try {
+      await chrome.debugger.detach({ tabId: this._tabId });
+    } catch {
+      // Debugger may already be detached or tab closed
+    }
   }
 
   get page(): PuppeteerPage | null {
@@ -100,4 +106,3 @@ export class PuppeteerAdapter {
     `);
   }
 }
-

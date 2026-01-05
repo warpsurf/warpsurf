@@ -311,9 +311,9 @@ export async function handleNewTask(message: any, deps: Deps) {
     }
   } catch {}
 
-  // Forward events to side panel
+  // Forward events to side panel; clear executor reference on completion
   try {
-    await subscribeToExecutorEvents(executor, currentPort, taskManager, deps.logger);
+    await subscribeToExecutorEvents(executor, currentPort, taskManager, deps.logger, () => setCurrentExecutor(null));
   } catch {}
 
   // Execute
@@ -327,7 +327,7 @@ export async function handleNewTask(message: any, deps: Deps) {
 }
 
 export async function handleFollowUpTask(message: any, deps: Deps) {
-  const { currentPort, getCurrentExecutor, taskManager, logger } = deps;
+  const { currentPort, getCurrentExecutor, setCurrentExecutor, taskManager, logger } = deps;
   const task: string = String(message.task || '').trim();
   const sessionId: string = String(message.taskId || '');
   let agentType: string | undefined = message.agentType ? String(message.agentType) : undefined;
@@ -537,7 +537,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     delete (existing as any).__backgroundSubscribed;
     try {
-      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger);
+      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger, () => setCurrentExecutor(null));
     } catch {}
 
     // Re-bind executor to TaskManager so TAB_CREATED triggers mirroring for new tabs
@@ -603,7 +603,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     delete (existing as any).__backgroundSubscribed;
     try {
-      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger);
+      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger, () => setCurrentExecutor(null));
     } catch {}
     // Restore reactivateTask - needed for stop button to work!
     // But mirroring is already stopped and marked disabled above

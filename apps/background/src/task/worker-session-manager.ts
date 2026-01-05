@@ -32,7 +32,7 @@ export class WorkerSessionManager {
   constructor(
     private getTasks: () => Map<string, Task>,
     private mirrors: MirrorCoordinator,
-    private tabGroups: TabGroupService
+    private tabGroups: TabGroupService,
   ) {}
 
   setSidePanelPort(port?: chrome.runtime.Port): void {
@@ -46,14 +46,14 @@ export class WorkerSessionManager {
       parentSessionId?: string;
       messageContext?: string;
       workerIndex?: number;
-    }
+    },
   ): Promise<void> {
     const settings = await generalSettingsStore.getSettings();
     const workerPrompt = new WorkerPrompt(settings.maxActionsPerStep);
     const executor = await createWorkerExecutor({
       prompt: initialPrompt,
       sessionId: task.id,
-      workerModelPrefers: AgentNameEnum.MultiagentWorker
+      workerModelPrefers: AgentNameEnum.MultiagentWorker,
     });
 
     try {
@@ -67,9 +67,9 @@ export class WorkerSessionManager {
 
     task.executor = executor;
     this.propagateGroupId(task);
-    
+
     this.setupTokenTracking(task.id, options.workerIndex, options.parentSessionId);
-    
+
     try {
       await executor.initialize();
     } catch (e) {
@@ -78,7 +78,7 @@ export class WorkerSessionManager {
 
     this.setupEventHandlers(task, settings);
     await this.handleInitTab(task, executor, settings);
-    
+
     this.sessions.set(task.id, { executor, started: false });
   }
 
@@ -88,11 +88,11 @@ export class WorkerSessionManager {
     options: {
       targetTabIds?: number[];
       subtaskId?: number;
-    }
+    },
   ): Promise<{ ok: boolean; error?: string; outputText?: string; tabIds?: number[] }> {
     const task = this.getTasks().get(taskId);
     if (!task?.executor) return { ok: false, error: 'Session not found' };
-    
+
     const session = this.sessions.get(taskId);
     if (!session) return { ok: false, error: 'Session missing' };
 
@@ -122,6 +122,11 @@ export class WorkerSessionManager {
       } catch {}
     }
 
+    // Cleanup executor (detaches debugger) for all final statuses
+    try {
+      await (task.executor as any)?.cleanup?.();
+    } catch {}
+
     this.sessions.delete(taskId);
     task.status = finalStatus;
     task.completedAt = Date.now();
@@ -129,7 +134,7 @@ export class WorkerSessionManager {
     try {
       task.executor && (task.executor as any).clearExecutionEvents?.();
     } catch {}
-    
+
     this.endCapture(taskId);
     this.mirrors.freezeTab(task.tabId);
     this.mirrors.freezeSession(String(task.parentSessionId || task.id));
@@ -163,7 +168,7 @@ export class WorkerSessionManager {
 
   private async adoptTargetTabs(executor: Executor, targetTabIds?: number[]): Promise<void> {
     if (!Array.isArray(targetTabIds) || targetTabIds.length === 0) return;
-    
+
     try {
       const ctx = (executor as any).getBrowserContext?.();
       if (ctx) {
@@ -181,7 +186,7 @@ export class WorkerSessionManager {
     if ((task.executor as any).__taskManagerSubscribed) return;
     (task.executor as any).__taskManagerSubscribed = true;
 
-    task.executor!.subscribeExecutionEvents(async (event) => {
+    task.executor!.subscribeExecutionEvents(async event => {
       if (task.status !== 'running') return;
 
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
@@ -222,7 +227,7 @@ export class WorkerSessionManager {
       tabIds: new Set(),
       messages: [],
       doneTexts: [],
-      lastActionWasDone: false
+      lastActionWasDone: false,
     });
   }
 
@@ -281,36 +286,35 @@ export class WorkerSessionManager {
 
   private emitProgress(taskId: string, message: string): void {
     if (!this.sidePanelPort) return;
-    
+
     try {
       const task = this.getTasks().get(taskId);
       if (!task) return;
-      
+
       this.sidePanelPort.postMessage({
         type: 'workflow_progress',
         data: {
           sessionId: task.parentSessionId || task.id,
           actor: 'worker',
           workerId: task.workerIndex || 1,
-          message
-        }
+          message,
+        },
       });
     } catch {}
   }
 
   private captureCleanDone(cap: CaptureWindow, message: string): void {
     if (!cap.lastActionWasDone) return;
-    
+
     const txt = message.trim();
     const lower = txt.toLowerCase();
-    const isNoise = (
+    const isNoise =
       lower === 'task completed successfully' ||
       lower.startsWith('task failed') ||
       lower === 'navigation done' ||
       lower === 'navigating...' ||
-      /^action:\s*/i.test(txt)
-    );
-    
+      /^action:\s*/i.test(txt);
+
     if (txt && !isNoise) {
       cap.doneTexts.push(txt);
       cap.lastActionWasDone = false;
@@ -331,9 +335,8 @@ export class WorkerSessionManager {
     if (cap.doneTexts.length > 0) {
       output = cap.doneTexts[cap.doneTexts.length - 1];
     } else if (cap.messages.length > 0) {
-      output = this.tryExtractJson(cap.messages) ||
-               this.tryExtractDone(cap.messages) ||
-               this.getFallbackOutput(cap.messages);
+      output =
+        this.tryExtractJson(cap.messages) || this.tryExtractDone(cap.messages) || this.getFallbackOutput(cap.messages);
     }
 
     const tabIds = Array.from(cap.tabIds);
@@ -382,7 +385,7 @@ export class WorkerSessionManager {
       } catch {}
 
       const lower = m.toLowerCase();
-      const isGeneric = (
+      const isGeneric =
         lower === 'task completed successfully' ||
         lower.startsWith('task failed') ||
         lower === 'navigation done' ||
@@ -391,8 +394,7 @@ export class WorkerSessionManager {
         /^starting subtask\s+\d+:/i.test(m) ||
         /^worker\s+\d+\s+ready$/i.test(m) ||
         /^\d+\s+workers executing plan/i.test(m) ||
-        /^action:\s*/i.test(m)
-      );
+        /^action:\s*/i.test(m);
 
       if (!isGeneric) return m;
     }
@@ -411,4 +413,3 @@ export class WorkerSessionManager {
     return (nonSummaries[nonSummaries.length - 1] || messages[messages.length - 1] || '').toString();
   }
 }
-

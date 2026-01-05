@@ -1,12 +1,29 @@
-import { warningsSettingsStore, agentModelStore, generalSettingsStore, AgentNameEnum, getDefaultDisplayNameFromProviderId } from '@extension/storage';
+import {
+  warningsSettingsStore,
+  agentModelStore,
+  generalSettingsStore,
+  AgentNameEnum,
+  getDefaultDisplayNameFromProviderId,
+} from '@extension/storage';
 import { safePostMessage, safeStorageRemove } from '@extension/shared/lib/utils';
 import { initializeCostCalculator } from '../utils/cost-calculator';
 import { canInjectScripts, injectBuildDomTree } from '../utils/injection';
 import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
 import { subscribeToExecutorEvents } from '../workflows/shared/subscribe-to-executor-events';
-import { handleGetTokenLog, handleGetCombinedTokenLog, handleGetErrorLog, handleGetAgentLog, handleGetSessionLogs, handleGetCombinedSessionLogs } from '../logs/handlers';
+import {
+  handleGetTokenLog,
+  handleGetCombinedTokenLog,
+  handleGetErrorLog,
+  handleGetAgentLog,
+  handleGetSessionLogs,
+  handleGetCombinedSessionLogs,
+} from '../logs/handlers';
 import { focusTab, takeControl, handBackControl } from '../tabs/control-handlers';
-import { closeTaskTabs as closeTaskTabsFn, closeTaskGroup as closeTaskGroupFn, closeAllTabsForSession as closeAllTabsForSessionFn } from '../tabs/cleanup';
+import {
+  closeTaskTabs as closeTaskTabsFn,
+  closeTaskGroup as closeTaskGroupFn,
+  closeAllTabsForSession as closeAllTabsForSessionFn,
+} from '../tabs/cleanup';
 import { sendTabMirror, sendAllMirrorsForCleanup, setPreviewVisibility } from '../tabs/handlers';
 import { MultiAgentWorkflow } from '../workflows/multiagent/multiagent-workflow';
 import { createChatModel } from '../workflows/models/factory';
@@ -27,7 +44,17 @@ export type SidePanelDeps = {
 };
 
 export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: SidePanelDeps): void {
-  const { taskManager, logger, getCurrentPort, setCurrentPort, getCurrentExecutor, setCurrentExecutor, workflowsBySession, runningWorkflowSessionIds, setCurrentWorkflow } = deps;
+  const {
+    taskManager,
+    logger,
+    getCurrentPort,
+    setCurrentPort,
+    getCurrentExecutor,
+    setCurrentExecutor,
+    workflowsBySession,
+    runningWorkflowSessionIds,
+    setCurrentWorkflow,
+  } = deps;
 
   logger.info('Side panel connected');
   setCurrentPort(port);
@@ -35,15 +62,21 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
   // If a pending shortcut/omnibox session exists, notify the panel to adopt it immediately
   try {
-    chrome.storage.local.get('pending_shortcut').then(res => {
-      try {
-        const pending = (res as any)?.pending_shortcut;
-        if (pending && pending.text) {
-          try { port.postMessage({ type: 'shortcut', data: { text: String(pending.text || '') } }); } catch {}
-          // Clear after notifying to avoid re-adoption on reconnect
-          safeStorageRemove('pending_shortcut');}
-      } catch {}
-    }).catch(() => {});
+    chrome.storage.local
+      .get('pending_shortcut')
+      .then(res => {
+        try {
+          const pending = (res as any)?.pending_shortcut;
+          if (pending && pending.text) {
+            try {
+              port.postMessage({ type: 'shortcut', data: { text: String(pending.text || '') } });
+            } catch {}
+            // Clear after notifying to avoid re-adoption on reconnect
+            safeStorageRemove('pending_shortcut');
+          }
+        } catch {}
+      })
+      .catch(() => {});
   } catch {}
 
   port.onMessage.addListener(async (message: any) => {
@@ -54,12 +87,18 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         try {
           const w = await warningsSettingsStore.getWarnings();
           if (!w.hasAcceptedFirstRun) {
-            safePostMessage(port, { type: 'error', error: 'Please accept the liability disclaimer in the extension to continue.' });
+            safePostMessage(port, {
+              type: 'error',
+              error: 'Please accept the liability disclaimer in the extension to continue.',
+            });
             return;
           }
         } catch {
-          safePostMessage(port, { type: 'error', error: 'Please accept the liability disclaimer in the extension to continue.' });
-            return;
+          safePostMessage(port, {
+            type: 'error',
+            error: 'Please accept the liability disclaimer in the extension to continue.',
+          });
+          return;
         }
       }
 
@@ -88,12 +127,12 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           try {
             const sessionId = String(message.sessionId || message.taskId || '');
             const selectedModel = message.selectedModel ? String(message.selectedModel) : undefined;
-            
+
             if (!sessionId) {
               safePostMessage(port, { type: 'error', error: 'Missing sessionId' });
-            return;
+              return;
             }
-            
+
             // If a different model was selected, temporarily update the navigator model
             if (selectedModel) {
               try {
@@ -101,7 +140,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 const providers = await getAllProvidersDecrypted();
                 const agentModels = await agentModelStore.getAllAgentModels();
                 const navigatorModel = agentModels[AgentNameEnum.Navigator];
-                
+
                 if (navigatorModel && navigatorModel.modelName !== selectedModel) {
                   // Find the provider for this model
                   let modelProvider: string | null = null;
@@ -111,14 +150,14 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                       break;
                     }
                   }
-                  
+
                   if (modelProvider) {
                     // Update navigator model temporarily
                     await agentModelStore.setAgentModel(AgentNameEnum.Navigator, {
                       provider: modelProvider,
                       modelName: selectedModel,
                       parameters: navigatorModel.parameters,
-                      webSearch: navigatorModel.webSearch
+                      webSearch: navigatorModel.webSearch,
                     });
                     logger.info(`[Estimation] Temporarily updated navigator model to ${selectedModel} for this task`);
                   } else {
@@ -130,11 +169,13 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 // Continue anyway - don't fail the approval
               }
             }
-            
+
             const { approveEstimation } = await import('../executor/task-handlers');
             const estimation = message.estimation;
             approveEstimation(sessionId, estimation);
-            logger.info(`[Estimation] Approved for session ${sessionId}${selectedModel ? ` with model ${selectedModel}` : ''}${estimation ? ' (with recalculated estimation)' : ''}`);
+            logger.info(
+              `[Estimation] Approved for session ${sessionId}${selectedModel ? ` with model ${selectedModel}` : ''}${estimation ? ' (with recalculated estimation)' : ''}`,
+            );
             safePostMessage(port, { type: 'success' });
             return;
           } catch (e) {
@@ -148,7 +189,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const sessionId = String(message.sessionId || message.taskId || '');
             if (!sessionId) {
               safePostMessage(port, { type: 'error', error: 'Missing sessionId' });
-            return;
+              return;
             }
             const { cancelEstimation } = await import('../executor/task-handlers');
             cancelEstimation(sessionId);
@@ -164,9 +205,15 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         case 'cancel_task': {
           const requestId = message.requestId;
           const id = String(message.sessionId || message.taskId || '').trim();
-          
+
           if (!id) {
-            safePostMessage(port, { type: 'cancel_task_result', requestId, sessionId: id, success: false, error: 'Missing taskId/sessionId' });
+            safePostMessage(port, {
+              type: 'cancel_task_result',
+              requestId,
+              sessionId: id,
+              success: false,
+              error: 'Missing taskId/sessionId',
+            });
             return;
           }
 
@@ -177,9 +224,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               cancelEstimation(id);
               const { Actors, ExecutionState } = await import('../workflows/shared/event/types');
               port.postMessage({
-                type: 'execution', actor: Actors.ESTIMATOR, state: ExecutionState.ESTIMATION_CANCELLED,
+                type: 'execution',
+                actor: Actors.ESTIMATOR,
+                state: ExecutionState.ESTIMATION_CANCELLED,
                 data: { taskId: id, step: 0, maxSteps: 0, details: 'Workflow cancelled by user' },
-                timestamp: Date.now()
+                timestamp: Date.now(),
               });
             } catch {} // Estimation might not exist
 
@@ -200,22 +249,48 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               for (const [key, w] of workflowsBySession.entries()) {
                 if (w === wf) workflowsBySession.delete(key);
               }
-              try { await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id); } catch {}
-              
-              safePostMessage(port, { type: 'cancel_task_result', requestId, sessionId: id, success: true, workflowCancelled: true, taskCancelled: false });
+              try {
+                await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id);
+              } catch {}
+
+              safePostMessage(port, {
+                type: 'cancel_task_result',
+                requestId,
+                sessionId: id,
+                success: true,
+                workflowCancelled: true,
+                taskCancelled: false,
+              });
               return;
             }
 
             // Single-agent task cancellation
             await taskManager.cancelTask(id);
-            try { await (taskManager as any).cancelAllForParentSession?.(id); } catch {}
-            try { (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id); } catch {}
-            
-            safePostMessage(port, { type: 'cancel_task_result', requestId, sessionId: id, success: true, workflowCancelled: false, taskCancelled: true });
+            try {
+              await (taskManager as any).cancelAllForParentSession?.(id);
+            } catch {}
+            try {
+              (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id);
+            } catch {}
+
+            safePostMessage(port, {
+              type: 'cancel_task_result',
+              requestId,
+              sessionId: id,
+              success: true,
+              workflowCancelled: false,
+              taskCancelled: true,
+            });
             return;
           } catch (e) {
             logger.error('[cancel_task] Failed:', e);
-            safePostMessage(port, { type: 'cancel_task_result', requestId, sessionId: id, success: false, error: e instanceof Error ? e.message : 'Failed to cancel task' });
+            safePostMessage(port, {
+              type: 'cancel_task_result',
+              requestId,
+              sessionId: id,
+              success: false,
+              error: e instanceof Error ? e.message : 'Failed to cancel task',
+            });
             return;
           }
         }
@@ -223,15 +298,16 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           try {
             const sessionId: string = String(message.sessionId || '');
             const query: string = String(message.query || '').trim();
-            const maxWorkersOverride: number | undefined = typeof message.maxWorkersOverride === 'number' ? message.maxWorkersOverride : undefined;
+            const maxWorkersOverride: number | undefined =
+              typeof message.maxWorkersOverride === 'number' ? message.maxWorkersOverride : undefined;
             if (!sessionId || !query) {
               safePostMessage(port, { type: 'error', error: 'Missing sessionId or query for workflow v2' });
-            return;
+              return;
             }
             // Prevent duplicate starts for same session
             if (runningWorkflowSessionIds.has(sessionId)) {
               safePostMessage(port, { type: 'error', error: 'Workflow already running for this session' });
-            return;
+              return;
             }
 
             // Resolve providers and agent models
@@ -239,21 +315,35 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const agentModels = await agentModelStore.getAllAgentModels();
 
             // Choose planner: MultiagentPlanner -> AgentPlanner -> AgentNavigator
-            const plannerCfg = agentModels[AgentNameEnum.MultiagentPlanner] || agentModels[AgentNameEnum.AgentPlanner] || agentModels[AgentNameEnum.AgentNavigator];
+            const plannerCfg =
+              agentModels[AgentNameEnum.MultiagentPlanner] ||
+              agentModels[AgentNameEnum.AgentPlanner] ||
+              agentModels[AgentNameEnum.AgentNavigator];
             if (!plannerCfg) {
               safePostMessage(port, { type: 'error', error: 'Please set a Planner model in Settings' });
-            return;
+              return;
             }
             const plannerProvider = providers[plannerCfg.provider];
             if (!plannerProvider) {
               const name = getDefaultDisplayNameFromProviderId(plannerCfg.provider);
-              return port.postMessage({ type: 'error', error: `Provider '${name}' not found. Please add an API key for ${name} in Settings.` });
+              return port.postMessage({
+                type: 'error',
+                error: `Provider '${name}' not found. Please add an API key for ${name} in Settings.`,
+              });
             }
             const plannerLLM: BaseChatModel = createChatModel(plannerProvider, plannerCfg);
 
             // Compute max workers from settings with optional override
             const settings = await generalSettingsStore.getSettings();
-            const maxWorkers = Math.max(1, Math.min(32, (typeof maxWorkersOverride === 'number' && maxWorkersOverride > 0) ? maxWorkersOverride : (settings?.maxWorkerAgents ?? 3)));
+            const maxWorkers = Math.max(
+              1,
+              Math.min(
+                32,
+                typeof maxWorkersOverride === 'number' && maxWorkersOverride > 0
+                  ? maxWorkersOverride
+                  : (settings?.maxWorkerAgents ?? 3),
+              ),
+            );
 
             // Create orchestrator and start
             const orchestrator = new MultiAgentWorkflow(taskManager, port, String(sessionId), { maxWorkers });
@@ -267,22 +357,34 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             runningWorkflowSessionIds.add(sessionId);
             setCurrentWorkflow(orchestrator);
             workflowsBySession.set(sessionId, orchestrator);
-            safePostMessage(port, { type: 'workflow_started', data: { sessionId } });// Start async; errors are posted back to UI
+            safePostMessage(port, { type: 'workflow_started', data: { sessionId } }); // Start async; errors are posted back to UI
             (async () => {
               try {
                 await orchestrator.start(query, plannerLLM);
               } catch (e) {
-                safePostMessage(port, { type: 'workflow_ended', ok: false, error: e instanceof Error ? e.message : 'Workflow failed' });} finally {
+                safePostMessage(port, {
+                  type: 'workflow_ended',
+                  ok: false,
+                  error: e instanceof Error ? e.message : 'Workflow failed',
+                });
+              } finally {
                 runningWorkflowSessionIds.delete(sessionId);
                 setCurrentWorkflow(null);
-                try { workflowsBySession.delete(sessionId); } catch {}
+                try {
+                  workflowsBySession.delete(sessionId);
+                } catch {}
                 // Freeze mirrors when the orchestrator ends so previews remain
-                try { await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId)); } catch {}
+                try {
+                  await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId));
+                } catch {}
               }
             })();
             return;
           } catch (e) {
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to start workflow v2' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to start workflow v2',
+            });
             return;
           }
         }
@@ -317,14 +419,25 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const evaluationJson: string = String(payload.evaluationJson || '');
             const judgeSessionId: string = String(payload.sessionId || '');
             if (!question || !groundTruthCSV || !agentOutput || !evaluationJson) {
-              return port.postMessage({ type: 'judge_result', error: 'Missing judge payload fields', data: { sessionId: judgeSessionId } });
+              return port.postMessage({
+                type: 'judge_result',
+                error: 'Missing judge payload fields',
+                data: { sessionId: judgeSessionId },
+              });
             }
             // Choose judge model: AgentValidator -> Chat -> AgentNavigator
             const providers = await getAllProvidersDecrypted();
             const agentModels = await agentModelStore.getAllAgentModels();
-            const judgeModel = agentModels[AgentNameEnum.AgentValidator] || agentModels[AgentNameEnum.Chat] || agentModels[AgentNameEnum.AgentNavigator];
+            const judgeModel =
+              agentModels[AgentNameEnum.AgentValidator] ||
+              agentModels[AgentNameEnum.Chat] ||
+              agentModels[AgentNameEnum.AgentNavigator];
             if (!judgeModel) {
-              return port.postMessage({ type: 'judge_result', error: 'No judge model configured. Please set Validator, Chat, or Navigator in Agent Settings.', data: { sessionId: judgeSessionId } });
+              return port.postMessage({
+                type: 'judge_result',
+                error: 'No judge model configured. Please set Validator, Chat, or Navigator in Agent Settings.',
+                data: { sessionId: judgeSessionId },
+              });
             }
             const judgeLLM: BaseChatModel = createChatModel(providers[judgeModel.provider], judgeModel);
             const system = [
@@ -347,14 +460,25 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 summary: 'short string',
                 issues: 'array of { row_key: string, column: string, reason: string }',
               },
-              instructions: 'Align rows using evaluation.unique_columns. Ensure all evaluation.required columns appear. For each required column, apply its metric. Produce JSON: {overall_pass, summary, issues} where overall_pass=false if any required field fails. Keep JSON under 2KB.'
+              instructions:
+                'Align rows using evaluation.unique_columns. Ensure all evaluation.required columns appear. For each required column, apply its metric. Produce JSON: {overall_pass, summary, issues} where overall_pass=false if any required field fails. Keep JSON under 2KB.',
             });
             let resultText = '';
             try {
-              const res = await (judgeLLM as any).invoke([{ role: 'system', content: system }, { role: 'user', content: user }] as any);
-              resultText = typeof (res as any)?.content === 'string' ? (res as any).content : JSON.stringify((res as any)?.content ?? '');
+              const res = await (judgeLLM as any).invoke([
+                { role: 'system', content: system },
+                { role: 'user', content: user },
+              ] as any);
+              resultText =
+                typeof (res as any)?.content === 'string'
+                  ? (res as any).content
+                  : JSON.stringify((res as any)?.content ?? '');
             } catch (e) {
-              return port.postMessage({ type: 'judge_result', error: e instanceof Error ? e.message : 'Judge invocation failed', data: { sessionId: judgeSessionId } });
+              return port.postMessage({
+                type: 'judge_result',
+                error: e instanceof Error ? e.message : 'Judge invocation failed',
+                data: { sessionId: judgeSessionId },
+              });
             }
             return port.postMessage({ type: 'judge_result', data: { sessionId: judgeSessionId, result: resultText } });
           } catch (e) {
@@ -363,57 +487,101 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           }
         }
         case 'get_token_log': {
-          try { handleGetTokenLog(port, String(message.taskId || '')); } catch (e) { safePostMessage(port, { type: 'token_log', error: e instanceof Error ? e.message : 'Failed to get token log' });
-            return; }
+          try {
+            handleGetTokenLog(port, String(message.taskId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'token_log',
+              error: e instanceof Error ? e.message : 'Failed to get token log',
+            });
+            return;
+          }
           break;
         }
         case 'get_error_log': {
-          try { handleGetErrorLog(port, String(message.sessionId || '')); } catch (e) { safePostMessage(port, { type: 'error_log', error: e instanceof Error ? e.message : 'Failed to get error log' });
-            return; }
+          try {
+            handleGetErrorLog(port, String(message.sessionId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'error_log',
+              error: e instanceof Error ? e.message : 'Failed to get error log',
+            });
+            return;
+          }
           break;
         }
         case 'get_agent_log': {
-          try { handleGetAgentLog(port, taskManager as any, String(message.taskId || '')); } catch (e) { safePostMessage(port, { type: 'agent_log', error: e instanceof Error ? e.message : 'Failed to get agent log' });
-            return; }
+          try {
+            handleGetAgentLog(port, taskManager as any, String(message.taskId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'agent_log',
+              error: e instanceof Error ? e.message : 'Failed to get agent log',
+            });
+            return;
+          }
           break;
         }
         case 'get_combined_token_log': {
-          try { handleGetCombinedTokenLog(port, taskManager as any, String(message.sessionId || '')); } catch (e) { safePostMessage(port, { type: 'combined_token_log', error: e instanceof Error ? e.message : 'Failed to get combined token log' });
-            return; }
+          try {
+            handleGetCombinedTokenLog(port, taskManager as any, String(message.sessionId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'combined_token_log',
+              error: e instanceof Error ? e.message : 'Failed to get combined token log',
+            });
+            return;
+          }
           break;
         }
         case 'get_session_logs': {
-          try { handleGetSessionLogs(port, taskManager as any, String(message.sessionId || '')); } catch (e) { safePostMessage(port, { type: 'session_logs', error: e instanceof Error ? e.message : 'Failed to get session logs' });
-            return; }
+          try {
+            handleGetSessionLogs(port, taskManager as any, String(message.sessionId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'session_logs',
+              error: e instanceof Error ? e.message : 'Failed to get session logs',
+            });
+            return;
+          }
           break;
         }
         case 'get_combined_session_logs': {
-          try { handleGetCombinedSessionLogs(port, taskManager as any, String(message.sessionId || '')); } catch (e) { safePostMessage(port, { type: 'combined_session_logs', error: e instanceof Error ? e.message : 'Failed to get combined session logs' });
-            return; }
+          try {
+            handleGetCombinedSessionLogs(port, taskManager as any, String(message.sessionId || ''));
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'combined_session_logs',
+              error: e instanceof Error ? e.message : 'Failed to get combined session logs',
+            });
+            return;
+          }
           break;
         }
         case 'summarise_history': {
           try {
             logger.info('[HistoryContext] Received summarise_history message');
-            
+
             // Verify privacy consent before proceeding
             const warnings = await warningsSettingsStore.getWarnings();
             if (!warnings.hasAcceptedHistoryPrivacyWarning) {
               return port.postMessage({
                 type: 'error',
-                error: 'History privacy warning must be accepted before using this feature. Enable history context in Agent Settings.'
+                error:
+                  'History privacy warning must be accepted before using this feature. Enable history context in Agent Settings.',
               });
             }
-            
+
             // Get configurable settings
             const settings = await generalSettingsStore.getSettings();
-            const windowHours = typeof message.windowHours === 'number' 
-              ? message.windowHours 
-              : (settings.historySummaryWindowHours || 24);
+            const windowHours =
+              typeof message.windowHours === 'number' ? message.windowHours : settings.historySummaryWindowHours || 24;
             const maxRawItems = settings.historySummaryMaxRawItems || 1000;
             const maxProcessedItems = settings.historySummaryMaxProcessedItems || 50;
-            logger.info(`[HistoryContext] Window: ${windowHours}h, maxRaw: ${maxRawItems}, maxProcessed: ${maxProcessedItems}`);
-            
+            logger.info(
+              `[HistoryContext] Window: ${windowHours}h, maxRaw: ${maxRawItems}, maxProcessed: ${maxProcessedItems}`,
+            );
+
             // Import modules dynamically
             logger.info('[HistoryContext] Importing modules...');
             const { fetchBrowserHistory } = await import('@src/browser/history/fetcher');
@@ -424,10 +592,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
             // Step 1: Fetch raw history
             logger.info('[HistoryContext] Fetching browser history...');
-            
+
             const rawHistory = await fetchBrowserHistory({ windowHours, maxResults: maxRawItems });
             logger.info(`[HistoryContext] Fetched ${rawHistory.length} raw items`);
-            
+
             // Step 2: Preprocess (deduplicate, aggregate counts)
             const processedHistory = preprocessHistory(rawHistory, {
               maxItems: maxProcessedItems,
@@ -442,7 +610,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             // Get model config for HistorySummariser
             const providers = await getAllProvidersDecrypted();
             const agentModels = await agentModelStore.getAllAgentModels();
-            
+
             const modelConfig = agentModels[AgentNameEnum.HistorySummariser];
             if (!modelConfig || !providers[modelConfig.provider]) {
               throw new Error('HistorySummariser model not configured. Please configure it in Settings.');
@@ -450,41 +618,38 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
             // Create chat model
             const chatModel = createChatModel(providers[modelConfig.provider], modelConfig);
-            
+
             // Import required classes for agent context
             const { AgentContext } = await import('@src/workflows/shared/agent-types');
             const { EventManager } = await import('@src/workflows/shared/event/event-bus');
             const MessageManager = (await import('@src/workflows/shared/messages/service')).default;
             const { HistorySummariserPrompt } = await import('@src/workflows/specialized/history-summarizer');
-            
+
             // Create event manager that doesn't forward to chat (silent background operation)
             const eventManager = new EventManager();
             // We don't subscribe to events - let it run silently in background
-            
+
             // Create minimal message manager (not really used by HistorySummariser)
             const messageManager = new MessageManager();
-            
+
             // Create minimal browser context (not used by HistorySummariser)
             const BrowserContext = (await import('@src/browser/context')).default;
             const browserContext = new BrowserContext({ forceNewTab: false });
-            
+
             // Create agent context using proper constructor
-            const agentContext = new AgentContext(
-              'history-summary',
-              browserContext,
-              messageManager,
-              eventManager,
-              { useVision: false, maxSteps: 1 }
-            );
-            
+            const agentContext = new AgentContext('history-summary', browserContext, messageManager, eventManager, {
+              useVision: false,
+              maxSteps: 1,
+            });
+
             // Create prompt
             const prompt = new HistorySummariserPrompt();
-            
+
             // Create agent with proper BaseAgentOptions
-            const agent = new HistorySummarizerWorkflow({ 
-              chatLLM: chatModel, 
-              context: agentContext, 
-              prompt 
+            const agent = new HistorySummarizerWorkflow({
+              chatLLM: chatModel,
+              context: agentContext,
+              prompt,
             });
             agent.setHistory(processedHistory);
 
@@ -493,7 +658,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             if (result.error) {
               return port.postMessage({
                 type: 'error',
-                error: `History summarization failed: ${result.error}`
+                error: `History summarization failed: ${result.error}`,
               });
             }
 
@@ -509,13 +674,12 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               windowHours,
               timestamp: Date.now(),
             });
-            
           } catch (error) {
             const errMsg = error instanceof Error ? error.message : 'Unknown error';
             logger.error('Summarise history failed:', error);
             return port.postMessage({
               type: 'error',
-              error: `Failed to summarize history: ${errMsg}`
+              error: `Failed to summarize history: ${errMsg}`,
             });
           }
           return;
@@ -524,7 +688,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           try {
             const { isHistoryContextActive } = await import('@src/workflows/shared/context/history-injector');
             const active = await isHistoryContextActive();
-            
+
             safePostMessage(port, {
               type: 'history_context_status',
               active,
@@ -557,14 +721,34 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           const { tabId, instructions } = message;
           logger.info(`Hand back control requested for tab ${tabId}`);
           try {
-            try { if (getCurrentExecutor()) { delete (getCurrentExecutor() as any).__backgroundSubscribed; } } catch {}
-            try { await subscribeToExecutorEvents(getCurrentExecutor() as any, getCurrentPort(), taskManager as any, logger as any); } catch {}
-            await handBackControl(typeof tabId === 'number' ? tabId : undefined, instructions, getCurrentExecutor(), logger);
+            try {
+              if (getCurrentExecutor()) {
+                delete (getCurrentExecutor() as any).__backgroundSubscribed;
+              }
+            } catch {}
+            try {
+              await subscribeToExecutorEvents(
+                getCurrentExecutor() as any,
+                getCurrentPort(),
+                taskManager as any,
+                logger as any,
+                () => setCurrentExecutor(null),
+              );
+            } catch {}
+            await handBackControl(
+              typeof tabId === 'number' ? tabId : undefined,
+              instructions,
+              getCurrentExecutor(),
+              logger,
+            );
             safePostMessage(port, { type: 'success' });
             return;
           } catch (e) {
             logger.error('Failed to hand back control:', e);
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to hand back control' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to hand back control',
+            });
             return;
           }
         }
@@ -591,7 +775,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               return;
             }
             delete (current as any).__backgroundSubscribed;
-            try { await subscribeToExecutorEvents(current as any, getCurrentPort(), taskManager as any, logger as any); } catch {}
+            try {
+              await subscribeToExecutorEvents(current as any, getCurrentPort(), taskManager as any, logger as any, () =>
+                setCurrentExecutor(null),
+              );
+            } catch {}
             await (current as any).resume?.();
             safePostMessage(port, { type: 'success' });
           } catch (e) {
@@ -630,7 +818,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             safePostMessage(port, { type: 'success' });
           } catch (e) {
             logger.error('[CloseTabs] close_task_group failed', e);
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to close group tabs' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to close group tabs',
+            });
           }
           return;
         }
@@ -647,7 +838,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             safePostMessage(port, { type: 'success' });
           } catch (e) {
             logger.error('[CloseTabs] close_all_tabs_for_session failed', e);
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to close all tabs for session' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to close all tabs for session',
+            });
           }
           return;
         }
@@ -659,11 +853,16 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               return;
             }
             logger.info(`[Mirrors] Requested stop_all_mirroring_for_session for sessionId=${sessionId}`);
-            try { await (taskManager as any).tabMirrorService?.stopMirrorsForSession?.(String(sessionId)); } catch {}
+            try {
+              await (taskManager as any).tabMirrorService?.stopMirrorsForSession?.(String(sessionId));
+            } catch {}
             safePostMessage(port, { type: 'success' });
           } catch (e) {
             logger.error('[Mirrors] stop_all_mirroring_for_session failed', e);
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to stop mirroring for session' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to stop mirroring for session',
+            });
           }
           return;
         }
@@ -675,7 +874,9 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               return;
             }
             await taskManager.cancelTask(String(agentId));
-            try { await (taskManager as any).cancelAllForParentSession?.(String(agentId)); } catch {}
+            try {
+              await (taskManager as any).cancelAllForParentSession?.(String(agentId));
+            } catch {}
             safePostMessage(port, { type: 'success' });
           } catch (e) {
             logger.error('[SidePanel] stop-agent failed', e);
@@ -699,15 +900,15 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             });
           } catch (e) {
             logger.error('[KILLSWITCH] Handler failed:', e instanceof Error ? e.message : String(e));
-            safePostMessage(port, { 
-              type: 'kill_all_complete', 
-              data: { 
-                success: false, 
+            safePostMessage(port, {
+              type: 'kill_all_complete',
+              data: {
+                success: false,
                 killedWorkflows: 0,
                 killedTasks: 0,
                 killedMirrors: 0,
-                error: e instanceof Error ? e.message : 'Killswitch handler failed'
-              }
+                error: e instanceof Error ? e.message : 'Killswitch handler failed',
+              },
             });
           }
           return;
@@ -720,7 +921,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           try {
             await sendAllMirrorsForCleanup(taskManager as any, port);
           } catch (e) {
-            safePostMessage(port, { type: 'tab-mirror-batch-for-cleanup', error: e instanceof Error ? e.message : 'Failed to get mirrors for cleanup' });
+            safePostMessage(port, {
+              type: 'tab-mirror-batch-for-cleanup',
+              error: e instanceof Error ? e.message : 'Failed to get mirrors for cleanup',
+            });
             return;
           }
           break;
@@ -730,23 +934,30 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const { sessionId, visible } = message;
             if (!sessionId || typeof visible !== 'boolean') {
               safePostMessage(port, { type: 'error', error: 'Invalid preview_visibility payload' });
-            return;
+              return;
             }
             setPreviewVisibility(taskManager as any, String(sessionId), !!visible);
             safePostMessage(port, { type: 'success' });
             return;
           } catch (e) {
-            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to set visibility' });
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to set visibility',
+            });
             return;
           }
         }
         default: {
           try {
             const msgTypeLog = String(((message as any)?.type ?? (message as any)?.messageType) || '');
-            logger.error('[SidePanel] default branch (Unknown message type)', { msgType: msgTypeLog, rawType: (message as any)?.type, message });
+            logger.error('[SidePanel] default branch (Unknown message type)', {
+              msgType: msgTypeLog,
+              rawType: (message as any)?.type,
+              message,
+            });
           } catch {}
           safePostMessage(port, { type: 'error', error: 'Unknown message type' });
-            return;
+          return;
         }
       }
     } catch (error) {
@@ -762,5 +973,3 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
     taskManager.setSidePanelPort(undefined);
   });
 }
-
-

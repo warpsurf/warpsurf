@@ -63,6 +63,7 @@ export class Executor {
   private lastError?: any;
   private retainTokenLogs?: boolean;
   private hasRunBrowserUse: boolean = false;
+  private _hasReachedTerminalState: boolean = false;
 
   public llmResponses: {
     auto: Array<{ request: string; response: any; timestamp: number }>;
@@ -322,6 +323,8 @@ export class Executor {
    * @returns {Promise<void>}
    */
   async execute(): Promise<void> {
+    // Reset terminal state for new/follow-up task execution
+    this._hasReachedTerminalState = false;
     const task = this.tasks[this.tasks.length - 1];
     const jobStartTime = Date.now();
     const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType);
@@ -398,6 +401,7 @@ export class Executor {
         if (!errorMessage.toLowerCase().includes('abort')) {
           workflowLogger.taskFailed(errorMessage, currentTaskNum);
           this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, `Task failed: ${errorMessage}`);
+          this._hasReachedTerminalState = true;
         }
         this.lastError = undefined;
       } else if (this.context.stopped) {
@@ -410,6 +414,7 @@ export class Executor {
           currentTaskNum,
         );
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, 'Task completed successfully');
+        this._hasReachedTerminalState = true;
 
         if (!this.retainTokenLogs) {
           globalTokenTracker.clearTokensForTask(this.context.taskId);
@@ -708,8 +713,10 @@ export class Executor {
           }
         } catch {}
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalDoneText || 'Task completed successfully');
+        this._hasReachedTerminalState = true;
       } else if (step >= allowedMaxSteps) {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, 'Task failed: Max steps reached');
+        this._hasReachedTerminalState = true;
       } else if (this.context.stopped) {
       } else {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, 'Task paused');
@@ -719,6 +726,7 @@ export class Executor {
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, `Task failed: ${errorMessage}`);
+        this._hasReachedTerminalState = true;
       }
     } finally {
       if (import.meta.env.DEV) {
@@ -790,12 +798,19 @@ export class Executor {
   }
 
   async cancel(): Promise<void> {
+    // Skip cancellation event if task already reached terminal state (completed/failed)
+    if (this._hasReachedTerminalState) {
+      try {
+        await this.context.browserContext.cleanup();
+      } catch {}
+      return;
+    }
+
+    this._hasReachedTerminalState = true;
     this.context.stop();
     try {
-      // Emit cancellation immediately so the panel always prints it
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
     } catch {}
-    // Immediately detach from any Puppeteer/CDP sessions so in-flight actions abort without closing tabs
     try {
       await this.context.browserContext.cleanup();
     } catch {}
@@ -816,14 +831,13 @@ export class Executor {
   }
 
   async cleanup(): Promise<void> {
-    // Browser context cleanup (closing tabs) is now handled explicitly by TaskManager
-    // when the user clicks "Close Tabs". This method is for executor-specific cleanup only.
-    // The browser tab should remain open after task completion for user interaction.
+    // Detach from browser tabs to release the Chrome debugger.
+    // Note: This does NOT close tabs - they remain open for user interaction.
+    // Tab closing is handled by TaskManager when user clicks "Close Tabs".
     try {
-      // Note: We do NOT call browserContext.cleanup() here anymore
-      logger.debug('Executor cleanup called - keeping browser context alive');
+      await this.context.browserContext.cleanup();
     } catch (error) {
-      logger.error(`Failed to cleanup executor-specific resources: ${error}`);
+      logger.error(`Failed to cleanup browser context: ${error}`);
     }
   }
 
@@ -1099,6 +1113,8 @@ export class Executor {
     skipFailures = true,
     delayBetweenActions = 2.0,
   ): Promise<ActionResult[]> {
+    // Reset terminal state for replay execution
+    this._hasReachedTerminalState = false;
     const results: ActionResult[] = [];
     const replayLogger = createLogger('Executor:replayHistory');
 
@@ -1146,13 +1162,16 @@ export class Executor {
 
       if (this.context.stopped) {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Replay cancelled');
+        this._hasReachedTerminalState = true;
       } else {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, 'Replay completed');
+        this._hasReachedTerminalState = true;
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       replayLogger.error(`Replay failed: ${errorMessage}`);
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, `Replay failed: ${errorMessage}`);
+      this._hasReachedTerminalState = true;
     }
 
     return results;
