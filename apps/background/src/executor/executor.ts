@@ -25,9 +25,11 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { AgentStepHistory } from '@src/workflows/shared/step-history';
 import type { GeneralSettingsConfig } from '@extension/storage';
 import { AutoWorkflow, type AutoAction } from '@src/workflows/auto';
-import { SystemMessage } from '@langchain/core/messages';
+import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils';
 import { tabExists } from '@src/utils';
+import { buildContextTabsMessage } from '@src/workflows/shared/context/context-tab-injector';
+import { WorkflowType } from '@extension/shared/lib/workflows/types';
 
 const logger = createLogger('Executor');
 
@@ -165,6 +167,37 @@ export class Executor {
       logger.info('Chat history loaded for session', this.context.taskId);
     } catch (e) {
       logger.info('No chat history found or failed to load history for session', this.context.taskId, e);
+    }
+
+    // Inject context tabs for Agent workflow (DOM format)
+    await this.injectContextTabsForAgent();
+  }
+
+  /**
+   * Set context tab IDs for this executor session.
+   */
+  setContextTabIds(tabIds: number[]): void {
+    this.context.contextTabIds = tabIds;
+    logger.info(`Set ${tabIds.length} context tabs for executor`);
+  }
+
+  /**
+   * Inject context tabs into Agent workflow messages (DOM format).
+   * Called during initialization for agent workflows.
+   */
+  private async injectContextTabsForAgent(): Promise<void> {
+    if (this.context.contextTabIds.length === 0) return;
+    if (this.manualAgentType && this.manualAgentType !== 'agent' && this.manualAgentType !== 'auto') return;
+
+    try {
+      const contextMsg = await buildContextTabsMessage(this.context.contextTabIds, WorkflowType.AGENT);
+      if (contextMsg) {
+        // Insert after system message
+        this.context.messageManager.addMessageWithTokens(contextMsg, 'context');
+        logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
+      }
+    } catch (e) {
+      logger.warn('Failed to inject context tabs for agent:', e);
     }
   }
 

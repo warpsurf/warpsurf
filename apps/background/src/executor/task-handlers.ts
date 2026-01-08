@@ -260,20 +260,26 @@ export async function handleNewTask(message: any, deps: Deps) {
 
   const browserContext = new BrowserContext({ forceNewTab: true });
 
-  // Register context tabs with the browser context (for Agent workflow)
-  const hasContextTabs = isWebAgent && contextTabIds.length > 0;
+  // Register context tabs with the browser context and create visual indicator
+  const hasContextTabs = contextTabIds.length > 0;
   if (hasContextTabs) {
     browserContext.setContextTabs(contextTabIds);
     deps.logger.info(`[handleNewTask] Set ${contextTabIds.length} context tabs for session ${sessionId}`);
 
-    // Create a tab group for context tabs immediately so they're grouped before agent starts
+    // Create a tab group for context tabs immediately with appropriate styling
     try {
       const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-      // Name and color the group
-      await chrome.tabGroups.update(groupId, { title: 'Web Agent', color: 'blue' });
-      // Set preferred group directly (don't call setPreferredGroupId to avoid redundant move)
-      (browserContext as any)._preferredGroupId = groupId;
-      deps.logger.info(`[handleNewTask] Created tab group ${groupId} for ${contextTabIds.length} context tabs`);
+      // For Agent workflows: blue "Web Agent" group; for Chat/Search: grey "Reference" group
+      const groupTitle = isWebAgent ? 'Web Agent' : 'Reference';
+      const groupColor = isWebAgent ? 'blue' : 'grey';
+      await chrome.tabGroups.update(groupId, { title: groupTitle, color: groupColor });
+      if (isWebAgent) {
+        // Set preferred group directly (don't call setPreferredGroupId to avoid redundant move)
+        (browserContext as any)._preferredGroupId = groupId;
+      }
+      deps.logger.info(
+        `[handleNewTask] Created tab group ${groupId} (${groupTitle}) for ${contextTabIds.length} context tabs`,
+      );
     } catch (e) {
       deps.logger.error('[handleNewTask] Failed to create tab group for context tabs:', e);
     }
@@ -281,7 +287,8 @@ export async function handleNewTask(message: any, deps: Deps) {
 
   // For Agent path without context tabs, optionally override tabId based on lightweight triage
   // Skip this when context tabs are provided since we already set the current tab
-  if (isWebAgent && !hasContextTabs) {
+  const hasAgentContextTabs = isWebAgent && hasContextTabs;
+  if (isWebAgent && !hasAgentContextTabs) {
     try {
       const useCurrent = await decideUseCurrentTab(task);
       if (!useCurrent) {
@@ -296,7 +303,8 @@ export async function handleNewTask(message: any, deps: Deps) {
     } catch {}
   }
 
-  const executor = await setupExecutor(sessionId, task, browserContext, effectiveAgentType);
+  const executor = await setupExecutor(sessionId, task, browserContext, effectiveAgentType, contextTabIds);
+
   setCurrentExecutor(executor);
 
   // Bind to TaskManager for mirroring/grouping ONLY for single_agent
@@ -435,6 +443,9 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       if (browserContext) {
         browserContext.setContextTabs(contextTabIds);
         logger.info(`[handleFollowUpTask] Set ${contextTabIds.length} context tabs for follow-up`);
+
+        // Also update executor context for prompt injection
+        existing.setContextTabIds?.(contextTabIds);
 
         // Add context tabs to the existing group if one exists
         try {
