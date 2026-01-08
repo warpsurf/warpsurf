@@ -12,8 +12,12 @@ export type RequestSummaryShape = {
 
 export function computeSummaryFromUsages(usages: Array<any>): { summary: RequestSummaryShape; latencyMs: number } {
   const list = Array.isArray(usages) ? usages : [];
-  let inputTokens = 0, outputTokens = 0, cost = 0, hasAnyCost = false;
-  const timestamps: number[] = [];
+  let inputTokens = 0,
+    outputTokens = 0,
+    cost = 0,
+    hasAnyCost = false;
+  const completionTimes: number[] = [];
+  const startTimes: number[] = [];
   let provider: string | undefined;
   let modelName: string | undefined;
   for (const u of list) {
@@ -25,18 +29,27 @@ export function computeSummaryFromUsages(usages: Array<any>): { summary: Request
       hasAnyCost = true;
     }
     const ts = Number(u?.timestamp || 0);
-    if (Number.isFinite(ts) && ts > 0) timestamps.push(ts);
+    if (Number.isFinite(ts) && ts > 0) completionTimes.push(ts);
+    const start = Number(u?.requestStartTime || u?.timestamp || 0);
+    if (Number.isFinite(start) && start > 0) startTimes.push(start);
     provider = u?.provider || provider;
     modelName = u?.modelName || modelName;
   }
   // If no valid costs found, mark as unavailable (-1)
   if (!hasAnyCost) cost = -1;
-  timestamps.sort((a, b) => a - b);
+  // Calculate latency: latest completion - earliest start
   let totalLatencyMs = 0;
-  if (timestamps.length >= 2) totalLatencyMs = Math.max(0, timestamps[timestamps.length - 1] - timestamps[0]);
-  else if (timestamps.length === 1) totalLatencyMs = 100;
+  if (startTimes.length > 0 && completionTimes.length > 0) {
+    totalLatencyMs = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
+  } else if (completionTimes.length >= 2) {
+    completionTimes.sort((a, b) => a - b);
+    totalLatencyMs = completionTimes[completionTimes.length - 1] - completionTimes[0];
+  }
   const latency = (totalLatencyMs / 1000).toFixed(2);
-  return { summary: { inputTokens, outputTokens, latency, cost, apiCalls: list.length, modelName, provider }, latencyMs: totalLatencyMs };
+  return {
+    summary: { inputTokens, outputTokens, latency, cost, apiCalls: list.length, modelName, provider },
+    latencyMs: totalLatencyMs,
+  };
 }
 
 export function applySummaryToMessage(
@@ -51,7 +64,9 @@ export function applySummaryToMessage(
     // Guard: don't overwrite non-zero latency with zero
     if (existing && Number(existing.latency) > 0 && Number(summary.latency) === 0) return prev;
     const next = { ...prev, [messageId]: { ...(existing || {}), ...summary } } as any;
-    try { if (sessionIdRef.current) (window as any).chatHistoryStore?.storeRequestSummaries?.(sessionIdRef.current, next); } catch {}
+    try {
+      if (sessionIdRef.current) (window as any).chatHistoryStore?.storeRequestSummaries?.(sessionIdRef.current, next);
+    } catch {}
     return next;
   });
 }
@@ -71,5 +86,3 @@ export function handleTokenLogForCancel(
     applySummaryToMessage(anchorId, summary, setRequestSummaries, sessionIdRef);
   } catch {}
 }
-
-

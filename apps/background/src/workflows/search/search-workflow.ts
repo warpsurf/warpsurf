@@ -69,7 +69,8 @@ export class SearchWorkflow {
         }
       }
 
-      const streamId = `search_${Date.now()}`;
+      const requestStartTime = Date.now();
+      const streamId = `search_${requestStartTime}`;
       let response = '';
       let usage: any = null;
 
@@ -84,7 +85,7 @@ export class SearchWorkflow {
       await this.context.emitStreamChunk(Actors.SEARCH, '', streamId, true);
 
       // Log token usage
-      this.logTokenUsage(usage);
+      this.logTokenUsage(usage, requestStartTime);
 
       return { id: 'Search', result: { response, done: true, search_queries: [] } };
     } catch (error) {
@@ -113,7 +114,7 @@ export class SearchWorkflow {
     }
   }
 
-  private logTokenUsage(usage: any): void {
+  private logTokenUsage(usage: any, requestStartTime?: number): void {
     if (!usage) return;
     try {
       const taskId = this.context?.taskId;
@@ -134,6 +135,7 @@ export class SearchWorkflow {
         thoughtTokens: 0,
         webSearchCount: 0,
         timestamp: Date.now(),
+        requestStartTime,
         provider: 'Search',
         modelName,
         cost,

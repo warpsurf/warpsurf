@@ -22,7 +22,10 @@ export interface RequestSummaryLike {
   provider?: string;
 }
 
-export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | null | undefined): { summary: RequestSummaryLike | null; totalLatencyMs: number } {
+export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | null | undefined): {
+  summary: RequestSummaryLike | null;
+  totalLatencyMs: number;
+} {
   if (!data) return { summary: null, totalLatencyMs: 0 };
   const main = Array.isArray((data as any).main) ? (data as any).main : [];
   const workersObj = (data as any).workers && typeof (data as any).workers === 'object' ? (data as any).workers : {};
@@ -36,7 +39,8 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
   let cost = 0;
   let hasAnyCost = false;
   let apiCalls = 0;
-  const timestamps: number[] = [];
+  const completionTimes: number[] = [];
+  const startTimes: number[] = [];
 
   for (const u of usages) {
     inputTokens += Math.max(0, Number(u?.inputTokens) || 0);
@@ -48,15 +52,21 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
     }
     apiCalls += 1;
     const ts = Number(u?.timestamp || 0);
-    if (Number.isFinite(ts) && ts > 0) timestamps.push(ts);
+    if (Number.isFinite(ts) && ts > 0) completionTimes.push(ts);
+    const start = Number(u?.requestStartTime || u?.timestamp || 0);
+    if (Number.isFinite(start) && start > 0) startTimes.push(start);
   }
   // If no valid costs found, mark as unavailable (-1)
   if (!hasAnyCost) cost = -1;
 
-  timestamps.sort((a, b) => a - b);
+  // Calculate latency: latest completion - earliest start
   let totalLatencyMs = 0;
-  if (timestamps.length >= 2) totalLatencyMs = Math.max(0, timestamps[timestamps.length - 1] - timestamps[0]);
-  else if (timestamps.length === 1) totalLatencyMs = 100;
+  if (startTimes.length > 0 && completionTimes.length > 0) {
+    totalLatencyMs = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
+  } else if (completionTimes.length >= 2) {
+    completionTimes.sort((a, b) => a - b);
+    totalLatencyMs = completionTimes[completionTimes.length - 1] - completionTimes[0];
+  }
 
   const last = usages[usages.length - 1] || {};
   const provider = last?.provider || undefined;
@@ -77,5 +87,3 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
     totalLatencyMs,
   };
 }
-
-

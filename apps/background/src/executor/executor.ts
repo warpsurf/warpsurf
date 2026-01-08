@@ -1103,13 +1103,19 @@ export class Executor {
       if (jobStartTime) {
         totalLatency = Date.now() - jobStartTime;
       } else {
-        // Fallback: Calculate latency from first to last token usage (existing behavior)
-        const timestamps = taskTokens.map((usage: any) => usage.timestamp).sort((a: number, b: number) => a - b);
-        if (timestamps.length > 1) {
-          totalLatency = timestamps[timestamps.length - 1] - timestamps[0];
-        } else if (timestamps.length === 1) {
-          // For single API call, estimate a minimum latency (e.g., 100ms)
-          totalLatency = 100; // Default minimum latency in milliseconds
+        // Fallback: Calculate latency from earliest start to latest completion
+        const completionTimes = taskTokens
+          .map((usage: any) => Number(usage.timestamp || 0))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+        const startTimes = taskTokens
+          .map((usage: any) => Number(usage.requestStartTime || usage.timestamp || 0))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+
+        if (startTimes.length > 0 && completionTimes.length > 0) {
+          totalLatency = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
+        } else if (completionTimes.length > 1) {
+          completionTimes.sort((a, b) => a - b);
+          totalLatency = completionTimes[completionTimes.length - 1] - completionTimes[0];
         }
       }
     } else if (jobStartTime) {

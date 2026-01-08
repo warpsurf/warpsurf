@@ -62,7 +62,8 @@ export class ChatWorkflow {
         }
       }
 
-      const streamId = `chat_${Date.now()}`;
+      const requestStartTime = Date.now();
+      const streamId = `chat_${requestStartTime}`;
       let response = '';
       let usage: any = null;
 
@@ -77,7 +78,7 @@ export class ChatWorkflow {
       await this.context.emitStreamChunk(Actors.CHAT, '', streamId, true);
 
       // Log token usage
-      this.logTokenUsage(usage);
+      this.logTokenUsage(usage, requestStartTime);
 
       return { id: 'Chat', result: { response, done: true } };
     } catch (error) {
@@ -106,7 +107,7 @@ export class ChatWorkflow {
     }
   }
 
-  private logTokenUsage(usage: any): void {
+  private logTokenUsage(usage: any, requestStartTime?: number): void {
     if (!usage) return;
     try {
       const taskId = this.context?.taskId;
@@ -127,6 +128,7 @@ export class ChatWorkflow {
         thoughtTokens: 0,
         webSearchCount: 0,
         timestamp: Date.now(),
+        requestStartTime,
         provider: 'Chat',
         modelName,
         cost,
