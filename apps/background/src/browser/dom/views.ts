@@ -189,7 +189,13 @@ export class DOMElementNode extends DOMBaseNode {
     return textParts.join('\n').trim();
   }
 
-  clickableElementsToString(includeAttributes: string[] = []): string {
+  /**
+   * Convert the DOM tree to a string representation.
+   * @param includeAttributes - List of attributes to include in the output
+   * @param includeAllText - If true, include all visible text (for reference context).
+   *                         If false (default), filter to interactive elements only (for automation).
+   */
+  clickableElementsToString(includeAttributes: string[] = [], includeAllText: boolean = false): string {
     const formattedText: string[] = [];
 
     const processNode = (node: DOMBaseNode, depth: number): void => {
@@ -273,9 +279,20 @@ export class DOMElementNode extends DOMBaseNode {
           processNode(child, nextDepth);
         }
       } else if (node instanceof DOMTextNode) {
-        // Add text only if it doesn't have a highlighted parent
-        if (!node.hasParentWithHighlightIndex() && node.parent && node.parent.isVisible && node.parent.isTopElement) {
-          formattedText.push(`${depthStr}${node.text}`);
+        // Always skip text inside interactive elements (already captured by getAllTextTillNextClickableElement)
+        if (node.hasParentWithHighlightIndex()) {
+          return;
+        }
+        if (includeAllText) {
+          // Include all visible text for reference context (context tabs)
+          if (node.parent && node.parent.isVisible) {
+            formattedText.push(`${depthStr}${node.text}`);
+          }
+        } else {
+          // Default: also require isTopElement for automation context
+          if (node.parent && node.parent.isVisible && node.parent.isTopElement) {
+            formattedText.push(`${depthStr}${node.text}`);
+          }
         }
       }
     };
