@@ -71,6 +71,8 @@ export class AgentContext {
   history: AgentStepHistory;
   // Pre-built chat history messages (LangChain BaseMessage objects) from the side panel session
   chatHistoryMessages: any[];
+  // Context tab IDs provided by user for reference
+  contextTabIds: number[];
 
   constructor(
     taskId: string,
@@ -96,6 +98,7 @@ export class AgentContext {
     this.stateMessageAdded = false;
     this.history = new AgentStepHistory();
     this.chatHistoryMessages = [];
+    this.contextTabIds = [];
   }
 
   async emitEvent(actor: Actors, state: ExecutionState, eventDetails: string, additionalData?: Partial<EventData>) {
