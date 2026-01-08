@@ -126,16 +126,44 @@ export default function TabContextSelector({
   }, [isOpen]);
 
   const updateDropdownPosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownStyle({
-        position: 'fixed',
-        left: rect.left,
-        bottom: window.innerHeight - rect.top + 4,
-        zIndex: 99999,
-      });
-    }
+    if (!buttonRef.current) return;
+
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownWidth = 256; // w-64
+    const gap = 4;
+
+    // Measure actual dropdown height if available, otherwise use max
+    const dropdownHeight = dropdownRef.current?.offsetHeight ?? 192; // max-h-48
+
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    // Choose direction: prefer upward, flip to downward if insufficient space above
+    const openUpward = spaceAbove >= dropdownHeight || spaceAbove >= spaceBelow;
+
+    // Horizontal: prevent right overflow
+    const left = Math.min(rect.left, window.innerWidth - dropdownWidth - 8);
+
+    setDropdownStyle({
+      position: 'fixed',
+      left: Math.max(8, left),
+      ...(openUpward ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }),
+      zIndex: 99999,
+    });
   }, []);
+
+  // Reposition dropdown on scroll/resize while open, and after mount to measure actual height
+  useEffect(() => {
+    if (!isOpen) return;
+    // Recalculate after render to use actual dropdown height
+    requestAnimationFrame(updateDropdownPosition);
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [isOpen, tabs.length, updateDropdownPosition]);
 
   const handleToggle = () => {
     if (disabled) return;
@@ -282,7 +310,7 @@ export default function TabContextSelector({
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}>
         <FaPlus className="w-2.5 h-2.5" />
-        <span>Add Tab</span>
+        <span>Add tab as context</span>
         {selectedTabIds.length > 0 && (
           <span
             className={`ml-1 rounded-full px-1.5 text-[10px] ${
