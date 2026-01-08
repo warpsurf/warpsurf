@@ -85,7 +85,7 @@ export class SearchWorkflow {
       await this.context.emitStreamChunk(Actors.SEARCH, '', streamId, true);
 
       // Log token usage
-      this.logTokenUsage(usage, requestStartTime);
+      this.logTokenUsage(usage, requestStartTime, messages, response);
 
       return { id: 'Search', result: { response, done: true, search_queries: [] } };
     } catch (error) {
@@ -114,7 +114,7 @@ export class SearchWorkflow {
     }
   }
 
-  private logTokenUsage(usage: any, requestStartTime?: number): void {
+  private logTokenUsage(usage: any, requestStartTime?: number, inputMessages?: any[], responseText?: string): void {
     if (!usage) return;
     try {
       const taskId = this.context?.taskId;
@@ -141,6 +141,12 @@ export class SearchWorkflow {
         cost,
         taskId,
         role: 'search',
+        request: inputMessages
+          ? {
+              messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
+            }
+          : undefined,
+        response: responseText,
       };
 
       const callId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;

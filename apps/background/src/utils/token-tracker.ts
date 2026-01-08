@@ -423,9 +423,7 @@ export function logLLMUsage(
       role,
       request: inputMessages
         ? {
-            messages: inputMessages
-              .slice(-3)
-              .map((m: any) => ({ role: m?.role, content: String(m?.content || '').slice(0, 1000) })),
+            messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
           }
         : undefined,
       response: response?.content || response?.parsed || response,

@@ -78,7 +78,7 @@ export class ChatWorkflow {
       await this.context.emitStreamChunk(Actors.CHAT, '', streamId, true);
 
       // Log token usage
-      this.logTokenUsage(usage, requestStartTime);
+      this.logTokenUsage(usage, requestStartTime, messages, response);
 
       return { id: 'Chat', result: { response, done: true } };
     } catch (error) {
@@ -107,7 +107,7 @@ export class ChatWorkflow {
     }
   }
 
-  private logTokenUsage(usage: any, requestStartTime?: number): void {
+  private logTokenUsage(usage: any, requestStartTime?: number, inputMessages?: any[], responseText?: string): void {
     if (!usage) return;
     try {
       const taskId = this.context?.taskId;
@@ -134,6 +134,12 @@ export class ChatWorkflow {
         cost,
         taskId,
         role: 'chat',
+        request: inputMessages
+          ? {
+              messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
+            }
+          : undefined,
+        response: responseText,
       };
 
       const callId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
