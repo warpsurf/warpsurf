@@ -462,7 +462,7 @@ export class Executor {
     this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_START, 'Analyzing request...');
 
     try {
-      const result = await this.autoService.triageRequest(request, this.context.taskId);
+      const result = await this.autoService.triageRequest(request, this.context.taskId, this.context.contextTabIds);
       // Enforce no 'request_more_info' downstream
       if (result.action === 'request_more_info') {
         result.action = 'chat';

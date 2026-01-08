@@ -194,7 +194,7 @@ export async function handleNewTask(message: any, deps: Deps) {
         globalTokenTracker.setCurrentTaskId(sessionId);
         globalTokenTracker.setCurrentRole('auto');
 
-        const triageResult = await (svc as any).triageRequest?.(task, sessionId);
+        const triageResult = await (svc as any).triageRequest?.(task, sessionId, contextTabIds);
         const action = String(triageResult?.action || '').toLowerCase();
         if (action === 'chat') effectiveAgentType = 'chat';
         else if (action === 'search') effectiveAgentType = 'search';
@@ -380,7 +380,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         globalTokenTracker.setCurrentTaskId(sessionId);
         globalTokenTracker.setCurrentRole('auto');
 
-        const triageResult = await (svc as any).triageRequest?.(task, sessionId);
+        const triageResult = await (svc as any).triageRequest?.(task, sessionId, contextTabIds);
         const action = String(triageResult?.action || '').toLowerCase();
         if (action === 'chat') {
           agentType = 'chat';
