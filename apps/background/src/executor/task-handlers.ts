@@ -309,10 +309,10 @@ export async function handleNewTask(message: any, deps: Deps) {
 
   // Bind to TaskManager for mirroring/grouping ONLY for single_agent
   // For chat/search/triage, register without tab control to avoid grouping/preview
-  // When context tabs are provided, don't pass the current tabId to avoid adding it to the group
+  // When context tabs are provided, use the first context tab for mirroring (agent starts there)
   try {
     if (isWebAgent) {
-      const tabIdForManager = hasContextTabs ? 0 : tabId > 0 ? tabId : 0;
+      const tabIdForManager = hasContextTabs ? contextTabIds[0] : tabId > 0 ? tabId : 0;
       taskManager.setSingleAgentExecutor(sessionId, executor, tabIdForManager);
     } else {
       taskManager.setSingleAgentExecutor(sessionId, executor, -1);
