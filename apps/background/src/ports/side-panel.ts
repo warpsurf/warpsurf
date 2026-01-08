@@ -28,6 +28,11 @@ import { sendTabMirror, sendAllMirrorsForCleanup, setPreviewVisibility } from '.
 import { MultiAgentWorkflow } from '../workflows/multiagent/multiagent-workflow';
 import { createChatModel } from '../workflows/models/factory';
 import { getAllProvidersDecrypted } from '../crypto';
+import {
+  extractTabContent,
+  extractMultipleTabs,
+  isUrlAllowedByFirewall,
+} from '../workflows/shared/context/context-tab-extractor';
 
 type BaseChatModel = any;
 
@@ -300,6 +305,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const query: string = String(message.query || '').trim();
             const maxWorkersOverride: number | undefined =
               typeof message.maxWorkersOverride === 'number' ? message.maxWorkersOverride : undefined;
+            // Extract context tab IDs from the message
+            const contextTabIds: number[] = Array.isArray(message.contextTabIds)
+              ? message.contextTabIds.filter((id: any) => typeof id === 'number' && id > 0)
+              : [];
             if (!sessionId || !query) {
               safePostMessage(port, { type: 'error', error: 'Missing sessionId or query for workflow v2' });
               return;
@@ -347,6 +356,13 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
             // Create orchestrator and start
             const orchestrator = new MultiAgentWorkflow(taskManager, port, String(sessionId), { maxWorkers });
+
+            // Pass context tab IDs to the orchestrator for planner injection
+            if (contextTabIds.length > 0) {
+              orchestrator.setContextTabIds(contextTabIds);
+              logger.info(`[start_multi_agent_workflow_v2] Set ${contextTabIds.length} context tabs`);
+            }
+
             // Optional: inject a dedicated Refiner model if configured
             try {
               const refinerCfg = agentModels[AgentNameEnum.MultiagentRefiner];
@@ -387,6 +403,46 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             });
             return;
           }
+        }
+        case 'extract_context_tabs': {
+          // Eager extraction: extract and cache tab content when user adds context tabs
+          const tabIds: number[] = Array.isArray(message.tabIds)
+            ? message.tabIds.filter((id: any) => typeof id === 'number' && id > 0)
+            : [];
+          if (tabIds.length === 0) {
+            safePostMessage(port, { type: 'extract_context_tabs_result', success: true, tabIds: [] });
+            break;
+          }
+          try {
+            const results = await extractMultipleTabs(tabIds);
+            const extracted = Array.from(results.keys());
+            logger.info(`[extract_context_tabs] Extracted ${extracted.length}/${tabIds.length} tabs`);
+            safePostMessage(port, { type: 'extract_context_tabs_result', success: true, tabIds: extracted });
+          } catch (e) {
+            logger.error('[extract_context_tabs] Failed:', e);
+            safePostMessage(port, {
+              type: 'extract_context_tabs_result',
+              success: false,
+              error: e instanceof Error ? e.message : 'Extraction failed',
+            });
+          }
+          break;
+        }
+        case 'check_urls_firewall': {
+          // Check which URLs are blocked by firewall
+          const urls: { tabId: number; url: string }[] = Array.isArray(message.urls) ? message.urls : [];
+          try {
+            const results: { tabId: number; allowed: boolean }[] = [];
+            for (const { tabId, url } of urls) {
+              const allowed = await isUrlAllowedByFirewall(url);
+              results.push({ tabId, allowed });
+            }
+            safePostMessage(port, { type: 'check_urls_firewall_result', results });
+          } catch (e) {
+            logger.error('[check_urls_firewall] Failed:', e);
+            safePostMessage(port, { type: 'check_urls_firewall_result', results: [], error: 'Check failed' });
+          }
+          break;
         }
         case 'panel_opened': {
           // Prewarm: initialize provider costs, inject DOM/mardown helpers in active tab

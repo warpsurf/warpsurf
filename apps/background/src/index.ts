@@ -6,7 +6,11 @@ import { TaskManager } from './task/task-manager';
 import { MultiAgentWorkflow } from './workflows/multiagent/multiagent-workflow';
 
 import { handleTestProviderMessage } from './workflows/models/provider-test';
-import { closeTaskTabs as closeTaskTabsFn, closeTaskGroup as closeTaskGroupFn, closeAllTabsForSession as closeAllTabsForSessionFn } from './tabs/cleanup';
+import {
+  closeTaskTabs as closeTaskTabsFn,
+  closeTaskGroup as closeTaskGroupFn,
+  closeAllTabsForSession as closeAllTabsForSessionFn,
+} from './tabs/cleanup';
 import { attachRuntimeListeners } from './listeners/runtime';
 import { initInstrumentation } from './init/instrumentation';
 import { attachSidePanelPortHandlers } from './ports/side-panel';
@@ -14,6 +18,11 @@ import { attachDashboardPortHandlers } from './ports/dashboard';
 import { workflowLogger } from './executor/workflow-logger';
 
 import { registerCryptoHandlers } from './crypto';
+import {
+  extractTabContent,
+  extractMultipleTabs,
+  isUrlAllowedByFirewall,
+} from './workflows/shared/context/context-tab-extractor';
 
 const logger = createLogger('background');
 
@@ -53,10 +62,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   try {
     switch (message?.type) {
       case 'test_provider': {
-        (async () => { await handleTestProviderMessage(message, sendResponse); })();
+        (async () => {
+          await handleTestProviderMessage(message, sendResponse);
+        })();
         return true;
       }
-      
+
       case 'close_task_tabs': {
         const taskId = message?.taskId;
         (async () => {
@@ -64,7 +75,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             if (!taskId) return;
             logger.info(`[CloseTabs/msg] Requested close_task_tabs for taskId=${taskId}`);
             await closeTaskTabsFn(taskManager, taskId);
-            try { currentPort?.postMessage({ type: 'tabs-closed', taskId }); } catch {}
+            try {
+              currentPort?.postMessage({ type: 'tabs-closed', taskId });
+            } catch {}
           } catch (e) {
             logger.error('[CloseTabs/msg] close_task_tabs failed', e);
           }
@@ -78,7 +91,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             if (typeof groupId !== 'number') return;
             logger.info(`[CloseTabs/msg] Requested close_task_group for groupId=${groupId}`);
             await closeTaskGroupFn(groupId);
-            try { currentPort?.postMessage({ type: 'tabs-closed', groupId }); } catch {}
+            try {
+              currentPort?.postMessage({ type: 'tabs-closed', groupId });
+            } catch {}
           } catch (e) {
             logger.error('[CloseTabs/msg] close_task_group failed', e);
           }
@@ -92,12 +107,52 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             if (!sessionId) return;
             logger.info(`[CloseTabs/msg] Requested close_all_tabs_for_session for sessionId=${sessionId}`);
             await closeAllTabsForSessionFn(taskManager, String(sessionId));
-            try { currentPort?.postMessage({ type: 'tabs-closed', sessionId }); } catch {}
+            try {
+              currentPort?.postMessage({ type: 'tabs-closed', sessionId });
+            } catch {}
           } catch (e) {
             logger.error('[CloseTabs/msg] close_all_tabs_for_session failed', e);
           }
         })();
         break;
+      }
+      case 'extract_context_tabs': {
+        const tabIds: number[] = Array.isArray(message.tabIds)
+          ? message.tabIds.filter((id: any) => typeof id === 'number' && id > 0)
+          : [];
+        (async () => {
+          try {
+            if (tabIds.length === 0) {
+              sendResponse({ success: true, tabIds: [] });
+              return;
+            }
+            const results = await extractMultipleTabs(tabIds);
+            const extracted = Array.from(results.keys());
+            logger.info(`[extract_context_tabs] Extracted ${extracted.length}/${tabIds.length} tabs`);
+            sendResponse({ success: true, tabIds: extracted });
+          } catch (e) {
+            logger.error('[extract_context_tabs] Failed:', e);
+            sendResponse({ success: false, error: e instanceof Error ? e.message : 'Extraction failed' });
+          }
+        })();
+        return true; // Async response
+      }
+      case 'check_urls_firewall': {
+        const urls: { tabId: number; url: string }[] = Array.isArray(message.urls) ? message.urls : [];
+        (async () => {
+          try {
+            const results: { tabId: number; allowed: boolean }[] = [];
+            for (const { tabId, url } of urls) {
+              const allowed = await isUrlAllowedByFirewall(url);
+              results.push({ tabId, allowed });
+            }
+            sendResponse({ results });
+          } catch (e) {
+            logger.error('[check_urls_firewall] Failed:', e);
+            sendResponse({ results: [], error: 'Check failed' });
+          }
+        })();
+        return true; // Async response
       }
       default:
         try {
@@ -126,12 +181,18 @@ chrome.runtime.onConnect.addListener(async port => {
       taskManager,
       logger,
       getCurrentPort: () => currentPort,
-      setCurrentPort: (p: chrome.runtime.Port | null) => { currentPort = p; },
+      setCurrentPort: (p: chrome.runtime.Port | null) => {
+        currentPort = p;
+      },
       getCurrentExecutor: () => currentExecutor,
-      setCurrentExecutor: (e: any | null) => { currentExecutor = e; },
+      setCurrentExecutor: (e: any | null) => {
+        currentExecutor = e;
+      },
       workflowsBySession,
       runningWorkflowSessionIds,
-      setCurrentWorkflow: (wf: any | null) => { currentWorkflow = wf; },
+      setCurrentWorkflow: (wf: any | null) => {
+        currentWorkflow = wf;
+      },
     });
     return;
   }
@@ -143,11 +204,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const { calculateCost } = await import('./utils/cost-calculator');
-        const cost = calculateCost(
-          message.modelName,
-          message.inputTokens,
-          message.outputTokens
-        );
+        const cost = calculateCost(message.modelName, message.inputTokens, message.outputTokens);
         sendResponse({ cost });
       } catch (e) {
         logger.error('Failed to calculate cost:', e);
@@ -156,7 +213,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // Indicates async response
   }
-  
+
   if (message.type === 'get_model_latency') {
     (async () => {
       try {
@@ -170,18 +227,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // Indicates async response
   }
-  
+
   if (message.type === 'get_available_models') {
     (async () => {
       try {
         const { getAllProvidersDecrypted } = await import('./crypto');
         const providers = await getAllProvidersDecrypted();
-        
+
         const models: Array<{ provider: string; providerName: string; model: string }> = [];
-        
+
         for (const [provider, config] of Object.entries(providers)) {
           if (!config?.apiKey || config.apiKey.trim() === '') continue;
-          
+
           const providerModels = config.modelNames || [];
           // Include all models, not just those with pricing data
           // Models without pricing will display costs as NaN
@@ -189,11 +246,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             ...providerModels.map(model => ({
               provider,
               providerName: config.name || provider,
-              model
-            }))
+              model,
+            })),
           );
         }
-        
+
         sendResponse({ models });
       } catch (e) {
         logger.error('Failed to get available models:', e);
@@ -293,14 +350,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
-  
+
   return false;
 });
 
 // Initialize instrumentation (cost calc, logging, updates)
-(async () => { 
-  try { 
+(async () => {
+  try {
     const summary = await initInstrumentation(logger);
-    workflowLogger.extensionInitialized(summary.pricedModels, summary.latencyModels, summary.registryModels, summary.errors);
-  } catch {} 
+    workflowLogger.extensionInitialized(
+      summary.pricedModels,
+      summary.latencyModels,
+      summary.registryModels,
+      summary.errors,
+    );
+  } catch {}
 })();
