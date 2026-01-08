@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FaPlus, FaTimes, FaChevronDown } from 'react-icons/fa';
+import { FaPlus, FaTimes, FaChevronDown, FaCheck, FaSpinner, FaBan } from 'react-icons/fa';
 
 export interface TabInfo {
   id: number;
@@ -26,6 +26,9 @@ export default function TabContextSelector({
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [currentTabId, setCurrentTabId] = useState<number | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [blockedTabIds, setBlockedTabIds] = useState<Set<number>>(new Set());
+  const [extractingTabIds, setExtractingTabIds] = useState<Set<number>>(new Set());
+  const [extractedTabIds, setExtractedTabIds] = useState<Set<number>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -36,16 +39,34 @@ export default function TabContextSelector({
       const currentTab = allTabs.find(t => t.active);
       setCurrentTabId(currentTab?.id ?? null);
 
-      setTabs(
-        allTabs
-          .filter(t => t.id !== undefined && t.url && !t.url.startsWith('chrome://'))
-          .map(t => ({
-            id: t.id!,
-            title: t.title || 'Untitled',
-            url: t.url || '',
-            favIconUrl: t.favIconUrl,
-          })),
-      );
+      const filteredTabs = allTabs
+        .filter(t => t.id !== undefined && t.url && !t.url.startsWith('chrome://'))
+        .map(t => ({
+          id: t.id!,
+          title: t.title || 'Untitled',
+          url: t.url || '',
+          favIconUrl: t.favIconUrl,
+        }));
+
+      setTabs(filteredTabs);
+
+      // Check firewall status for all tabs
+      const urlsToCheck = filteredTabs.map(t => ({ tabId: t.id, url: t.url }));
+      if (urlsToCheck.length > 0) {
+        try {
+          chrome.runtime.sendMessage({ type: 'check_urls_firewall', urls: urlsToCheck }, response => {
+            if (response?.results) {
+              const blocked = new Set<number>();
+              for (const { tabId, allowed } of response.results) {
+                if (!allowed) blocked.add(tabId);
+              }
+              setBlockedTabIds(blocked);
+            }
+          });
+        } catch {
+          // Ignore firewall check errors
+        }
+      }
     } catch {
       setTabs([]);
     }
@@ -126,10 +147,40 @@ export default function TabContextSelector({
   };
 
   const toggleTab = (tabId: number) => {
+    // Don't allow selecting blocked tabs
+    if (blockedTabIds.has(tabId)) return;
+
     if (selectedTabIds.includes(tabId)) {
       onSelectionChange(selectedTabIds.filter(id => id !== tabId));
+      setExtractedTabIds(prev => {
+        const next = new Set(prev);
+        next.delete(tabId);
+        return next;
+      });
     } else {
-      onSelectionChange([...selectedTabIds, tabId]);
+      const newSelection = [...selectedTabIds, tabId];
+      onSelectionChange(newSelection);
+
+      // Show extracting state and trigger extraction
+      setExtractingTabIds(prev => new Set(prev).add(tabId));
+      try {
+        chrome.runtime.sendMessage({ type: 'extract_context_tabs', tabIds: [tabId] }, response => {
+          setExtractingTabIds(prev => {
+            const next = new Set(prev);
+            next.delete(tabId);
+            return next;
+          });
+          if (response?.success && response.tabIds?.includes(tabId)) {
+            setExtractedTabIds(prev => new Set(prev).add(tabId));
+          }
+        });
+      } catch {
+        setExtractingTabIds(prev => {
+          const next = new Set(prev);
+          next.delete(tabId);
+          return next;
+        });
+      }
     }
   };
 
@@ -155,35 +206,56 @@ export default function TabContextSelector({
         tabs.map(tab => {
           const isSelected = selectedTabIds.includes(tab.id);
           const isCurrent = tab.id === currentTabId;
+          const isBlocked = blockedTabIds.has(tab.id);
+          const isExtracting = extractingTabIds.has(tab.id);
+          const isExtracted = extractedTabIds.has(tab.id);
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => toggleTab(tab.id)}
+              disabled={isBlocked}
               className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
-                isSelected
-                  ? isDarkMode
-                    ? 'bg-violet-900/40'
-                    : 'bg-violet-50'
-                  : isDarkMode
-                    ? 'hover:bg-slate-700'
-                    : 'hover:bg-gray-50'
+                isBlocked
+                  ? 'cursor-not-allowed opacity-50'
+                  : isSelected
+                    ? isDarkMode
+                      ? 'bg-violet-900/40'
+                      : 'bg-violet-50'
+                    : isDarkMode
+                      ? 'hover:bg-slate-700'
+                      : 'hover:bg-gray-50'
               }`}>
               {tab.favIconUrl ? (
-                <img src={tab.favIconUrl} alt="" className="w-4 h-4 flex-shrink-0 rounded-sm" />
+                <img
+                  src={tab.favIconUrl}
+                  alt=""
+                  className={`w-4 h-4 flex-shrink-0 rounded-sm ${isBlocked ? 'grayscale' : ''}`}
+                />
               ) : (
                 <div className={`w-4 h-4 flex-shrink-0 rounded-sm ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`} />
               )}
-              <span className={`flex-1 truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>{tab.title}</span>
-              {isCurrent && (
+              <span
+                className={`flex-1 truncate ${isBlocked ? (isDarkMode ? 'text-slate-500' : 'text-gray-400') : isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+                {tab.title}
+              </span>
+              {isBlocked ? (
+                <span className="flex-shrink-0 flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                  <FaBan className="w-2 h-2" />
+                  Blocked
+                </span>
+              ) : isCurrent ? (
                 <span
                   className={`flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${
                     isDarkMode ? 'bg-green-700 text-green-100' : 'bg-green-100 text-green-700'
                   }`}>
                   Current
                 </span>
+              ) : null}
+              {isExtracting && <FaSpinner className="w-3 h-3 text-violet-500 flex-shrink-0 animate-spin" />}
+              {isSelected && !isExtracting && (
+                <FaCheck className={`w-3 h-3 flex-shrink-0 ${isExtracted ? 'text-green-500' : 'text-violet-500'}`} />
               )}
-              {isSelected && <span className="text-violet-500 flex-shrink-0">✓</span>}
             </button>
           );
         })
@@ -225,33 +297,46 @@ export default function TabContextSelector({
       {/* Selected Tab Pills */}
       {selectedTabs.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
-          {selectedTabs.map(tab => (
-            <div
-              key={tab.id}
-              className={`inline-flex items-center gap-1 rounded-full pl-1.5 pr-1 py-0.5 text-[11px] ${
-                isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'
-              }`}>
-              {tab.favIconUrl ? (
-                <img src={tab.favIconUrl} alt="" className="w-3 h-3 rounded-sm" />
-              ) : (
-                <div className={`w-3 h-3 rounded-sm ${isDarkMode ? 'bg-slate-500' : 'bg-gray-300'}`} />
-              )}
-              <span className="max-w-[80px] truncate">{truncateTitle(tab.title, 15)}</span>
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  removeTab(tab.id);
-                }}
-                className={`p-0.5 rounded-full transition-colors ${
-                  isDarkMode
-                    ? 'hover:bg-slate-600 text-slate-400 hover:text-slate-200'
-                    : 'hover:bg-gray-200 text-gray-400 hover:text-gray-600'
+          {selectedTabs.map(tab => {
+            const isExtracting = extractingTabIds.has(tab.id);
+            const isExtracted = extractedTabIds.has(tab.id);
+            return (
+              <div
+                key={tab.id}
+                className={`inline-flex items-center gap-1 rounded-full pl-1.5 pr-1 py-0.5 text-[11px] ${
+                  isExtracted
+                    ? isDarkMode
+                      ? 'bg-green-900/40 text-green-200'
+                      : 'bg-green-100 text-green-700'
+                    : isDarkMode
+                      ? 'bg-slate-700 text-slate-200'
+                      : 'bg-gray-100 text-gray-700'
                 }`}>
-                <FaTimes className="w-2 h-2" />
-              </button>
-            </div>
-          ))}
+                {isExtracting ? (
+                  <FaSpinner className="w-3 h-3 animate-spin text-violet-500" />
+                ) : tab.favIconUrl ? (
+                  <img src={tab.favIconUrl} alt="" className="w-3 h-3 rounded-sm" />
+                ) : (
+                  <div className={`w-3 h-3 rounded-sm ${isDarkMode ? 'bg-slate-500' : 'bg-gray-300'}`} />
+                )}
+                <span className="max-w-[80px] truncate">{truncateTitle(tab.title, 15)}</span>
+                {isExtracted && <FaCheck className="w-2 h-2 text-green-500" />}
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    removeTab(tab.id);
+                  }}
+                  className={`p-0.5 rounded-full transition-colors ${
+                    isDarkMode
+                      ? 'hover:bg-slate-600 text-slate-400 hover:text-slate-200'
+                      : 'hover:bg-gray-200 text-gray-400 hover:text-gray-600'
+                  }`}>
+                  <FaTimes className="w-2 h-2" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
