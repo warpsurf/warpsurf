@@ -8,6 +8,8 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
 import { calculateCost } from '@src/utils/cost-calculator';
+import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
+import { WorkflowType } from '@extension/shared/lib/workflows/types';
 
 const logger = createLogger('ChatWorkflow');
 
@@ -45,6 +47,20 @@ export class ChatWorkflow {
       const messages = buildLLMMessagesWithHistory(systemPrompt, await this.getSessionMessages(), this.currentTask, {
         stripUserRequestTags: true,
       });
+
+      // Inject context tabs if available
+      if (this.context.contextTabIds.length > 0) {
+        try {
+          const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.CHAT);
+          if (contextMsg) {
+            // Insert after system message (index 0)
+            messages.splice(1, 0, contextMsg);
+            logger.info(`Injected context from ${this.context.contextTabIds.length} tabs`);
+          }
+        } catch (e) {
+          logger.warn('Failed to inject context tabs:', e);
+        }
+      }
 
       const streamId = `chat_${Date.now()}`;
       let response = '';
