@@ -28,7 +28,7 @@ import { AutoWorkflow, type AutoAction } from '@src/workflows/auto';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils';
 import { tabExists } from '@src/utils';
-import { buildContextTabsMessage } from '@src/workflows/shared/context/context-tab-injector';
+import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
 
 const logger = createLogger('Executor');
@@ -184,16 +184,17 @@ export class Executor {
   /**
    * Inject context tabs into Agent workflow messages (DOM format).
    * Called during initialization for agent workflows.
+   * Context tabs are inserted at position 1 (after system message, before user_request).
    */
   private async injectContextTabsForAgent(): Promise<void> {
     if (this.context.contextTabIds.length === 0) return;
     if (this.manualAgentType && this.manualAgentType !== 'agent' && this.manualAgentType !== 'auto') return;
 
     try {
-      const contextMsg = await buildContextTabsMessage(this.context.contextTabIds, WorkflowType.AGENT);
+      const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.AGENT);
       if (contextMsg) {
-        // Insert after system message
-        this.context.messageManager.addMessageWithTokens(contextMsg, 'context');
+        // Insert at position 1 (after system message, before user_request)
+        this.context.messageManager.addMessageWithTokens(contextMsg, 'context', 1);
         logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
       }
     } catch (e) {
@@ -274,13 +275,13 @@ export class Executor {
     // Mark that this executor has run browser-use (in case it was previously another type)
     this.hasRunBrowserUse = true;
 
-    // Step 1: Remove ALL nano_user_request blocks
+    // Step 1: Remove ALL user_request blocks
     try {
       const msgs: any[] = (this.context.messageManager as any).history?.messages || [];
-      const USER_REQUEST_START = '<nano_user_request>';
-      const USER_REQUEST_END = '</nano_user_request>';
+      const USER_REQUEST_START = '<user_request>';
+      const USER_REQUEST_END = '</user_request>';
 
-      // Find all messages containing nano_user_request and remove them (backwards to preserve indices)
+      // Find all messages containing user_request and remove them (backwards to preserve indices)
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m = msgs[i]?.message;
         if (
