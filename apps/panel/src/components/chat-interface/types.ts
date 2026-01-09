@@ -13,6 +13,10 @@ export interface TraceItem {
   content: string;
   timestamp: number;
   controlRequest?: { type: string; tabId?: number; reason?: string };
+  /** Current page URL when this trace was recorded */
+  pageUrl?: string;
+  /** Current page title when this trace was recorded */
+  pageTitle?: string;
 }
 
 export interface WorkerItem {

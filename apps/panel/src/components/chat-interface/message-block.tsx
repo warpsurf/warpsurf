@@ -7,6 +7,7 @@ import { ACTOR_PROFILES } from '../../types/message';
 import { formatUsd, formatTimestamp, formatDuration, hexToRgba } from '../../utils';
 import type { JobSummary, MessageMetadata, TraceItem, WorkerItem } from './types';
 import CodeBlock from './code-block';
+import { AgentTrajectory } from './agent-trajectory';
 
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
 const EstimationPopUp = lazy(() => import('../modals/estimation-popup'));
@@ -558,53 +559,7 @@ export default function MessageBlock({
               )}
               {isAgentAggregate && !collapsed && traceItems.length > 0 && (
                 <div className="mt-2 clear-both">
-                  <div className="space-y-1">
-                    {traceItems.map((trace, index) => {
-                      const opacity = Math.max(0.45, 1 - (traceItems.length - 1 - index) * 0.12);
-                      const controlRequest = trace.controlRequest;
-                      const text = transformWorkerLabel(trace.content);
-                      return (
-                        <div
-                          key={index}
-                          className="text-sm flex items-start gap-2 transition-opacity hover:opacity-100"
-                          style={{ opacity }}>
-                          <span
-                            className={`mt-[6px] h-1.5 w-1.5 rounded-full ${isDarkMode ? 'bg-amber-400' : 'bg-amber-500'}`}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div
-                              className={`flex items-center gap-2 ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
-                              <span className="font-medium truncate max-w-[50%]">{trace.actor}</span>
-                              <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                {formatTimestamp(trace.timestamp)}
-                              </span>
-                            </div>
-                            <div className="whitespace-pre-wrap break-words leading-5">
-                              {controlRequest?.type === 'request_user_control' ? (
-                                <div className="space-y-2">
-                                  <Suspense fallback={<span>{text}</span>}>
-                                    <MarkdownRenderer components={{ a: LinkComponent }}>{text}</MarkdownRenderer>
-                                  </Suspense>
-                                  {typeof controlRequest.tabId === 'number' && onTakeControl && (
-                                    <button
-                                      type="button"
-                                      className={controlBtnClass}
-                                      onClick={() => onTakeControl(controlRequest.tabId)}>
-                                      Take Control
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <Suspense fallback={<span>{text}</span>}>
-                                  <MarkdownRenderer components={{ a: LinkComponent }}>{text}</MarkdownRenderer>
-                                </Suspense>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <AgentTrajectory traceItems={traceItems} isDarkMode={isDarkMode} compactMode={compactMode} />
                 </div>
               )}
               {!isUser &&

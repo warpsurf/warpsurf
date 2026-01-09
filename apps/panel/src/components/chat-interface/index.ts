@@ -11,4 +11,5 @@ export { default as AvailableChatSection } from './available-chat-section';
 export { default as ExampleUses } from './example-uses';
 export { default as TabContextSelector } from './tab-context-selector';
 export type { TabInfo } from './tab-context-selector';
+export { AgentTrajectory } from './agent-trajectory';
 export type { JobSummary, MessageMetadata, TraceItem, WorkerItem, InlinePreview, InlinePreviewBatch } from './types';
