@@ -25,9 +25,11 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { AgentStepHistory } from '@src/workflows/shared/step-history';
 import type { GeneralSettingsConfig } from '@extension/storage';
 import { AutoWorkflow, type AutoAction } from '@src/workflows/auto';
-import { SystemMessage } from '@langchain/core/messages';
+import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils';
 import { tabExists } from '@src/utils';
+import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
+import { WorkflowType } from '@extension/shared/lib/workflows/types';
 
 const logger = createLogger('Executor');
 
@@ -166,6 +168,38 @@ export class Executor {
     } catch (e) {
       logger.info('No chat history found or failed to load history for session', this.context.taskId, e);
     }
+
+    // Inject context tabs for Agent workflow (DOM format)
+    await this.injectContextTabsForAgent();
+  }
+
+  /**
+   * Set context tab IDs for this executor session.
+   */
+  setContextTabIds(tabIds: number[]): void {
+    this.context.contextTabIds = tabIds;
+    logger.info(`Set ${tabIds.length} context tabs for executor`);
+  }
+
+  /**
+   * Inject context tabs into Agent workflow messages (DOM format).
+   * Called during initialization for agent workflows.
+   * Context tabs are inserted at position 1 (after system message, before user_request).
+   */
+  private async injectContextTabsForAgent(): Promise<void> {
+    if (this.context.contextTabIds.length === 0) return;
+    if (this.manualAgentType && this.manualAgentType !== 'agent' && this.manualAgentType !== 'auto') return;
+
+    try {
+      const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.AGENT);
+      if (contextMsg) {
+        // Insert at position 1 (after system message, before user_request)
+        this.context.messageManager.addMessageWithTokens(contextMsg, 'context', 1);
+        logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
+      }
+    } catch (e) {
+      logger.warn('Failed to inject context tabs for agent:', e);
+    }
   }
 
   subscribeExecutionEvents(callback: EventCallback): void {
@@ -241,13 +275,13 @@ export class Executor {
     // Mark that this executor has run browser-use (in case it was previously another type)
     this.hasRunBrowserUse = true;
 
-    // Step 1: Remove ALL nano_user_request blocks
+    // Step 1: Remove ALL user_request blocks
     try {
       const msgs: any[] = (this.context.messageManager as any).history?.messages || [];
-      const USER_REQUEST_START = '<nano_user_request>';
-      const USER_REQUEST_END = '</nano_user_request>';
+      const USER_REQUEST_START = '<user_request>';
+      const USER_REQUEST_END = '</user_request>';
 
-      // Find all messages containing nano_user_request and remove them (backwards to preserve indices)
+      // Find all messages containing user_request and remove them (backwards to preserve indices)
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m = msgs[i]?.message;
         if (
@@ -429,7 +463,7 @@ export class Executor {
     this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_START, 'Analyzing request...');
 
     try {
-      const result = await this.autoService.triageRequest(request, this.context.taskId);
+      const result = await this.autoService.triageRequest(request, this.context.taskId, this.context.contextTabIds);
       // Enforce no 'request_more_info' downstream
       if (result.action === 'request_more_info') {
         result.action = 'chat';
@@ -1070,13 +1104,19 @@ export class Executor {
       if (jobStartTime) {
         totalLatency = Date.now() - jobStartTime;
       } else {
-        // Fallback: Calculate latency from first to last token usage (existing behavior)
-        const timestamps = taskTokens.map((usage: any) => usage.timestamp).sort((a: number, b: number) => a - b);
-        if (timestamps.length > 1) {
-          totalLatency = timestamps[timestamps.length - 1] - timestamps[0];
-        } else if (timestamps.length === 1) {
-          // For single API call, estimate a minimum latency (e.g., 100ms)
-          totalLatency = 100; // Default minimum latency in milliseconds
+        // Fallback: Calculate latency from earliest start to latest completion
+        const completionTimes = taskTokens
+          .map((usage: any) => Number(usage.timestamp || 0))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+        const startTimes = taskTokens
+          .map((usage: any) => Number(usage.requestStartTime || usage.timestamp || 0))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+
+        if (startTimes.length > 0 && completionTimes.length > 0) {
+          totalLatency = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
+        } else if (completionTimes.length > 1) {
+          completionTimes.sort((a, b) => a - b);
+          totalLatency = completionTimes[completionTimes.length - 1] - completionTimes[0];
         }
       }
     } else if (jobStartTime) {

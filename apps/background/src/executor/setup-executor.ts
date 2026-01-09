@@ -1,7 +1,13 @@
 import BrowserContext from '../browser/context';
 import { Executor } from './executor';
 import { createChatModel } from '../workflows/models/factory';
-import { agentModelStore, AgentNameEnum, firewallStore, generalSettingsStore, getDefaultDisplayNameFromProviderId } from '@extension/storage';
+import {
+  agentModelStore,
+  AgentNameEnum,
+  firewallStore,
+  generalSettingsStore,
+  getDefaultDisplayNameFromProviderId,
+} from '@extension/storage';
 import { getAllProvidersDecrypted } from '../crypto';
 type BaseChatModel = any;
 import { globalTokenTracker } from '../utils/token-tracker';
@@ -17,13 +23,19 @@ function getRequiredAgentsForWorkflow(agentType?: string): AgentNameEnum[] {
   return [AgentNameEnum.AgentNavigator]; // 'agent' or default
 }
 
-export async function setupExecutor(taskId: string, task: string, browserContext: BrowserContext, agentType?: string) {
+export async function setupExecutor(
+  taskId: string,
+  task: string,
+  browserContext: BrowserContext,
+  agentType?: string,
+  contextTabIds?: number[],
+) {
   const providers = await getAllProvidersDecrypted();
   if (Object.keys(providers).length === 0) {
     throw new Error('Please configure API keys in the settings first');
   }
   const agentModels = await agentModelStore.getAllAgentModels();
-  
+
   // Validate only the agents required for this workflow
   for (const agentName of getRequiredAgentsForWorkflow(agentType)) {
     const agentModel = agentModels[agentName];
@@ -100,7 +112,7 @@ export async function setupExecutor(taskId: string, task: string, browserContext
   });
 
   globalTokenTracker.setCurrentTaskId(taskId);
-  
+
   const executor = new Executor(task, taskId, browserContext, navigatorLLM, {
     plannerLLM: plannerLLM ?? navigatorLLM,
     validatorLLM: validatorLLM ?? navigatorLLM,
@@ -122,8 +134,11 @@ export async function setupExecutor(taskId: string, task: string, browserContext
     retainTokenLogs: true,
   });
 
+  // Set context tabs BEFORE initialize() so they're available for injection
+  if (contextTabIds?.length) {
+    executor.setContextTabIds(contextTabIds);
+  }
+
   await executor.initialize();
   return executor;
 }
-
-

@@ -8,7 +8,7 @@ export async function subscribeToExecutorEvents(
   currentPort: chrome.runtime.Port | null,
   taskManager: any,
   logger: { warning: Function; debug: Function },
-  onTaskFinished?: (executor: Executor) => void
+  onTaskFinished?: (executor: Executor) => void,
 ) {
   if ((executor as any).__backgroundSubscribed) {
     logger.warning('Executor already has background subscription, skipping duplicate');
@@ -29,8 +29,12 @@ export async function subscribeToExecutorEvents(
               sessionLogArchive.append(String(taskId), existing);
             }
           } catch {}
-          try { (globalTokenTracker as any)?.clearTokensForTask?.(String(taskId)); } catch {}
-          try { (globalTokenTracker as any)?.setCurrentTaskId?.(String(taskId)); } catch {}
+          try {
+            (globalTokenTracker as any)?.clearTokensForTask?.(String(taskId));
+          } catch {}
+          try {
+            (globalTokenTracker as any)?.setCurrentTaskId?.(String(taskId));
+          } catch {}
         }
       }
     } catch {}
@@ -50,11 +54,10 @@ export async function subscribeToExecutorEvents(
           return base;
         };
 
-        const isTerminal = (
+        const isTerminal =
           event.state === ExecutionState.TASK_OK ||
           event.state === ExecutionState.TASK_FAIL ||
-          event.state === ExecutionState.TASK_CANCEL
-        );
+          event.state === ExecutionState.TASK_CANCEL;
 
         const outEvent: any = {
           type: event.type,
@@ -69,19 +72,27 @@ export async function subscribeToExecutorEvents(
             const taskId: string | undefined = (event as any)?.data?.taskId;
             if (taskId) {
               // Collect all usages for this task across rounds, ordered chronologically
-              const usages = ((globalTokenTracker as any)?.getTokensForTask?.(taskId) || []).sort((a: any, b: any) => (Number(a?.timestamp||0)) - (Number(b?.timestamp||0)));
+              const usages = ((globalTokenTracker as any)?.getTokensForTask?.(taskId) || []).sort(
+                (a: any, b: any) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0),
+              );
               if (Array.isArray(usages) && usages.length > 0) {
                 // Append to combined archive so future rounds can download combined logs
-                try { sessionLogArchive.append(String(taskId), usages); } catch {}
+                try {
+                  sessionLogArchive.append(String(taskId), usages);
+                } catch {}
                 const totalInputTokens = usages.reduce((sum: number, u: any) => sum + (u.inputTokens || 0), 0);
                 const totalOutputTokens = usages.reduce((sum: number, u: any) => sum + (u.outputTokens || 0), 0);
                 // Sum only valid costs (>= 0); if none found, total is -1 (unavailable)
                 let hasAnyCost = false;
-                const totalCost = usages.reduce((sum: number, u: any) => {
-                  const c = Number(u.cost);
-                  if (isFinite(c) && c >= 0) { hasAnyCost = true; return sum + c; }
-                  return sum;
-                }, 0) || (hasAnyCost ? 0 : -1);
+                const totalCost =
+                  usages.reduce((sum: number, u: any) => {
+                    const c = Number(u.cost);
+                    if (isFinite(c) && c >= 0) {
+                      hasAnyCost = true;
+                      return sum + c;
+                    }
+                    return sum;
+                  }, 0) || (hasAnyCost ? 0 : -1);
                 const apiCallCount = usages.length;
                 const last = usages[usages.length - 1] || {};
                 const provider = last.provider || 'Unknown';
@@ -89,12 +100,23 @@ export async function subscribeToExecutorEvents(
 
                 let totalLatencyMs = 0;
                 try {
-                  const timestamps = usages
+                  // Get completion timestamps
+                  const completionTimes = usages
                     .map((u: any) => Number(u?.timestamp || 0))
-                    .filter((n: number) => Number.isFinite(n) && n > 0)
-                    .sort((a: number, b: number) => a - b);
-                  if (timestamps.length >= 2) totalLatencyMs = Math.max(0, timestamps[timestamps.length - 1] - timestamps[0]);
-                  else if (timestamps.length === 1) totalLatencyMs = 100;
+                    .filter((n: number) => Number.isFinite(n) && n > 0);
+                  // Get request start times (fallback to completion time if not set)
+                  const startTimes = usages
+                    .map((u: any) => Number(u?.requestStartTime || u?.timestamp || 0))
+                    .filter((n: number) => Number.isFinite(n) && n > 0);
+
+                  if (startTimes.length > 0 && completionTimes.length > 0) {
+                    // Latency = latest completion - earliest start
+                    totalLatencyMs = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
+                  } else if (completionTimes.length >= 2) {
+                    // Fallback for backwards compatibility
+                    completionTimes.sort((a, b) => a - b);
+                    totalLatencyMs = completionTimes[completionTimes.length - 1] - completionTimes[0];
+                  }
                 } catch {}
 
                 const dataSummary = {
@@ -113,7 +135,9 @@ export async function subscribeToExecutorEvents(
                 outEvent.data.message = JSON.stringify({ type: 'job_summary', data: dataSummary });
 
                 // Freeze mirrors for this session so previews remain but updates stop
-                try { await (taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(taskId)); } catch {}
+                try {
+                  await (taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(taskId));
+                } catch {}
               }
             }
           } catch (err) {
@@ -140,8 +164,9 @@ export async function subscribeToExecutorEvents(
         }
       } catch {}
       await (executor as any)?.cleanup?.();
-      try { onTaskFinished?.(executor); } catch {}
+      try {
+        onTaskFinished?.(executor);
+      } catch {}
     }
   });
 }
-

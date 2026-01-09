@@ -2,7 +2,13 @@
 
 import { Actors, chatHistoryStore } from '@extension/storage';
 import type { AgentEvent } from '../../types/event';
-import type { NormalizedEvent, TaskEventHandlerDeps, JobSummary, WorkerProgressItem, WorkerTabGroup } from './create-task-event-handler';
+import type {
+  NormalizedEvent,
+  TaskEventHandlerDeps,
+  JobSummary,
+  WorkerProgressItem,
+  WorkerTabGroup,
+} from './create-task-event-handler';
 
 // ==================== Event Utilities ====================
 
@@ -47,8 +53,14 @@ export function updateWorkerProgress(event: AgentEvent, deps: TaskEventHandlerDe
       const existing: any = prev[rootId] || {};
       const prevWorkerItems: Array<any> = Array.isArray(existing.workerItems) ? existing.workerItems : [];
       const without = prevWorkerItems.filter((w: any) => String(w.workerId) !== workerKey);
-      return { ...prev, [rootId]: { ...existing, workerItems: [...without, item],
-        totalWorkers: Math.max((existing.totalWorkers || 0), without.length + 1) } } as any;
+      return {
+        ...prev,
+        [rootId]: {
+          ...existing,
+          workerItems: [...without, item],
+          totalWorkers: Math.max(existing.totalWorkers || 0, without.length + 1),
+        },
+      } as any;
     });
   } catch {}
 }
@@ -69,9 +81,14 @@ export function handleWorkerTabCreated(event: AgentEvent, deps: TaskEventHandler
     const groupId = (data as any)?.groupId;
     if (deps.getCurrentTaskAgentType() === 'multiagent') deps.setShowCloseTabs(true);
     deps.setWorkerTabGroups((prev: WorkerTabGroup[]) => {
-      const exists = prev.some((g) => g.taskId === taskId);
+      const exists = prev.some(g => g.taskId === taskId);
       if (!exists) {
-        const newGroup: WorkerTabGroup = { taskId, name: agentName, color, ...(typeof groupId === 'number' ? { groupId } : {}) };
+        const newGroup: WorkerTabGroup = {
+          taskId,
+          name: agentName,
+          color,
+          ...(typeof groupId === 'number' ? { groupId } : {}),
+        };
         deps.setShowCloseTabs(true);
         return [...prev, newGroup];
       }
@@ -95,9 +112,14 @@ export function handleSingleAgentTabCreated(event: AgentEvent, deps: TaskEventHa
     const color = (data as any)?.agentColor || '#A78BFA';
     const groupId = (data as any)?.groupId;
     deps.setWorkerTabGroups((prev: WorkerTabGroup[]) => {
-      const exists = prev.some((g) => g.taskId === taskId);
+      const exists = prev.some(g => g.taskId === taskId);
       if (!exists) {
-        const newGroup: WorkerTabGroup = { taskId, name: agentName, color, ...(typeof groupId === 'number' ? { groupId } : {}) };
+        const newGroup: WorkerTabGroup = {
+          taskId,
+          name: agentName,
+          color,
+          ...(typeof groupId === 'number' ? { groupId } : {}),
+        };
         deps.setShowCloseTabs(true);
         return [...prev, newGroup];
       }
@@ -120,12 +142,16 @@ export function updateTabGroupColor(event: AgentEvent, deps: TaskEventHandlerDep
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = { ...updated[existingIndex], color: finalColor, ...(title && { name: title }) };
-        try { deps.laneColorByLaneRef.current.clear(); } catch {}
+        try {
+          deps.laneColorByLaneRef.current.clear();
+        } catch {}
         return updated;
       } else {
         const ordinal = deps.ensureAgentOrdinal(taskId, workerIndex);
         const name = title || `Web Agent ${ordinal}`;
-        try { deps.laneColorByLaneRef.current.clear(); } catch {}
+        try {
+          deps.laneColorByLaneRef.current.clear();
+        } catch {}
         return [...prev, { taskId, name, color: finalColor }];
       }
     });
@@ -171,14 +197,23 @@ export function shouldShowCloseTabs(deps: TaskEventHandlerDeps, data: any): bool
 // ==================== Metadata Utilities ====================
 
 /** Stores job summary with deduplication */
-export function storeJobSummary(summaryData: JobSummary, taskId: string, event: 'task.ok' | 'task.fail' | 'task.cancel', deps: TaskEventHandlerDeps): boolean {
+export function storeJobSummary(
+  summaryData: JobSummary,
+  taskId: string,
+  event: 'task.ok' | 'task.fail' | 'task.cancel',
+  deps: TaskEventHandlerDeps,
+): boolean {
   try {
     const sessionId = taskId || String(deps.sessionIdRef.current) || 'unknown';
     const jobSummaryId = `${sessionId}:${event}:${Number(summaryData.totalInputTokens) || 0}:${Number(summaryData.totalOutputTokens) || 0}:${Number(summaryData.totalCost) || 0}:${Number(summaryData.apiCallCount) || 0}`;
     if (deps.processedJobSummariesRef.current.has(jobSummaryId)) return false;
     deps.processedJobSummariesRef.current.add(jobSummaryId);
-    deps.updateSessionStats({ totalInputTokens: summaryData.totalInputTokens, totalOutputTokens: summaryData.totalOutputTokens,
-      totalLatencyMs: summaryData.totalLatencyMs, totalCost: summaryData.totalCost });
+    deps.updateSessionStats({
+      totalInputTokens: summaryData.totalInputTokens,
+      totalOutputTokens: summaryData.totalOutputTokens,
+      totalLatencyMs: summaryData.totalLatencyMs,
+      totalCost: summaryData.totalCost,
+    });
     return true;
   } catch {
     return false;
@@ -186,18 +221,28 @@ export function storeJobSummary(summaryData: JobSummary, taskId: string, event: 
 }
 
 /** Updates request summary for a message */
-export function updateRequestSummary(messageId: string, summary: Partial<JobSummary>, deps: TaskEventHandlerDeps): void {
+export function updateRequestSummary(
+  messageId: string,
+  summary: Partial<JobSummary>,
+  deps: TaskEventHandlerDeps,
+): void {
   try {
     deps.setRequestSummaries(prev => {
       const existing = (prev as any)[messageId];
       if (existing && Number(existing.latency) > 0 && Number(summary.totalLatencySeconds) === 0) return prev;
       const requestSummary = {
-        inputTokens: summary.totalInputTokens || 0, outputTokens: summary.totalOutputTokens || 0,
-        latency: summary.totalLatencySeconds?.toString() || '0.00', cost: summary.totalCost || 0,
-        apiCalls: summary.apiCallCount || 0, modelName: summary.modelName, provider: summary.provider,
+        inputTokens: summary.totalInputTokens || 0,
+        outputTokens: summary.totalOutputTokens || 0,
+        latency: summary.totalLatencySeconds?.toString() || '0.00',
+        cost: summary.totalCost || 0,
+        apiCalls: summary.apiCallCount || 0,
+        modelName: summary.modelName,
+        provider: summary.provider,
       };
       const next = { ...prev, [messageId]: requestSummary } as any;
-      try { if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next); } catch {}
+      try {
+        if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next);
+      } catch {}
       return next;
     });
   } catch {}
@@ -231,16 +276,33 @@ export function parseJobSummary(data: any): JobSummary | null {
 }
 
 /** Adds trace item to aggregate message */
-export function addTraceItem(actor: string, content: string, timestamp: number, deps: TaskEventHandlerDeps, additionalData?: any): void {
+export function addTraceItem(
+  actor: string,
+  content: string,
+  timestamp: number,
+  deps: TaskEventHandlerDeps,
+  additionalData?: any,
+): void {
   if (!deps.agentTraceRootIdRef.current) return;
   try {
     const rootId = deps.agentTraceRootIdRef.current as string;
     deps.setMessageMetadata(prev => {
       const existing = (prev as any)[rootId] || {};
       const traceItems = (existing as any).traceItems || [];
-      const newItem = { actor, content, timestamp, ...additionalData };
+      // Extract pageUrl and pageTitle from additionalData if present
+      const { pageUrl, pageTitle, ...rest } = additionalData || {};
+      const newItem = {
+        actor,
+        content,
+        timestamp,
+        ...(pageUrl && { pageUrl }),
+        ...(pageTitle && { pageTitle }),
+        ...rest,
+      };
       const updated = { ...prev, [rootId]: { ...existing, traceItems: [...traceItems, newItem] } } as any;
-      try { if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated); } catch {}
+      try {
+        if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
+      } catch {}
       return updated;
     });
   } catch {}
@@ -254,7 +316,9 @@ export function markAggregateComplete(deps: TaskEventHandlerDeps, rootId?: strin
     deps.setMessageMetadata(prev => {
       const existing = (prev as any)[targetRootId] || {};
       const updated = { ...prev, [targetRootId]: { ...existing, isCompleted: true } } as any;
-      try { if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated); } catch {}
+      try {
+        if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
+      } catch {}
       return updated;
     });
   } catch {}
@@ -275,14 +339,21 @@ export function persistFinalPreview(deps: TaskEventHandlerDeps): void {
         const singlePreview = (deps as any)?.mirrorPreview || existing.finalPreview;
         if (singlePreview) next[rootId] = { ...existing, finalPreview: singlePreview };
       }
-      try { if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next); } catch {}
+      try {
+        if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);
+      } catch {}
       return next;
     });
   } catch {}
 }
 
 /** Creates new aggregate root message */
-export function createAggregateRoot(actor: string, content: string, timestamp: number, deps: TaskEventHandlerDeps): string {
+export function createAggregateRoot(
+  actor: string,
+  content: string,
+  timestamp: number,
+  deps: TaskEventHandlerDeps,
+): string {
   const rootId = `${timestamp}-${actor}`;
   deps.setAgentTraceRootId(rootId);
   deps.agentTraceRootIdRef.current = rootId;
@@ -298,11 +369,13 @@ export function updateAggregateRootContent(content: string, deps: TaskEventHandl
   const rootId = deps.agentTraceRootIdRef.current;
   if (!rootId) return;
   try {
-    deps.setMessages(prev => prev.map(m => {
-      const messageId = `${(m as any).timestamp}-${(m as any).actor}`;
-      if (messageId === rootId) return { ...(m as any), content };
-      return m;
-    }));
+    deps.setMessages(prev =>
+      prev.map(m => {
+        const messageId = `${(m as any).timestamp}-${(m as any).actor}`;
+        if (messageId === rootId) return { ...(m as any), content };
+        return m;
+      }),
+    );
   } catch {}
 }
 
@@ -328,38 +401,67 @@ export function addRunningAgent(taskId: string, deps: TaskEventHandlerDeps): voi
   try {
     const sessionTitle = deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
     const agentTypeName = deps.getCurrentTaskAgentType() || 'Agent';
-    const userMsg = deps.lastUserPromptRef.current || [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content || '';
+    const userMsg =
+      deps.lastUserPromptRef.current ||
+      [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content ||
+      '';
     const taskDescription = `${agentTypeName}: ${userMsg.substring(0, 120)}`;
     const runningAgent: DashboardAgent = {
-      sessionId: taskId, sessionTitle, taskDescription, startTime: Date.now(),
-      agentType: agentTypeName, status: 'running', lastUpdate: Date.now(),
+      sessionId: taskId,
+      sessionTitle,
+      taskDescription,
+      startTime: Date.now(),
+      agentType: agentTypeName,
+      status: 'running',
+      lastUpdate: Date.now(),
     };
-    chrome.storage.local.get(RUNNING_KEY).then(result => {
-      const arr = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
-      const filtered = arr.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
-      filtered.push(runningAgent);
-      chrome.storage.local.set({ [RUNNING_KEY]: filtered });
-    }).catch(() => {});
+    chrome.storage.local
+      .get(RUNNING_KEY)
+      .then(result => {
+        const arr = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
+        const filtered = arr.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
+        filtered.push(runningAgent);
+        chrome.storage.local.set({ [RUNNING_KEY]: filtered });
+      })
+      .catch(() => {});
   } catch {}
 }
 
 /** Moves agent from running to completed */
-export function moveToCompleted(taskId: string, status: 'completed' | 'failed' | 'cancelled', deps: TaskEventHandlerDeps): void {
+export function moveToCompleted(
+  taskId: string,
+  status: 'completed' | 'failed' | 'cancelled',
+  deps: TaskEventHandlerDeps,
+): void {
   try {
-    chrome.storage.local.get([RUNNING_KEY, COMPLETED_KEY]).then(result => {
-      const running = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
-      const completed = Array.isArray(result[COMPLETED_KEY]) ? result[COMPLETED_KEY] : [];
-      const existing = running.find((a: DashboardAgent) => String(a.sessionId) === taskId);
-      const sessionTitle = existing?.sessionTitle || deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
-      const lastUserMsg = deps.lastUserPromptRef.current || [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content || '';
-      const taskDescription = existing?.taskDescription || `Agent: ${lastUserMsg.substring(0, 120)}`;
-      const startTime = existing?.startTime || Date.now();
-      const agentTypeName = existing?.agentType || deps.getCurrentTaskAgentType() || 'auto';
-      const completedEntry: DashboardAgent = { sessionId: taskId, sessionTitle, taskDescription, startTime, endTime: Date.now(), agentType: agentTypeName, status };
-      const newRunning = running.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
-      const nextCompleted = [...completed, completedEntry].slice(-MAX_COMPLETED);
-      chrome.storage.local.set({ [RUNNING_KEY]: newRunning, [COMPLETED_KEY]: nextCompleted });
-    }).catch(() => {});
+    chrome.storage.local
+      .get([RUNNING_KEY, COMPLETED_KEY])
+      .then(result => {
+        const running = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
+        const completed = Array.isArray(result[COMPLETED_KEY]) ? result[COMPLETED_KEY] : [];
+        const existing = running.find((a: DashboardAgent) => String(a.sessionId) === taskId);
+        const sessionTitle =
+          existing?.sessionTitle || deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
+        const lastUserMsg =
+          deps.lastUserPromptRef.current ||
+          [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content ||
+          '';
+        const taskDescription = existing?.taskDescription || `Agent: ${lastUserMsg.substring(0, 120)}`;
+        const startTime = existing?.startTime || Date.now();
+        const agentTypeName = existing?.agentType || deps.getCurrentTaskAgentType() || 'auto';
+        const completedEntry: DashboardAgent = {
+          sessionId: taskId,
+          sessionTitle,
+          taskDescription,
+          startTime,
+          endTime: Date.now(),
+          agentType: agentTypeName,
+          status,
+        };
+        const newRunning = running.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
+        const nextCompleted = [...completed, completedEntry].slice(-MAX_COMPLETED);
+        chrome.storage.local.set({ [RUNNING_KEY]: newRunning, [COMPLETED_KEY]: nextCompleted });
+      })
+      .catch(() => {});
   } catch {}
 }
-

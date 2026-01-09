@@ -1,5 +1,10 @@
 import { createChatModel } from '@src/workflows/models/factory';
-import { agentModelStore, AgentNameEnum, getDefaultDisplayNameFromProviderId, generalSettingsStore } from '@extension/storage';
+import {
+  agentModelStore,
+  AgentNameEnum,
+  getDefaultDisplayNameFromProviderId,
+  generalSettingsStore,
+} from '@extension/storage';
 import { getAllProvidersDecrypted } from '@src/crypto';
 import { createLogger } from '@src/log';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -8,6 +13,12 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { SystemPrompt } from './auto-prompt';
 import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
 import { getChatHistoryForSession } from '@src/workflows/shared/utils/chat-history';
+
+interface TabMetadata {
+  id: number;
+  title: string;
+  url: string;
+}
 
 const logger = createLogger('AutoWorkflow');
 
@@ -29,10 +40,10 @@ export class AutoWorkflow {
   async initialize(): Promise<void> {
     try {
       logger.info('Starting auto service initialization...');
-      
+
       const providers = await getAllProvidersDecrypted();
       logger.info(`Found ${Object.keys(providers).length} providers:`, Object.keys(providers));
-      
+
       if (Object.keys(providers).length === 0) {
         logger.warning('No LLM providers configured for auto');
         return;
@@ -40,21 +51,21 @@ export class AutoWorkflow {
 
       const agentModels = await agentModelStore.getAllAgentModels();
       logger.info(`Found agent models:`, Object.keys(agentModels));
-      
+
       let autoModel = agentModels[AgentNameEnum.Auto];
       let modelSource = 'dedicated auto model';
-      
+
       if (!autoModel) {
         logger.info('No auto model configured, falling back to planner model');
         autoModel = agentModels[AgentNameEnum.AgentPlanner];
         modelSource = 'planner model fallback';
-        
+
         if (!autoModel) {
           logger.warning('No planner model available for auto fallback');
           return;
         }
       }
-      
+
       logger.info(`Using ${modelSource} for auto:`, autoModel);
 
       const autoProviderConfig = providers[autoModel.provider];
@@ -70,22 +81,67 @@ export class AutoWorkflow {
     }
   }
 
-  async triageRequest(request: string, sessionId?: string): Promise<AutoResult> {
+  /**
+   * Get metadata for context tabs (title, url, id) without extracting content.
+   */
+  private async getContextTabsMetadata(tabIds: number[]): Promise<TabMetadata[]> {
+    const metadata: TabMetadata[] = [];
+    for (const tabId of tabIds) {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.url && tab.title) {
+          metadata.push({
+            id: tabId,
+            title: tab.title,
+            url: tab.url,
+          });
+        }
+      } catch (e) {
+        logger.debug(`Could not get metadata for tab ${tabId}:`, e);
+      }
+    }
+    return metadata;
+  }
+
+  /**
+   * Build the context tabs section for the prompt (metadata only, no content).
+   */
+  private buildContextTabsSection(tabsMetadata: TabMetadata[]): string {
+    if (tabsMetadata.length === 0) return '';
+
+    const lines = tabsMetadata.map(tab => `- Tab ID: ${tab.id}, Title: "${tab.title}", URL: ${tab.url}`);
+
+    return `\n\n[Tabs added as context by user]
+The user has added the following tabs as context for their request:
+${lines.join('\n')}
+
+Consider these tabs when determining the appropriate action. If the request relates to content from these tabs (e.g., "summarise these tabs"), the chat action is appropriate.`;
+  }
+
+  async triageRequest(request: string, sessionId?: string, contextTabIds?: number[]): Promise<AutoResult> {
     logger.info(`Auto request: "${request}"`);
-    
+
     // If LLM is not initialized, try to initialize it now
     if (!this.autoLLM) {
       logger.info('Auto LLM not initialized, attempting to initialize...');
       await this.initialize();
     }
-    
+
     // If still no LLM available, use fallback logic
     if (!this.autoLLM) {
       logger.warning('Auto LLM not available, using fallback logic');
       return this.fallbackTriage(request);
     }
 
-    const systemPrompt = `${SystemPrompt}
+    // Get context tabs metadata if provided
+    let contextTabsSection = '';
+    if (contextTabIds && contextTabIds.length > 0) {
+      const tabsMetadata = await this.getContextTabsMetadata(contextTabIds);
+      contextTabsSection = this.buildContextTabsSection(tabsMetadata);
+      logger.info(`Added ${tabsMetadata.length} context tabs metadata to auto prompt`);
+    }
+
+    const systemPrompt = `${SystemPrompt}${contextTabsSection}
 
 Here is the request:
 ${request}`;
@@ -103,33 +159,33 @@ ${request}`;
     try {
       // Build messages with chat history context
       const messages: BaseMessage[] = [new SystemMessage(systemPrompt)];
-      
+
       // Inject chat history if session ID is available
       if (sessionId) {
         const historyBlock = await getChatHistoryForSession(sessionId, {
           latestTaskText: request,
           stripUserRequestTags: true,
-          maxTurns: 4
+          maxTurns: 4,
         });
         if (historyBlock) {
           messages.push(new SystemMessage(historyBlock));
         }
       }
-      
+
       messages.push(new HumanMessage(request));
 
       logger.debug(`Starting Auto API Request for: ${request}`);
 
       const response = await this.autoLLM.invoke(messages, { signal: controller.signal });
       clearTimeout(timeoutId);
-      
+
       // Log token usage with the session ID
       const taskId = sessionId || globalTokenTracker.getCurrentTaskId() || 'unknown';
       const modelName = (this.autoLLM as any)?.modelName || (this.autoLLM as any)?.model || 'unknown';
       logLLMUsage(response, { taskId, role: 'auto', modelName, inputMessages: messages });
-      
+
       logger.info(`Raw auto response: ${response.content}`);
-      
+
       if (typeof response.content === 'string') {
         // Try to parse JSON from the response
         const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -142,7 +198,7 @@ ${request}`;
             return {
               action: normalizedAction as AutoAction,
               confidence: parsed.confidence || 0.8,
-              reasoning: parsed.reasoning
+              reasoning: parsed.reasoning,
             };
           }
         }
@@ -170,35 +226,43 @@ ${request}`;
   private fallbackTriage(request: string): AutoResult {
     // Simple keyword-based fallback logic
     const lowerRequest = request.toLowerCase();
-    
+
     // Check for current/news related queries FIRST (higher priority)
-    if (lowerRequest.includes('current') || lowerRequest.includes('latest') || 
-        lowerRequest.includes('news') || lowerRequest.includes('today') || 
-        lowerRequest.includes('weather')) {
+    if (
+      lowerRequest.includes('current') ||
+      lowerRequest.includes('latest') ||
+      lowerRequest.includes('news') ||
+      lowerRequest.includes('today') ||
+      lowerRequest.includes('weather')
+    ) {
       return {
         action: 'search',
         confidence: 0.7,
-        reasoning: 'Detected as requiring current information based on keywords'
+        reasoning: 'Detected as requiring current information based on keywords',
       };
     }
-    
+
     // Check for simple questions SECOND (lower priority)
-    if (lowerRequest.includes('what is') || lowerRequest.includes('who is') || 
-        lowerRequest.includes('explain') || lowerRequest.includes('define') || 
-        lowerRequest.includes('how does') || lowerRequest.includes('why')) {
+    if (
+      lowerRequest.includes('what is') ||
+      lowerRequest.includes('who is') ||
+      lowerRequest.includes('explain') ||
+      lowerRequest.includes('define') ||
+      lowerRequest.includes('how does') ||
+      lowerRequest.includes('why')
+    ) {
       return {
         action: 'chat',
         confidence: 0.7,
-        reasoning: 'Detected as a simple question based on keywords'
+        reasoning: 'Detected as a simple question based on keywords',
       };
     }
-    
+
     // Default to browser use for complex tasks
     return {
       action: 'agent',
       confidence: 0.5,
-      reasoning: 'Defaulting to browser use for potentially complex task'
+      reasoning: 'Defaulting to browser use for potentially complex task',
     };
   }
 }
-

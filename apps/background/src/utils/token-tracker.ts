@@ -10,6 +10,7 @@ export interface TokenUsage {
   thoughtTokens?: number;
   webSearchCount?: number;
   timestamp: number;
+  requestStartTime?: number; // When the API request started (for accurate latency calculation)
   provider: string;
   modelName: string;
   cost: number; // Cost in USD
@@ -352,6 +353,7 @@ export function logLLMUsage(
     modelName: string;
     provider?: string;
     inputMessages?: any[];
+    requestStartTime?: number;
   },
 ): void {
   try {
@@ -413,6 +415,7 @@ export function logLLMUsage(
       thoughtTokens,
       webSearchCount,
       timestamp: Date.now(),
+      requestStartTime: options.requestStartTime,
       provider,
       modelName,
       cost,
@@ -420,9 +423,7 @@ export function logLLMUsage(
       role,
       request: inputMessages
         ? {
-            messages: inputMessages
-              .slice(-3)
-              .map((m: any) => ({ role: m?.role, content: String(m?.content || '').slice(0, 1000) })),
+            messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
           }
         : undefined,
       response: response?.content || response?.parsed || response,

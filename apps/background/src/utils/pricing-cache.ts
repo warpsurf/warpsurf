@@ -29,9 +29,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-01-05 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-01-09 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-01-05T15:58:10.367Z',
+  generatedAt: '2026-01-09T14:54:31.619Z',
   version: 1,
   helicone: {
     openai: {
@@ -1194,7 +1194,14 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'allenai',
         displayName: 'Allenai',
-        models: ['allenai/olmo-2-0325-32b-instruct', 'allenai/olmo-3-7b-instruct', 'allenai/olmo-3-7b-think'],
+        models: [
+          'allenai/olmo-2-0325-32b-instruct',
+          'allenai/olmo-3-32b-think',
+          'allenai/olmo-3-7b-instruct',
+          'allenai/olmo-3-7b-think',
+          'allenai/olmo-3.1-32b-instruct',
+          'allenai/olmo-3.1-32b-think',
+        ],
       },
       {
         id: 'alpindale',
@@ -1222,7 +1229,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         displayName: 'Anthropic',
         models: [
           'anthropic/claude-3-haiku',
-          'anthropic/claude-3-opus',
           'anthropic/claude-3.5-haiku',
           'anthropic/claude-3.5-haiku-20241022',
           'anthropic/claude-3.5-sonnet',
@@ -1411,9 +1417,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         id: 'microsoft',
         displayName: 'Microsoft',
         models: [
-          'microsoft/phi-3-medium-128k-instruct',
-          'microsoft/phi-3-mini-128k-instruct',
-          'microsoft/phi-3.5-mini-128k-instruct',
           'microsoft/phi-4',
           'microsoft/phi-4-multimodal-instruct',
           'microsoft/phi-4-reasoning-plus',
@@ -1585,7 +1588,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'perplexity/sonar-deep-research',
           'perplexity/sonar-pro',
           'perplexity/sonar-pro-search',
-          'perplexity/sonar-reasoning',
           'perplexity/sonar-reasoning-pro',
         ],
       },
@@ -1730,6 +1732,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'allenai/olmo-3.1-32b-instruct': {
+        inputPerToken: 2e-7,
+        outputPerToken: 6e-7,
+      },
       'bytedance-seed/seed-1.6-flash': {
         inputPerToken: 7.5e-8,
         outputPerToken: 3e-7,
@@ -1739,12 +1745,12 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.000002,
       },
       'minimax/minimax-m2.1': {
-        inputPerToken: 1.2e-7,
-        outputPerToken: 4.8e-7,
+        inputPerToken: 2.8e-7,
+        outputPerToken: 0.0000012,
       },
       'z-ai/glm-4.7': {
-        inputPerToken: 1.6e-7,
-        outputPerToken: 8e-7,
+        inputPerToken: 4e-7,
+        outputPerToken: 0.0000015,
       },
       'google/gemini-3-flash-preview': {
         inputPerToken: 5e-7,
@@ -1753,6 +1759,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'mistralai/mistral-small-creative': {
         inputPerToken: 1e-7,
         outputPerToken: 3e-7,
+      },
+      'allenai/olmo-3.1-32b-think': {
+        inputPerToken: 1.5e-7,
+        outputPerToken: 5e-7,
       },
       'nvidia/nemotron-3-nano-30b-a3b': {
         inputPerToken: 6e-8,
@@ -1838,6 +1848,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000005,
         outputPerToken: 0.000025,
       },
+      'allenai/olmo-3-32b-think': {
+        inputPerToken: 1.5e-7,
+        outputPerToken: 5e-7,
+      },
       'allenai/olmo-3-7b-instruct': {
         inputPerToken: 1e-7,
         outputPerToken: 2e-7,
@@ -1883,8 +1897,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 8.28e-7,
       },
       'moonshotai/kimi-k2-thinking': {
-        inputPerToken: 3.2e-7,
-        outputPerToken: 4.8e-7,
+        inputPerToken: 4e-7,
+        outputPerToken: 0.00000175,
       },
       'amazon/nova-premier-v1': {
         inputPerToken: 0.0000025,
@@ -1915,12 +1929,12 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.0000015,
       },
       'liquid/lfm2-8b-a1b': {
-        inputPerToken: 5e-8,
-        outputPerToken: 1e-7,
+        inputPerToken: 1e-8,
+        outputPerToken: 2e-8,
       },
       'liquid/lfm-2.2-6b': {
-        inputPerToken: 5e-8,
-        outputPerToken: 1e-7,
+        inputPerToken: 1e-8,
+        outputPerToken: 2e-8,
       },
       'ibm-granite/granite-4.0-h-micro': {
         inputPerToken: 1.7e-8,
@@ -2019,8 +2033,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.0000035,
       },
       'qwen/qwen3-vl-235b-a22b-instruct': {
-        inputPerToken: 1.2e-7,
-        outputPerToken: 5.6e-7,
+        inputPerToken: 2e-7,
+        outputPerToken: 0.0000012,
       },
       'qwen/qwen3-max': {
         inputPerToken: 0.0000012,
@@ -2063,8 +2077,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.0000012,
       },
       'qwen/qwen3-next-80b-a3b-instruct': {
-        inputPerToken: 6e-8,
-        outputPerToken: 6e-7,
+        inputPerToken: 9e-8,
+        outputPerToken: 0.0000011,
       },
       'meituan/longcat-flash-chat': {
         inputPerToken: 2e-7,
@@ -2171,16 +2185,16 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 4e-7,
       },
       'openai/gpt-oss-120b': {
-        inputPerToken: 2e-8,
-        outputPerToken: 1e-7,
+        inputPerToken: 3.9e-8,
+        outputPerToken: 1.9e-7,
       },
       'openai/gpt-oss-120b:exacto': {
         inputPerToken: 3.9e-8,
         outputPerToken: 1.9e-7,
       },
       'openai/gpt-oss-20b': {
-        inputPerToken: 1.6e-8,
-        outputPerToken: 6e-8,
+        inputPerToken: 2e-8,
+        outputPerToken: 1e-7,
       },
       'anthropic/claude-opus-4.1': {
         inputPerToken: 0.000015,
@@ -2515,8 +2529,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00001,
       },
       'google/gemma-3-27b-it': {
-        inputPerToken: 3.6e-8,
-        outputPerToken: 6.4e-8,
+        inputPerToken: 4e-8,
+        outputPerToken: 1.5e-7,
       },
       'thedrummer/skyfall-36b-v2': {
         inputPerToken: 5.5e-7,
@@ -2622,10 +2636,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.5e-7,
         outputPerToken: 1.5e-7,
       },
-      'perplexity/sonar-reasoning': {
-        inputPerToken: 0.000001,
-        outputPerToken: 0.000005,
-      },
       'perplexity/sonar': {
         inputPerToken: 0.000001,
         outputPerToken: 0.000001,
@@ -2710,11 +2720,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 4e-7,
         outputPerToken: 4e-7,
       },
-      'anthropic/claude-3.5-haiku-20241022': {
+      'anthropic/claude-3.5-haiku': {
         inputPerToken: 8e-7,
         outputPerToken: 0.000004,
       },
-      'anthropic/claude-3.5-haiku': {
+      'anthropic/claude-3.5-haiku-20241022': {
         inputPerToken: 8e-7,
         outputPerToken: 0.000004,
       },
@@ -2742,11 +2752,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.0000012,
         outputPerToken: 0.0000012,
       },
-      'inflection/inflection-3-pi': {
+      'inflection/inflection-3-productivity': {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
-      'inflection/inflection-3-productivity': {
+      'inflection/inflection-3-pi': {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
@@ -2754,21 +2764,21 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.7e-7,
         outputPerToken: 4.3e-7,
       },
-      'meta-llama/llama-3.2-3b-instruct': {
-        inputPerToken: 2e-8,
-        outputPerToken: 2e-8,
-      },
       'meta-llama/llama-3.2-1b-instruct': {
         inputPerToken: 2.7e-8,
         outputPerToken: 2e-7,
+      },
+      'meta-llama/llama-3.2-11b-vision-instruct': {
+        inputPerToken: 4.9e-8,
+        outputPerToken: 4.9e-8,
       },
       'meta-llama/llama-3.2-90b-vision-instruct': {
         inputPerToken: 3.5e-7,
         outputPerToken: 4e-7,
       },
-      'meta-llama/llama-3.2-11b-vision-instruct': {
-        inputPerToken: 4.9e-8,
-        outputPerToken: 4.9e-8,
+      'meta-llama/llama-3.2-3b-instruct': {
+        inputPerToken: 2e-8,
+        outputPerToken: 2e-8,
       },
       'qwen/qwen-2.5-72b-instruct': {
         inputPerToken: 1.2e-7,
@@ -2790,17 +2800,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
-      'sao10k/l3.1-euryale-70b': {
-        inputPerToken: 6.5e-7,
-        outputPerToken: 7.5e-7,
-      },
       'qwen/qwen-2.5-vl-7b-instruct': {
         inputPerToken: 2e-7,
         outputPerToken: 2e-7,
       },
-      'microsoft/phi-3.5-mini-128k-instruct': {
-        inputPerToken: 1e-7,
-        outputPerToken: 1e-7,
+      'sao10k/l3.1-euryale-70b': {
+        inputPerToken: 6.5e-7,
+        outputPerToken: 7.5e-7,
       },
       'nousresearch/hermes-3-llama-3.1-70b': {
         inputPerToken: 3e-7,
@@ -2828,25 +2834,25 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
       'meta-llama/llama-3.1-8b-instruct': {
         inputPerToken: 2e-8,
-        outputPerToken: 3e-8,
-      },
-      'meta-llama/llama-3.1-405b-instruct': {
-        inputPerToken: 0.0000035,
-        outputPerToken: 0.0000035,
+        outputPerToken: 5e-8,
       },
       'meta-llama/llama-3.1-70b-instruct': {
         inputPerToken: 4e-7,
         outputPerToken: 4e-7,
       },
+      'meta-llama/llama-3.1-405b-instruct': {
+        inputPerToken: 0.0000035,
+        outputPerToken: 0.0000035,
+      },
       'mistralai/mistral-nemo': {
         inputPerToken: 2e-8,
         outputPerToken: 4e-8,
       },
-      'openai/gpt-4o-mini-2024-07-18': {
+      'openai/gpt-4o-mini': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
-      'openai/gpt-4o-mini': {
+      'openai/gpt-4o-mini-2024-07-18': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
@@ -2862,27 +2868,15 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.00000148,
         outputPerToken: 0.00000148,
       },
-      'nousresearch/hermes-2-pro-llama-3-8b': {
-        inputPerToken: 2.5e-8,
-        outputPerToken: 8e-8,
-      },
       'mistralai/mistral-7b-instruct': {
         inputPerToken: 2.8e-8,
         outputPerToken: 5.4e-8,
       },
+      'nousresearch/hermes-2-pro-llama-3-8b': {
+        inputPerToken: 2.5e-8,
+        outputPerToken: 8e-8,
+      },
       'mistralai/mistral-7b-instruct-v0.3': {
-        inputPerToken: 2e-7,
-        outputPerToken: 2e-7,
-      },
-      'microsoft/phi-3-mini-128k-instruct': {
-        inputPerToken: 1e-7,
-        outputPerToken: 1e-7,
-      },
-      'microsoft/phi-3-medium-128k-instruct': {
-        inputPerToken: 0.000001,
-        outputPerToken: 0.000001,
-      },
-      'meta-llama/llama-guard-2-8b': {
         inputPerToken: 2e-7,
         outputPerToken: 2e-7,
       },
@@ -2894,13 +2888,17 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
-      'meta-llama/llama-3-70b-instruct': {
-        inputPerToken: 3e-7,
-        outputPerToken: 4e-7,
+      'meta-llama/llama-guard-2-8b': {
+        inputPerToken: 2e-7,
+        outputPerToken: 2e-7,
       },
       'meta-llama/llama-3-8b-instruct': {
         inputPerToken: 3e-8,
         outputPerToken: 6e-8,
+      },
+      'meta-llama/llama-3-70b-instruct': {
+        inputPerToken: 3e-7,
+        outputPerToken: 4e-7,
       },
       'mistralai/mixtral-8x22b-instruct': {
         inputPerToken: 0.000002,
@@ -2918,21 +2916,17 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 2.5e-7,
         outputPerToken: 0.00000125,
       },
-      'anthropic/claude-3-opus': {
-        inputPerToken: 0.000015,
-        outputPerToken: 0.000075,
-      },
       'mistralai/mistral-large': {
         inputPerToken: 0.000002,
         outputPerToken: 0.000006,
       },
-      'openai/gpt-3.5-turbo-0613': {
-        inputPerToken: 0.000001,
-        outputPerToken: 0.000002,
-      },
       'openai/gpt-4-turbo-preview': {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
+      },
+      'openai/gpt-3.5-turbo-0613': {
+        inputPerToken: 0.000001,
+        outputPerToken: 0.000002,
       },
       'mistralai/mistral-tiny': {
         inputPerToken: 2.5e-7,
@@ -2962,13 +2956,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
       },
-      'openai/gpt-3.5-turbo-instruct': {
-        inputPerToken: 0.0000015,
-        outputPerToken: 0.000002,
-      },
       'mistralai/mistral-7b-instruct-v0.1': {
         inputPerToken: 1.1e-7,
         outputPerToken: 1.9e-7,
+      },
+      'openai/gpt-3.5-turbo-instruct': {
+        inputPerToken: 0.0000015,
+        outputPerToken: 0.000002,
       },
       'openai/gpt-3.5-turbo-16k': {
         inputPerToken: 0.000003,

@@ -71,6 +71,8 @@ export class AgentContext {
   history: AgentStepHistory;
   // Pre-built chat history messages (LangChain BaseMessage objects) from the side panel session
   chatHistoryMessages: any[];
+  // Context tab IDs provided by user for reference
+  contextTabIds: number[];
 
   constructor(
     taskId: string,
@@ -96,14 +98,30 @@ export class AgentContext {
     this.stateMessageAdded = false;
     this.history = new AgentStepHistory();
     this.chatHistoryMessages = [];
+    this.contextTabIds = [];
   }
 
   async emitEvent(actor: Actors, state: ExecutionState, eventDetails: string, additionalData?: Partial<EventData>) {
+    // Try to include current page URL for trajectory tracking
+    let pageUrl: string | undefined;
+    let pageTitle: string | undefined;
+    try {
+      const page = await this.browserContext.getCurrentPage();
+      if (page) {
+        pageUrl = page.url() || undefined;
+        pageTitle = await page.title().catch(() => undefined);
+      }
+    } catch {
+      // Ignore - page may not be available
+    }
+
     const event = new AgentEvent(actor, state, {
       taskId: this.taskId,
       step: this.nSteps,
       maxSteps: this.options.maxSteps,
       details: eventDetails,
+      ...(pageUrl && { pageUrl }),
+      ...(pageTitle && { pageTitle }),
       ...additionalData,
     });
     await this.eventManager.emit(event);

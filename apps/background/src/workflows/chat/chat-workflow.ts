@@ -8,6 +8,8 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
 import { calculateCost } from '@src/utils/cost-calculator';
+import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
+import { WorkflowType } from '@extension/shared/lib/workflows/types';
 
 const logger = createLogger('ChatWorkflow');
 
@@ -46,7 +48,22 @@ export class ChatWorkflow {
         stripUserRequestTags: true,
       });
 
-      const streamId = `chat_${Date.now()}`;
+      // Inject context tabs if available
+      if (this.context.contextTabIds.length > 0) {
+        try {
+          const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.CHAT);
+          if (contextMsg) {
+            // Insert after system message (index 0)
+            messages.splice(1, 0, contextMsg);
+            logger.info(`Injected context from ${this.context.contextTabIds.length} tabs`);
+          }
+        } catch (e) {
+          logger.warn('Failed to inject context tabs:', e);
+        }
+      }
+
+      const requestStartTime = Date.now();
+      const streamId = `chat_${requestStartTime}`;
       let response = '';
       let usage: any = null;
 
@@ -61,7 +78,7 @@ export class ChatWorkflow {
       await this.context.emitStreamChunk(Actors.CHAT, '', streamId, true);
 
       // Log token usage
-      this.logTokenUsage(usage);
+      this.logTokenUsage(usage, requestStartTime, messages, response);
 
       return { id: 'Chat', result: { response, done: true } };
     } catch (error) {
@@ -90,7 +107,7 @@ export class ChatWorkflow {
     }
   }
 
-  private logTokenUsage(usage: any): void {
+  private logTokenUsage(usage: any, requestStartTime?: number, inputMessages?: any[], responseText?: string): void {
     if (!usage) return;
     try {
       const taskId = this.context?.taskId;
@@ -111,11 +128,18 @@ export class ChatWorkflow {
         thoughtTokens: 0,
         webSearchCount: 0,
         timestamp: Date.now(),
+        requestStartTime,
         provider: 'Chat',
         modelName,
         cost,
         taskId,
         role: 'chat',
+        request: inputMessages
+          ? {
+              messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
+            }
+          : undefined,
+        response: responseText,
       };
 
       const callId = `${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;

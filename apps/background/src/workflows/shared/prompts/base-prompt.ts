@@ -30,9 +30,11 @@ abstract class BasePrompt {
     // In worker mode with no bound tab, return a placeholder message
     try {
       // Prefer smart state retrieval to avoid heavy DOM scans between action batches
-      const browserState = await (context.browserContext as any).getSmartState?.(context.options.useVision)
-        .catch(() => context.browserContext.getState(context.options.useVision))
-        || await context.browserContext.getState(context.options.useVision);
+      const browserState =
+        (await (context.browserContext as any)
+          .getSmartState?.(context.options.useVision)
+          .catch(() => context.browserContext.getState(context.options.useVision))) ||
+        (await context.browserContext.getState(context.options.useVision));
       const rawElementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
 
       let formattedElementsText = '';
@@ -54,8 +56,8 @@ abstract class BasePrompt {
       stepInfoDescription += `Current date and time: ${timeStr}`;
 
       let actionResultsDescription = '';
-      let extractionContent = '';  // Separate handling for extraction results (full content, temporary)
-      
+      let extractionContent = ''; // Separate handling for extraction results (full content, temporary)
+
       if (context.actionResults.length > 0) {
         // Keep only last 3 unique action result texts (to cap prompt bloat)
         const uniques: string[] = [];
@@ -65,10 +67,11 @@ abstract class BasePrompt {
           const result = context.actionResults[i];
           if (result.extractedContent) {
             const text = String(result.extractedContent);
-            
+
             // Separate extraction results (show full, temporary) from other results (truncate, persist)
             if (text.includes('Extraction completed successfully')) {
-              if (extractions.length === 0) {  // Keep only most recent extraction
+              if (extractions.length === 0) {
+                // Keep only most recent extraction
                 extractions.push(text);
               }
             } else {
@@ -86,14 +89,14 @@ abstract class BasePrompt {
             }
           }
         }
-        
+
         // Format non-extraction action results (truncated to 1,000 chars)
         const trimmed = uniques.reverse().map((text, idx) => {
-          const t = text.length > 1000 ? (text.slice(0, 1000) + '…[truncated]') : text;
+          const t = text.length > 1000 ? text.slice(0, 1000) + '…[truncated]' : text;
           return `Action ${idx + 1}/${uniques.length}: ${t}`;
         });
         if (trimmed.length > 0) actionResultsDescription = '\n' + trimmed.join('\n');
-        
+
         // Add extraction content FULL (no truncation) - agent needs complete content to process
         if (extractions.length > 0) {
           extractionContent = '\n\n' + extractions[0];
@@ -101,12 +104,17 @@ abstract class BasePrompt {
       }
 
       const currentTab = `{id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}}`;
-      const otherTabs = (browserState.tabs as Array<{ id: number; url: string; title: string }> | undefined)
-        ?.filter((tab: { id: number }) => tab.id !== browserState.tabId)
-        ?.map((tab: { id: number; url: string; title: string }) => `- {id: ${tab.id}, url: ${tab.url}, title: ${tab.title}}`) || [];
+      const otherTabs =
+        (browserState.tabs as Array<{ id: number; url: string; title: string }> | undefined)
+          ?.filter((tab: { id: number }) => tab.id !== browserState.tabId)
+          ?.map(
+            (tab: { id: number; url: string; title: string }) =>
+              `- {id: ${tab.id}, url: ${tab.url}, title: ${tab.title}}`,
+          ) || [];
       const stateDescription = `
-[Task history memory ends]
-[Current state starts here]
+</task_history>
+
+<browser_state>
 The following is one-time information - if you need to remember it write it to memory:
 Current tab: ${currentTab}
 Other available tabs:
@@ -116,6 +124,7 @@ ${formattedElementsText}
 ${stepInfoDescription}
 ${actionResultsDescription}
 ${extractionContent}
+</browser_state>
 `;
 
       if (browserState.screenshot && context.options.useVision) {
@@ -149,10 +158,12 @@ ${extractionContent}
         stepInfoDescription += `Current date and time: ${timeStr}`;
 
         const stateDescription = `
-[Task history memory ends]
-[Current state starts here]
+</task_history>
+
+<browser_state>
 No usable worker tab is currently bound (attach failed or in use). Use go_to_url, open_tab, or search_google to navigate to a page first.
 ${stepInfoDescription}
+</browser_state>
 `;
         return new HumanMessage(stateDescription);
       }
@@ -163,4 +174,3 @@ ${stepInfoDescription}
 }
 
 export { BasePrompt };
-

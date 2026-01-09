@@ -213,8 +213,9 @@ export function createMessageSender(deps: MessageSenderDeps) {
           type: 'start_multi_agent_workflow_v2',
           query: trimmedText.replace(/^\/(chat|search|agent|agentv2)\b\s*/i, ''),
           sessionId: sessionIdRef.current,
+          contextTabIds,
         } as any);
-        logger.log('start_multi_agent_workflow_v2 sent', trimmedText, sessionIdRef.current);
+        logger.log('start_multi_agent_workflow_v2 sent', trimmedText, sessionIdRef.current, contextTabIds);
         setCurrentTaskAgentType('multiagent');
       } else if (isFollowUpMode()) {
         await sendMessage({

@@ -4,20 +4,28 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 type SessionMessage = { actor: string; content: string; timestamp?: number };
 
 export interface BuildChatHistoryOptions {
-  latestTaskText?: string;           // exclude matching final user turn
-  maxTurns?: number;                 // optional cap on prior turns (pairs)
-  stripUserRequestTags?: boolean;    // default true
+  latestTaskText?: string; // exclude matching final user turn
+  maxTurns?: number; // optional cap on prior turns (pairs)
+  stripUserRequestTags?: boolean; // default true
 }
 
 const ASSISTANT_ACTORS = new Set<string>([
-  'system', 'chat', 'search', 'auto', 'multiagent', 
-  'agent_navigator', 'agent_validator', 'agent_planner',
+  'system',
+  'chat',
+  'search',
+  'auto',
+  'multiagent',
+  'agent_navigator',
+  'agent_validator',
+  'agent_planner',
 ]);
 
 function stripUserRequestBlocks(text: string): string {
   try {
-    return text.replace(/<\s*nano_user_request\s*>[\s\S]*?<\s*\/\s*nano_user_request\s*>/gi, '').trim();
-  } catch { return text; }
+    return text.replace(/<\s*user_request\s*>[\s\S]*?<\s*\/\s*user_request\s*>/gi, '').trim();
+  } catch {
+    return text;
+  }
 }
 
 export function buildChatHistoryBlock(
@@ -80,7 +88,7 @@ export function buildLLMMessagesWithHistory(
   messages.push(new SystemMessage(systemPrompt));
   const block = buildChatHistoryBlock(sessionMessages, { ...opts, latestTaskText });
   if (block) messages.push(new SystemMessage(block));
-  messages.push(new HumanMessage(`[User Request]\n${latestTaskText}`));
+  messages.push(new HumanMessage(`<user_request>\n${latestTaskText}\n</user_request>`));
   return messages;
 }
 
@@ -90,7 +98,7 @@ export function buildLLMMessagesWithHistory(
  */
 export async function getChatHistoryForSession(
   sessionId: string,
-  opts: BuildChatHistoryOptions = {}
+  opts: BuildChatHistoryOptions = {},
 ): Promise<string | null> {
   if (!sessionId) return null;
   try {
@@ -102,4 +110,3 @@ export async function getChatHistoryForSession(
     return null;
   }
 }
-

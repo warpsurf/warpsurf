@@ -36,6 +36,10 @@ export interface EventData {
   streamId?: string;
   /** Streaming: true on final chunk */
   isFinal?: boolean;
+  /** Current page URL when action was performed */
+  pageUrl?: string;
+  /** Current page title when action was performed */
+  pageTitle?: string;
 }
 
 export class AgentEvent {

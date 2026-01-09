@@ -72,6 +72,9 @@ interface ChatInputProps {
   isJobActive?: boolean;
   // Whether a stop request is pending confirmation
   isStopping?: boolean;
+  // Context tabs - lifted state from parent for persistence across renders
+  contextTabIds?: number[];
+  onContextTabsChange?: (tabIds: number[]) => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -95,11 +98,16 @@ export default function ChatInput({
   setAgentSelector,
   isJobActive = false,
   isStopping = false,
+  contextTabIds: externalContextTabIds,
+  onContextTabsChange,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<WorkflowType>(WorkflowType.AUTO);
-  const [contextTabIds, setContextTabIds] = useState<number[]>([]);
+  // Use external state if provided (for persistence), otherwise local state
+  const [localContextTabIds, setLocalContextTabIds] = useState<number[]>([]);
+  const contextTabIds = externalContextTabIds ?? localContextTabIds;
+  const setContextTabIds = onContextTabsChange ?? setLocalContextTabIds;
   const [textareaHeight, setTextareaHeight] = useState(DEFAULT_HEIGHT);
   const [isResizing, setIsResizing] = useState(false);
   const isSendButtonDisabled = useMemo(() => disabled || text.trim() === '', [disabled, text]);
@@ -216,11 +224,10 @@ export default function ChatInput({
         // Remove leading mode command if followed by content
         cleanText = cleanText.replace(/^\/(chat|search|agent|magent)\b\s*/i, '');
 
-        // Pass contextTabIds only for Agent workflow
-        const tabIds = selectedAgent === WorkflowType.AGENT ? contextTabIds : undefined;
-        onSendMessage(cleanText || text, selectedAgent, tabIds?.length ? tabIds : undefined);
+        // Pass contextTabIds to all workflows
+        onSendMessage(cleanText || text, selectedAgent, contextTabIds.length ? contextTabIds : undefined);
         setText('');
-        setContextTabIds([]);
+        // Don't clear context tabs - they persist until user removes them
         // Remember last manual choice; only reset if Auto
         setSelectedAgent(prev => (prev === WorkflowType.AUTO ? WorkflowType.AUTO : prev));
       }
@@ -324,8 +331,8 @@ export default function ChatInput({
 
         <div className={`flex items-center justify-between px-3 py-2`}>
           <div className="flex gap-2 text-gray-500 items-center">
-            {/* Tab Context Selector - only show for Agent workflow */}
-            {selectedAgent === WorkflowType.AGENT && !showStopButton && !historicalSessionId && (
+            {/* Tab Context Selector - available for all workflows */}
+            {!showStopButton && !historicalSessionId && (
               <TabContextSelector
                 selectedTabIds={contextTabIds}
                 onSelectionChange={setContextTabIds}

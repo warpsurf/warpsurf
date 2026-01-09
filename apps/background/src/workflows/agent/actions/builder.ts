@@ -245,17 +245,18 @@ export class ActionBuilder {
         return new ActionResult({ error: msg, includeInMemory: true });
       }
 
-      // Canonical strict JSON payload for downstream workers
+      // Canonical strict JSON payload for downstream workers - wrap as untrusted
       const payload = {
         type: 'search_links',
         links: list.map(({ title, url }) => ({ title, url })),
         urls: list.map(({ url }) => url),
       };
       const formatted = JSON.stringify(payload);
+      const wrappedContent = wrapUntrustedContent(formatted);
 
       const msg = `Extracted ${list.length} Google results${fromCache ? ' (cached)' : ''}`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-      return new ActionResult({ extractedContent: formatted, includeInMemory: !fromCache, success: true });
+      return new ActionResult({ extractedContent: wrappedContent, includeInMemory: !fromCache, success: true });
     }, extractGoogleResultsActionSchema);
     actions.push(extractGoogleResults);
 
@@ -362,9 +363,10 @@ export class ActionBuilder {
         });
       }
 
-      // Format the extracted content with clear metadata header
+      // Format the extracted content with clear metadata header, wrap as untrusted
       const metadataHeader = `Extraction completed successfully. Format: ${format}. Strategy: ${strategyUsed}. Length: ${content.length} characters${truncated ? ' (truncated)' : ''}.`;
-      const formattedContent = `${metadataHeader}\n\nExtracted content (${format}):\n${content}`;
+      const wrappedContent = wrapUntrustedContent(content);
+      const formattedContent = `${metadataHeader}\n\nExtracted content (${format}):\n${wrappedContent}`;
 
       return new ActionResult({
         extractedContent: formattedContent,
@@ -589,7 +591,7 @@ export class ActionBuilder {
     }, findAndClickTextActionSchema);
     actions.push(findAndClickText);
 
-    // Quick text scan (fast, non-interactive)
+    // Quick text scan (fast, non-interactive) - content wrapped as untrusted
     const quickTextScan = new Action(async (input: z.infer<typeof quickTextScanActionSchema.schema>) => {
       this.checkCancelled();
       const intent = input.intent || 'Quick text scan of page';
@@ -600,7 +602,8 @@ export class ActionBuilder {
       const content = (text || '').slice(0, maxChars);
       const msg = `Scanned ${content.length} chars`;
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
-      return new ActionResult({ extractedContent: content, includeInMemory: true, success: true });
+      const wrappedContent = wrapUntrustedContent(content);
+      return new ActionResult({ extractedContent: wrappedContent, includeInMemory: true, success: true });
     }, quickTextScanActionSchema);
     actions.push(quickTextScan);
 
