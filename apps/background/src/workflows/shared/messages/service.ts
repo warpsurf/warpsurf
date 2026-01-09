@@ -55,13 +55,15 @@ export default class MessageManager {
     this.addMessageWithTokens(systemMessage, 'init');
 
     // Add context message if provided
-    {/*
+    {
+      /*
     if (messageContext && messageContext.length > 0) {
       const contextMessage = new HumanMessage({
         content: `Context for the task: ${messageContext}`,
       });
       this.addMessageWithTokens(contextMessage, 'init');
-    }*/}
+    }*/
+    }
 
     // Add task instructions only if non-empty
     const normalizedTask = String(task || '').trim();
@@ -122,9 +124,9 @@ export default class MessageManager {
       this.addToolMessage('Browser started', toolCallId, 'init');
     }
 
-    // Add history start marker
+    // Add task history start marker
     const historyStartMessage = new HumanMessage({
-      content: '[Your task history memory starts here]',
+      content: '<task_history>',
     });
     this.addMessageWithTokens(historyStartMessage);
 
@@ -152,9 +154,10 @@ export default class MessageManager {
     // If the initial task is empty, do not inject an idle directive. Workers will receive
     // a precise subtask via addNewTask before any actions are taken.
     const normalized = String(task || '').trim();
-    const content = normalized.length > 0
-      ? `Your ultimate task is: """${normalized}""". If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task. If not, continue as usual.`
-      : '';
+    const content =
+      normalized.length > 0
+        ? `Your ultimate task is: """${normalized}""". If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task. If not, continue as usual.`
+        : '';
     const wrappedContent = content ? wrapUserRequest(content) : '';
     return new HumanMessage({ content: wrappedContent });
   }
@@ -225,15 +228,48 @@ export default class MessageManager {
       },
     ];
 
+    // Format action summary for readable logs
+    const actionSummary = this.formatActionSummary(modelOutput);
+
     const msg = new AIMessage({
-      content: 'tool call',
+      content: actionSummary,
       tool_calls: toolCalls,
     });
     this.addMessageWithTokens(msg);
 
-    // Need a placeholder for the tool response here to avoid errors sometimes
-    // NOTE: in browser-use, it uses an empty string
-    this.addToolMessage('tool call response', toolCallId);
+    // Placeholder for tool response (required for message alternation)
+    this.addToolMessage('Action executed', toolCallId);
+  }
+
+  /**
+   * Format model output into readable action summary
+   */
+  private formatActionSummary(modelOutput: Record<string, any>): string {
+    try {
+      const actions = modelOutput?.action;
+      if (!Array.isArray(actions) || actions.length === 0) {
+        return 'No actions';
+      }
+
+      const summaries: string[] = [];
+      for (const action of actions) {
+        if (!action || typeof action !== 'object') continue;
+        const actionName = Object.keys(action)[0];
+        if (!actionName) continue;
+        const params = action[actionName];
+        if (params && typeof params === 'object') {
+          const paramStr = Object.entries(params)
+            .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v}"` : v}`)
+            .join(', ');
+          summaries.push(`${actionName}(${paramStr})`);
+        } else {
+          summaries.push(`${actionName}()`);
+        }
+      }
+      return summaries.length > 0 ? summaries.join(' → ') : 'No actions';
+    } catch {
+      return 'Action';
+    }
   }
 
   /**
@@ -270,18 +306,18 @@ export default class MessageManager {
         const isHuman = ctor === 'HumanMessage';
         const isAI = ctor === 'AIMessage';
         const isSystem = ctor === 'SystemMessage';
-        const role = isHuman ? 'USER' : (isAI || isSystem ? 'ASSISTANT' : null);
+        const role = isHuman ? 'USER' : isAI || isSystem ? 'ASSISTANT' : null;
         let text = typeof m.content === 'string' ? m.content : '';
         if (!text) continue;
-        // Sanitize: strip any prior <nano_user_request> blocks so they don't appear in Chat History
+        // Sanitize: strip any prior <user_request> blocks so they don't appear in Chat History
         try {
           const start = USER_REQUEST_TAG_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const end = USER_REQUEST_TAG_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const re = new RegExp(`${start}[\\s\\S]*?${end}`, 'g');
           text = text.replace(re, '').trim();
         } catch {}
-        // Remove legacy markers
-        if (text.includes('[Your task history memory starts here]')) continue;
+        // Remove task history markers
+        if (text.includes('<task_history>')) continue;
         // Only include USER/ASSISTANT lines in Chat History; skip SYSTEM
         if (role) lines.push(`${role}: ${text}`);
       }
@@ -317,23 +353,23 @@ export default class MessageManager {
   }
 
   /**
-   * Insert a preformatted Chat History block immediately after the history marker, if present.
+   * Insert a preformatted Chat History block immediately after the task history marker, if present.
    * Falls back to appending at the end if the marker is not found.
    */
   public insertChatHistoryBlock(blockText: string): void {
-    const historyMarker = '[Your task history memory starts here]';
+    const historyMarker = '<task_history>';
     let insertAt: number | null = null;
     try {
       const msgs: any[] = (this as any).history?.messages || [];
       // Prefer to insert immediately after the first SystemMessage (the navigator system prompt)
       for (let i = 0; i < msgs.length; i++) {
         const m = msgs[i]?.message;
-        if (m && (m instanceof SystemMessage)) {
+        if (m && m instanceof SystemMessage) {
           insertAt = i + 1;
           break;
         }
       }
-      // Fallback: insert after legacy history marker if present
+      // Fallback: insert after task history marker if present
       if (insertAt == null) {
         for (let i = 0; i < msgs.length; i++) {
           const m = msgs[i]?.message;
@@ -352,7 +388,7 @@ export default class MessageManager {
     }
   }
 
-  // Note: Do not prune prior <nano_user_request> blocks here; agent step prompting depends on them.
+  // Note: Do not prune prior <user_request> blocks here; agent step prompting depends on them.
 
   /**
    * Remove any existing Chat History blocks from the current message history.
@@ -376,16 +412,18 @@ export default class MessageManager {
 
   /**
    * Upsert Chat History block: remove any existing Chat History blocks and insert the provided block
-   * immediately after the system prompt (or after the legacy history marker if present).
+   * immediately after the system prompt (or after the task history marker if present).
    */
   public upsertChatHistoryBlock(blockText: string): void {
-    try { this.removeChatHistoryBlocks(); } catch {}
+    try {
+      this.removeChatHistoryBlocks();
+    } catch {}
     this.insertChatHistoryBlock(blockText);
   }
 
   /**
    * Reset the message history to a fresh single-agent prompt scaffold:
-   * [System] + [Task instruction (Your ultimate task ...)] + [History marker].
+   * [System] + [Task instruction (Your ultimate task ...)] + [<task_history> marker].
    * Then the caller can insert Chat History via upsert/insert.
    *
    * If no systemMessage is provided, reuse the first SystemMessage from existing history if present.
@@ -397,7 +435,10 @@ export default class MessageManager {
         const msgs: any[] = (this as any).history?.messages || [];
         for (let i = 0; i < msgs.length; i++) {
           const m = msgs[i]?.message;
-          if (m && (m instanceof SystemMessage)) { sysMsg = m as SystemMessage; break; }
+          if (m && m instanceof SystemMessage) {
+            sysMsg = m as SystemMessage;
+            break;
+          }
         }
       }
     } catch {}
@@ -563,7 +604,7 @@ export default class MessageManager {
     const normalized = String(task || '').trim();
     const msg = MessageManager.taskInstructions(normalized);
     if (this.currentTaskIndex != null && this.currentTaskIndex >= 0 && this.currentTaskIndex < this.length()) {
-      // Replace the existing current task message in place to avoid multiple nano_user_request blocks
+      // Replace the existing current task message in place to avoid multiple user_request blocks
       // Remove old at index and insert new, preserving token counts via re-add
       (this as any).history.removeMessage(this.currentTaskIndex);
       this.addMessageWithTokens(msg, 'init', this.currentTaskIndex);
@@ -573,4 +614,3 @@ export default class MessageManager {
     }
   }
 }
-
