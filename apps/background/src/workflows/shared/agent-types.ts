@@ -102,11 +102,26 @@ export class AgentContext {
   }
 
   async emitEvent(actor: Actors, state: ExecutionState, eventDetails: string, additionalData?: Partial<EventData>) {
+    // Try to include current page URL for trajectory tracking
+    let pageUrl: string | undefined;
+    let pageTitle: string | undefined;
+    try {
+      const page = await this.browserContext.getCurrentPage();
+      if (page) {
+        pageUrl = page.url() || undefined;
+        pageTitle = await page.title().catch(() => undefined);
+      }
+    } catch {
+      // Ignore - page may not be available
+    }
+
     const event = new AgentEvent(actor, state, {
       taskId: this.taskId,
       step: this.nSteps,
       maxSteps: this.options.maxSteps,
       details: eventDetails,
+      ...(pageUrl && { pageUrl }),
+      ...(pageTitle && { pageTitle }),
       ...additionalData,
     });
     await this.eventManager.emit(event);
