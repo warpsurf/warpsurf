@@ -1,6 +1,6 @@
 {
   "name": "@warpsurf/background",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Warpsurf background service worker",
   "private": true,
   "type": "module",
