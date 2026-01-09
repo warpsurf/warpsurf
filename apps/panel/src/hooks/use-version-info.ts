@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const releaseNotes =
-    'Added streaming to response generation, user-selectable tab context, default temperatures, improved UI, and more.';
+    'Added context tabs to all workflows, improved agent trajectories, fixed agent previews, improved agent prompting.';
 
   useEffect(() => {
     try {
