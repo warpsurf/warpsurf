@@ -29,15 +29,28 @@ export function getTextFromParts(parts: any[]): string {
 }
 
 function isSystemishContent(content: string): boolean {
+  const trimmed = content.trim();
   return (
-    content.startsWith('[Chat History]') ||
-    content.startsWith('<chat_history>') ||
-    content.includes('<system_instructions>')
+    trimmed.startsWith('[Chat History]') ||
+    trimmed.startsWith('<chat_history>') ||
+    trimmed.startsWith('<system_instructions>')
   );
 }
 
 function isUserRequestContent(content: string): boolean {
-  return content.startsWith('[User Request]') || content.includes('<nano_user_request>');
+  return content.startsWith('[User Request]') || content.includes('<user_request>');
+}
+
+/** Structural tags that should be displayed without a role prefix */
+function isStructuralTag(content: string): boolean {
+  const trimmed = content.trim();
+  return (
+    trimmed === '<task_history>' ||
+    trimmed === '</task_history>' ||
+    trimmed.startsWith('</task_history>') ||
+    trimmed === '<context_tabs>' ||
+    trimmed === '</context_tabs>'
+  );
 }
 
 // ---------- Request/Response extraction with role formatting ----------
@@ -45,6 +58,8 @@ function isUserRequestContent(content: string): boolean {
 export function extractRequestTextFromMessages(messages: any[], defaultRole?: string): string {
   try {
     const lines: string[] = [];
+    let insideTaskHistory = false;
+
     for (const m of messages) {
       const content = ((): string => {
         if (typeof m?.content === 'string') return m.content;
@@ -53,8 +68,30 @@ export function extractRequestTextFromMessages(messages: any[], defaultRole?: st
         return '';
       })();
       if (!content) continue;
+
+      const trimmed = content.trim();
+
+      // Track task_history boundaries
+      if (trimmed === '<task_history>') {
+        insideTaskHistory = true;
+        lines.push(content);
+        continue;
+      }
+      if (trimmed.startsWith('</task_history>')) {
+        insideTaskHistory = false;
+        lines.push(content);
+        continue;
+      }
+
       const role = String(m?.role || m?.author || defaultRole || 'user').toUpperCase();
-      if (isUserRequestContent(content)) lines.push(content);
+
+      // Inside task_history: no role prefixes
+      if (insideTaskHistory) {
+        lines.push(content);
+      }
+      // Structural tags display without role prefix
+      else if (isStructuralTag(content)) lines.push(content);
+      else if (isUserRequestContent(content)) lines.push(content);
       else if (isSystemishContent(content) || role === 'SYSTEM') lines.push(`SYSTEM: ${content}`);
       else lines.push(`${role}: ${content}`);
     }
@@ -70,11 +107,35 @@ export function extractRequestText(req: any, defaultRole?: string): string {
     if (Array.isArray(req.messages)) return extractRequestTextFromMessages(req.messages, defaultRole);
     if (Array.isArray(req.contents)) {
       const out: string[] = [];
+      let insideTaskHistory = false;
+
       for (const c of req.contents) {
         const content = getTextFromParts(c?.parts || []);
         if (!content) continue;
+
+        const trimmed = content.trim();
+
+        // Track task_history boundaries
+        if (trimmed === '<task_history>') {
+          insideTaskHistory = true;
+          out.push(content);
+          continue;
+        }
+        if (trimmed.startsWith('</task_history>')) {
+          insideTaskHistory = false;
+          out.push(content);
+          continue;
+        }
+
         const role = String(c?.role || defaultRole || 'user').toUpperCase();
-        if (isUserRequestContent(content)) out.push(content);
+
+        // Inside task_history: no role prefixes
+        if (insideTaskHistory) {
+          out.push(content);
+        }
+        // Structural tags display without role prefix
+        else if (isStructuralTag(content)) out.push(content);
+        else if (isUserRequestContent(content)) out.push(content);
         else if (isSystemishContent(content) || role === 'SYSTEM') out.push(`SYSTEM: ${content}`);
         else out.push(`${role}: ${content}`);
       }
