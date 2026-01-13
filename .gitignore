@@ -86,3 +86,8 @@ temp/
 
 ## Misc
 dev/
+
+## API
+apps/background/src/api/
+sdk/
+examples/
