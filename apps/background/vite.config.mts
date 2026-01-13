@@ -3,7 +3,7 @@ import { defineConfig, type PluginOption } from "vite";
 import libAssetsPlugin from '@laynezh/vite-plugin-lib-assets';
 import makeManifestPlugin from './utils/plugins/make-manifest-plugin';
 import { watchPublicPlugin, watchRebuildPlugin } from '@extension/hmr';
-import { isDev, isProduction, isStore, watchOption } from '@extension/vite-config';
+import { isDev, isProduction, isStore, isAPI, watchOption } from '@extension/vite-config';
 
 const rootDir = resolve(__dirname);
 const srcDir = resolve(rootDir, 'src');
@@ -72,6 +72,7 @@ export default defineConfig({
   define: {
     'import.meta.env.DEV': isDev,
     'import.meta.env.STORE': isStore,
+    'import.meta.env.API': isAPI,
   },
 
   envDir: '../../',

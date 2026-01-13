@@ -15,6 +15,7 @@
     "build": "pnpm clean:bundle && turbo ready && turbo build",
     "build:dev": "cross-env LOG_LEVEL=debug pnpm -w run build",
     "build:store": "(pnpm generate-pricing-cache || true) && (pnpm generate-latency-cache || true) && pnpm clean:bundle && turbo ready && cross-env __STORE__=true LOG_LEVEL=error turbo build",
+    "build:api": "pnpm clean:bundle && turbo ready && cross-env __API__=true turbo build",
     "zip": "pnpm build && pnpm -F zipper zip",
     "zip:store": "pnpm build:store && cross-env __STORE__=true pnpm -F zipper zip",
     "dev": "turbo ready && cross-env __DEV__=true turbo watch dev --concurrency 20",
