@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actors, chatHistoryStore } from '@extension/storage';
+import { ExecutionState } from '@extension/shared/lib/utils';
 import { computeRequestSummaryFromSessionLogs } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
 import { createAggregateRoot, addTraceItem, updateAggregateRootContent } from './handlers/utils';
@@ -13,7 +14,10 @@ export function createPanelHandlers(deps: any): any {
       try {
         // Prefer using SidePanel-provided setter when available to prefill input
         if (typeof (deps as any)?.setInputTextRef?.current === 'function') {
-          try { (deps as any).setInputTextRef.current(text); return; } catch {}
+          try {
+            (deps as any).setInputTextRef.current(text);
+            return;
+          } catch {}
         }
       } catch {}
       // Fallback: append as a user message so the intent is visible, user can press send
@@ -30,7 +34,7 @@ export function createPanelHandlers(deps: any): any {
           const now = Date.now();
           const last = win.__lastExecKeys.get(key) as number | undefined;
           const isTerminal = String((event as any).state).startsWith('task.');
-          if (isTerminal && last && (now - last) < 1000) return; // suppress rapid duplicates
+          if (isTerminal && last && now - last < 1000) return; // suppress rapid duplicates
           if (isTerminal) win.__lastExecKeys.set(key, now);
         } catch {}
         (deps.taskEventHandler as any)(event);
@@ -88,7 +92,7 @@ export function createPanelHandlers(deps: any): any {
     onWorkflowPlanDataset: (message: any) => {
       try {
         const ds = (message as any)?.data?.dataset;
-        if (ds) deps.setMessageMetadata((prev: any) => ({ ...prev, __workflowPlanDataset: ds } as any));
+        if (ds) deps.setMessageMetadata((prev: any) => ({ ...prev, __workflowPlanDataset: ds }) as any);
       } catch {}
     },
     onWorkflowProgress: (message: any) => {
@@ -97,14 +101,14 @@ export function createPanelHandlers(deps: any): any {
         const workerId = (message as any)?.data?.workerId;
         const actorHint = (message as any)?.data?.actor;
         const timestamp = Date.now();
-        
+
         // Handle cancel messages
         try {
           const lowered = String(text).toLowerCase();
           if (lowered.includes('cancel')) {
             let shouldAppend = false;
             deps.setMessageMetadata((prev: any) => {
-              const already = !!((prev as any)?.__cancelMessageShown);
+              const already = !!(prev as any)?.__cancelMessageShown;
               const g = ((prev as any)?.__workflowGraph as any) || ((prev as any)?.__workflowGraphInitial as any);
               let transformed = g;
               let completedIds: number[] = Array.isArray((prev as any)?.__workflowCompletedAtCancel)
@@ -115,7 +119,10 @@ export function createPanelHandlers(deps: any): any {
                 const keepCompleted = new Set(completedIds);
                 transformed = {
                   ...g,
-                  nodes: g.nodes.map((n: any) => ({ ...n, status: keepCompleted.has(Number(n.id)) ? 'completed' : 'cancelled' })),
+                  nodes: g.nodes.map((n: any) => ({
+                    ...n,
+                    status: keepCompleted.has(Number(n.id)) ? 'completed' : 'cancelled',
+                  })),
                 };
               }
               const next: any = {
@@ -131,40 +138,50 @@ export function createPanelHandlers(deps: any): any {
             if (shouldAppend) {
               if (deps.lastAgentMessageRef.current) {
                 const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
-                deps.setMessages((prev: any) => prev.map((m: any) => ((`${m.timestamp}-${m.actor}` === rootMsgId) ? { ...m, content: 'Task cancelled' } : m)));
+                deps.setMessages((prev: any) =>
+                  prev.map((m: any) =>
+                    `${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m,
+                  ),
+                );
               }
               deps.setShowStopButton(false);
               deps.setInputEnabled(true);
-              try { deps.setShowInlineWorkflow(false); } catch {}
+              try {
+                deps.setShowInlineWorkflow(false);
+              } catch {}
             }
           }
         } catch {}
-        
+
         // Only create aggregate message for browser-use or multi-agent workflows
-        const isAppropriateWorkflow = deps.getCurrentTaskAgentType?.() === 'agent' || 
-                                      deps.getCurrentTaskAgentType?.() === 'multiagent' ||
-                                      actorHint === 'multiagent';
+        const isAppropriateWorkflow =
+          deps.getCurrentTaskAgentType?.() === 'agent' ||
+          deps.getCurrentTaskAgentType?.() === 'multiagent' ||
+          actorHint === 'multiagent';
         if (!isAppropriateWorkflow) return;
-        
+
         // Use the SAME utilities as single-agent workflow for consistency
         const actorToUse = actorHint === 'multiagent' ? Actors.MULTIAGENT : Actors.AGENT_NAVIGATOR;
         const traceActor = actorHint || Actors.SYSTEM;
-        
+
         if (text) {
           if (!deps.agentTraceRootIdRef.current) {
             createAggregateRoot(actorToUse, text, timestamp, deps);
           }
           addTraceItem(traceActor, text, timestamp, deps);
         }
-        
+
         // Update the main message content for phase lines
         try {
-          const isPhaseLine = /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|\d+\s+workers executing plan)\b/i.test(text);
+          const isPhaseLine =
+            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|\d+\s+workers executing plan)\b/i.test(
+              text,
+            );
           if (isPhaseLine) {
             updateAggregateRootContent(text, deps);
           }
         } catch {}
-        
+
         // Handle worker-specific items
         if (workerId && deps.agentTraceRootIdRef.current) {
           const rootId = deps.agentTraceRootIdRef.current;
@@ -173,13 +190,19 @@ export function createPanelHandlers(deps: any): any {
             const workerKey = String(workerId);
             const prevWorkerItems: Array<any> = Array.isArray(existing.workerItems) ? existing.workerItems : [];
             const without = prevWorkerItems.filter((w: any) => String(w.workerId) !== workerKey);
-            const item = { workerId: workerKey, text, agentName: `Web Agent ${workerKey}`, color: existing.agentColor || '#A78BFA', timestamp };
+            const item = {
+              workerId: workerKey,
+              text,
+              agentName: `Web Agent ${workerKey}`,
+              color: existing.agentColor || '#A78BFA',
+              timestamp,
+            };
             return {
               ...prev,
               [rootId]: {
                 ...existing,
                 workerItems: [...without, item],
-                totalWorkers: Math.max((existing.totalWorkers || 0), without.length + 1),
+                totalWorkers: Math.max(existing.totalWorkers || 0, without.length + 1),
               },
             };
           });
@@ -195,12 +218,23 @@ export function createPanelHandlers(deps: any): any {
         if (isAgentV2 && hasAggregate) {
           const rootId = deps.agentTraceRootIdRef.current as string;
           // Update the existing Agent v2 aggregate message instead of appending a SYSTEM line
-          deps.setMessages((prev: any) => prev.map((m: any) => ((`${m.timestamp}-${m.actor}` === rootId) ? { ...m, content: text } : m)));
+          deps.setMessages((prev: any) =>
+            prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootId ? { ...m, content: text } : m)),
+          );
           // Add a trace item to the aggregate metadata for auditability
           deps.setMessageMetadata((prev: any) => {
             const existing: any = prev[rootId] || {};
             const traceItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
-            return { ...prev, [rootId]: { ...existing, traceItems: [...traceItems, { actor: (deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT), content: text, timestamp: ts }] } } as any;
+            return {
+              ...prev,
+              [rootId]: {
+                ...existing,
+                traceItems: [
+                  ...traceItems,
+                  { actor: deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT, content: text, timestamp: ts },
+                ],
+              },
+            } as any;
           });
           // Persist as Agent v2 actor (OVERSEER aggregate) in history
           try {
@@ -218,7 +252,9 @@ export function createPanelHandlers(deps: any): any {
         }
       }
       deps.setInputEnabled(true);
-      try { deps.setShowInlineWorkflow(false); } catch {}
+      try {
+        deps.setShowInlineWorkflow(false);
+      } catch {}
     },
     onWorkflowEnded: (message: any) => {
       try {
@@ -252,32 +288,50 @@ export function createPanelHandlers(deps: any): any {
                   const summary = {
                     inputTokens: Number(s.totalInputTokens) || 0,
                     outputTokens: Number(s.totalOutputTokens) || 0,
-                    latency: (s.totalLatencySeconds ?? (s.totalLatencyMs ? (s.totalLatencyMs/1000).toFixed(2) : '0.00')).toString(),
+                    latency: (
+                      s.totalLatencySeconds ?? (s.totalLatencyMs ? (s.totalLatencyMs / 1000).toFixed(2) : '0.00')
+                    ).toString(),
                     cost: Number(s.totalCost) || 0,
                     apiCalls: Number(s.apiCallCount) || 0,
                     modelName: s.modelName,
                     provider: s.provider,
                   } as any;
                   const next = { ...prev, [cancelMsgId]: { ...(existing || {}), ...summary } } as any;
-                  try { if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next); } catch {}
+                  try {
+                    if (deps.sessionIdRef.current)
+                      chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next);
+                  } catch {}
                   return next;
                 });
               }
             }
-        } catch {}
-        // Mark final processed for this session to avoid double counting when session_logs arrives
-        try {
-          const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
-          if (sid) deps.processedJobSummariesRef.current.add(`${sid}:final`);
-        } catch {}
+          } catch {}
+          // Mark final processed for this session to avoid double counting when session_logs arrives
+          try {
+            const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
+            if (sid) deps.processedJobSummariesRef.current.add(`${sid}:final`);
+          } catch {}
           try {
             deps.setMessageMetadata((prev: any) => {
               const g = ((prev as any)?.__workflowGraph as any) || ((prev as any)?.__workflowGraphInitial as any);
               if (!g || !Array.isArray(g.nodes)) return { ...prev, __workflowCancelled: true } as any;
-              const completedIds: number[] = g.nodes.filter((n: any) => n.status === 'completed').map((n: any) => Number(n.id));
+              const completedIds: number[] = g.nodes
+                .filter((n: any) => n.status === 'completed')
+                .map((n: any) => Number(n.id));
               const keepCompleted = new Set(completedIds);
-              const transformed = { ...g, nodes: g.nodes.map((n: any) => ({ ...n, status: keepCompleted.has(Number(n.id)) ? 'completed' : 'cancelled' })) };
-              return { ...prev, __workflowGraph: transformed, __workflowCancelled: true, __workflowCompletedAtCancel: completedIds } as any;
+              const transformed = {
+                ...g,
+                nodes: g.nodes.map((n: any) => ({
+                  ...n,
+                  status: keepCompleted.has(Number(n.id)) ? 'completed' : 'cancelled',
+                })),
+              };
+              return {
+                ...prev,
+                __workflowGraph: transformed,
+                __workflowCancelled: true,
+                __workflowCompletedAtCancel: completedIds,
+              } as any;
             });
           } catch {}
         } else if (data.ok === true) {
@@ -289,7 +343,16 @@ export function createPanelHandlers(deps: any): any {
               deps.setMessageMetadata((prev: any) => {
                 const existing: any = prev[rootId] || {};
                 const traceItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
-                return { ...prev, [rootId]: { ...existing, traceItems: [...traceItems, { actor: Actors.SYSTEM, content: 'Workflow completed', timestamp: Date.now() }] } } as any;
+                return {
+                  ...prev,
+                  [rootId]: {
+                    ...existing,
+                    traceItems: [
+                      ...traceItems,
+                      { actor: Actors.SYSTEM, content: 'Workflow completed', timestamp: Date.now() },
+                    ],
+                  },
+                } as any;
               });
             }
           }
@@ -297,19 +360,28 @@ export function createPanelHandlers(deps: any): any {
       } catch {}
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
-      try { deps.setIsFollowUpMode(true); } catch {}
-      try { deps.setShowInlineWorkflow(false); } catch {}
+      try {
+        deps.setIsFollowUpMode(true);
+      } catch {}
+      try {
+        deps.setShowInlineWorkflow(false);
+      } catch {}
       try {
         const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
         const setInFlight: Set<string> | undefined = (window as any).__v2InFlight;
         if (sid && setInFlight && setInFlight.has(sid)) setInFlight.delete(sid);
       } catch {}
       try {
-        if ((deps.getWorkerTabGroups?.() || []).length > 0 || deps.getCurrentTaskAgentType?.() === 'multiagent') deps.setShowCloseTabs(true);
+        if ((deps.getWorkerTabGroups?.() || []).length > 0 || deps.getCurrentTaskAgentType?.() === 'multiagent')
+          deps.setShowCloseTabs(true);
       } catch {}
       try {
         const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
-        if (deps.getCurrentTaskAgentType?.() === 'multiagent' && sid && deps.portRef.current?.name === 'side-panel-connection') {
+        if (
+          deps.getCurrentTaskAgentType?.() === 'multiagent' &&
+          sid &&
+          deps.portRef.current?.name === 'side-panel-connection'
+        ) {
           deps.portRef.current.postMessage({ type: 'get_session_logs', sessionId: sid });
         }
       } catch {}
@@ -334,7 +406,9 @@ export function createPanelHandlers(deps: any): any {
           const existing = (prev as any)[messageId];
           if (existing && Number(existing.latency) > 0 && Number(summary.latency) === 0) return prev;
           const next = { ...prev, [messageId]: summary } as any;
-          try { if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next); } catch {}
+          try {
+            if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next);
+          } catch {}
           return next;
         });
 
@@ -345,7 +419,9 @@ export function createPanelHandlers(deps: any): any {
             deps.setRequestSummaries((prev: any) => {
               const existing = (prev as any)[cancelMsgId];
               const next = { ...prev, [cancelMsgId]: { ...(existing || {}), ...summary } } as any;
-              try { if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next); } catch {}
+              try {
+                if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next);
+              } catch {}
               return next;
             });
           }
@@ -361,10 +437,11 @@ export function createPanelHandlers(deps: any): any {
     },
     onError: (message: any) => {
       if (deps.setHistoryContextLoading) deps.setHistoryContextLoading(false);
-      
+
       const msgText = message.error || '';
       if (msgText && msgText !== 'Unknown message type') {
-        const isAbortLike = String(msgText).toLowerCase().includes('abort') || String(msgText).toLowerCase().includes('cancel');
+        const isAbortLike =
+          String(msgText).toLowerCase().includes('abort') || String(msgText).toLowerCase().includes('cancel');
         if (!isAbortLike) {
           const now = Date.now();
           if (msgText !== lastErrorContent || now - lastErrorTime > 2000) {
@@ -377,20 +454,31 @@ export function createPanelHandlers(deps: any): any {
       }
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
-      try { deps.setIsJobActive?.(false); } catch {}
-      try { deps.setIsPaused?.(false); } catch {}
-      try { deps.setShowInlineWorkflow?.(false); } catch {}
+      try {
+        deps.setIsJobActive?.(false);
+      } catch {}
+      try {
+        deps.setIsPaused?.(false);
+      } catch {}
+      try {
+        deps.setShowInlineWorkflow?.(false);
+      } catch {}
     },
     onTokenLog: (message: any) => {
-      try { if (message?.data && Array.isArray(message.data)) deps.setTokenLog?.(message.data); } catch {}
-      try { handleTokenLogForCancel(message, deps.cancelSummaryTargetsRef, deps.setRequestSummaries, deps.sessionIdRef); } catch {}
+      try {
+        if (message?.data && Array.isArray(message.data)) deps.setTokenLog?.(message.data);
+      } catch {}
+      try {
+        handleTokenLogForCancel(message, deps.cancelSummaryTargetsRef, deps.setRequestSummaries, deps.sessionIdRef);
+      } catch {}
     },
     onTabsClosed: (message: any) => {
       const closedTaskId = message.taskId ? String(message.taskId) : '';
       const closedGroupId = typeof message.groupId === 'number' ? Number(message.groupId) : undefined;
       deps.setWorkerTabGroups((prev: any[]) => {
         let next = prev;
-        if (typeof closedGroupId === 'number') next = prev.filter((g: any) => Number((g as any).groupId) !== closedGroupId);
+        if (typeof closedGroupId === 'number')
+          next = prev.filter((g: any) => Number((g as any).groupId) !== closedGroupId);
         else if (closedTaskId) next = prev.filter((g: any) => String(g.taskId) !== closedTaskId);
         if (next.length === 0) deps.setShowCloseTabs(false);
         return next;
@@ -425,22 +513,44 @@ export function createPanelHandlers(deps: any): any {
         if (!targetSessionId || targetSessionId !== currentSession) return;
 
         if (deps.jobActiveRef.current) deps.setShowStopButton(true);
-        try { if (data.agentId) deps.closableTaskIdsRef.current.add(String(data.agentId)); } catch {}
+        try {
+          if (data.agentId) deps.closableTaskIdsRef.current.add(String(data.agentId));
+        } catch {}
 
         try {
           if (deps.portRef.current?.name === 'side-panel-connection' && deps.sessionIdRef.current) {
-            deps.portRef.current.postMessage({ type: 'preview_visibility', sessionId: deps.sessionIdRef.current, visible: true });
+            deps.portRef.current.postMessage({
+              type: 'preview_visibility',
+              sessionId: deps.sessionIdRef.current,
+              visible: true,
+            });
           }
         } catch {}
         deps.setMirrorPreview((prev: any) => {
           // If tabId changed, this is a new tab - replace entirely to avoid stale data
           if (data.tabId && data.tabId !== prev?.tabId) {
-            return { url: data.url || '', title: data.title || '', screenshot: data.screenshot, tabId: data.tabId, color: data.color };
+            return {
+              url: data.url || '',
+              title: data.title || '',
+              screenshot: data.screenshot,
+              tabId: data.tabId,
+              color: data.color,
+            };
           }
           // Same tab - merge incremental updates
-          const hasChanges = data.url !== prev?.url || data.title !== prev?.title || data.screenshot !== prev?.screenshot || data.color !== prev?.color;
+          const hasChanges =
+            data.url !== prev?.url ||
+            data.title !== prev?.title ||
+            data.screenshot !== prev?.screenshot ||
+            data.color !== prev?.color;
           if (!hasChanges) return prev;
-          return { url: data.url || prev?.url, title: data.title || prev?.title, screenshot: data.screenshot || prev?.screenshot, tabId: prev?.tabId, color: data.color || prev?.color };
+          return {
+            url: data.url || prev?.url,
+            title: data.title || prev?.title,
+            screenshot: data.screenshot || prev?.screenshot,
+            tabId: prev?.tabId,
+            color: data.color || prev?.color,
+          };
         });
         try {
           if (deps.agentTraceRootIdRef.current && data.color) {
@@ -460,7 +570,9 @@ export function createPanelHandlers(deps: any): any {
       const currentSession = deps.sessionIdRef.current ? String(deps.sessionIdRef.current) : '';
       // Hard session gate: if no active session, ignore batches entirely
       if (!currentSession) return;
-      let filteredAll = (arr as Array<any>).filter((d: any) => String((d as any)?.sessionId || (d as any)?.agentId || '') === currentSession);
+      let filteredAll = (arr as Array<any>).filter(
+        (d: any) => String((d as any)?.sessionId || (d as any)?.agentId || '') === currentSession,
+      );
 
       if (filteredAll.length === 0) {
         // Preserve last preview if job already ended; only clear during active runs
@@ -497,11 +609,13 @@ export function createPanelHandlers(deps: any): any {
           if (!prev || (d?.lastUpdated || 0) > (prev?.lastUpdated || 0)) latestByAgent.set(key, d);
         }
 
-        const groups: Array<{ taskId: string; name: string; color: string }> = (deps.getWorkerTabGroups?.() || []) as any;
+        const groups: Array<{ taskId: string; name: string; color: string }> = (deps.getWorkerTabGroups?.() ||
+          []) as any;
         const batch = Array.from(latestByAgent.values()).map((d: any) => {
           const id = String(d?.agentId || '');
           // Prefer authoritative workerIndex from backend over first-seen ordinal
-          let ordinal = typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
+          let ordinal =
+            typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
           let name = `Web Agent ${ordinal}`;
           try {
             const mapped = groups.find((g: any) => String(g.taskId) === id);
@@ -511,7 +625,16 @@ export function createPanelHandlers(deps: any): any {
               if (m && m[1]) ordinal = Number(m[1]);
             }
           } catch {}
-          return { url: d?.url, title: d?.title, screenshot: d?.screenshot, tabId: d?.tabId, color: d?.color, agentId: d?.agentId, agentOrdinal: ordinal, agentName: name };
+          return {
+            url: d?.url,
+            title: d?.title,
+            screenshot: d?.screenshot,
+            tabId: d?.tabId,
+            color: d?.color,
+            agentId: d?.agentId,
+            agentOrdinal: ordinal,
+            agentName: name,
+          };
         });
 
         deps.logger.log('[Panel] Setting mirror preview batch:', batch.length, 'items');
@@ -525,16 +648,24 @@ export function createPanelHandlers(deps: any): any {
           batch.forEach((p: any, idx: number) => {
             const id = String(p.agentId || `agent-${idx + 1}`);
             const color = String(p.color || '#A78BFA');
-            const name = String(p.agentName || '').trim() || `Web Agent ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
+            const name =
+              String(p.agentName || '').trim() || `Web Agent ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
             if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color });
           });
           const groupsNext = Array.from(groupsMap.values());
           if (groupsNext.length > 0) deps.setWorkerTabGroups(groupsNext);
         } catch {}
-
       } else {
-        const chosen = filteredAll.slice().sort((a: any, b: any) => (b?.lastUpdated || 0) - (a?.lastUpdated || 0))[0] as any;
-        deps.setMirrorPreview({ url: chosen?.url, title: chosen?.title, screenshot: chosen?.screenshot, tabId: chosen?.tabId, color: chosen?.color });
+        const chosen = filteredAll
+          .slice()
+          .sort((a: any, b: any) => (b?.lastUpdated || 0) - (a?.lastUpdated || 0))[0] as any;
+        deps.setMirrorPreview({
+          url: chosen?.url,
+          title: chosen?.title,
+          screenshot: chosen?.screenshot,
+          tabId: chosen?.tabId,
+          color: chosen?.color,
+        });
         try {
           if (deps.agentTraceRootIdRef.current && chosen?.color) {
             const rootId = deps.agentTraceRootIdRef.current as string;
@@ -559,7 +690,8 @@ export function createPanelHandlers(deps: any): any {
           const id = String(d?.agentId || '').trim();
           if (!id) continue;
           // Prefer authoritative workerIndex from backend
-          const ordinal = typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
+          const ordinal =
+            typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
           const name = `Web Agent ${ordinal}`;
           const color = String(d?.color || '#A78BFA');
           const groupId = typeof d?.groupId === 'number' ? d.groupId : undefined;
@@ -610,16 +742,16 @@ export function createPanelHandlers(deps: any): any {
         }
         if (active) {
           const windowHours = (message as any)?.windowHours || 24;
-          
+
           // Set "just completed" state for 1 minute
           if (deps.setHistoryJustCompleted) {
             deps.setHistoryJustCompleted(true);
-            
+
             // Clear any existing timer
             if (deps.historyCompletedTimerRef?.current) {
               clearTimeout(deps.historyCompletedTimerRef.current);
             }
-            
+
             // Set timer to clear after 60 seconds
             deps.historyCompletedTimerRef.current = window.setTimeout(() => {
               if (deps.setHistoryJustCompleted) {
@@ -627,7 +759,7 @@ export function createPanelHandlers(deps: any): any {
               }
             }, 60000);
           }
-          
+
           // Show toast notification instead of chat message
           if (deps.showToast) {
             deps.showToast(`✓ History context loaded (${windowHours}h window)`);
@@ -650,7 +782,7 @@ export function createPanelHandlers(deps: any): any {
     /** Handles confirmation of cancel_task from backend */
     onCancelTaskResult: (message: any) => {
       const data = (message as any)?.data || message || {};
-      
+
       // Clear timeout and reset cancellation tracking
       if (deps.cancelTimeoutRef?.current) {
         clearTimeout(deps.cancelTimeoutRef.current);
@@ -658,20 +790,20 @@ export function createPanelHandlers(deps: any): any {
       }
       if (deps.isCancellingRef) deps.isCancellingRef.current = false;
       deps.setIsStopping?.(false);
-      
+
       if (data.success) {
         deps.setIsJobActive?.(false);
         deps.setInputEnabled(true);
         deps.setShowStopButton(false);
         deps.setIsPaused?.(false);
-        
+
         // Stop animations - mark aggregate message as completed and update content
         const rootId = deps.agentTraceRootIdRef?.current;
         if (deps.lastAgentMessageRef?.current) {
           const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
-          deps.setMessages?.((prev: any[]) => prev.map((m: any) => 
-            `${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m
-          ));
+          deps.setMessages?.((prev: any[]) =>
+            prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
+          );
         }
         deps.setMessageMetadata?.((prev: any) => {
           const update: any = { ...prev, __workflowCancelled: true };
@@ -681,7 +813,7 @@ export function createPanelHandlers(deps: any): any {
         deps.agentTraceRootIdRef && (deps.agentTraceRootIdRef.current = null);
         deps.agentTraceActiveRef && (deps.agentTraceActiveRef.current = false);
         deps.setAgentTraceRootId?.(null);
-        
+
         // Show Close Tabs if there were workers
         const hasWorkers = (deps.getWorkerTabGroups?.() || []).length > 0;
         if (hasWorkers || deps.getCurrentTaskAgentType?.() === 'multiagent' || data.workflowCancelled) {
@@ -689,17 +821,17 @@ export function createPanelHandlers(deps: any): any {
         }
       } else {
         // Cancellation failed - keep stop button visible for retry
-        deps.appendMessage({ 
-          actor: Actors.SYSTEM, 
-          content: `Failed to stop: ${data.error || 'Cancellation failed'}. Try Emergency Stop if the issue persists.`, 
-          timestamp: Date.now() 
+        deps.appendMessage({
+          actor: Actors.SYSTEM,
+          content: `Failed to stop: ${data.error || 'Cancellation failed'}. Try Emergency Stop if the issue persists.`,
+          timestamp: Date.now(),
         });
         deps.setInputEnabled(true);
       }
     },
     onKillAllComplete: (message: any) => {
       const data = (message as any)?.data || {};
-      
+
       // Clear any pending cancellation state
       if (deps.cancelTimeoutRef?.current) {
         clearTimeout(deps.cancelTimeoutRef.current);
@@ -707,14 +839,14 @@ export function createPanelHandlers(deps: any): any {
       }
       if (deps.isCancellingRef) deps.isCancellingRef.current = false;
       deps.setIsStopping?.(false);
-      
+
       // Stop animations - mark aggregate message as completed and update content
       const rootId = deps.agentTraceRootIdRef?.current;
       if (deps.lastAgentMessageRef?.current) {
         const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
-        deps.setMessages?.((prev: any[]) => prev.map((m: any) => 
-          `${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m
-        ));
+        deps.setMessages?.((prev: any[]) =>
+          prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
+        );
       }
       deps.setMessageMetadata?.((prev: any) => {
         const update: any = { ...prev, __workflowCancelled: true };
@@ -724,7 +856,7 @@ export function createPanelHandlers(deps: any): any {
       deps.agentTraceRootIdRef && (deps.agentTraceRootIdRef.current = null);
       deps.agentTraceActiveRef && (deps.agentTraceActiveRef.current = false);
       deps.setAgentTraceRootId?.(null);
-      
+
       // Reset all UI state
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
@@ -735,23 +867,177 @@ export function createPanelHandlers(deps: any): any {
       deps.setMirrorPreview?.(null);
       deps.setMirrorPreviewBatch?.([]);
       deps.setHasFirstPreview?.(false);
-      
+
       if (data.success) {
-        deps.appendMessage({ 
-          actor: Actors.SYSTEM, 
-          content: `**Emergency stop complete**\nTerminated: ${data.killedWorkflows || 0} workflows, ${data.killedTasks || 0} tasks, ${data.killedMirrors || 0} previews`, 
-          timestamp: Date.now() 
+        deps.appendMessage({
+          actor: Actors.SYSTEM,
+          content: `**Emergency stop complete**\nTerminated: ${data.killedWorkflows || 0} workflows, ${data.killedTasks || 0} tasks, ${data.killedMirrors || 0} previews`,
+          timestamp: Date.now(),
         });
       } else if (data.error) {
-        deps.appendMessage({ 
-          actor: Actors.SYSTEM, 
-          content: `Emergency stop encountered issues: ${data.error}`, 
-          timestamp: Date.now() 
+        deps.appendMessage({
+          actor: Actors.SYSTEM,
+          content: `Emergency stop encountered issues: ${data.error}`,
+          timestamp: Date.now(),
         });
       }
     },
-    onDisconnect: () => { deps.setInputEnabled(true); },
+    /** Restore active session state when panel reopens mid-workflow */
+    onRestoreActiveSession: async (data: {
+      sessionId: string;
+      agentType: string;
+      isRunning: boolean;
+      workflowGraph?: any;
+      bufferedEvents?: any[];
+    }) => {
+      console.log(
+        '[RestoreSession] Handler called with data:',
+        data.sessionId,
+        'bufferedEvents:',
+        data.bufferedEvents?.length || 0,
+      );
+      if (!data.sessionId || !data.isRunning) {
+        console.log('[RestoreSession] Skipping - no sessionId or not running');
+        return;
+      }
+      try {
+        console.log('[RestoreSession] Loading session from storage');
+        // Load session and persisted metadata from storage
+        const [session, storedMetadata] = await Promise.all([
+          chatHistoryStore.getSession(data.sessionId),
+          chatHistoryStore.loadMessageMetadata(data.sessionId).catch(() => ({})),
+        ]);
+        console.log('[RestoreSession] Loaded session:', session?.messages?.length, 'messages');
+        console.log('[RestoreSession] Loaded stored metadata keys:', Object.keys(storedMetadata || {}));
+
+        // Set session ID FIRST
+        deps.sessionIdRef.current = data.sessionId;
+        deps.setCurrentSessionId(data.sessionId);
+
+        // Restore messages if available
+        if (session?.messages && Array.isArray(session.messages)) {
+          deps.setMessages(session.messages);
+
+          // Find the last aggregate root message (agent message) to restore trajectory state
+          const agentActors = [
+            Actors.AGENT_NAVIGATOR,
+            Actors.AGENT_PLANNER,
+            Actors.AGENT_VALIDATOR,
+            Actors.CHAT,
+            Actors.SEARCH,
+          ];
+          const lastAgentMsg = [...session.messages].reverse().find((m: any) => agentActors.includes(m.actor));
+          if (lastAgentMsg) {
+            const rootId = `${lastAgentMsg.timestamp}-${lastAgentMsg.actor}`;
+            console.log('[RestoreSession] Restoring agentTraceRootId:', rootId);
+            deps.agentTraceRootIdRef.current = rootId;
+            deps.agentTraceActiveRef.current = true;
+            deps.setAgentTraceRootId(rootId);
+            deps.lastAgentMessageRef.current = { timestamp: lastAgentMsg.timestamp, actor: lastAgentMsg.actor };
+          }
+        }
+
+        // Restore the PERSISTED metadata (including trajectory trace items from before panel closed)
+        const restoredMetadata = { ...(storedMetadata || {}) };
+
+        // Update UI state for running workflow
+        deps.setShowStopButton(true);
+        deps.setInputEnabled(false);
+        deps.setIsJobActive(true);
+        deps.jobActiveRef.current = true;
+        deps.setIsAgentModeActive(true);
+        deps.setCurrentTaskAgentType(data.agentType);
+        deps.setShowDashboard(false);
+
+        // Restore workflow graph for multiagent
+        if (data.agentType === 'multiagent' && data.workflowGraph) {
+          restoredMetadata.__workflowGraph = data.workflowGraph;
+          deps.setShowInlineWorkflow(true);
+        }
+
+        // Process buffered events - add trace items to restored metadata
+        if (data.bufferedEvents && Array.isArray(data.bufferedEvents) && data.bufferedEvents.length > 0) {
+          console.log('[RestoreSession] Processing', data.bufferedEvents.length, 'buffered events');
+
+          const rootId = deps.agentTraceRootIdRef.current as string;
+          if (rootId) {
+            // Collect trace items from buffered events
+            const traceItemsToAdd: Array<{
+              actor: string;
+              content: string;
+              timestamp: number;
+              pageUrl?: string;
+              pageTitle?: string;
+            }> = [];
+
+            for (const evt of data.bufferedEvents) {
+              try {
+                if (!evt || evt.type !== 'execution') continue;
+                const evtData = evt.data || {};
+                const content = evtData.details || '';
+                const timestamp = evt.timestamp || Date.now();
+                const actor = evt.actor || Actors.SYSTEM;
+                const state = evt.state;
+
+                // Only add meaningful trace items (skip internal states)
+                const traceStates = [
+                  ExecutionState.STEP_START,
+                  ExecutionState.STEP_OK,
+                  ExecutionState.STEP_FAIL,
+                  ExecutionState.ACT_START,
+                  ExecutionState.ACT_OK,
+                  ExecutionState.ACT_FAIL,
+                  ExecutionState.TASK_OK,
+                  ExecutionState.TASK_FAIL,
+                ];
+                if (content && traceStates.includes(state)) {
+                  traceItemsToAdd.push({
+                    actor,
+                    content,
+                    timestamp,
+                    pageUrl: evtData.pageUrl,
+                    pageTitle: evtData.pageTitle,
+                  });
+                }
+              } catch (e) {
+                console.log('[RestoreSession] Failed to extract trace from event:', e);
+              }
+            }
+
+            // Add buffered trace items to restored metadata
+            if (traceItemsToAdd.length > 0) {
+              console.log('[RestoreSession] Adding', traceItemsToAdd.length, 'buffered trace items to root', rootId);
+              const existing = restoredMetadata[rootId] || {};
+              const currentItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
+              restoredMetadata[rootId] = {
+                ...existing,
+                traceItems: [...currentItems, ...traceItemsToAdd],
+              };
+            }
+          }
+        }
+
+        // Set all metadata at once (persisted + buffered events)
+        console.log('[RestoreSession] Setting metadata with', Object.keys(restoredMetadata).length, 'keys');
+        const rootId = deps.agentTraceRootIdRef.current;
+        if (rootId) {
+          console.log(
+            '[RestoreSession] Root',
+            rootId,
+            'has',
+            restoredMetadata[rootId]?.traceItems?.length || 0,
+            'trace items',
+          );
+        }
+        deps.setMessageMetadata(restoredMetadata as any);
+
+        deps.logger.log('[RestoreSession] Restored active session:', data.sessionId);
+      } catch (err) {
+        deps.logger.error('[RestoreSession] Failed:', err);
+      }
+    },
+    onDisconnect: () => {
+      deps.setInputEnabled(true);
+    },
   };
 }
-
-

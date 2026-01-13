@@ -46,6 +46,8 @@ export type SidePanelDeps = {
   workflowsBySession: Map<string, MultiAgentWorkflow>;
   runningWorkflowSessionIds: Set<string>;
   setCurrentWorkflow: (wf: MultiAgentWorkflow | null) => void;
+  eventBuffer: any[];
+  maxEventBufferSize: number;
 };
 
 export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: SidePanelDeps): void {
@@ -59,6 +61,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
     workflowsBySession,
     runningWorkflowSessionIds,
     setCurrentWorkflow,
+    eventBuffer,
+    maxEventBufferSize,
   } = deps;
 
   logger.info('Side panel connected');
@@ -112,9 +116,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           await handleNewTask(message, {
             taskManager,
             logger,
-            currentPort: getCurrentPort(),
+            getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
+            eventBuffer,
+            maxEventBufferSize,
           });
           return;
         }
@@ -122,9 +128,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           await handleFollowUpTask(message, {
             taskManager,
             logger,
-            currentPort: getCurrentPort(),
+            getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
+            eventBuffer,
+            maxEventBufferSize,
           });
           return;
         }
@@ -208,8 +216,12 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           }
         }
         case 'cancel_task': {
+          console.log('[cancel_task] Received cancel request:', message);
           const requestId = message.requestId;
           const id = String(message.sessionId || message.taskId || '').trim();
+          console.log('[cancel_task] Parsed ID:', id);
+          console.log('[cancel_task] workflowsBySession keys:', [...workflowsBySession.keys()]);
+          console.log('[cancel_task] getCurrentExecutor:', !!getCurrentExecutor());
 
           if (!id) {
             safePostMessage(port, {
@@ -248,7 +260,9 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               }
             }
 
+            console.log('[cancel_task] Found workflow:', !!wf);
             if (wf) {
+              console.log('[cancel_task] Cancelling multiagent workflow');
               await wf.cancelAll();
               workflowsBySession.delete(id);
               for (const [key, w] of workflowsBySession.entries()) {
@@ -270,6 +284,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
 
             // Single-agent task cancellation
+            console.log('[cancel_task] Attempting single-agent cancellation for:', id);
+            console.log('[cancel_task] taskManager.tasks:', [...((taskManager as any).tasks?.keys?.() || [])]);
             await taskManager.cancelTask(id);
             try {
               await (taskManager as any).cancelAllForParentSession?.(id);
@@ -354,8 +370,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               ),
             );
 
-            // Create orchestrator and start
-            const orchestrator = new MultiAgentWorkflow(taskManager, port, String(sessionId), { maxWorkers });
+            // Create orchestrator and start (pass port getter for reconnection support)
+            const orchestrator = new MultiAgentWorkflow(taskManager, getCurrentPort, String(sessionId), { maxWorkers });
 
             // Pass context tab IDs to the orchestrator for planner injection
             if (contextTabIds.length > 0) {
@@ -445,7 +461,12 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           break;
         }
         case 'panel_opened': {
-          // Prewarm: initialize provider costs, inject DOM/mardown helpers in active tab
+          console.log('[panel_opened] Panel opened, checking for running workflows...');
+          console.log('[panel_opened] runningWorkflowSessionIds:', [...runningWorkflowSessionIds]);
+          console.log('[panel_opened] hasExecutor:', !!getCurrentExecutor());
+          console.log('[panel_opened] eventBuffer length:', eventBuffer.length);
+
+          // Prewarm: initialize provider costs, inject DOM/markdown helpers in active tab
           try {
             await initializeCostCalculator();
           } catch {}
@@ -455,6 +476,48 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               await injectBuildDomTree(active.id, active.url);
             }
           } catch {}
+
+          // Collect buffered events to include in restore message
+          const bufferedEvents = eventBuffer.length > 0 ? eventBuffer.splice(0, eventBuffer.length) : [];
+          console.log('[panel_opened] Collected', bufferedEvents.length, 'buffered events');
+
+          // Restore running workflow state if any
+          try {
+            if (runningWorkflowSessionIds.size > 0) {
+              const activeSessionId = [...runningWorkflowSessionIds][0];
+              const workflow = workflowsBySession.get(activeSessionId);
+              console.log('[panel_opened] Restoring multiagent session:', activeSessionId);
+              safePostMessage(port, {
+                type: 'restore_active_session',
+                data: {
+                  sessionId: activeSessionId,
+                  agentType: 'multiagent',
+                  isRunning: true,
+                  workflowGraph: workflow?.getCurrentGraph?.() || null,
+                  bufferedEvents, // Include buffered events
+                },
+              });
+            } else if (getCurrentExecutor()) {
+              const executor = getCurrentExecutor();
+              const sessionId = (executor as any)?.context?.taskId;
+              console.log('[panel_opened] Restoring single-agent session:', sessionId);
+              if (sessionId) {
+                safePostMessage(port, {
+                  type: 'restore_active_session',
+                  data: {
+                    sessionId,
+                    agentType: (executor as any)?.manualAgentType || 'agent',
+                    isRunning: true,
+                    bufferedEvents, // Include buffered events
+                  },
+                });
+              }
+            } else {
+              console.log('[panel_opened] No running workflows to restore');
+            }
+          } catch (e) {
+            logger.error('[panel_opened] Failed to restore session:', e);
+          }
           break;
         }
         case 'heartbeat':
@@ -953,6 +1016,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               getCurrentExecutor,
               setCurrentExecutor,
               setCurrentWorkflow,
+              eventBuffer,
             });
           } catch (e) {
             logger.error('[KILLSWITCH] Handler failed:', e instanceof Error ? e.message : String(e));
