@@ -34,6 +34,9 @@ let currentWorkflow: MultiAgentWorkflow | null = null;
 const runningWorkflowSessionIds = new Set<string>();
 // Track active MultiAgentWorkflow instances by sessionId for robust cancellation
 const workflowsBySession = new Map<string, MultiAgentWorkflow>();
+// Buffer events when panel is disconnected, replay on reconnect
+const eventBuffer: any[] = [];
+const MAX_EVENT_BUFFER_SIZE = 500; // Prevent memory bloat
 
 // Initialize task manager for parallel execution
 const taskManager = new TaskManager({
@@ -241,8 +244,12 @@ chrome.runtime.onConnect.addListener(async port => {
     attachSidePanelPortHandlers(port, {
       taskManager,
       logger,
-      getCurrentPort: () => currentPort,
+      getCurrentPort: () => {
+        console.log('[getCurrentPort] Called, returning:', currentPort ? 'PORT_EXISTS' : 'NULL');
+        return currentPort;
+      },
       setCurrentPort: (p: chrome.runtime.Port | null) => {
+        console.log('[setCurrentPort] Setting port to:', p ? 'PORT' : 'NULL');
         currentPort = p;
       },
       getCurrentExecutor: () => currentExecutor,
@@ -254,6 +261,8 @@ chrome.runtime.onConnect.addListener(async port => {
       setCurrentWorkflow: (wf: any | null) => {
         currentWorkflow = wf;
       },
+      eventBuffer,
+      maxEventBufferSize: MAX_EVENT_BUFFER_SIZE,
     });
     return;
   }

@@ -11,9 +11,11 @@ import { globalTokenTracker } from '../utils/token-tracker';
 type Deps = {
   taskManager: any;
   logger: any;
-  currentPort: chrome.runtime.Port | null;
+  getCurrentPort: () => chrome.runtime.Port | null;
   getCurrentExecutor: () => any | null;
   setCurrentExecutor: (e: any | null) => void;
+  eventBuffer?: any[];
+  maxEventBufferSize?: number;
 };
 
 // Map for pending estimation approvals
@@ -147,7 +149,8 @@ async function runEstimationIfEnabled(
 }
 
 export async function handleNewTask(message: any, deps: Deps) {
-  const { taskManager, currentPort, setCurrentExecutor } = deps;
+  const { taskManager, getCurrentPort, setCurrentExecutor } = deps;
+  const currentPort = getCurrentPort();
   const task: string = String(message.task || '').trim();
   const sessionId: string = String(message.taskId || '');
   const agentType: string | undefined = message.agentType ? String(message.agentType) : undefined;
@@ -319,9 +322,20 @@ export async function handleNewTask(message: any, deps: Deps) {
     }
   } catch {}
 
-  // Forward events to side panel; clear executor reference on completion
+  // Forward events to side panel (pass getter for reconnection support)
   try {
-    await subscribeToExecutorEvents(executor, currentPort, taskManager, deps.logger, () => setCurrentExecutor(null));
+    const bufferOpts =
+      deps.eventBuffer && deps.maxEventBufferSize
+        ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
+        : undefined;
+    await subscribeToExecutorEvents(
+      executor,
+      getCurrentPort,
+      taskManager,
+      deps.logger,
+      () => setCurrentExecutor(null),
+      bufferOpts,
+    );
   } catch {}
 
   // Execute
@@ -329,13 +343,14 @@ export async function handleNewTask(message: any, deps: Deps) {
     await executor.execute();
   } catch (e: any) {
     try {
-      currentPort?.postMessage({ type: 'error', error: e?.message || 'Task failed' });
+      getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Task failed' });
     } catch {}
   }
 }
 
 export async function handleFollowUpTask(message: any, deps: Deps) {
-  const { currentPort, getCurrentExecutor, setCurrentExecutor, taskManager, logger } = deps;
+  const { getCurrentPort, getCurrentExecutor, setCurrentExecutor, taskManager, logger } = deps;
+  const currentPort = getCurrentPort();
   const task: string = String(message.task || '').trim();
   const sessionId: string = String(message.taskId || '');
   let agentType: string | undefined = message.agentType ? String(message.agentType) : undefined;
@@ -548,7 +563,18 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     delete (existing as any).__backgroundSubscribed;
     try {
-      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger, () => setCurrentExecutor(null));
+      const bufferOpts =
+        deps.eventBuffer && deps.maxEventBufferSize
+          ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
+          : undefined;
+      await subscribeToExecutorEvents(
+        existing,
+        getCurrentPort,
+        taskManager,
+        logger,
+        () => setCurrentExecutor(null),
+        bufferOpts,
+      );
     } catch {}
 
     // Re-bind executor to TaskManager so TAB_CREATED triggers mirroring for new tabs
@@ -564,7 +590,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       await existing.execute();
     } catch (e: any) {
       try {
-        currentPort?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
+        getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
       } catch {}
     }
     return;
@@ -589,7 +615,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         (task as any).mirroringDisabled = true; // Explicitly disable mirroring
       }
     } catch (e) {
-      logger.warn('[handleFollowUpTask] Failed to stop mirroring:', e);
+      logger.warning('[handleFollowUpTask] Failed to stop mirroring:', e);
     }
 
     try {
@@ -614,7 +640,18 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     delete (existing as any).__backgroundSubscribed;
     try {
-      await subscribeToExecutorEvents(existing, currentPort, taskManager, logger, () => setCurrentExecutor(null));
+      const bufferOpts =
+        deps.eventBuffer && deps.maxEventBufferSize
+          ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
+          : undefined;
+      await subscribeToExecutorEvents(
+        existing,
+        getCurrentPort,
+        taskManager,
+        logger,
+        () => setCurrentExecutor(null),
+        bufferOpts,
+      );
     } catch {}
     // Restore reactivateTask - needed for stop button to work!
     // But mirroring is already stopped and marked disabled above
@@ -625,7 +662,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       await existing.execute();
     } catch (e: any) {
       try {
-        currentPort?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
+        getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
       } catch {}
     }
     return;
