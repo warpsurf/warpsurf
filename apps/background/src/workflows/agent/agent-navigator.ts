@@ -26,6 +26,31 @@ import { globalTokenTracker } from '@src/utils/token-tracker';
 
 const logger = createLogger('AgentNavigator');
 
+/** Action-specific delays (ms) - fast actions use minimal delays, navigation actions use longer delays */
+const ACTION_DELAYS: Record<string, number> = {
+  go_to_url: 800,
+  search_google: 800,
+  open_tab: 600,
+  click_element: 500,
+  click_selector: 400,
+  find_and_click_text: 400,
+  input_text: 100,
+  send_keys: 100,
+  scroll_to_percent: 150,
+  scroll_to_top: 100,
+  scroll_to_bottom: 100,
+  scroll_up: 100,
+  scroll_down: 100,
+  next_page: 150,
+  previous_page: 150,
+  cache_content: 50,
+  extract_page_markdown: 200,
+  extract_google_results: 200,
+  quick_text_scan: 100,
+  wait: 0, // wait action handles its own timing
+  done: 0,
+};
+
 interface ParsedModelOutput {
   current_state?: {
     next_goal?: string;
@@ -313,6 +338,17 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     }
   }
 
+  /** Speculatively refresh state in background to warm cache for next step */
+  private async speculativelyRefreshState(): Promise<void> {
+    try {
+      // Fire and forget - don't block on this
+      // This warms the cache so getState() is fast on next agent step
+      await this.context.browserContext.getState(this.context.options.useVision);
+    } catch {
+      // Non-critical, silently ignore failures
+    }
+  }
+
   /** Build a simple state signature from URL and DOM path hashes */
   private async buildStateSignature(state: BrowserState): Promise<string> {
     try {
@@ -578,7 +614,15 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         if (this.context.paused || this.context.stopped) {
           return results;
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Use action-specific delay for better performance
+        const delay = ACTION_DELAYS[actionName] ?? 500;
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // Speculatively refresh state in background after action completes
+        // This warms the cache for the next agent step
+        this.speculativelyRefreshState().catch(() => {});
       } catch (error) {
         if (error instanceof URLNotAllowedError) {
           throw error;

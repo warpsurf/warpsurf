@@ -108,22 +108,25 @@ export async function extractTabContent(tabId: number, forceRefresh = false): Pr
       return null;
     }
 
-    // Extract markdown
+    // Extract markdown and DOM tree in parallel for better performance
+    const [markdownResult, domResult] = await Promise.allSettled([
+      getMarkdownContent(tabId),
+      getClickableElements(tabId, tab.url!, false, -1, 0, false),
+    ]);
+
     let markdown = '';
-    try {
-      markdown = await getMarkdownContent(tabId);
-    } catch (e) {
-      logger.warn(`Failed to extract markdown from tab ${tabId}:`, e);
+    if (markdownResult.status === 'fulfilled') {
+      markdown = markdownResult.value;
+    } else {
+      logger.warn(`Failed to extract markdown from tab ${tabId}:`, markdownResult.reason);
     }
 
-    // Extract DOM tree with all text content for reference context
     let domTree = '';
-    try {
-      const domState = await getClickableElements(tabId, tab.url!, false, -1, 0, false);
+    if (domResult.status === 'fulfilled') {
       // Use includeAllText=true to capture full page content for context tabs
-      domTree = domState.elementTree.clickableElementsToString([], true);
-    } catch (e) {
-      logger.warn(`Failed to extract DOM from tab ${tabId}:`, e);
+      domTree = domResult.value.elementTree.clickableElementsToString([], true);
+    } else {
+      logger.warn(`Failed to extract DOM from tab ${tabId}:`, domResult.reason);
     }
 
     if (!markdown && !domTree) {
