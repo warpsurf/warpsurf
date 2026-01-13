@@ -48,17 +48,25 @@ export class TaskManager extends EventEmitter {
   private sidePanelPort?: chrome.runtime.Port;
   private logger = createLogger('TaskManager');
   public tabMirrorService: TabMirrorService;
-  
+
   private queue: TaskQueue;
   private tabGroups: TabGroupService;
   private mirrors: MirrorCoordinator;
   private workers: WorkerSessionManager;
 
+  /** Update extension badge to show running task count */
+  private updateBadge(): void {
+    const running = this.getRunningTasks().length;
+    this.logger.info(`Updating badge: ${running} running tasks`);
+    chrome.action.setBadgeText({ text: running > 0 ? String(running) : '' });
+    chrome.action.setBadgeBackgroundColor({ color: running > 0 ? '#22c55e' : '#666' });
+  }
+
   constructor(options: TaskManagerOptions) {
     super();
     this.dashboardPort = options.dashboardPort;
     this.tabMirrorService = new TabMirrorService();
-    
+
     this.queue = new TaskQueue(options.maxConcurrentTasks);
     this.tabGroups = new TabGroupService();
     this.mirrors = new MirrorCoordinator(this.tabMirrorService);
@@ -84,16 +92,16 @@ export class TaskManager extends EventEmitter {
     skipQueue: boolean = false,
     explicitId?: string,
     parentSessionId?: string,
-    workerIndex?: number
+    workerIndex?: number,
   ): Promise<string> {
     const taskId = explicitId || `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const { name: taskName, worker_num } = name 
-      ? { name, worker_num: workerIndex || 0 } 
+    const { name: taskName, worker_num } = name
+      ? { name, worker_num: workerIndex || 0 }
       : this.tabGroups.getNextWebAgentName(this.tasks);
-    
+
     const used = await this.tabGroups.getUsedColors(this.tasks);
     const chosen = this.tabGroups.chooseColor(used, worker_num);
-    
+
     const task: Task = {
       id: taskId,
       name: taskName,
@@ -107,24 +115,25 @@ export class TaskManager extends EventEmitter {
     };
 
     this.tasks.set(taskId, task);
-    
+
     if (!skipQueue) {
       this.queue.enqueue(taskId);
       this.notifyDashboard('agent-created', { id: taskId, name: task.name, task: prompt });
       this.emit('task-created', task);
       await this.processQueue();
     }
-    
+
     return taskId;
   }
 
   reactivateTask(taskId: string): void {
     const task = this.tasks.get(taskId);
     if (!task) return;
-    
+
     task.status = 'running';
     task.startedAt = Date.now();
     this.queue.markRunning(taskId);
+    this.updateBadge();
   }
 
   async cancelTask(taskId: string): Promise<void> {
@@ -144,18 +153,19 @@ export class TaskManager extends EventEmitter {
     task.completedAt = Date.now();
     this.queue.markCompleted(taskId);
     this.queue.remove(taskId);
-    
+
     this.mirrors.freezeSession(String(task.parentSessionId || task.id));
     this.notifyDashboard('agent-status-update', { agentId: taskId, status: 'cancelled' });
     this.emit('task-cancelled', task);
-    
+    this.updateBadge();
+
     await this.processQueue();
   }
 
   async closeTaskGroup(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
-    
+
     try {
       if (typeof task.groupId === 'number' && task.groupId >= 0) {
         const tabs = await chrome.tabs.query({ groupId: task.groupId, windowType: 'normal' });
@@ -206,15 +216,17 @@ export class TaskManager extends EventEmitter {
 
       this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running' });
       this.emit('task-started', task);
+      this.updateBadge();
 
       await executor.execute();
-      
+
       task.status = 'completed';
       task.completedAt = Date.now();
       this.queue.markCompleted(task.id);
       this.mirrors.freezeSession(String(task.parentSessionId || task.id));
       this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'completed' });
       this.emit('task-completed', task, {});
+      this.updateBadge();
     } catch (error) {
       task.status = 'error';
       task.completedAt = Date.now();
@@ -224,7 +236,8 @@ export class TaskManager extends EventEmitter {
       this.addTaskLog(task.id, `Error: ${task.error}`, 'error');
       this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'error' });
       this.emit('task-error', task, error);
-      
+      this.updateBadge();
+
       try {
         errorLog.add({
           sessionId: String(task.parentSessionId || task.id),
@@ -244,27 +257,27 @@ export class TaskManager extends EventEmitter {
     if (Object.keys(providers).length === 0) {
       throw new Error('Please configure API keys in the settings first');
     }
-    
+
     const agentModels = await agentModelStore.getAllAgentModels();
     const navigatorModel = agentModels[AgentNameEnum.Navigator];
     if (!navigatorModel) {
       throw new Error('Please choose a model for the navigator in the settings first');
     }
-    
+
     const navigatorLLM = createChatModel(providers[navigatorModel.provider], navigatorModel);
-    
+
     let plannerLLM: BaseChatModel | null = null;
     const plannerModel = agentModels[AgentNameEnum.Planner];
     if (plannerModel) {
       plannerLLM = createChatModel(providers[plannerModel.provider], plannerModel);
     }
-    
+
     let validatorLLM: BaseChatModel | null = null;
     const validatorModel = agentModels[AgentNameEnum.Validator];
     if (validatorModel) {
       validatorLLM = createChatModel(providers[validatorModel.provider], validatorModel);
     }
-    
+
     const firewall = await firewallStore.getFirewall();
     if (firewall.enabled) {
       browserContext.updateConfig({
@@ -272,7 +285,7 @@ export class TaskManager extends EventEmitter {
         deniedUrls: firewall.denyList,
       });
     }
-    
+
     const settings = await generalSettingsStore.getSettings();
     this.tabMirrorService.setVisionEnabled(!!(settings.showTabPreviews ?? true));
     browserContext.updateConfig({
@@ -280,7 +293,7 @@ export class TaskManager extends EventEmitter {
       displayHighlights: settings.displayHighlights,
       viewportExpansion: settings.fullPageWindow ? -1 : 0,
     });
-    
+
     return await createSingleAgentExecutor({
       prompt: task.prompt,
       sessionId: task.id,
@@ -291,18 +304,18 @@ export class TaskManager extends EventEmitter {
     try {
       const createdTabId = browserContext.getAndClearNewTabCreated();
       if (typeof createdTabId !== 'number' || createdTabId <= 0) return;
-      
+
       if (task.tabId && task.tabId !== createdTabId) {
         this.mirrors.stopMirroring(task.tabId);
       }
-      
+
       task.tabId = createdTabId;
       await this.tabGroups.applyTabColor(createdTabId, task, this.tasks);
-      
+
       const settings = await generalSettingsStore.getSettings();
       const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
       await this.mirrors.setupMirroring(task, createdTabId, executor, visionEnabled);
-      
+
       this.emit('tab-created', {
         taskId: task.id,
         tabId: createdTabId,
@@ -316,8 +329,8 @@ export class TaskManager extends EventEmitter {
   private setupTaskEventHandlers(task: Task, executor: Executor): void {
     if ((executor as any).__taskManagerSubscribed) return;
     (executor as any).__taskManagerSubscribed = true;
-    
-    executor.subscribeExecutionEvents(async (event) => {
+
+    executor.subscribeExecutionEvents(async event => {
       if (task.status !== 'running') return;
 
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
@@ -331,29 +344,29 @@ export class TaskManager extends EventEmitter {
   }
 
   private async handleTabCreated(task: Task, executor: Executor, tabId: number): Promise<void> {
-    if (!await tabExists(tabId)) return; // Tab closed before setup
-    
+    if (!(await tabExists(tabId))) return; // Tab closed before setup
+
     if (task.tabId && task.tabId !== tabId) {
       this.mirrors.stopMirroring(task.tabId);
     }
     task.tabId = tabId;
 
     await this.tabGroups.applyTabColor(tabId, task, this.tasks);
-    
+
     const settings = await generalSettingsStore.getSettings();
     const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
     await this.mirrors.setupMirroring(task, tabId, executor, visionEnabled);
     // Ensure mirror has the updated color from applyTabColor
     this.tabMirrorService.updateMirrorColor(tabId, task.color);
-    
+
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running', tabId });
-    
-    chrome.tabs.get(tabId, (tab) => {
+
+    chrome.tabs.get(tabId, tab => {
       if (!chrome.runtime.lastError) {
         this.notifyDashboard('active-tab-update', {
           tabId,
           url: tab.url || '',
-          title: tab.title || ''
+          title: tab.title || '',
         });
       }
     });
@@ -375,7 +388,14 @@ export class TaskManager extends EventEmitter {
       await startPageFlash(tId);
     }
 
-    if ([ExecutionState.TASK_RESUME, ExecutionState.TASK_OK, ExecutionState.TASK_FAIL, ExecutionState.TASK_CANCEL].includes(event.state)) {
+    if (
+      [
+        ExecutionState.TASK_RESUME,
+        ExecutionState.TASK_OK,
+        ExecutionState.TASK_FAIL,
+        ExecutionState.TASK_CANCEL,
+      ].includes(event.state)
+    ) {
       await stopPageFlash(tId);
     }
   }
@@ -392,7 +412,7 @@ export class TaskManager extends EventEmitter {
   private forwardEventToPanel(task: Task, event: any): void {
     try {
       if (!this.sidePanelPort) return;
-      
+
       this.sidePanelPort.postMessage({
         type: EventType.EXECUTION,
         actor: event.actor,
@@ -439,13 +459,13 @@ export class TaskManager extends EventEmitter {
     this.dashboardPort = port;
     this.tabMirrorService.setDashboardPort(port);
   }
-  
+
   setSidePanelPort(port: chrome.runtime.Port | undefined): void {
     this.sidePanelPort = port;
     this.mirrors.setSidePanelPort(port);
     this.workers.setSidePanelPort(port);
     this.tabGroups.setSidePanelPort(port);
-    
+
     if (port) {
       const latestMirror = this.mirrors.getLatestMirror();
       if (latestMirror) {
@@ -459,7 +479,7 @@ export class TaskManager extends EventEmitter {
     prettyName?: string,
     parentSessionId?: string,
     messageContext?: string,
-    workerIndex?: number
+    workerIndex?: number,
   ): Promise<string> {
     const taskId = await this.createTask(initialPrompt, prettyName, true, undefined, parentSessionId, workerIndex);
     const task = this.tasks.get(taskId)!;
@@ -471,7 +491,7 @@ export class TaskManager extends EventEmitter {
     await this.workers.createSession(task, initialPrompt, {
       parentSessionId,
       messageContext,
-      workerIndex
+      workerIndex,
     });
 
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running' });
@@ -483,14 +503,17 @@ export class TaskManager extends EventEmitter {
     taskId: string,
     prompt: string,
     targetTabIds?: number[],
-    subtaskId?: number
+    subtaskId?: number,
   ): Promise<{ ok: boolean; error?: string; outputText?: string; tabIds?: number[] }> {
     return await this.workers.runSubtask(taskId, prompt, { targetTabIds, subtaskId });
   }
 
-  async endWorkerSession(taskId: string, finalStatus: 'completed' | 'cancelled' | 'error' = 'completed'): Promise<void> {
+  async endWorkerSession(
+    taskId: string,
+    finalStatus: 'completed' | 'cancelled' | 'error' = 'completed',
+  ): Promise<void> {
     await this.workers.endSession(taskId, finalStatus);
-    
+
     const task = this.tasks.get(taskId);
     if (task) {
       this.queue.markCompleted(taskId);
@@ -533,21 +556,24 @@ export class TaskManager extends EventEmitter {
   }
 
   getPendingTasks(): Task[] {
-    return this.queue.getPendingIds().map(id => this.tasks.get(id)!).filter(Boolean);
+    return this.queue
+      .getPendingIds()
+      .map(id => this.tasks.get(id)!)
+      .filter(Boolean);
   }
 
   getAllMirrors(): any[] {
     return this.mirrors.getAllMirrors();
   }
-  
+
   getActiveMirrors(): any[] {
     return this.mirrors.getActiveMirrors();
   }
-  
+
   getLatestMirror(): any | null {
     return this.mirrors.getLatestMirror();
   }
-  
+
   async stopAllMirrorsForSession(_sessionId: string): Promise<void> {
     const mirrors = this.mirrors.getAllMirrors();
     for (const m of mirrors) {
@@ -556,7 +582,7 @@ export class TaskManager extends EventEmitter {
       }
     }
   }
-  
+
   getActiveTabInfo(): { tabId: number; url: string; title: string } | null {
     for (const task of this.tasks.values()) {
       if (task.status === 'running' && task.tabId) {
@@ -565,7 +591,7 @@ export class TaskManager extends EventEmitter {
     }
     return null;
   }
-  
+
   async forwardInteraction(tabId: number, interaction: any): Promise<void> {
     return this.tabMirrorService.forwardInteraction(tabId, interaction);
   }
@@ -573,7 +599,7 @@ export class TaskManager extends EventEmitter {
   async assignGroup(taskId: string, groupId: number, colorName?: chrome.tabGroups.Color): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
-    
+
     await this.tabGroups.assignGroup(task, groupId, colorName);
   }
 
@@ -594,9 +620,9 @@ export class TaskManager extends EventEmitter {
     task.startedAt = Date.now();
     task.mirroringStarted = false;
     if (forceNewGroup) task.groupId = undefined;
-    
+
     this.propagateGroupId(task, executor);
-    
+
     if (tabId > 0) {
       this.mirrors.stopMirroring(tabId);
       this.setupSingleAgentMirroring(task, executor, tabId);
@@ -605,6 +631,7 @@ export class TaskManager extends EventEmitter {
     this.setupSingleAgentEventHandlers(task, executor, tabId);
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running', tabId });
     this.emit('task-started', task);
+    this.updateBadge();
   }
 
   private setupSingleAgentMirroring(task: Task, executor: Executor, tabId: number): void {
@@ -617,35 +644,44 @@ export class TaskManager extends EventEmitter {
       }
     });
 
-    this.tabGroups.applyTabColor(tabId, task, this.tasks).then(() => {
-      try {
-        this.tabMirrorService.startMirroring(tabId, task.id, task.color, task.parentSessionId || task.id, task.workerIndex);
-        // Ensure mirror has the updated color from applyTabColor
-        this.tabMirrorService.updateMirrorColor(tabId, task.color);
-        task.mirroringStarted = true;
-        
-        if (this.sidePanelPort) {
-          setTimeout(() => {
-            const mirrors = this.tabMirrorService.getCurrentMirrors();
-            const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
-            if (mirrorData) {
-              const sessionId = task.parentSessionId || task.id;
-              this.sidePanelPort?.postMessage({
-                type: 'tab-mirror-update',
-                data: { ...mirrorData, sessionId }
-              });
-            }
-          }, 500);
-        }
-      } catch {}
-    }).catch(() => {});
+    this.tabGroups
+      .applyTabColor(tabId, task, this.tasks)
+      .then(() => {
+        try {
+          this.tabMirrorService.startMirroring(
+            tabId,
+            task.id,
+            task.color,
+            task.parentSessionId || task.id,
+            task.workerIndex,
+          );
+          // Ensure mirror has the updated color from applyTabColor
+          this.tabMirrorService.updateMirrorColor(tabId, task.color);
+          task.mirroringStarted = true;
+
+          if (this.sidePanelPort) {
+            setTimeout(() => {
+              const mirrors = this.tabMirrorService.getCurrentMirrors();
+              const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
+              if (mirrorData) {
+                const sessionId = task.parentSessionId || task.id;
+                this.sidePanelPort?.postMessage({
+                  type: 'tab-mirror-update',
+                  data: { ...mirrorData, sessionId },
+                });
+              }
+            }, 500);
+          }
+        } catch {}
+      })
+      .catch(() => {});
   }
 
   private setupSingleAgentEventHandlers(task: Task, executor: Executor, tabId: number): void {
     if ((executor as any).__taskManagerSubscribed) return;
     (executor as any).__taskManagerSubscribed = true;
-    
-    executor.subscribeExecutionEvents(async (event) => {
+
+    executor.subscribeExecutionEvents(async event => {
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
         await this.handleSingleAgentTabCreated(task, executor, event.data.tabId);
       }
@@ -658,15 +694,15 @@ export class TaskManager extends EventEmitter {
 
   private async handleSingleAgentTabCreated(task: Task, executor: Executor, newTabId: number): Promise<void> {
     if (task.status !== 'running') return;
-    if (!await tabExists(newTabId)) return; // Tab closed before setup
-    
+    if (!(await tabExists(newTabId))) return; // Tab closed before setup
+
     if (task.tabId && task.tabId !== newTabId) {
       this.mirrors.stopMirroring(task.tabId);
     }
     task.tabId = newTabId;
 
     await this.tabGroups.applyTabColor(newTabId, task, this.tasks);
-    
+
     this.tabMirrorService.registerScreenshotProvider(newTabId, async () => {
       try {
         const data = await executor.captureTabScreenshot(newTabId);
@@ -675,15 +711,21 @@ export class TaskManager extends EventEmitter {
         return undefined;
       }
     });
-    
-    this.tabMirrorService.startMirroring(newTabId, task.id, task.color, task.parentSessionId || task.id, task.workerIndex);
+
+    this.tabMirrorService.startMirroring(
+      newTabId,
+      task.id,
+      task.color,
+      task.parentSessionId || task.id,
+      task.workerIndex,
+    );
     // Ensure mirror has the updated color from applyTabColor
     this.tabMirrorService.updateMirrorColor(newTabId, task.color);
     task.mirroringStarted = true;
-    
+
     if (this.sidePanelPort) {
       setTimeout(async () => {
-        if (!await tabExists(newTabId)) return; // Tab closed
+        if (!(await tabExists(newTabId))) return; // Tab closed
         const mirrors = this.tabMirrorService.getCurrentMirrors();
         const mirrorData = mirrors.find((m: any) => m.tabId === newTabId);
         if (mirrorData) {
@@ -699,11 +741,16 @@ export class TaskManager extends EventEmitter {
       return;
     }
 
-    task.status = event.state === ExecutionState.TASK_OK ? 'completed' : 
-                 event.state === ExecutionState.TASK_CANCEL ? 'cancelled' : 'error';
+    task.status =
+      event.state === ExecutionState.TASK_OK
+        ? 'completed'
+        : event.state === ExecutionState.TASK_CANCEL
+          ? 'cancelled'
+          : 'error';
     task.completedAt = Date.now();
-    
+
     this.mirrors.freezeSession(String(task.parentSessionId || task.id));
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: task.status });
+    this.updateBadge();
   }
 }
