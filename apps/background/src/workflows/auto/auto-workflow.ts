@@ -165,7 +165,6 @@ ${request}`;
         const historyBlock = await getChatHistoryForSession(sessionId, {
           latestTaskText: request,
           stripUserRequestTags: true,
-          maxTurns: 4,
         });
         if (historyBlock) {
           messages.push(new SystemMessage(historyBlock));

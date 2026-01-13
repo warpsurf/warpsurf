@@ -3,9 +3,12 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 
 type SessionMessage = { actor: string; content: string; timestamp?: number };
 
+/** Default number of conversation turns to retain in chat history */
+const DEFAULT_MAX_TURNS = 25;
+
 export interface BuildChatHistoryOptions {
   latestTaskText?: string; // exclude matching final user turn
-  maxTurns?: number; // optional cap on prior turns (pairs)
+  maxTurns?: number; // optional cap on prior turns (pairs), defaults to 25
   stripUserRequestTags?: boolean; // default true
 }
 
@@ -49,20 +52,19 @@ export function buildChatHistoryBlock(
   const lines: string[] = [];
   const stripTags = opts.stripUserRequestTags !== false;
 
-  // Optionally cap to last N turns (2 lines per turn min)
+  // Cap to last N turns (default 25)
   const capped = (() => {
-    if (typeof opts.maxTurns === 'number' && opts.maxTurns > 0) {
-      // Walk from end backwards to find ~maxTurns pairs
-      const out: SessionMessage[] = [];
-      let users = 0;
-      for (let i = prior.length - 1; i >= 0; i--) {
-        out.push(prior[i]);
-        if (String(prior[i].actor).toLowerCase() === 'user') users += 1;
-        if (users >= opts.maxTurns) break;
-      }
-      return out.reverse();
+    const effectiveMaxTurns =
+      typeof opts.maxTurns === 'number' && opts.maxTurns > 0 ? opts.maxTurns : DEFAULT_MAX_TURNS;
+
+    const out: SessionMessage[] = [];
+    let users = 0;
+    for (let i = prior.length - 1; i >= 0; i--) {
+      out.push(prior[i]);
+      if (String(prior[i].actor).toLowerCase() === 'user') users += 1;
+      if (users >= effectiveMaxTurns) break;
     }
-    return prior;
+    return out.reverse();
   })();
 
   for (const m of capped) {
