@@ -12,6 +12,9 @@ export function usePanelEffects(params: {
   historyCompletedTimerRef: MutableRefObject<number | null>;
   panelRef: MutableRefObject<HTMLDivElement | null>;
   messagesEndRef: MutableRefObject<HTMLDivElement | null>;
+  setInputTextRef: MutableRefObject<((text: string) => void) | null>;
+  setSelectedAgentRef: MutableRefObject<((agent: any) => void) | null>;
+  setContextTabIdsRef: MutableRefObject<((tabIds: number[]) => void) | null>;
   logger: any;
   stopConnection: () => void;
   setPaletteOpen: (v: boolean) => void;
@@ -43,15 +46,69 @@ export function usePanelEffects(params: {
   showTabPreviews: boolean;
   resetPerChatAcceptance?: () => void;
   promptPerChatIfEnabled?: () => void;
+  handleSendMessage?: (text: string) => void;
 }) {
-  const { portRef, sessionIdRef, isReplayingRef, jobActiveRef, isAgentModeActiveRef, promptedOnOpenRef, historyCompletedTimerRef, panelRef, messagesEndRef, logger, stopConnection, setPaletteOpen, setFishMenuOpen, setAgentSettingsOpen, setFeedbackMenuOpen, setMoreMenuOpen, setHasConfiguredModels, setHasProviders, setReplayEnabled, setDisplayHighlights, setUseVisionState, setShowTabPreviews, setUseFullPlanningPipeline, setEnablePlanner, setEnableValidator, setFavoritePrompts, setShowJumpToLatest, setShowEmergencyStop, currentSessionId, isReplaying, isJobActive, isAgentModeActive, messages, firstRunAccepted, disablePerChatWarnings, isFollowUpMode, isHistoricalSession, showTabPreviews, resetPerChatAcceptance, promptPerChatIfEnabled } = params;
-  
+  const {
+    portRef,
+    sessionIdRef,
+    isReplayingRef,
+    jobActiveRef,
+    isAgentModeActiveRef,
+    promptedOnOpenRef,
+    historyCompletedTimerRef,
+    panelRef,
+    messagesEndRef,
+    setInputTextRef,
+    setSelectedAgentRef,
+    setContextTabIdsRef,
+    logger,
+    stopConnection,
+    setPaletteOpen,
+    setFishMenuOpen,
+    setAgentSettingsOpen,
+    setFeedbackMenuOpen,
+    setMoreMenuOpen,
+    setHasConfiguredModels,
+    setHasProviders,
+    setReplayEnabled,
+    setDisplayHighlights,
+    setUseVisionState,
+    setShowTabPreviews,
+    setUseFullPlanningPipeline,
+    setEnablePlanner,
+    setEnableValidator,
+    setFavoritePrompts,
+    setShowJumpToLatest,
+    setShowEmergencyStop,
+    currentSessionId,
+    isReplaying,
+    isJobActive,
+    isAgentModeActive,
+    messages,
+    firstRunAccepted,
+    disablePerChatWarnings,
+    isFollowUpMode,
+    isHistoricalSession,
+    showTabPreviews,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    handleSendMessage,
+  } = params;
+
   // Sync refs
-  useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId, sessionIdRef]);
-  useEffect(() => { isReplayingRef.current = isReplaying; }, [isReplaying, isReplayingRef]);
-  useEffect(() => { isAgentModeActiveRef.current = isAgentModeActive; }, [isAgentModeActive, isAgentModeActiveRef]);
-  useEffect(() => { jobActiveRef.current = isJobActive; }, [isJobActive, jobActiveRef]);
-  
+  useEffect(() => {
+    sessionIdRef.current = currentSessionId;
+  }, [currentSessionId, sessionIdRef]);
+  useEffect(() => {
+    isReplayingRef.current = isReplaying;
+  }, [isReplaying, isReplayingRef]);
+  useEffect(() => {
+    isAgentModeActiveRef.current = isAgentModeActive;
+  }, [isAgentModeActive, isAgentModeActiveRef]);
+  useEffect(() => {
+    jobActiveRef.current = isJobActive;
+  }, [isJobActive, jobActiveRef]);
+
   // Configuration checking
   useEffect(() => {
     const check = async () => {
@@ -71,7 +128,9 @@ export function usePanelEffects(params: {
       }
     };
     check();
-    const handleVisibilityChange = () => { if (!document.hidden) check(); };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) check();
+    };
     const handleFocus = () => check();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
@@ -80,7 +139,63 @@ export function usePanelEffects(params: {
       window.removeEventListener('focus', handleFocus);
     };
   }, [logger, setHasConfiguredModels, setHasProviders]);
-  
+
+  // Check for pending context menu actions (on mount and on storage change)
+  useEffect(() => {
+    const processPendingAction = async () => {
+      try {
+        const result = await chrome.storage.session.get('pendingAction');
+        const pendingAction = result.pendingAction as
+          | {
+              prompt: string;
+              autoStart: boolean;
+              workflowType?: string;
+              contextTabId?: number;
+            }
+          | undefined;
+        if (pendingAction) {
+          await chrome.storage.session.remove('pendingAction');
+          // Set the workflow type if specified (e.g., 'chat')
+          if (pendingAction.workflowType && setSelectedAgentRef.current) {
+            setSelectedAgentRef.current(pendingAction.workflowType as any);
+          }
+          // Add context tab if specified (e.g., for "Summarize this page")
+          if (pendingAction.contextTabId && setContextTabIdsRef.current) {
+            setContextTabIdsRef.current([pendingAction.contextTabId]);
+          }
+          if (setInputTextRef.current) {
+            setInputTextRef.current(pendingAction.prompt);
+          }
+          if (pendingAction.autoStart && handleSendMessage) {
+            // Pass workflow type and context tabs to handleSendMessage
+            const contextTabs = pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined;
+            // Small delay to let UI update
+            setTimeout(() => {
+              (handleSendMessage as any)(pendingAction.prompt, pendingAction.workflowType || 'chat', contextTabs);
+            }, 50);
+          }
+        }
+      } catch (error) {
+        logger.error('Error checking pending action:', error);
+      }
+    };
+
+    // Check on mount
+    processPendingAction();
+
+    // Listen for new pending actions (when panel is already open)
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'session' && changes.pendingAction?.newValue) {
+        processPendingAction();
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, [logger, setInputTextRef, setSelectedAgentRef, setContextTabIdsRef, handleSendMessage]);
+
   // Settings loading
   useEffect(() => {
     const load = async () => {
@@ -100,8 +215,18 @@ export function usePanelEffects(params: {
       }
     };
     load();
-  }, [logger, setReplayEnabled, setDisplayHighlights, setUseVisionState, setShowTabPreviews, setUseFullPlanningPipeline, setEnablePlanner, setEnableValidator, setShowEmergencyStop]);
-  
+  }, [
+    logger,
+    setReplayEnabled,
+    setDisplayHighlights,
+    setUseVisionState,
+    setShowTabPreviews,
+    setUseFullPlanningPipeline,
+    setEnablePlanner,
+    setEnableValidator,
+    setShowEmergencyStop,
+  ]);
+
   // Per-chat disclaimer
   useEffect(() => {
     try {
@@ -114,8 +239,17 @@ export function usePanelEffects(params: {
         promptPerChatIfEnabled?.();
       }
     } catch {}
-  }, [firstRunAccepted, disablePerChatWarnings, isFollowUpMode, isHistoricalSession, resetPerChatAcceptance, promptPerChatIfEnabled, promptedOnOpenRef, sessionIdRef]);
-  
+  }, [
+    firstRunAccepted,
+    disablePerChatWarnings,
+    isFollowUpMode,
+    isHistoricalSession,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    promptedOnOpenRef,
+    sessionIdRef,
+  ]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -127,7 +261,7 @@ export function usePanelEffects(params: {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [setPaletteOpen]);
-  
+
   // Close menus
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -153,22 +287,26 @@ export function usePanelEffects(params: {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [setFishMenuOpen, setAgentSettingsOpen, setFeedbackMenuOpen, setMoreMenuOpen]);
-  
+
   // History context check
   useEffect(() => {
-    const check = () => { try { portRef.current?.postMessage({ type: 'check_history_context' }); } catch {} };
+    const check = () => {
+      try {
+        portRef.current?.postMessage({ type: 'check_history_context' });
+      } catch {}
+    };
     check();
     const timer = setTimeout(check, 1000);
     return () => clearTimeout(timer);
   }, [portRef]);
-  
+
   // Cleanup
   useEffect(() => {
     return () => {
       if (historyCompletedTimerRef.current) clearTimeout(historyCompletedTimerRef.current);
     };
   }, [historyCompletedTimerRef]);
-  
+
   // Preview requests
   useEffect(() => {
     if (!(isJobActive && (showTabPreviews ?? true))) return;
@@ -181,7 +319,7 @@ export function usePanelEffects(params: {
     }, 500);
     return () => window.clearInterval(interval);
   }, [isJobActive, showTabPreviews, portRef]);
-  
+
   // Load favorites
   useEffect(() => {
     const load = async () => {
@@ -189,7 +327,11 @@ export function usePanelEffects(params: {
         let prompts = await favoritesStorage.getAllPrompts();
         if (prompts.length === 0) {
           await favoritesStorage.addPrompt('Weather', 'What is the current weather in Cambridge UK?', 'search');
-          await favoritesStorage.addPrompt('Shopping', 'Navigate to the Nike website and find the latest women\'s running shoes', 'agent');
+          await favoritesStorage.addPrompt(
+            'Shopping',
+            "Navigate to the Nike website and find the latest women's running shoes",
+            'agent',
+          );
           prompts = await favoritesStorage.getAllPrompts();
         }
         setFavoritePrompts(prompts);
@@ -199,7 +341,7 @@ export function usePanelEffects(params: {
     };
     load();
   }, [logger, setFavoritePrompts]);
-  
+
   // Export session handler
   useEffect(() => {
     const handler = async (e: Event) => {
@@ -223,7 +365,7 @@ export function usePanelEffects(params: {
     document.addEventListener('export-session-markdown', handler as EventListener);
     return () => document.removeEventListener('export-session-markdown', handler as EventListener);
   }, [logger]);
-  
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -235,7 +377,7 @@ export function usePanelEffects(params: {
       stopConnection();
     };
   }, [stopConnection, portRef, sessionIdRef]);
-  
+
   // Scroll to bottom
   useEffect(() => {
     const container = panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null;
@@ -244,7 +386,7 @@ export function usePanelEffects(params: {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, panelRef, messagesEndRef]);
-  
+
   // Jump-to-latest
   useEffect(() => {
     const container = panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null;
@@ -257,4 +399,3 @@ export function usePanelEffects(params: {
     return () => container.removeEventListener('scroll', onScroll);
   }, [panelRef, setShowJumpToLatest]);
 }
-

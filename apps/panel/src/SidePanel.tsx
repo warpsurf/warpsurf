@@ -110,6 +110,7 @@ const SidePanel = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const setInputTextRef = useRef<((text: string) => void) | null>(null);
   const setSelectedAgentRef = useRef<((agent: AgentType) => void) | null>(null);
+  const setContextTabIdsRef = useRef<((tabIds: number[]) => void) | null>(null);
   const lastAgentMessageRef = useRef<{ timestamp: number; actor: string } | null>(null);
   const taskIdToRootIdRef = useRef<Map<string, string>>(new Map());
   const lastAgentMessageByTaskRef = useRef<Map<string, { timestamp: number; actor: string }>>(new Map());
@@ -320,50 +321,6 @@ const SidePanel = () => {
     pinnedMessageIds,
   });
 
-  // Effects (initialization, keyboard, cleanup, etc.)
-  usePanelEffects({
-    portRef,
-    sessionIdRef,
-    isReplayingRef,
-    jobActiveRef,
-    isAgentModeActiveRef,
-    promptedOnOpenRef,
-    historyCompletedTimerRef,
-    panelRef,
-    messagesEndRef,
-    logger,
-    stopConnection,
-    setPaletteOpen,
-    setFishMenuOpen,
-    setAgentSettingsOpen,
-    setFeedbackMenuOpen,
-    setMoreMenuOpen,
-    setHasConfiguredModels,
-    setHasProviders,
-    setReplayEnabled,
-    setDisplayHighlights,
-    setUseVisionState,
-    setShowTabPreviews,
-    setUseFullPlanningPipeline,
-    setEnablePlanner,
-    setEnableValidator,
-    setFavoritePrompts,
-    setShowJumpToLatest,
-    setShowEmergencyStop,
-    currentSessionId,
-    isReplaying,
-    isJobActive,
-    isAgentModeActive,
-    messages,
-    firstRunAccepted,
-    disablePerChatWarnings,
-    isFollowUpMode,
-    isHistoricalSession,
-    showTabPreviews,
-    resetPerChatAcceptance,
-    promptPerChatIfEnabled,
-  });
-
   // Message sender
   let handleSendMessage = useMemo(
     () =>
@@ -456,6 +413,55 @@ const SidePanel = () => {
       chatSessions,
     ],
   );
+
+  // Effects (initialization, keyboard, cleanup, etc.)
+  // NOTE: Must be after handleSendMessage is defined to avoid temporal dead zone
+  usePanelEffects({
+    portRef,
+    sessionIdRef,
+    isReplayingRef,
+    jobActiveRef,
+    isAgentModeActiveRef,
+    promptedOnOpenRef,
+    historyCompletedTimerRef,
+    panelRef,
+    messagesEndRef,
+    setInputTextRef,
+    setSelectedAgentRef,
+    setContextTabIdsRef,
+    logger,
+    stopConnection,
+    setPaletteOpen,
+    setFishMenuOpen,
+    setAgentSettingsOpen,
+    setFeedbackMenuOpen,
+    setMoreMenuOpen,
+    setHasConfiguredModels,
+    setHasProviders,
+    setReplayEnabled,
+    setDisplayHighlights,
+    setUseVisionState,
+    setShowTabPreviews,
+    setUseFullPlanningPipeline,
+    setEnablePlanner,
+    setEnableValidator,
+    setFavoritePrompts,
+    setShowJumpToLatest,
+    setShowEmergencyStop,
+    currentSessionId,
+    isReplaying,
+    isJobActive,
+    isAgentModeActive,
+    messages,
+    firstRunAccepted,
+    disablePerChatWarnings,
+    isFollowUpMode,
+    isHistoricalSession,
+    showTabPreviews,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    handleSendMessage,
+  });
 
   // Computed values
   const computedLaneInfo = useMemo(() => {
@@ -721,6 +727,7 @@ const SidePanel = () => {
               messagesEndRef={messagesEndRef}
               setInputTextRef={setInputTextRef}
               setSelectedAgentRef={setSelectedAgentRef}
+              setContextTabIdsRef={setContextTabIdsRef}
               setIsPreviewCollapsed={setIsPreviewCollapsed}
               setSelectedEstimationModel={setSelectedEstimationModel}
               setRecalculatedEstimation={setRecalculatedEstimation}
