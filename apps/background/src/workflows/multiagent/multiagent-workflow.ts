@@ -1,13 +1,6 @@
 import { createLogger } from '@src/log';
 import type { TaskManager } from '../../task/task-manager';
-import type {
-  WorkflowEventsPort,
-  WorkflowConfig,
-  TaskPlan,
-  SubtaskId,
-  SubtaskOutputs,
-  PriorOutput,
-} from './multiagent-types';
+import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId, SubtaskOutputs, PriorOutput } from './multiagent-types';
 import { planSubtasksFromQuery } from './multiagent-planner';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils/chat-history';
@@ -28,7 +21,7 @@ const logger = createLogger('workflow:multiagent');
  */
 export class MultiAgentWorkflow {
   private taskManager: TaskManager;
-  private port: WorkflowEventsPort;
+  private getPort: PortGetter;
   private config: WorkflowConfig;
   private sessionId: string;
   private subtasksById = new Map<
@@ -65,9 +58,9 @@ export class MultiAgentWorkflow {
   private abortController: AbortController = new AbortController();
   private contextTabIds: number[] = [];
 
-  constructor(taskManager: TaskManager, port: WorkflowEventsPort, sessionId: string, config: WorkflowConfig) {
+  constructor(taskManager: TaskManager, getPort: PortGetter, sessionId: string, config: WorkflowConfig) {
     this.taskManager = taskManager;
-    this.port = port;
+    this.getPort = getPort;
     this.sessionId = sessionId;
     this.config = { maxWorkers: Math.max(1, config.maxWorkers || 16) };
   }
@@ -82,8 +75,26 @@ export class MultiAgentWorkflow {
     this.refinerLLM = llm;
   }
 
+  /** Get current workflow graph for UI restoration after panel reconnect */
+  getCurrentGraph(): any {
+    if (this.lastNodes.length === 0) return null;
+    const titles: Record<number, string> = {};
+    for (const n of this.lastNodes) titles[n.id] = n.title;
+    const merged = buildMergedGraphAfterScheduleConsecutive(this.lastDeps, titles, this.lastSchedule);
+    const graph = buildGraphData(merged.vizSchedules, merged.dependenciesViz, merged.groupTitles, merged.durations);
+    return {
+      ...graph,
+      nodes: graph.nodes.map(n => ({ ...n, status: this.status.get(n.id) || 'not_started' })),
+    };
+  }
+
   private emit(type: string, data: any) {
-    safePostMessage(this.port, { type, data });
+    const port = this.getPort();
+    if (port) {
+      safePostMessage(port, { type, data });
+    } else {
+      logger.info(`[MultiAgent] No port available for event: ${type}`);
+    }
   }
 
   private buildDispatchPrompt(subtaskId: SubtaskId): string {
@@ -179,7 +190,6 @@ export class MultiAgentWorkflow {
           const block = buildChatHistoryBlock(sessionMsgs as any, {
             latestTaskText: query,
             stripUserRequestTags: true,
-            maxTurns: 6,
           });
           if (block && block.trim().length > 0) historyBlock = block;
         }
