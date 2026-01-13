@@ -53,6 +53,67 @@ attachRuntimeListeners({
   getCurrentPort: () => currentPort,
 });
 
+// Setup context menus for quick actions
+function setupContextMenus() {
+  // Remove existing menus first to avoid duplicates
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'explain-selection',
+      title: 'Explain this',
+      contexts: ['selection'],
+    });
+
+    // Show on all contexts except selection (which has its own menu item)
+    chrome.contextMenus.create({
+      id: 'summarize-page',
+      title: 'Summarize this page',
+      contexts: ['page', 'frame', 'link', 'image', 'video', 'audio'],
+    });
+
+    logger.info('Context menus created');
+  });
+}
+
+// Create menus on install/update
+chrome.runtime.onInstalled.addListener(() => {
+  setupContextMenus();
+});
+
+// Also create on startup (for when extension is reloaded)
+chrome.runtime.onStartup.addListener(() => {
+  setupContextMenus();
+});
+
+// Create immediately for dev reloads
+setupContextMenus();
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab?.windowId) return;
+
+  let pendingAction: { prompt: string; autoStart: boolean; workflowType: string; contextTabId?: number } | null = null;
+
+  if (info.menuItemId === 'explain-selection' && info.selectionText) {
+    pendingAction = {
+      prompt: `Explain this:\n\n${info.selectionText}`,
+      autoStart: true,
+      workflowType: 'chat',
+    };
+  } else if (info.menuItemId === 'summarize-page') {
+    // Summarize the currently open tab (where right-click happened)
+    pendingAction = {
+      prompt: 'Summarize this page',
+      autoStart: true,
+      workflowType: 'chat',
+      contextTabId: tab.id, // Pass the tab ID so it's added as context
+    };
+  }
+
+  if (pendingAction) {
+    await chrome.storage.session.set({ pendingAction });
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+});
+
 logger.info('background loaded');
 
 // storage/install listeners moved to listeners/runtime
@@ -366,3 +427,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     );
   } catch {}
 })();
+
+// Initialize API (only when built with __API__=true)
+import { initializeAPI } from './api';
+initializeAPI(taskManager);
