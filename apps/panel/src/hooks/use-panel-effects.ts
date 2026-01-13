@@ -16,6 +16,7 @@ export function usePanelEffects(params: {
   setSelectedAgentRef: MutableRefObject<((agent: any) => void) | null>;
   setContextTabIdsRef: MutableRefObject<((tabIds: number[]) => void) | null>;
   logger: any;
+  setupConnection: () => void;
   stopConnection: () => void;
   setPaletteOpen: (v: boolean) => void;
   setFishMenuOpen: (v: boolean) => void;
@@ -62,6 +63,7 @@ export function usePanelEffects(params: {
     setSelectedAgentRef,
     setContextTabIdsRef,
     logger,
+    setupConnection,
     stopConnection,
     setPaletteOpen,
     setFishMenuOpen,
@@ -108,6 +110,14 @@ export function usePanelEffects(params: {
   useEffect(() => {
     jobActiveRef.current = isJobActive;
   }, [isJobActive, jobActiveRef]);
+
+  // Establish connection on mount - this sends panel_opened to background
+  // which allows the background to restore any running workflows
+  useEffect(() => {
+    if (!portRef.current) {
+      setupConnection();
+    }
+  }, [portRef, setupConnection]);
 
   // Configuration checking
   useEffect(() => {
