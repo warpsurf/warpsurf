@@ -53,24 +53,23 @@ export default class Page {
     this._tabId = tabId;
     this._config = { ...DEFAULT_BROWSER_CONTEXT_CONFIG, ...config };
     this._state = build_initial_state(tabId, url, title);
-    
+
     const lowerCaseUrl = url.trim().toLowerCase();
     this._validWebPage =
-      (tabId && lowerCaseUrl && lowerCaseUrl.startsWith('http') &&
-        !lowerCaseUrl.startsWith('https://chromewebstore.google.com')) || false;
+      (tabId &&
+        lowerCaseUrl &&
+        lowerCaseUrl.startsWith('http') &&
+        !lowerCaseUrl.startsWith('https://chromewebstore.google.com')) ||
+      false;
 
     this._adapter = new PuppeteerAdapter(tabId);
     this._network = new NetworkWaiter(this._adapter, this._config);
-    this._scroll = new ScrollManager(
-      this._adapter,
-      tabId,
-      (node) => this.locateElement(node)
-    );
+    this._scroll = new ScrollManager(this._adapter, tabId, node => this.locateElement(node));
     this._screenshots = new ScreenshotService(
       this._adapter,
       () => this._cache?.cached || null,
       this._config,
-      () => this._network.waitForPageLoad()
+      () => this._network.waitForPageLoad(),
     );
     this._cache = new StateCache(
       tabId,
@@ -78,15 +77,25 @@ export default class Page {
       () => this._adapter.page,
       () => this._scroll.getScrollInfo(),
       () => this.removeHighlight(),
-      (fullPage) => this._screenshots.capture(fullPage)
+      fullPage => this._screenshots.capture(fullPage),
     );
   }
 
-  get tabId(): number { return this._tabId; }
-  get validWebPage(): boolean { return this._validWebPage; }
-  get attached(): boolean { return this._validWebPage && this._adapter.attached; }
-  get state(): PageState { return this._state; }
-  get config(): BrowserContextConfig { return this._config; }
+  get tabId(): number {
+    return this._tabId;
+  }
+  get validWebPage(): boolean {
+    return this._validWebPage;
+  }
+  get attached(): boolean {
+    return this._validWebPage && this._adapter.attached;
+  }
+  get state(): PageState {
+    return this._state;
+  }
+  get config(): BrowserContextConfig {
+    return this._config;
+  }
 
   updateConfig(config: Partial<BrowserContextConfig>): void {
     this._config = { ...this._config, ...config };
@@ -117,7 +126,13 @@ export default class Page {
 
   async getClickableElements(showHighlightElements: boolean, focusElement: number): Promise<DOMState | null> {
     if (!this._validWebPage) return null;
-    return _getClickableElements(this._tabId, this.url(), showHighlightElements, focusElement, this._config.viewportExpansion);
+    return _getClickableElements(
+      this._tabId,
+      this.url(),
+      showHighlightElements,
+      focusElement,
+      this._config.viewportExpansion,
+    );
   }
 
   getScrollInfo = () => this._scroll.getScrollInfo();
@@ -160,7 +175,7 @@ export default class Page {
   async navigateTo(url: string): Promise<void> {
     const page = this._adapter.page;
     if (!page) return;
-    
+
     logger.debug('navigateTo', url);
     if (!isUrlAllowed(url, this._config.allowedUrls, this._config.deniedUrls)) {
       throw new URLNotAllowedError(`URL: ${url} is not allowed`);
@@ -253,10 +268,7 @@ export default class Page {
       for (const modifier of modifiers) {
         await page.keyboard.down(this._convertKey(modifier));
       }
-      await Promise.all([
-        page.keyboard.press(this._convertKey(mainKey)),
-        this._network.waitForPageLoad(),
-      ]);
+      await Promise.all([page.keyboard.press(this._convertKey(mainKey)), this._network.waitForPageLoad()]);
       logger.debug('sendKeys complete', keys);
     } catch (error) {
       logger.error('Failed to send keys:', error);
@@ -283,17 +295,56 @@ export default class Page {
     }
 
     const keyMap: { [key: string]: string } = {
-      a: 'KeyA', b: 'KeyB', c: 'KeyC', d: 'KeyD', e: 'KeyE', f: 'KeyF',
-      g: 'KeyG', h: 'KeyH', i: 'KeyI', j: 'KeyJ', k: 'KeyK', l: 'KeyL',
-      m: 'KeyM', n: 'KeyN', o: 'KeyO', p: 'KeyP', q: 'KeyQ', r: 'KeyR',
-      s: 'KeyS', t: 'KeyT', u: 'KeyU', v: 'KeyV', w: 'KeyW', x: 'KeyX',
-      y: 'KeyY', z: 'KeyZ',
-      '0': 'Digit0', '1': 'Digit1', '2': 'Digit2', '3': 'Digit3', '4': 'Digit4',
-      '5': 'Digit5', '6': 'Digit6', '7': 'Digit7', '8': 'Digit8', '9': 'Digit9',
-      control: 'Control', shift: 'Shift', alt: 'Alt', meta: 'Meta',
-      enter: 'Enter', backspace: 'Backspace', delete: 'Delete',
-      arrowleft: 'ArrowLeft', arrowright: 'ArrowRight', arrowup: 'ArrowUp', arrowdown: 'ArrowDown',
-      escape: 'Escape', tab: 'Tab', space: 'Space',
+      a: 'KeyA',
+      b: 'KeyB',
+      c: 'KeyC',
+      d: 'KeyD',
+      e: 'KeyE',
+      f: 'KeyF',
+      g: 'KeyG',
+      h: 'KeyH',
+      i: 'KeyI',
+      j: 'KeyJ',
+      k: 'KeyK',
+      l: 'KeyL',
+      m: 'KeyM',
+      n: 'KeyN',
+      o: 'KeyO',
+      p: 'KeyP',
+      q: 'KeyQ',
+      r: 'KeyR',
+      s: 'KeyS',
+      t: 'KeyT',
+      u: 'KeyU',
+      v: 'KeyV',
+      w: 'KeyW',
+      x: 'KeyX',
+      y: 'KeyY',
+      z: 'KeyZ',
+      '0': 'Digit0',
+      '1': 'Digit1',
+      '2': 'Digit2',
+      '3': 'Digit3',
+      '4': 'Digit4',
+      '5': 'Digit5',
+      '6': 'Digit6',
+      '7': 'Digit7',
+      '8': 'Digit8',
+      '9': 'Digit9',
+      control: 'Control',
+      shift: 'Shift',
+      alt: 'Alt',
+      meta: 'Meta',
+      enter: 'Enter',
+      backspace: 'Backspace',
+      delete: 'Delete',
+      arrowleft: 'ArrowLeft',
+      arrowright: 'ArrowRight',
+      arrowup: 'ArrowUp',
+      arrowdown: 'ArrowDown',
+      escape: 'Escape',
+      tab: 'Tab',
+      space: 'Space',
     };
 
     const convertedKey = keyMap[lowerKey] || key;
@@ -308,20 +359,20 @@ export default class Page {
 
     if (!element || !page) throw new Error('Element not found or puppeteer not connected');
 
-      const elementHandle = await this.locateElement(element);
+    const elementHandle = await this.locateElement(element);
     if (!elementHandle) throw new Error('Dropdown element not found');
 
-      const options = await elementHandle.evaluate(select => {
+    const options = await elementHandle.evaluate(select => {
       if (!(select instanceof HTMLSelectElement)) throw new Error('Element is not a select element');
-        return Array.from(select.options).map(option => ({
-          index: option.index,
+      return Array.from(select.options).map(option => ({
+        index: option.index,
         text: option.text,
-          value: option.value,
-        }));
-      });
+        value: option.value,
+      }));
+    });
 
     if (!options.length) throw new Error('No options found in dropdown');
-      return options;
+    return options;
   }
 
   async selectDropdownOption(index: number, text: string): Promise<string> {
@@ -339,42 +390,42 @@ export default class Page {
       throw new Error(msg);
     }
 
-      const elementHandle = await this.locateElement(element);
+    const elementHandle = await this.locateElement(element);
     if (!elementHandle) throw new Error(`Dropdown element with index ${index} not found`);
 
-      const result = await elementHandle.evaluate(
-        (select, optionText, elementIndex) => {
-          if (!(select instanceof HTMLSelectElement)) {
+    const result = await elementHandle.evaluate(
+      (select, optionText, elementIndex) => {
+        if (!(select instanceof HTMLSelectElement)) {
           return { found: false, message: `Element with index ${elementIndex} is not a SELECT` };
-          }
+        }
 
-          const options = Array.from(select.options);
-          const option = options.find(opt => opt.text.trim() === optionText);
+        const options = Array.from(select.options);
+        const option = options.find(opt => opt.text.trim() === optionText);
 
-          if (!option) {
-            const availableOptions = options.map(o => o.text.trim()).join('", "');
-            return {
-              found: false,
-              message: `Option "${optionText}" not found in dropdown element with index ${elementIndex}. Available options: "${availableOptions}"`,
-            };
-          }
+        if (!option) {
+          const availableOptions = options.map(o => o.text.trim()).join('", "');
+          return {
+            found: false,
+            message: `Option "${optionText}" not found in dropdown element with index ${elementIndex}. Available options: "${availableOptions}"`,
+          };
+        }
 
-          const previousValue = select.value;
-          select.value = option.value;
+        const previousValue = select.value;
+        select.value = option.value;
 
-          if (previousValue !== option.value) {
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            select.dispatchEvent(new Event('input', { bubbles: true }));
-          }
+        if (previousValue !== option.value) {
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          select.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
         return { found: true, message: `Selected option "${optionText}" with value "${option.value}"` };
-        },
-        text,
-        index,
-      );
+      },
+      text,
+      index,
+    );
 
-      logger.debug('Selection result:', result);
-      return result.message;
+    logger.debug('Selection result:', result);
+    return result.message;
   }
 
   async locateElement(element: DOMElementNode): Promise<ElementHandle | null> {
@@ -464,40 +515,38 @@ export default class Page {
       }
 
       const tagName = await element.evaluate(el => el.tagName.toLowerCase());
-      const isContentEditable = await element.evaluate(el => {
-        if (el instanceof HTMLElement) return el.isContentEditable;
-        return false;
-      });
-      const isReadOnly = await element.evaluate(el => {
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.readOnly;
-        return false;
-      });
-      const isDisabled = await element.evaluate(el => {
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.disabled;
-        return false;
-      });
+      const isContentEditable = await element.evaluate(el => el instanceof HTMLElement && el.isContentEditable);
 
-      if ((isContentEditable || tagName === 'input') && !isReadOnly && !isDisabled) {
-        await element.evaluate(el => {
-          if (el instanceof HTMLElement) el.textContent = '';
-          if ('value' in el) (el as HTMLInputElement).value = '';
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        await element.type(text, { delay: 0.01 });
+      if (isContentEditable) {
+        // For contenteditable (Google Docs, rich editors), click to focus then type
+        await element.click();
+        // Select all existing content and delete it
+        const isMac = navigator.userAgent.toLowerCase().includes('mac os x');
+        const modifier = isMac ? 'Meta' : 'Control';
+        await page.keyboard.down(modifier);
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up(modifier);
+        await page.keyboard.press('Backspace');
+        // Type with reasonable delay for editors to process
+        await page.keyboard.type(text, { delay: 1 });
       } else {
+        // For form inputs and other elements, set value directly
         await element.evaluate((el, value) => {
+          if (el instanceof HTMLElement) el.focus();
           if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
             el.value = value;
-          } else if (el instanceof HTMLElement && el.isContentEditable) {
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (el instanceof HTMLElement) {
             el.textContent = value;
           }
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
         }, text);
       }
 
       await this._network.waitForPageLoad();
+
+      // Verify text was actually entered
+      await this._verifyInputText(element, text, tagName);
     } catch (error) {
       const errorMsg = `Failed to input text into element: ${elementNode}. Error: ${error instanceof Error ? error.message : String(error)}`;
       logger.error(errorMsg);
@@ -531,6 +580,36 @@ export default class Page {
     logger.debug('Element stability check completed');
   }
 
+  private async _verifyInputText(element: ElementHandle, text: string, tagName: string): Promise<void> {
+    // Brief delay for DOM to settle
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const result = await element.evaluate((el, expected) => {
+      let actual = '';
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        actual = el.value;
+      } else if (el instanceof HTMLElement) {
+        actual = (el.innerText || el.textContent || '').trim();
+      }
+      const prefix = expected.slice(0, 50);
+      return {
+        verified: actual.length > 0 && actual.includes(prefix),
+        length: actual.length,
+        preview: actual.slice(0, 100),
+      };
+    }, text);
+
+    if (!result.verified) {
+      const preview = result.preview ? `"${result.preview}"` : '(empty)';
+      throw new Error(
+        `Input verification failed for ${tagName}: text not found. ` +
+          `Element contains ${result.length} chars: ${preview}`,
+      );
+    }
+
+    logger.debug(`Input verified: ${result.length} chars in ${tagName}`);
+  }
+
   async clickElementNode(useVision: boolean, elementNode: DOMElementNode): Promise<void> {
     const page = this._adapter.page;
     if (!page) throw new Error('Puppeteer is not connected');
@@ -554,11 +633,15 @@ export default class Page {
           await element.evaluate(el => (el as HTMLElement).click());
         } catch (secondError) {
           if (secondError instanceof URLNotAllowedError) throw secondError;
-          throw new Error(`Failed to click element: ${secondError instanceof Error ? secondError.message : String(secondError)}`);
+          throw new Error(
+            `Failed to click element: ${secondError instanceof Error ? secondError.message : String(secondError)}`,
+          );
         }
       }
     } catch (error) {
-      throw new Error(`Failed to click element: ${elementNode}. Error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to click element: ${elementNode}. Error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -641,14 +724,25 @@ export default class Page {
     if (!page) throw new Error('Puppeteer is not connected');
 
     try {
-      const ok = await page.evaluate((sel: string, nth: number) => {
-        const all = Array.from(document.querySelectorAll(sel));
-        const idx = Math.max(1, nth) - 1;
-        const el = all[idx] as HTMLElement | undefined;
-        if (!el) return false;
-        try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
-        try { (el as HTMLElement).click(); return true; } catch { return false; }
-      }, selector, nth);
+      const ok = await page.evaluate(
+        (sel: string, nth: number) => {
+          const all = Array.from(document.querySelectorAll(sel));
+          const idx = Math.max(1, nth) - 1;
+          const el = all[idx] as HTMLElement | undefined;
+          if (!el) return false;
+          try {
+            el.scrollIntoView({ block: 'center', inline: 'center' });
+          } catch {}
+          try {
+            (el as HTMLElement).click();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        selector,
+        nth,
+      );
       return !!ok;
     } catch (error) {
       logger.debug('clickSelector failed:', error);
@@ -692,8 +786,15 @@ export default class Page {
           const idx = Math.max(1, nth) - 1;
           const el = matches[idx];
           if (!el) return false;
-          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
-          try { el.click(); return true; } catch { return false; }
+          try {
+            el.scrollIntoView({ block: 'center', inline: 'center' });
+          } catch {}
+          try {
+            el.click();
+            return true;
+          } catch {
+            return false;
+          }
         },
         text,
         exact,
@@ -701,7 +802,7 @@ export default class Page {
         nth,
       );
       return !!ok;
-      } catch (error) {
+    } catch (error) {
       logger.debug('findAndClickText failed:', error);
       return false;
     }
