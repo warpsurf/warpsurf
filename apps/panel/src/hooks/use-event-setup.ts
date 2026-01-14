@@ -57,6 +57,7 @@ export function useEventSetup(params: {
   setIsStopping: (v: boolean) => void;
   setCurrentSessionId: (v: string | null) => void;
   setShowDashboard: (v: boolean) => void;
+  setShowHistory: (v: boolean) => void;
   setCurrentTaskAgentType: (v: string | null) => void;
   currentTaskAgentType: string | null;
   workerTabGroups: any[];
@@ -117,6 +118,7 @@ export function useEventSetup(params: {
     setIsStopping,
     setCurrentSessionId,
     setShowDashboard,
+    setShowHistory,
     setCurrentTaskAgentType,
   } = params;
 
@@ -367,6 +369,7 @@ export function useEventSetup(params: {
         // Session restoration deps
         setCurrentSessionId,
         setShowDashboard,
+        setShowHistory,
         setCurrentTaskAgentType,
       }),
     [
@@ -413,6 +416,7 @@ export function useEventSetup(params: {
       setIsStopping,
       setCurrentSessionId,
       setShowDashboard,
+      setShowHistory,
       setCurrentTaskAgentType,
       chatSessions,
       params.currentTaskAgentType,

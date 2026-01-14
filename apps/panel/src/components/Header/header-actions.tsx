@@ -12,6 +12,7 @@ interface HeaderActionsProps {
   onNewChat: () => void;
   onLoadHistory: () => void;
   onLoadDashboard: () => void;
+  runningAgentsCount?: number;
   agentSettingsOpen: boolean;
   setAgentSettingsOpen: (v: boolean) => void;
   feedbackMenuOpen: boolean;
@@ -207,8 +208,13 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
         <button
           type="button"
           onClick={props.onLoadDashboard}
-          className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
+          className={`relative rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
           Agent Dashboard
+          {(props.runningAgentsCount ?? 0) > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold text-white">
+              {props.runningAgentsCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -533,8 +539,13 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                     props.onLoadDashboard();
                     setMoreMenuOpen(false);
                   }}
-                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
-                  Agent Dashboard
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center justify-between rounded px-3 py-2`}>
+                  <span>Agent Dashboard</span>
+                  {(props.runningAgentsCount ?? 0) > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold text-white">
+                      {props.runningAgentsCount}
+                    </span>
+                  )}
                 </button>
               )}
 

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import { type Message } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 const CommandPalette = lazy(() => import('./components/header/command-palette'));
@@ -38,6 +38,7 @@ const SidePanel = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0);
   const [showPopulations, setShowPopulations] = useState(false);
   const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const [isHistoricalSession, setIsHistoricalSession] = useState(false);
@@ -230,6 +231,7 @@ const SidePanel = () => {
     setIsStopping,
     setCurrentSessionId,
     setShowDashboard,
+    setShowHistory,
     setCurrentTaskAgentType,
     currentTaskAgentType,
     workerTabGroups,
@@ -467,6 +469,36 @@ const SidePanel = () => {
     handleSendMessage,
   });
 
+  // Subscribe to running agents count for dashboard badge
+  useEffect(() => {
+    const updateCount = async () => {
+      try {
+        const stored = await chrome.storage.local.get('agent_dashboard_running');
+        const list = stored.agent_dashboard_running || [];
+        setRunningAgentsCount(Array.isArray(list) ? list.length : 0);
+      } catch {}
+    };
+    updateCount();
+    const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes.agent_dashboard_running) {
+        const list = changes.agent_dashboard_running.newValue || [];
+        setRunningAgentsCount(Array.isArray(list) ? list.length : 0);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
+  // Persist panel view state for restoration on reopen
+  useEffect(() => {
+    const viewMode = showHistory ? 'history' : showDashboard ? 'dashboard' : 'chat';
+    chrome.storage.local
+      .set({
+        panel_view_state: { currentSessionId, viewMode, timestamp: Date.now() },
+      })
+      .catch(() => {});
+  }, [currentSessionId, showHistory, showDashboard]);
+
   // Computed values
   const computedLaneInfo = useMemo(() => {
     try {
@@ -611,6 +643,7 @@ const SidePanel = () => {
                   onNewChat={handleNewChat}
                   onLoadHistory={handleLoadHistory}
                   onLoadDashboard={handleLoadDashboard}
+                  runningAgentsCount={runningAgentsCount}
                   agentSettingsOpen={agentSettingsOpen}
                   setAgentSettingsOpen={setAgentSettingsOpen}
                   feedbackMenuOpen={feedbackMenuOpen}
