@@ -64,7 +64,7 @@ export async function buildContextTabsMessage(
   }
 
   if (!contents.length) {
-    logger.warn('No valid context tab content available');
+    logger.warning('No valid context tab content available');
     return null;
   }
 

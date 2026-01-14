@@ -46,6 +46,8 @@ export type SidePanelDeps = {
   workflowsBySession: Map<string, MultiAgentWorkflow>;
   runningWorkflowSessionIds: Set<string>;
   setCurrentWorkflow: (wf: MultiAgentWorkflow | null) => void;
+  eventBuffer: any[];
+  maxEventBufferSize: number;
 };
 
 export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: SidePanelDeps): void {
@@ -59,6 +61,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
     workflowsBySession,
     runningWorkflowSessionIds,
     setCurrentWorkflow,
+    eventBuffer,
+    maxEventBufferSize,
   } = deps;
 
   logger.info('Side panel connected');
@@ -112,9 +116,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           await handleNewTask(message, {
             taskManager,
             logger,
-            currentPort: getCurrentPort(),
+            getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
+            eventBuffer,
+            maxEventBufferSize,
           });
           return;
         }
@@ -122,9 +128,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           await handleFollowUpTask(message, {
             taskManager,
             logger,
-            currentPort: getCurrentPort(),
+            getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
+            eventBuffer,
+            maxEventBufferSize,
           });
           return;
         }
@@ -354,8 +362,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               ),
             );
 
-            // Create orchestrator and start
-            const orchestrator = new MultiAgentWorkflow(taskManager, port, String(sessionId), { maxWorkers });
+            // Create orchestrator and start (pass port getter for reconnection support)
+            const orchestrator = new MultiAgentWorkflow(taskManager, getCurrentPort, String(sessionId), { maxWorkers });
 
             // Pass context tab IDs to the orchestrator for planner injection
             if (contextTabIds.length > 0) {
@@ -445,7 +453,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           break;
         }
         case 'panel_opened': {
-          // Prewarm: initialize provider costs, inject DOM/mardown helpers in active tab
+          // Prewarm: initialize provider costs, inject DOM/markdown helpers in active tab
           try {
             await initializeCostCalculator();
           } catch {}
@@ -455,6 +463,66 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               await injectBuildDomTree(active.id, active.url);
             }
           } catch {}
+
+          // Clean up stale running entries in dashboard storage
+          try {
+            const executorSessionId = (getCurrentExecutor() as any)?.context?.taskId;
+            const validRunningIds = new Set<string>([...runningWorkflowSessionIds]);
+            if (executorSessionId) validRunningIds.add(String(executorSessionId));
+
+            const stored = await chrome.storage.local.get('agent_dashboard_running');
+            const runningList: any[] = stored.agent_dashboard_running || [];
+            const cleaned = runningList.filter((a: any) => validRunningIds.has(String(a?.sessionId)));
+            if (cleaned.length !== runningList.length) {
+              await chrome.storage.local.set({ agent_dashboard_running: cleaned });
+            }
+          } catch {}
+
+          // Collect buffered events to include in restore message
+          const bufferedEvents = eventBuffer.length > 0 ? eventBuffer.splice(0, eventBuffer.length) : [];
+
+          // Restore running workflow state if any
+          try {
+            if (runningWorkflowSessionIds.size > 0) {
+              const activeSessionId = [...runningWorkflowSessionIds][0];
+              const workflow = workflowsBySession.get(activeSessionId);
+              safePostMessage(port, {
+                type: 'restore_active_session',
+                data: {
+                  sessionId: activeSessionId,
+                  agentType: 'multiagent',
+                  isRunning: true,
+                  workflowGraph: workflow?.getCurrentGraph?.() || null,
+                  bufferedEvents, // Include buffered events
+                },
+              });
+            } else if (getCurrentExecutor()) {
+              const executor = getCurrentExecutor();
+              const sessionId = (executor as any)?.context?.taskId;
+              if (sessionId) {
+                safePostMessage(port, {
+                  type: 'restore_active_session',
+                  data: {
+                    sessionId,
+                    agentType: (executor as any)?.manualAgentType || 'agent',
+                    isRunning: true,
+                    bufferedEvents,
+                  },
+                });
+              }
+            } else {
+              // No active workflow - restore saved view state
+              try {
+                const stored = await chrome.storage.local.get('panel_view_state');
+                const viewState = stored.panel_view_state;
+                if (viewState?.currentSessionId || viewState?.viewMode) {
+                  safePostMessage(port, { type: 'restore_view_state', data: viewState });
+                }
+              } catch {}
+            }
+          } catch (e) {
+            logger.error('[panel_opened] Failed to restore session:', e);
+          }
           break;
         }
         case 'heartbeat':
@@ -953,6 +1021,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               getCurrentExecutor,
               setCurrentExecutor,
               setCurrentWorkflow,
+              eventBuffer,
             });
           } catch (e) {
             logger.error('[KILLSWITCH] Handler failed:', e instanceof Error ? e.message : String(e));

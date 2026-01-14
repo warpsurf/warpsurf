@@ -58,7 +58,7 @@ export class ChatWorkflow {
             logger.info(`Injected context from ${this.context.contextTabIds.length} tabs`);
           }
         } catch (e) {
-          logger.warn('Failed to inject context tabs:', e);
+          logger.warning('Failed to inject context tabs:', e);
         }
       }
 

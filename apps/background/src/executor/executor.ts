@@ -198,7 +198,7 @@ export class Executor {
         logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
       }
     } catch (e) {
-      logger.warn('Failed to inject context tabs for agent:', e);
+      logger.warning('Failed to inject context tabs for agent:', e);
     }
   }
 

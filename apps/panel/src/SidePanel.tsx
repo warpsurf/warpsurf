@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import { type Message } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 const CommandPalette = lazy(() => import('./components/header/command-palette'));
@@ -38,6 +38,7 @@ const SidePanel = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0);
   const [showPopulations, setShowPopulations] = useState(false);
   const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const [isHistoricalSession, setIsHistoricalSession] = useState(false);
@@ -110,6 +111,7 @@ const SidePanel = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const setInputTextRef = useRef<((text: string) => void) | null>(null);
   const setSelectedAgentRef = useRef<((agent: AgentType) => void) | null>(null);
+  const setContextTabIdsRef = useRef<((tabIds: number[]) => void) | null>(null);
   const lastAgentMessageRef = useRef<{ timestamp: number; actor: string } | null>(null);
   const taskIdToRootIdRef = useRef<Map<string, string>>(new Map());
   const lastAgentMessageByTaskRef = useRef<Map<string, { timestamp: number; actor: string }>>(new Map());
@@ -227,6 +229,10 @@ const SidePanel = () => {
     setShowInlineWorkflow,
     setTokenLog,
     setIsStopping,
+    setCurrentSessionId,
+    setShowDashboard,
+    setShowHistory,
+    setCurrentTaskAgentType,
     currentTaskAgentType,
     workerTabGroups,
     messages,
@@ -318,50 +324,6 @@ const SidePanel = () => {
     workerTabGroups,
     currentTaskAgentType,
     pinnedMessageIds,
-  });
-
-  // Effects (initialization, keyboard, cleanup, etc.)
-  usePanelEffects({
-    portRef,
-    sessionIdRef,
-    isReplayingRef,
-    jobActiveRef,
-    isAgentModeActiveRef,
-    promptedOnOpenRef,
-    historyCompletedTimerRef,
-    panelRef,
-    messagesEndRef,
-    logger,
-    stopConnection,
-    setPaletteOpen,
-    setFishMenuOpen,
-    setAgentSettingsOpen,
-    setFeedbackMenuOpen,
-    setMoreMenuOpen,
-    setHasConfiguredModels,
-    setHasProviders,
-    setReplayEnabled,
-    setDisplayHighlights,
-    setUseVisionState,
-    setShowTabPreviews,
-    setUseFullPlanningPipeline,
-    setEnablePlanner,
-    setEnableValidator,
-    setFavoritePrompts,
-    setShowJumpToLatest,
-    setShowEmergencyStop,
-    currentSessionId,
-    isReplaying,
-    isJobActive,
-    isAgentModeActive,
-    messages,
-    firstRunAccepted,
-    disablePerChatWarnings,
-    isFollowUpMode,
-    isHistoricalSession,
-    showTabPreviews,
-    resetPerChatAcceptance,
-    promptPerChatIfEnabled,
   });
 
   // Message sender
@@ -456,6 +418,87 @@ const SidePanel = () => {
       chatSessions,
     ],
   );
+
+  // Effects (initialization, keyboard, cleanup, etc.)
+  // NOTE: Must be after handleSendMessage is defined to avoid temporal dead zone
+  usePanelEffects({
+    portRef,
+    sessionIdRef,
+    isReplayingRef,
+    jobActiveRef,
+    isAgentModeActiveRef,
+    promptedOnOpenRef,
+    historyCompletedTimerRef,
+    panelRef,
+    messagesEndRef,
+    setInputTextRef,
+    setSelectedAgentRef,
+    setContextTabIdsRef,
+    logger,
+    setupConnection,
+    stopConnection,
+    setPaletteOpen,
+    setFishMenuOpen,
+    setAgentSettingsOpen,
+    setFeedbackMenuOpen,
+    setMoreMenuOpen,
+    setHasConfiguredModels,
+    setHasProviders,
+    setReplayEnabled,
+    setDisplayHighlights,
+    setUseVisionState,
+    setShowTabPreviews,
+    setUseFullPlanningPipeline,
+    setEnablePlanner,
+    setEnableValidator,
+    setFavoritePrompts,
+    setShowJumpToLatest,
+    setShowEmergencyStop,
+    currentSessionId,
+    isReplaying,
+    isJobActive,
+    isAgentModeActive,
+    messages,
+    firstRunAccepted,
+    disablePerChatWarnings,
+    isFollowUpMode,
+    isHistoricalSession,
+    showTabPreviews,
+    resetPerChatAcceptance,
+    promptPerChatIfEnabled,
+    handleSendMessage,
+    appendMessage,
+  });
+
+  // Subscribe to running agents count for dashboard badge
+  useEffect(() => {
+    const updateCount = async () => {
+      try {
+        const stored = await chrome.storage.local.get('agent_dashboard_running');
+        const list = stored.agent_dashboard_running || [];
+        setRunningAgentsCount(Array.isArray(list) ? list.length : 0);
+      } catch {}
+    };
+    updateCount();
+    const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes.agent_dashboard_running) {
+        const list = changes.agent_dashboard_running.newValue || [];
+        setRunningAgentsCount(Array.isArray(list) ? list.length : 0);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
+  // Persist panel view state for restoration on reopen
+  useEffect(() => {
+    const viewMode = showHistory ? 'history' : showDashboard ? 'dashboard' : 'chat';
+    chrome.storage.local
+      .set({
+        panel_view_state: { currentSessionId, viewMode, timestamp: Date.now() },
+      })
+      .catch(() => {});
+  }, [currentSessionId, showHistory, showDashboard]);
 
   // Computed values
   const computedLaneInfo = useMemo(() => {
@@ -601,6 +644,7 @@ const SidePanel = () => {
                   onNewChat={handleNewChat}
                   onLoadHistory={handleLoadHistory}
                   onLoadDashboard={handleLoadDashboard}
+                  runningAgentsCount={runningAgentsCount}
                   agentSettingsOpen={agentSettingsOpen}
                   setAgentSettingsOpen={setAgentSettingsOpen}
                   feedbackMenuOpen={feedbackMenuOpen}
@@ -721,6 +765,7 @@ const SidePanel = () => {
               messagesEndRef={messagesEndRef}
               setInputTextRef={setInputTextRef}
               setSelectedAgentRef={setSelectedAgentRef}
+              setContextTabIdsRef={setContextTabIdsRef}
               setIsPreviewCollapsed={setIsPreviewCollapsed}
               setSelectedEstimationModel={setSelectedEstimationModel}
               setRecalculatedEstimation={setRecalculatedEstimation}

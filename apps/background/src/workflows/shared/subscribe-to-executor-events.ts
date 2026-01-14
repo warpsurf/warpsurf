@@ -3,12 +3,22 @@ import { ExecutionState } from '@src/workflows/shared/event/types';
 import { globalTokenTracker } from '@src/utils/token-tracker';
 import { sessionLogArchive } from '@src/utils/session-log-archive';
 
+/** Port getter for dynamic resolution (handles panel reconnection) */
+type PortGetter = () => chrome.runtime.Port | null;
+
+/** Options for event buffering when port is disconnected */
+type BufferOptions = {
+  eventBuffer: any[];
+  maxSize: number;
+};
+
 export async function subscribeToExecutorEvents(
   executor: Executor,
-  currentPort: chrome.runtime.Port | null,
+  getPort: PortGetter,
   taskManager: any,
   logger: { warning: Function; debug: Function },
   onTaskFinished?: (executor: Executor) => void,
+  bufferOptions?: BufferOptions,
 ) {
   if ((executor as any).__backgroundSubscribed) {
     logger.warning('Executor already has background subscription, skipping duplicate');
@@ -40,33 +50,39 @@ export async function subscribeToExecutorEvents(
     } catch {}
 
     try {
+      const currentPort = getPort();
+
+      // Build base event (needed whether we send now or buffer)
+      const baseDataBuilder = () => {
+        const base: any = { ...event.data, taskId: event.data?.taskId };
+        try {
+          const t = event.data?.taskId ? taskManager.getTask(event.data.taskId) : undefined;
+          if (t) {
+            base.agentColor = t.color;
+            base.agentName = t.name;
+          }
+        } catch {}
+        return base;
+      };
+
+      const isTerminal =
+        event.state === ExecutionState.TASK_OK ||
+        event.state === ExecutionState.TASK_FAIL ||
+        event.state === ExecutionState.TASK_CANCEL;
+
+      const outEvent: any = {
+        type: event.type,
+        actor: event.actor,
+        state: event.state,
+        data: baseDataBuilder(),
+        timestamp: event.timestamp,
+      };
+
+      if (!currentPort && bufferOptions && bufferOptions.eventBuffer.length < bufferOptions.maxSize) {
+        bufferOptions.eventBuffer.push(outEvent);
+      }
+
       if (currentPort) {
-        // Build base event
-        const baseDataBuilder = () => {
-          const base: any = { ...event.data, taskId: event.data?.taskId };
-          try {
-            const t = event.data?.taskId ? taskManager.getTask(event.data.taskId) : undefined;
-            if (t) {
-              base.agentColor = t.color;
-              base.agentName = t.name;
-            }
-          } catch {}
-          return base;
-        };
-
-        const isTerminal =
-          event.state === ExecutionState.TASK_OK ||
-          event.state === ExecutionState.TASK_FAIL ||
-          event.state === ExecutionState.TASK_CANCEL;
-
-        const outEvent: any = {
-          type: event.type,
-          actor: event.actor,
-          state: event.state,
-          data: baseDataBuilder(),
-          timestamp: event.timestamp,
-        };
-
         if (isTerminal) {
           try {
             const taskId: string | undefined = (event as any)?.data?.taskId;
@@ -145,7 +161,12 @@ export async function subscribeToExecutorEvents(
           }
         }
 
-        currentPort.postMessage(outEvent);
+        try {
+          currentPort.postMessage(outEvent);
+        } catch (postErr) {
+          logger.debug('Failed to post message to side panel:', postErr);
+          throw postErr;
+        }
       }
     } catch (error) {
       logger.debug('Failed to send message to side panel:', error);

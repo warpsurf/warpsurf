@@ -1,11 +1,6 @@
 import { createChatModel } from '@src/workflows/models/factory';
-import {
-  agentModelStore,
-  AgentNameEnum,
-  getDefaultDisplayNameFromProviderId,
-  generalSettingsStore,
-} from '@extension/storage';
-import { getAllProvidersDecrypted } from '@src/crypto';
+import { AgentNameEnum, getDefaultDisplayNameFromProviderId, generalSettingsStore } from '@extension/storage';
+import { getAllProvidersDecrypted, getAllAgentModelsDecrypted } from '@src/crypto';
 import { createLogger } from '@src/log';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -49,7 +44,7 @@ export class AutoWorkflow {
         return;
       }
 
-      const agentModels = await agentModelStore.getAllAgentModels();
+      const agentModels = await getAllAgentModelsDecrypted();
       logger.info(`Found agent models:`, Object.keys(agentModels));
 
       let autoModel = agentModels[AgentNameEnum.Auto];
@@ -165,7 +160,6 @@ ${request}`;
         const historyBlock = await getChatHistoryForSession(sessionId, {
           latestTaskText: request,
           stripUserRequestTags: true,
-          maxTurns: 4,
         });
         if (historyBlock) {
           messages.push(new SystemMessage(historyBlock));

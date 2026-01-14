@@ -44,19 +44,28 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
             const agentModels = await agentModelStore.getAllAgentModels();
             const navigatorCfg = agentModels[AgentNameEnum.Navigator];
             if (!navigatorCfg) {
-              return port.postMessage({ type: 'error', error: 'Please choose a model for the navigator in the settings first' });
+              return port.postMessage({
+                type: 'error',
+                error: 'Please choose a model for the navigator in the settings first',
+              });
             }
             const navigatorLLM: BaseChatModel = createChatModel(providers[navigatorCfg.provider], navigatorCfg);
 
             const plannerCfg = agentModels[AgentNameEnum.Planner] || null;
             const validatorCfg = agentModels[AgentNameEnum.Validator] || null;
-            const plannerLLM: BaseChatModel | null = plannerCfg ? createChatModel(providers[plannerCfg.provider], plannerCfg) : null;
-            const validatorLLM: BaseChatModel | null = validatorCfg ? createChatModel(providers[validatorCfg.provider], validatorCfg) : null;
+            const plannerLLM: BaseChatModel | null = plannerCfg
+              ? createChatModel(providers[plannerCfg.provider], plannerCfg)
+              : null;
+            const validatorLLM: BaseChatModel | null = validatorCfg
+              ? createChatModel(providers[validatorCfg.provider], validatorCfg)
+              : null;
 
             // Apply general settings; disable full planning by default for single-agent modes
             const generalSettings = await generalSettingsStore.getSettings();
             const effectiveSettings: any = { ...generalSettings };
-            try { (effectiveSettings as any).useFullPlanningPipeline = false; } catch {}
+            try {
+              (effectiveSettings as any).useFullPlanningPipeline = false;
+            } catch {}
 
             // Build single-agent executor bound to this session
             const browserCtx = new BrowserContext({});
@@ -76,10 +85,16 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
             });
 
             // Register with TaskManager for mirroring/tab grouping, then forward execution events to panel
-            try { taskManager.tabMirrorService.setVisionEnabled(!!(generalSettings.showTabPreviews ?? true)); } catch {}
-            try { taskManager.setSingleAgentExecutor(sessionId, executor as any, tabId > 0 ? tabId : 0); } catch {}
+            try {
+              taskManager.tabMirrorService.setVisionEnabled(!!(generalSettings.showTabPreviews ?? true));
+            } catch {}
+            try {
+              taskManager.setSingleAgentExecutor(sessionId, executor as any, tabId > 0 ? tabId : 0);
+            } catch {}
             delete (executor as any).__backgroundSubscribed;
-            try { await subscribeToExecutorEvents(executor, getCurrentPort(), taskManager, logger); } catch {}
+            try {
+              await subscribeToExecutorEvents(executor, getCurrentPort, taskManager, logger);
+            } catch {}
 
             // Initialize and run asynchronously
             (async () => {
@@ -87,7 +102,8 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
                 await executor.initialize();
                 await executor.execute();
               } catch (e) {
-                safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Task failed' });}
+                safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Task failed' });
+              }
             })();
             return;
           } catch (e) {
@@ -106,21 +122,43 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
 
             const task = taskManager.getTask(sessionId);
             if (task && task.executor) {
-              try { (task.executor as any).addFollowUpTask(query, manualAgentType); } catch {}
-              try { (task.executor as any).clearExecutionEvents?.(); } catch {}
-              try { await subscribeToExecutorEvents(task.executor as any, getCurrentPort(), taskManager, logger); } catch {}
+              try {
+                (task.executor as any).addFollowUpTask(query, manualAgentType);
+              } catch {}
+              try {
+                (task.executor as any).clearExecutionEvents?.();
+              } catch {}
+              try {
+                await subscribeToExecutorEvents(task.executor as any, getCurrentPort(), taskManager, logger);
+              } catch {}
               // CRITICAL FIX: Reactivate task in TaskManager so STOP button works on follow-ups
-              try { taskManager.reactivateTask(sessionId); } catch {}
-              ;(async () => { try { await (task.executor as any).execute(); } catch (e) { safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Follow-up failed' });} })();
+              try {
+                taskManager.reactivateTask(sessionId);
+              } catch {}
+              (async () => {
+                try {
+                  await (task.executor as any).execute();
+                } catch (e) {
+                  safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Follow-up failed' });
+                }
+              })();
               return;
             }
             // If no existing executor, fall back to new_task flow
-            port.postMessage({ type: 'panel_log', message: '[Compat] follow_up_task -> new_task (no existing executor)' });
+            port.postMessage({
+              type: 'panel_log',
+              message: '[Compat] follow_up_task -> new_task (no existing executor)',
+            });
             const newMsg = { ...message, type: 'new_task' };
-            try { (port as any).onMessage.dispatch?.(newMsg); } catch {}
+            try {
+              (port as any).onMessage.dispatch?.(newMsg);
+            } catch {}
             return;
           } catch (e) {
-            return port.postMessage({ type: 'error', error: e instanceof Error ? e.message : 'Failed to send follow-up' });
+            return port.postMessage({
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to send follow-up',
+            });
           }
         }
 
@@ -131,13 +169,13 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
             if (!id) {
               return port.postMessage({ type: 'error', error: 'Missing taskId/sessionId' });
             }
-            
+
             // First, check if there's a pending estimation for this session and cancel it
             try {
               const { cancelEstimation } = await import('../executor/task-handlers');
               cancelEstimation(id);
               logger.info(`[Estimation] Cancelled estimation for session ${id} via cancel_task (dashboard)`);
-              
+
               // Send immediate cancellation feedback to frontend
               const { Actors, ExecutionState } = await import('../workflows/shared/event/types');
               port.postMessage({
@@ -150,14 +188,16 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
                   maxSteps: 0,
                   details: 'Workflow cancelled by user',
                 },
-                timestamp: Date.now()
+                timestamp: Date.now(),
               });
             } catch (e) {
               // Estimation might not exist, continue with task cancellation
             }
-            
+
             await taskManager.cancelTask(id);
-            try { await (taskManager as any).cancelAllForParentSession?.(id); } catch {}
+            try {
+              await (taskManager as any).cancelAllForParentSession?.(id);
+            } catch {}
             return port.postMessage({ type: 'success' });
           } catch (e) {
             return port.postMessage({ type: 'error', error: e instanceof Error ? e.message : 'Failed to cancel task' });
@@ -172,7 +212,10 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
             setPreviewVisibility(taskManager as any, String(sessionId), !!visible);
             return port.postMessage({ type: 'success' });
           } catch (e) {
-            return port.postMessage({ type: 'error', error: e instanceof Error ? e.message : 'Failed to set visibility' });
+            return port.postMessage({
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to set visibility',
+            });
           }
         }
         case 'get-agents-status': {
@@ -218,7 +261,14 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
           break;
         }
         case 'get-all-mirrors-for-cleanup': {
-          try { await sendAllMirrorsForCleanup(taskManager as any, port); } catch (e) { return port.postMessage({ type: 'tab-mirror-batch-for-cleanup', error: e instanceof Error ? e.message : 'Failed to get mirrors for cleanup' }); }
+          try {
+            await sendAllMirrorsForCleanup(taskManager as any, port);
+          } catch (e) {
+            return port.postMessage({
+              type: 'tab-mirror-batch-for-cleanup',
+              error: e instanceof Error ? e.message : 'Failed to get mirrors for cleanup',
+            });
+          }
           break;
         }
         default:
@@ -235,5 +285,3 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
     setDashboardPort(undefined);
   });
 }
-
-

@@ -22,6 +22,14 @@ type BackgroundHandlers = {
   onWorkerSessionCreated?: (message: any) => void;
   onCancelTaskResult?: (message: any) => void;
   onKillAllComplete?: (message: any) => void;
+  onRestoreActiveSession?: (data: {
+    sessionId: string;
+    agentType: string;
+    isRunning: boolean;
+    workflowGraph?: any;
+    bufferedEvents?: any[];
+  }) => void;
+  onRestoreViewState?: (data: { currentSessionId?: string; viewMode?: string }) => void;
   onDisconnect?: (error?: any) => void;
 };
 
@@ -39,7 +47,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
   const handlersRef = useRef<Partial<BackgroundHandlers>>(handlers);
   const cancelledSessionsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => { handlersRef.current = handlers; }, [handlers]);
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
 
   const stopConnection = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -47,7 +57,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
       heartbeatIntervalRef.current = null;
     }
     if (portRef.current) {
-      try { portRef.current.disconnect(); } catch {}
+      try {
+        portRef.current.disconnect();
+      } catch {}
       portRef.current = null;
     }
   }, [portRef]);
@@ -71,9 +83,13 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         throw new Error(chrome.runtime.lastError.message || 'Failed to connect to service worker');
       }
 
-      logger.log('[Panel] Successfully connected to background script');
-      try { portRef.current.postMessage({ type: 'panel_opened' }); } catch {}
-      logger.log('[Panel] Connection status:', { portName: portRef.current?.name, portState: portRef.current ? 'connected' : 'null' });
+      try {
+        portRef.current.postMessage({ type: 'panel_opened' });
+      } catch {}
+      logger.log('[Panel] Connection status:', {
+        portName: portRef.current?.name,
+        portState: portRef.current ? 'connected' : 'null',
+      });
 
       // biome-ignore lint/suspicious/noExplicitAny: background messages are dynamic
       portRef.current.onMessage.addListener((message: any) => {
@@ -94,11 +110,50 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         }
 
         if (message && (message.type === EventType.EXECUTION || message.type === 'execution')) {
-          // Discard foreign events for other sessions
+          // Discard foreign events for other sessions, but NEVER drop terminal events
           try {
             const d: any = (message as any)?.data || {};
             const incomingTaskId = d?.taskId || d?.workerId || d?.parentSessionId || d?.sessionId;
-            if (sessionIdRef.current && incomingTaskId && String(incomingTaskId) !== String(sessionIdRef.current)) {
+            const eventState = String((message as any)?.state || '').toLowerCase();
+            const isTerminalEvent =
+              eventState === 'task.ok' || eventState === 'task.fail' || eventState === 'task.cancel';
+            if (isTerminalEvent) {
+              try {
+                if (
+                  !sessionIdRef.current ||
+                  !incomingTaskId ||
+                  String(incomingTaskId) === String(sessionIdRef.current)
+                ) {
+                  // If this is the current session, ensure any pending entry is cleared
+                  chrome.storage.local.get('pending_terminal_events', res => {
+                    const pending = res.pending_terminal_events || {};
+                    if (incomingTaskId && pending[incomingTaskId]) {
+                      delete pending[incomingTaskId];
+                      chrome.storage.local.set({ pending_terminal_events: pending });
+                    }
+                  });
+                } else {
+                  chrome.storage.local.get('pending_terminal_events', res => {
+                    const pending = res.pending_terminal_events || {};
+                    pending[String(incomingTaskId)] = {
+                      state: eventState,
+                      data: d,
+                      timestamp: (message as any)?.timestamp || Date.now(),
+                      content: (message as any)?.data?.details || (message as any)?.content || '',
+                    };
+                    chrome.storage.local.set({ pending_terminal_events: pending });
+                  });
+                }
+              } catch {}
+            }
+            // Only filter non-terminal events - terminal events must always be processed
+            // to ensure UI updates even if user switched sessions mid-task
+            if (
+              !isTerminalEvent &&
+              sessionIdRef.current &&
+              incomingTaskId &&
+              String(incomingTaskId) !== String(sessionIdRef.current)
+            ) {
               return;
             }
           } catch {}
@@ -107,13 +162,15 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             const state = String((message as any)?.state || (message as any)?.data?.state || '').toLowerCase();
             if (state === 'task.cancel') {
               const d: any = (message as any)?.data || {};
-              const sid = String(d?.parentSessionId || d?.sessionId || d?.taskId || '') || String(sessionIdRef.current || '');
+              const sid =
+                String(d?.parentSessionId || d?.sessionId || d?.taskId || '') || String(sessionIdRef.current || '');
               if (sid) cancelledSessionsRef.current.add(sid);
             }
             // When a new v1 task starts (task.start) for the current session, clear cancel gate
             if (state === 'task.start') {
               const d: any = (message as any)?.data || {};
-              const sid = String(d?.taskId || d?.parentSessionId || d?.sessionId || '') || String(sessionIdRef.current || '');
+              const sid =
+                String(d?.taskId || d?.parentSessionId || d?.sessionId || '') || String(sessionIdRef.current || '');
               if (sid && cancelledSessionsRef.current.has(sid)) cancelledSessionsRef.current.delete(sid);
             }
           } catch {}
@@ -127,7 +184,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             timestamp: (message as any).timestamp || Date.now(),
           };
           handlersRef.current.onExecution?.(normalized as AgentEvent);
-          try { handlersRef.current.onExecutionMeta?.(message); } catch {}
+          try {
+            handlersRef.current.onExecutionMeta?.(message);
+          } catch {}
         } else if (message && message.type === 'workflow_graph_update') {
           handlersRef.current.onWorkflowGraphUpdate?.(message);
         } else if (message && message.type === 'workflow_plan_dataset') {
@@ -151,7 +210,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             const text = String((message as any)?.data?.text || '');
             // Route to optional shortcut handler if provided; else just append visually
             if (text) {
-              try { (handlersRef.current as any)?.onShortcut?.(text); } catch {}
+              try {
+                (handlersRef.current as any)?.onShortcut?.(text);
+              } catch {}
               if (!(handlersRef.current as any)?.onShortcut) {
                 appendMessage({ actor: Actors.USER as any, content: text, timestamp: Date.now() } as any);
               }
@@ -167,7 +228,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           handlersRef.current.onTabsClosed?.(message);
         } else if (message && message.type === 'tab-mirror-update') {
           // Ensure Close Tabs is visible when we have a mirror for the current session
-          try { (handlersRef.current as any)?.setShowCloseTabs?.(true); } catch {}
+          try {
+            (handlersRef.current as any)?.setShowCloseTabs?.(true);
+          } catch {}
           handlersRef.current.onTabMirrorUpdate?.(message);
         } else if (message && message.type === 'tab-mirror-batch') {
           handlersRef.current.onTabMirrorBatch?.(message);
@@ -183,6 +246,10 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           handlersRef.current.onCancelTaskResult?.(message);
         } else if (message && message.type === 'kill_all_complete') {
           handlersRef.current.onKillAllComplete?.(message);
+        } else if (message && message.type === 'restore_active_session') {
+          handlersRef.current.onRestoreActiveSession?.(message.data || {});
+        } else if (message && message.type === 'restore_view_state') {
+          handlersRef.current.onRestoreViewState?.(message.data || {});
         } else if (message && message.type === 'heartbeat_ack') {
           // ignore
         }
@@ -209,7 +276,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = null;
         }
-        try { handlersRef.current.onDisconnect?.(error); } catch {}
+        try {
+          handlersRef.current.onDisconnect?.(error);
+        } catch {}
       });
 
       if (heartbeatIntervalRef.current) {
@@ -240,24 +309,25 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
     }
   }, [appendMessage, logger, portRef, sessionIdRef, stopConnection]);
 
-  const sendMessage = useCallback((message: any) => {
-    if (portRef.current?.name !== 'side-panel-connection') {
-      logger.error('[Panel] Connection check failed:', {
-        portExists: !!portRef.current,
-        portName: portRef.current?.name,
-      });
-      throw new Error('No valid connection available');
-    }
-    try {
-      portRef.current.postMessage(message);
-    } catch (error) {
-      logger.error('Failed to send message:', error);
-      stopConnection();
-      throw error;
-    }
-  }, [logger, portRef, stopConnection]);
+  const sendMessage = useCallback(
+    (message: any) => {
+      if (portRef.current?.name !== 'side-panel-connection') {
+        logger.error('[Panel] Connection check failed:', {
+          portExists: !!portRef.current,
+          portName: portRef.current?.name,
+        });
+        throw new Error('No valid connection available');
+      }
+      try {
+        portRef.current.postMessage(message);
+      } catch (error) {
+        logger.error('Failed to send message:', error);
+        stopConnection();
+        throw error;
+      }
+    },
+    [logger, portRef, stopConnection],
+  );
 
   return { setupConnection, stopConnection, sendMessage };
 }
-
-

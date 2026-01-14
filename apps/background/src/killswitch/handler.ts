@@ -1,6 +1,6 @@
 /**
  * Killswitch Module - Emergency stop for all extension activity
- * 
+ *
  * This module provides a global kill mechanism that terminates:
  * - All running workflows (multi-agent orchestrators)
  * - All running tasks (single-agent executors)
@@ -21,6 +21,7 @@ export interface KillswitchDeps {
   getCurrentExecutor: () => any | null;
   setCurrentExecutor: (e: any | null) => void;
   setCurrentWorkflow: (wf: any | null) => void;
+  eventBuffer?: any[];
 }
 
 export interface KillswitchResult {
@@ -35,11 +36,20 @@ export interface KillswitchResult {
  * Execute the killswitch - terminates ALL extension activity
  */
 export async function handleKillAll(deps: KillswitchDeps): Promise<void> {
-  const { port, logger, taskManager, workflowsBySession, runningWorkflowSessionIds, getCurrentExecutor, setCurrentExecutor, setCurrentWorkflow } = deps;
-  
+  const {
+    port,
+    logger,
+    taskManager,
+    workflowsBySession,
+    runningWorkflowSessionIds,
+    getCurrentExecutor,
+    setCurrentExecutor,
+    setCurrentWorkflow,
+  } = deps;
+
   try {
     logger.info('[KILLSWITCH] Received kill_all command - initiating emergency stop');
-    
+
     let killedWorkflows = 0;
     let killedTasks = 0;
     let killedMirrors = 0;
@@ -81,34 +91,49 @@ export async function handleKillAll(deps: KillswitchDeps): Promise<void> {
     runningWorkflowSessionIds.clear();
     setCurrentWorkflow(null);
 
-    // 5. Freeze all remaining mirrors
+    // 5. Clear event buffer
+    if (deps.eventBuffer) {
+      deps.eventBuffer.length = 0;
+    }
+
+    // 6. Clear dashboard running list
+    try {
+      await chrome.storage.local.set({ agent_dashboard_running: [] });
+      logger.info('[KILLSWITCH] Cleared dashboard running list');
+    } catch (e) {
+      logger.error('[KILLSWITCH] Failed to clear dashboard running list:', e);
+    }
+
+    // 7. Freeze all remaining mirrors
     try {
       taskManager.tabMirrorService?.freezeAllMirrors?.();
     } catch {}
 
-    logger.info(`[KILLSWITCH] Complete. Killed: ${killedWorkflows} workflows, ${killedTasks} tasks, ${killedMirrors} mirrors`);
+    logger.info(
+      `[KILLSWITCH] Complete. Killed: ${killedWorkflows} workflows, ${killedTasks} tasks, ${killedMirrors} mirrors`,
+    );
 
-    safePostMessage(port, { 
-      type: 'kill_all_complete', 
-      data: { 
-        success: true, 
+    safePostMessage(port, {
+      type: 'kill_all_complete',
+      data: {
+        success: true,
         killedWorkflows,
         killedTasks,
         killedMirrors,
-        message: 'All extension activity has been terminated'
-      }
+        message: 'All extension activity has been terminated',
+      },
     });
   } catch (e) {
     logger.error('[KILLSWITCH] Global kill failed:', e);
-    safePostMessage(port, { 
-      type: 'kill_all_complete', 
-      data: { 
-        success: false, 
+    safePostMessage(port, {
+      type: 'kill_all_complete',
+      data: {
+        success: false,
         killedWorkflows: 0,
         killedTasks: 0,
         killedMirrors: 0,
-        error: e instanceof Error ? e.message : 'Killswitch failed'
-      }
+        error: e instanceof Error ? e.message : 'Killswitch failed',
+      },
     });
   }
 }
@@ -117,8 +142,8 @@ export async function handleKillAll(deps: KillswitchDeps): Promise<void> {
  * Kill all tasks in the TaskManager
  */
 async function killAllTasks(
-  taskManager: any, 
-  logger: { info: Function; error: Function }
+  taskManager: any,
+  logger: { info: Function; error: Function },
 ): Promise<{ killedTasks: number; killedMirrors: number }> {
   let killedTasks = 0;
   let killedMirrors = 0;
@@ -151,11 +176,9 @@ async function killAllTasks(
     } catch (e) {
       logger.error('[KILLSWITCH] Failed to stop mirrors:', e);
     }
-
   } catch (e) {
     logger.error('[KILLSWITCH] killAllTasks failed:', e);
   }
 
   return { killedTasks, killedMirrors };
 }
-

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const releaseNotes =
-    'Added context tabs to all workflows, improved agent trajectories, fixed agent previews, improved agent prompting.';
+    'Right-click context menus (Explain/Summarize), session restoration on panel reopen, task count badge, improved text input for contenteditable elements, performance optimizations.';
 
   useEffect(() => {
     try {

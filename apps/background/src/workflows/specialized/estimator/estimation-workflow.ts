@@ -67,7 +67,6 @@ export class LLMWorkflowEstimator implements IEstimator {
         const historyBlock = await getChatHistoryForSession(this.currentTaskId, {
           latestTaskText: task,
           stripUserRequestTags: true,
-          maxTurns: 6,
         });
         if (historyBlock) {
           messages.push(new SystemMessage(historyBlock));

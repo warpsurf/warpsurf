@@ -34,6 +34,9 @@ let currentWorkflow: MultiAgentWorkflow | null = null;
 const runningWorkflowSessionIds = new Set<string>();
 // Track active MultiAgentWorkflow instances by sessionId for robust cancellation
 const workflowsBySession = new Map<string, MultiAgentWorkflow>();
+// Buffer events when panel is disconnected, replay on reconnect
+const eventBuffer: any[] = [];
+const MAX_EVENT_BUFFER_SIZE = 500; // Prevent memory bloat
 
 // Initialize task manager for parallel execution
 const taskManager = new TaskManager({
@@ -51,6 +54,107 @@ attachRuntimeListeners({
   browserContext,
   getCurrentExecutor: () => currentExecutor,
   getCurrentPort: () => currentPort,
+});
+
+// Setup context menus for quick actions
+function setupContextMenus() {
+  // Remove existing menus first to avoid duplicates
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'explain-selection',
+      title: 'Explain this',
+      contexts: ['selection'],
+    });
+
+    // Show on all contexts except selection (which has its own menu item)
+    chrome.contextMenus.create({
+      id: 'summarize-page',
+      title: 'Summarize this page',
+      contexts: ['page', 'frame', 'link', 'image', 'video', 'audio'],
+    });
+
+    logger.info('Context menus created');
+  });
+}
+
+// Create menus on install/update
+chrome.runtime.onInstalled.addListener(() => {
+  setupContextMenus();
+});
+
+// Also create on startup (for when extension is reloaded)
+chrome.runtime.onStartup.addListener(() => {
+  setupContextMenus();
+});
+
+// Create immediately for dev reloads
+setupContextMenus();
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab?.windowId) return;
+
+  let pendingAction: {
+    prompt: string;
+    autoStart: boolean;
+    workflowType: string;
+    contextTabId?: number;
+    errorMessage?: string;
+  } | null = null;
+
+  if (info.menuItemId === 'explain-selection' && info.selectionText) {
+    pendingAction = {
+      prompt: `Explain this:\n\n${info.selectionText}`,
+      autoStart: true,
+      workflowType: 'chat',
+    };
+  } else if (info.menuItemId === 'summarize-page') {
+    // Check if the tab URL is restricted before attempting to summarize
+    const tabUrl = tab.url || '';
+    const RESTRICTED_PREFIXES = [
+      'chrome://',
+      'chrome-extension://',
+      'about:',
+      'data:',
+      'javascript:',
+      'edge://',
+      'brave://',
+    ];
+    const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
+
+    if (isRestricted) {
+      // Show friendly error for restricted pages
+      pendingAction = {
+        prompt: '',
+        autoStart: false,
+        workflowType: 'chat',
+        errorMessage: `Cannot summarize this page. Browser system pages (like ${tabUrl.split('/')[0]}//...) are restricted and cannot be accessed by extensions for security reasons. Please try summarizing a regular web page instead.`,
+      };
+    } else {
+      // Check firewall settings
+      const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+      if (!allowedByFirewall) {
+        pendingAction = {
+          prompt: '',
+          autoStart: false,
+          workflowType: 'chat',
+          errorMessage: `Cannot summarize this page. The URL "${tabUrl}" is blocked by your firewall settings. You can adjust allowed/denied URLs in Settings > Web.`,
+        };
+      } else {
+        // Summarize the currently open tab (where right-click happened)
+        pendingAction = {
+          prompt: 'Summarize this page',
+          autoStart: true,
+          workflowType: 'chat',
+          contextTabId: tab.id, // Pass the tab ID so it's added as context
+        };
+      }
+    }
+  }
+
+  if (pendingAction) {
+    await chrome.storage.session.set({ pendingAction });
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  }
 });
 
 logger.info('background loaded');
@@ -180,7 +284,9 @@ chrome.runtime.onConnect.addListener(async port => {
     attachSidePanelPortHandlers(port, {
       taskManager,
       logger,
-      getCurrentPort: () => currentPort,
+      getCurrentPort: () => {
+        return currentPort;
+      },
       setCurrentPort: (p: chrome.runtime.Port | null) => {
         currentPort = p;
       },
@@ -193,6 +299,8 @@ chrome.runtime.onConnect.addListener(async port => {
       setCurrentWorkflow: (wf: any | null) => {
         currentWorkflow = wf;
       },
+      eventBuffer,
+      maxEventBufferSize: MAX_EVENT_BUFFER_SIZE,
     });
     return;
   }
@@ -366,3 +474,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     );
   } catch {}
 })();
+
+// Initialize API (only when built with __API__=true)
+import { initializeAPI } from './api';
+initializeAPI(taskManager);

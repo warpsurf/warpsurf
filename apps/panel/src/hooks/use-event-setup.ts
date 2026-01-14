@@ -55,78 +55,41 @@ export function useEventSetup(params: {
   setShowInlineWorkflow: (v: boolean) => void;
   setTokenLog: (v: any[]) => void;
   setIsStopping: (v: boolean) => void;
+  setCurrentSessionId: (v: string | null) => void;
+  setShowDashboard: (v: boolean) => void;
+  setShowHistory: (v: boolean) => void;
+  setCurrentTaskAgentType: (v: string | null) => void;
   currentTaskAgentType: string | null;
   workerTabGroups: any[];
   messages: any[];
   mirrorPreviewBatch: any[];
   recalculatedEstimation: any;
 }) {
-  const { portRef, sessionIdRef, agentTraceRootIdRef, agentTraceActiveRef, lastAgentMessageRef, jobActiveRef, laneColorByLaneRef, processedJobSummariesRef, taskIdToRootIdRef, lastAgentMessageByTaskRef, closableTaskIdsRef, workflowEndedRef, cancelSummaryTargetsRef, runStartedAtRef, lastUserPromptRef, historyCompletedTimerRef, setInputTextRef, isCancellingRef, cancelTimeoutRef, logger, showToast, ensureAgentOrdinal, chatSessions, incognitoMode, setMessages, setIsJobActive, setShowStopButton, setIsHistoricalSession, setHasFirstPreview, setMirrorPreview, setMirrorPreviewBatch, setWorkerTabGroups, setShowCloseTabs, setIsFollowUpMode, setInputEnabled, setIsReplaying, setIsAgentModeActive, setActiveAggregateMessageId, setIsPaused, setAgentTraceRootId, setMessageMetadata, setRequestSummaries, setSessionStats, setPendingEstimation, setHistoryContextActive, setHistoryContextLoading, setHistoryJustCompleted, setShowInlineWorkflow, setTokenLog, setIsStopping } = params;
-  
-  const appendMessage = useCallback((newMessage: Message, sessionId?: string | null) => {
-    const isProgressMessage = newMessage.content === 'Showing progress...' || newMessage.content === 'Estimating workflow...';
-    setMessages((prev: Message[]) => {
-      const filtered = prev.filter((msg, idx) => !(msg.content === 'Showing progress...' && idx === prev.length - 1));
-      const last = filtered[filtered.length - 1];
-      if (last && last.actor === newMessage.actor && last.timestamp === newMessage.timestamp && String(last.content) === String(newMessage.content)) {
-        return filtered;
-      }
-      return [...filtered, newMessage];
-    });
-    const effectiveSessionId = sessionId !== undefined ? sessionId : sessionIdRef.current;
-    if (effectiveSessionId && !isProgressMessage && !incognitoMode) {
-      chatHistoryStore.addMessage(effectiveSessionId, newMessage).catch(err => logger.error('Failed to save message:', err));
-    }
-  }, [sessionIdRef, logger, incognitoMode, setMessages]);
-  
-  const persistAgentMessage = useCallback((actor: Actors, content: string, timestamp: number) => {
-    try {
-      const effectiveSessionId = sessionIdRef.current;
-      if (!effectiveSessionId || incognitoMode) return;
-      chatHistoryStore.addMessage(effectiveSessionId, { actor, content, timestamp }).catch(err => logger.error('Failed to save agent message:', err));
-    } catch (e) {
-      logger.error('persistAgentMessage failed', e);
-    }
-  }, [sessionIdRef, logger, incognitoMode]);
-  
-  const updateSessionStats = useCallback((requestData: { totalInputTokens: number; totalOutputTokens: number; totalLatencyMs: number; totalCost: number; }) => {
-    setSessionStats((prev: any) => {
-      const newStats = {
-        totalRequests: prev.totalRequests + 1,
-        totalInputTokens: prev.totalInputTokens + requestData.totalInputTokens,
-        totalOutputTokens: prev.totalOutputTokens + requestData.totalOutputTokens,
-        totalLatency: prev.totalLatency + requestData.totalLatencyMs,
-        totalCost: prev.totalCost + requestData.totalCost,
-        avgLatencyPerRequest: 0,
-      };
-      newStats.avgLatencyPerRequest = newStats.totalRequests > 0 ? newStats.totalLatency / newStats.totalRequests : 0;
-      if (sessionIdRef.current) {
-        chatHistoryStore.storeSessionStats(sessionIdRef.current, newStats).catch(() => {});
-      }
-      return newStats;
-    });
-  }, [setSessionStats, sessionIdRef]);
-  
-  const resetRunState = useCallback(() => {
-    agentTraceActiveRef.current = false;
-    setAgentTraceRootId(null);
-    agentTraceRootIdRef.current = null;
-    lastAgentMessageRef.current = null;
-    workflowEndedRef.current = false;
-    // Clear preview state for fresh task runs
-    setHasFirstPreview(false);
-    setMirrorPreview(null);
-    setMirrorPreviewBatch([]);
-    try {
-      const sid = sessionIdRef.current;
-      if (sid) cancelSummaryTargetsRef.current.delete(sid);
-    } catch {}
-  }, [agentTraceActiveRef, setAgentTraceRootId, agentTraceRootIdRef, lastAgentMessageRef, workflowEndedRef, sessionIdRef, cancelSummaryTargetsRef, setHasFirstPreview, setMirrorPreview, setMirrorPreviewBatch]);
-  
-  const taskEventHandler = useMemo(() => createTaskEventHandler({
+  const {
+    portRef,
+    sessionIdRef,
+    agentTraceRootIdRef,
+    agentTraceActiveRef,
+    lastAgentMessageRef,
+    jobActiveRef,
+    laneColorByLaneRef,
+    processedJobSummariesRef,
+    taskIdToRootIdRef,
+    lastAgentMessageByTaskRef,
+    closableTaskIdsRef,
+    workflowEndedRef,
+    cancelSummaryTargetsRef,
+    runStartedAtRef,
+    lastUserPromptRef,
+    historyCompletedTimerRef,
+    setInputTextRef,
+    isCancellingRef,
+    cancelTimeoutRef,
     logger,
-    appendMessage,
-    persistAgentMessage,
+    showToast,
+    ensureAgentOrdinal,
+    chatSessions,
+    incognitoMode,
     setMessages,
     setIsJobActive,
     setShowStopButton,
@@ -142,86 +105,327 @@ export function useEventSetup(params: {
     setIsAgentModeActive,
     setActiveAggregateMessageId,
     setIsPaused,
-    agentTraceRootIdRef,
     setAgentTraceRootId,
-    agentTraceActiveRef,
-    lastAgentMessageRef,
-    jobActiveRef,
-    laneColorByLaneRef,
-    processedJobSummariesRef,
-    sessionIdRef,
-    taskIdToRootIdRef,
-    lastAgentMessageByTaskRef,
-    closableTaskIdsRef,
-    workflowEndedRef,
     setMessageMetadata,
     setRequestSummaries,
-    updateSessionStats,
-    getCurrentTaskAgentType: () => params.currentTaskAgentType,
-    getWorkerTabGroups: () => params.workerTabGroups,
-    getChatSessions: () => chatSessions,
-    getMessages: () => params.messages,
-    getMirrorPreviewBatch: () => params.mirrorPreviewBatch,
-    lastUserPromptRef,
-    ensureAgentOrdinal,
-    portRef,
-    cancelSummaryTargetsRef,
-    runStartedAtRef,
+    setSessionStats,
     setPendingEstimation,
-    getRecalculatedEstimation: () => params.recalculatedEstimation,
-  }), [logger, appendMessage, persistAgentMessage, setMessages, setIsJobActive, setShowStopButton, setIsHistoricalSession, setHasFirstPreview, setMirrorPreview, setMirrorPreviewBatch, setWorkerTabGroups, setShowCloseTabs, setIsFollowUpMode, setInputEnabled, setIsReplaying, setIsAgentModeActive, setActiveAggregateMessageId, setIsPaused, agentTraceRootIdRef, setAgentTraceRootId, agentTraceActiveRef, lastAgentMessageRef, jobActiveRef, laneColorByLaneRef, processedJobSummariesRef, sessionIdRef, taskIdToRootIdRef, lastAgentMessageByTaskRef, closableTaskIdsRef, workflowEndedRef, setMessageMetadata, setRequestSummaries, updateSessionStats, lastUserPromptRef, ensureAgentOrdinal, portRef, cancelSummaryTargetsRef, runStartedAtRef, setPendingEstimation, chatSessions, params.currentTaskAgentType, params.workerTabGroups, params.messages, params.mirrorPreviewBatch, params.recalculatedEstimation]);
-  
-  const panelHandlers = useMemo(() => createPanelHandlers({
-    logger,
-    taskEventHandler,
-    setMessageMetadata,
-    agentTraceRootIdRef,
     setHistoryContextActive,
     setHistoryContextLoading,
     setHistoryJustCompleted,
-    historyCompletedTimerRef,
-    showToast,
-    getCurrentTaskAgentType: () => params.currentTaskAgentType,
-    setShowCloseTabs,
-    setMessages,
-    appendMessage,
-    setShowStopButton,
-    setInputEnabled,
-    setIsFollowUpMode,
     setShowInlineWorkflow,
-    lastAgentMessageRef,
-    setAgentTraceRootId,
+    setTokenLog,
+    setIsStopping,
+    setCurrentSessionId,
+    setShowDashboard,
+    setShowHistory,
+    setCurrentTaskAgentType,
+  } = params;
+
+  const appendMessage = useCallback(
+    (newMessage: Message, sessionId?: string | null) => {
+      const isProgressMessage =
+        newMessage.content === 'Showing progress...' || newMessage.content === 'Estimating workflow...';
+      setMessages((prev: Message[]) => {
+        const filtered = prev.filter((msg, idx) => !(msg.content === 'Showing progress...' && idx === prev.length - 1));
+        const last = filtered[filtered.length - 1];
+        if (
+          last &&
+          last.actor === newMessage.actor &&
+          last.timestamp === newMessage.timestamp &&
+          String(last.content) === String(newMessage.content)
+        ) {
+          return filtered;
+        }
+        return [...filtered, newMessage];
+      });
+      const effectiveSessionId = sessionId !== undefined ? sessionId : sessionIdRef.current;
+      if (effectiveSessionId && !isProgressMessage && !incognitoMode) {
+        chatHistoryStore
+          .addMessage(effectiveSessionId, newMessage)
+          .catch(err => logger.error('Failed to save message:', err));
+      }
+    },
+    [sessionIdRef, logger, incognitoMode, setMessages],
+  );
+
+  const persistAgentMessage = useCallback(
+    (actor: Actors, content: string, timestamp: number) => {
+      try {
+        const effectiveSessionId = sessionIdRef.current;
+        if (!effectiveSessionId || incognitoMode) return;
+        chatHistoryStore
+          .addMessage(effectiveSessionId, { actor, content, timestamp })
+          .catch(err => logger.error('Failed to save agent message:', err));
+      } catch (e) {
+        logger.error('persistAgentMessage failed', e);
+      }
+    },
+    [sessionIdRef, logger, incognitoMode],
+  );
+
+  const updateSessionStats = useCallback(
+    (requestData: {
+      totalInputTokens: number;
+      totalOutputTokens: number;
+      totalLatencyMs: number;
+      totalCost: number;
+    }) => {
+      setSessionStats((prev: any) => {
+        const newStats = {
+          totalRequests: prev.totalRequests + 1,
+          totalInputTokens: prev.totalInputTokens + requestData.totalInputTokens,
+          totalOutputTokens: prev.totalOutputTokens + requestData.totalOutputTokens,
+          totalLatency: prev.totalLatency + requestData.totalLatencyMs,
+          totalCost: prev.totalCost + requestData.totalCost,
+          avgLatencyPerRequest: 0,
+        };
+        newStats.avgLatencyPerRequest = newStats.totalRequests > 0 ? newStats.totalLatency / newStats.totalRequests : 0;
+        if (sessionIdRef.current) {
+          chatHistoryStore.storeSessionStats(sessionIdRef.current, newStats).catch(() => {});
+        }
+        return newStats;
+      });
+    },
+    [setSessionStats, sessionIdRef],
+  );
+
+  const resetRunState = useCallback(() => {
+    agentTraceActiveRef.current = false;
+    setAgentTraceRootId(null);
+    agentTraceRootIdRef.current = null;
+    lastAgentMessageRef.current = null;
+    workflowEndedRef.current = false;
+    // Clear preview state for fresh task runs
+    setHasFirstPreview(false);
+    setMirrorPreview(null);
+    setMirrorPreviewBatch([]);
+    try {
+      const sid = sessionIdRef.current;
+      if (sid) cancelSummaryTargetsRef.current.delete(sid);
+    } catch {}
+  }, [
     agentTraceActiveRef,
+    setAgentTraceRootId,
+    agentTraceRootIdRef,
+    lastAgentMessageRef,
+    workflowEndedRef,
     sessionIdRef,
-    ensureAgentOrdinal,
+    cancelSummaryTargetsRef,
+    setHasFirstPreview,
     setMirrorPreview,
     setMirrorPreviewBatch,
-    setHasFirstPreview,
-    setIsAgentModeActive,
-    portRef,
-    closableTaskIdsRef,
-    jobActiveRef,
-    setWorkerTabGroups,
-    getWorkerTabGroups: () => params.workerTabGroups,
-    getChatSessions: () => chatSessions,
-    getMessages: () => params.messages,
-    getMirrorPreviewBatch: () => params.mirrorPreviewBatch,
-    processedJobSummariesRef,
-    setRequestSummaries,
-    updateSessionStats,
-    setTokenLog,
-    cancelSummaryTargetsRef,
-    runStartedAtRef,
-    setInputTextRef,
-    // Killswitch dependencies
-    setIsJobActive,
-    setIsPaused,
-    // Cancellation state refs for confirmation-based stop
-    isCancellingRef,
-    cancelTimeoutRef,
-    setIsStopping,
-  }), [logger, taskEventHandler, setMessageMetadata, agentTraceRootIdRef, setHistoryContextActive, setHistoryContextLoading, setHistoryJustCompleted, historyCompletedTimerRef, showToast, setShowCloseTabs, setMessages, appendMessage, setShowStopButton, setInputEnabled, setIsFollowUpMode, setShowInlineWorkflow, lastAgentMessageRef, setAgentTraceRootId, agentTraceActiveRef, sessionIdRef, ensureAgentOrdinal, setMirrorPreview, setMirrorPreviewBatch, setHasFirstPreview, setIsAgentModeActive, portRef, closableTaskIdsRef, jobActiveRef, setWorkerTabGroups, processedJobSummariesRef, setRequestSummaries, updateSessionStats, setTokenLog, cancelSummaryTargetsRef, runStartedAtRef, setInputTextRef, setIsJobActive, setIsPaused, isCancellingRef, cancelTimeoutRef, setIsStopping, chatSessions, params.currentTaskAgentType, params.workerTabGroups, params.messages, params.mirrorPreviewBatch]);
-  
+  ]);
+
+  const taskEventHandler = useMemo(
+    () =>
+      createTaskEventHandler({
+        logger,
+        appendMessage,
+        persistAgentMessage,
+        setMessages,
+        setIsJobActive,
+        setShowStopButton,
+        setIsHistoricalSession,
+        setHasFirstPreview,
+        setMirrorPreview,
+        setMirrorPreviewBatch,
+        setWorkerTabGroups,
+        setShowCloseTabs,
+        setIsFollowUpMode,
+        setInputEnabled,
+        setIsReplaying,
+        setIsAgentModeActive,
+        setActiveAggregateMessageId,
+        setIsPaused,
+        agentTraceRootIdRef,
+        setAgentTraceRootId,
+        agentTraceActiveRef,
+        lastAgentMessageRef,
+        jobActiveRef,
+        laneColorByLaneRef,
+        processedJobSummariesRef,
+        sessionIdRef,
+        taskIdToRootIdRef,
+        lastAgentMessageByTaskRef,
+        closableTaskIdsRef,
+        workflowEndedRef,
+        setMessageMetadata,
+        setRequestSummaries,
+        updateSessionStats,
+        getCurrentTaskAgentType: () => params.currentTaskAgentType,
+        getWorkerTabGroups: () => params.workerTabGroups,
+        getChatSessions: () => chatSessions,
+        getMessages: () => params.messages,
+        getMirrorPreviewBatch: () => params.mirrorPreviewBatch,
+        lastUserPromptRef,
+        ensureAgentOrdinal,
+        portRef,
+        cancelSummaryTargetsRef,
+        runStartedAtRef,
+        setPendingEstimation,
+        getRecalculatedEstimation: () => params.recalculatedEstimation,
+      }),
+    [
+      logger,
+      appendMessage,
+      persistAgentMessage,
+      setMessages,
+      setIsJobActive,
+      setShowStopButton,
+      setIsHistoricalSession,
+      setHasFirstPreview,
+      setMirrorPreview,
+      setMirrorPreviewBatch,
+      setWorkerTabGroups,
+      setShowCloseTabs,
+      setIsFollowUpMode,
+      setInputEnabled,
+      setIsReplaying,
+      setIsAgentModeActive,
+      setActiveAggregateMessageId,
+      setIsPaused,
+      agentTraceRootIdRef,
+      setAgentTraceRootId,
+      agentTraceActiveRef,
+      lastAgentMessageRef,
+      jobActiveRef,
+      laneColorByLaneRef,
+      processedJobSummariesRef,
+      sessionIdRef,
+      taskIdToRootIdRef,
+      lastAgentMessageByTaskRef,
+      closableTaskIdsRef,
+      workflowEndedRef,
+      setMessageMetadata,
+      setRequestSummaries,
+      updateSessionStats,
+      lastUserPromptRef,
+      ensureAgentOrdinal,
+      portRef,
+      cancelSummaryTargetsRef,
+      runStartedAtRef,
+      setPendingEstimation,
+      chatSessions,
+      params.currentTaskAgentType,
+      params.workerTabGroups,
+      params.messages,
+      params.mirrorPreviewBatch,
+      params.recalculatedEstimation,
+    ],
+  );
+
+  const panelHandlers = useMemo(
+    () =>
+      createPanelHandlers({
+        logger,
+        taskEventHandler,
+        setMessageMetadata,
+        agentTraceRootIdRef,
+        setHistoryContextActive,
+        setHistoryContextLoading,
+        setHistoryJustCompleted,
+        historyCompletedTimerRef,
+        showToast,
+        getCurrentTaskAgentType: () => params.currentTaskAgentType,
+        setShowCloseTabs,
+        setMessages,
+        appendMessage,
+        setShowStopButton,
+        setInputEnabled,
+        setIsFollowUpMode,
+        setShowInlineWorkflow,
+        lastAgentMessageRef,
+        setAgentTraceRootId,
+        agentTraceActiveRef,
+        sessionIdRef,
+        ensureAgentOrdinal,
+        setMirrorPreview,
+        setMirrorPreviewBatch,
+        setHasFirstPreview,
+        setIsAgentModeActive,
+        portRef,
+        closableTaskIdsRef,
+        jobActiveRef,
+        setWorkerTabGroups,
+        getWorkerTabGroups: () => params.workerTabGroups,
+        getChatSessions: () => chatSessions,
+        getMessages: () => params.messages,
+        getMirrorPreviewBatch: () => params.mirrorPreviewBatch,
+        processedJobSummariesRef,
+        setRequestSummaries,
+        updateSessionStats,
+        setTokenLog,
+        cancelSummaryTargetsRef,
+        runStartedAtRef,
+        setInputTextRef,
+        // Killswitch dependencies
+        setIsJobActive,
+        setIsPaused,
+        // Cancellation state refs for confirmation-based stop
+        isCancellingRef,
+        cancelTimeoutRef,
+        setIsStopping,
+        // Session restoration deps
+        setCurrentSessionId,
+        setShowDashboard,
+        setShowHistory,
+        setCurrentTaskAgentType,
+      }),
+    [
+      logger,
+      taskEventHandler,
+      setMessageMetadata,
+      agentTraceRootIdRef,
+      setHistoryContextActive,
+      setHistoryContextLoading,
+      setHistoryJustCompleted,
+      historyCompletedTimerRef,
+      showToast,
+      setShowCloseTabs,
+      setMessages,
+      appendMessage,
+      setShowStopButton,
+      setInputEnabled,
+      setIsFollowUpMode,
+      setShowInlineWorkflow,
+      lastAgentMessageRef,
+      setAgentTraceRootId,
+      agentTraceActiveRef,
+      sessionIdRef,
+      ensureAgentOrdinal,
+      setMirrorPreview,
+      setMirrorPreviewBatch,
+      setHasFirstPreview,
+      setIsAgentModeActive,
+      portRef,
+      closableTaskIdsRef,
+      jobActiveRef,
+      setWorkerTabGroups,
+      processedJobSummariesRef,
+      setRequestSummaries,
+      updateSessionStats,
+      setTokenLog,
+      cancelSummaryTargetsRef,
+      runStartedAtRef,
+      setInputTextRef,
+      setIsJobActive,
+      setIsPaused,
+      isCancellingRef,
+      cancelTimeoutRef,
+      setIsStopping,
+      setCurrentSessionId,
+      setShowDashboard,
+      setShowHistory,
+      setCurrentTaskAgentType,
+      chatSessions,
+      params.currentTaskAgentType,
+      params.workerTabGroups,
+      params.messages,
+      params.mirrorPreviewBatch,
+    ],
+  );
+
   return {
     appendMessage,
     persistAgentMessage,
@@ -231,4 +435,3 @@ export function useEventSetup(params: {
     panelHandlers,
   };
 }
-

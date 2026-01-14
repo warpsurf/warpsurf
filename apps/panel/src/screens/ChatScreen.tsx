@@ -1,4 +1,4 @@
-import { type MutableRefObject, useState } from 'react';
+import { type MutableRefObject, useState, useEffect } from 'react';
 import { Actors } from '@extension/storage';
 import type { FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { INLINE_CHAT_DISCLAIMER } from '@extension/shared/lib/utils/disclaimers';
@@ -53,6 +53,7 @@ export interface ChatScreenProps {
   messagesEndRef: MutableRefObject<HTMLDivElement | null>;
   setInputTextRef: MutableRefObject<((text: string) => void) | null>;
   setSelectedAgentRef: MutableRefObject<((agent: any) => void) | null>;
+  setContextTabIdsRef?: MutableRefObject<((tabIds: number[]) => void) | null>;
   setIsPreviewCollapsed: (v: boolean) => void;
   setSelectedEstimationModel: (v: any) => void;
   setRecalculatedEstimation: (v: any) => void;
@@ -122,6 +123,7 @@ export function ChatScreen(props: ChatScreenProps) {
     messagesEndRef,
     setInputTextRef,
     setSelectedAgentRef,
+    setContextTabIdsRef,
     setIsPreviewCollapsed,
     setSelectedEstimationModel,
     setRecalculatedEstimation,
@@ -148,6 +150,18 @@ export function ChatScreen(props: ChatScreenProps) {
 
   // Context tabs state lifted here to persist across ChatInput remounts
   const [contextTabIds, setContextTabIds] = useState<number[]>([]);
+
+  // Expose setContextTabIds via ref for external control (e.g., context menu)
+  useEffect(() => {
+    if (setContextTabIdsRef) {
+      setContextTabIdsRef.current = setContextTabIds;
+    }
+    return () => {
+      if (setContextTabIdsRef) {
+        setContextTabIdsRef.current = null;
+      }
+    };
+  }, [setContextTabIdsRef]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
