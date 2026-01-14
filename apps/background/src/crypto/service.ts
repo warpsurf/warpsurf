@@ -1,16 +1,7 @@
 import { encrypt, decrypt, isEncryptedData, type EncryptedData } from '@extension/storage';
+import { ephemeralStore } from '../api/ephemeral-storage';
 
 const apiKeyCache = new Map<string, string>();
-
-// Ephemeral storage for API mode (only in API builds)
-let ephemeralStore: any = null;
-if (import.meta.env.API) {
-  import('../api/ephemeral-storage')
-    .then(module => {
-      ephemeralStore = module.ephemeralStore;
-    })
-    .catch(() => {});
-}
 
 export async function encryptApiKey(apiKey: string): Promise<EncryptedData> {
   return encrypt(apiKey);
@@ -75,7 +66,7 @@ export async function getAllProviderApiKeys(): Promise<Map<string, string>> {
 
 export async function getAllProvidersDecrypted(): Promise<Record<string, any>> {
   // Check ephemeral store first (only in API builds with data)
-  if (import.meta.env.API && ephemeralStore?.hasData()) {
+  if (import.meta.env.API && ephemeralStore?.hasData?.()) {
     return ephemeralStore.getProviders();
   }
 
@@ -125,7 +116,7 @@ export function invalidateProviderCache(providerId: string): void {
  */
 export async function getAllAgentModelsDecrypted(): Promise<Record<string, any>> {
   // Check ephemeral store first (only in API builds with data)
-  if (import.meta.env.API && ephemeralStore?.hasData()) {
+  if (import.meta.env.API && ephemeralStore?.hasData?.()) {
     const ephemeralModels = ephemeralStore.getAgentModels();
     if (Object.keys(ephemeralModels).length > 0) {
       return ephemeralModels;
