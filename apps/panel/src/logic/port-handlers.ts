@@ -890,25 +890,18 @@ export function createPanelHandlers(deps: any): any {
       workflowGraph?: any;
       bufferedEvents?: any[];
     }) => {
-      console.log(
-        '[RestoreSession] Handler called with data:',
-        data.sessionId,
-        'bufferedEvents:',
-        data.bufferedEvents?.length || 0,
-      );
-      if (!data.sessionId || !data.isRunning) {
-        console.log('[RestoreSession] Skipping - no sessionId or not running');
+      if (!data.sessionId) return;
+      // Do not steal focus if user is already on another session and this is just a running workflow ping
+      if (deps.sessionIdRef.current && deps.sessionIdRef.current !== data.sessionId && data.isRunning) {
+        deps.logger.log('[RestoreSession] Skipping auto-focus; user in another session');
         return;
       }
       try {
-        console.log('[RestoreSession] Loading session from storage');
         // Load session and persisted metadata from storage
         const [session, storedMetadata] = await Promise.all([
           chatHistoryStore.getSession(data.sessionId),
           chatHistoryStore.loadMessageMetadata(data.sessionId).catch(() => ({})),
         ]);
-        console.log('[RestoreSession] Loaded session:', session?.messages?.length, 'messages');
-        console.log('[RestoreSession] Loaded stored metadata keys:', Object.keys(storedMetadata || {}));
 
         // Set session ID FIRST
         deps.sessionIdRef.current = data.sessionId;
@@ -929,7 +922,6 @@ export function createPanelHandlers(deps: any): any {
           const lastAgentMsg = [...session.messages].reverse().find((m: any) => agentActors.includes(m.actor));
           if (lastAgentMsg) {
             const rootId = `${lastAgentMsg.timestamp}-${lastAgentMsg.actor}`;
-            console.log('[RestoreSession] Restoring agentTraceRootId:', rootId);
             deps.agentTraceRootIdRef.current = rootId;
             deps.agentTraceActiveRef.current = true;
             deps.setAgentTraceRootId(rootId);
@@ -940,14 +932,22 @@ export function createPanelHandlers(deps: any): any {
         // Restore the PERSISTED metadata (including trajectory trace items from before panel closed)
         const restoredMetadata = { ...(storedMetadata || {}) };
 
-        // Update UI state for running workflow
-        deps.setShowStopButton(true);
-        deps.setInputEnabled(false);
-        deps.setIsJobActive(true);
-        deps.jobActiveRef.current = true;
-        deps.setIsAgentModeActive(true);
-        deps.setCurrentTaskAgentType(data.agentType);
-        deps.setShowDashboard(false);
+        // Update UI state based on running flag
+        if (data.isRunning) {
+          deps.setShowStopButton(true);
+          deps.setInputEnabled(false);
+          deps.setIsJobActive(true);
+          deps.jobActiveRef.current = true;
+          deps.setIsAgentModeActive(true);
+          deps.setCurrentTaskAgentType(data.agentType);
+          deps.setShowDashboard(false);
+        } else {
+          deps.setShowStopButton(false);
+          deps.setInputEnabled(true);
+          deps.setIsJobActive(false);
+          deps.jobActiveRef.current = false;
+          deps.setIsAgentModeActive(false);
+        }
 
         // Restore workflow graph for multiagent
         if (data.agentType === 'multiagent' && data.workflowGraph) {
@@ -956,12 +956,19 @@ export function createPanelHandlers(deps: any): any {
         }
 
         // Process buffered events - add trace items to restored metadata
-        if (data.bufferedEvents && Array.isArray(data.bufferedEvents) && data.bufferedEvents.length > 0) {
-          console.log('[RestoreSession] Processing', data.bufferedEvents.length, 'buffered events');
-
+        if (data.bufferedEvents?.length > 0) {
           const rootId = deps.agentTraceRootIdRef.current as string;
           if (rootId) {
-            // Collect trace items from buffered events
+            const traceStates = [
+              ExecutionState.STEP_START,
+              ExecutionState.STEP_OK,
+              ExecutionState.STEP_FAIL,
+              ExecutionState.ACT_START,
+              ExecutionState.ACT_OK,
+              ExecutionState.ACT_FAIL,
+              ExecutionState.TASK_OK,
+              ExecutionState.TASK_FAIL,
+            ];
             const traceItemsToAdd: Array<{
               actor: string;
               content: string;
@@ -969,72 +976,101 @@ export function createPanelHandlers(deps: any): any {
               pageUrl?: string;
               pageTitle?: string;
             }> = [];
-
             for (const evt of data.bufferedEvents) {
               try {
                 if (!evt || evt.type !== 'execution') continue;
                 const evtData = evt.data || {};
                 const content = evtData.details || '';
-                const timestamp = evt.timestamp || Date.now();
-                const actor = evt.actor || Actors.SYSTEM;
-                const state = evt.state;
-
-                // Only add meaningful trace items (skip internal states)
-                const traceStates = [
-                  ExecutionState.STEP_START,
-                  ExecutionState.STEP_OK,
-                  ExecutionState.STEP_FAIL,
-                  ExecutionState.ACT_START,
-                  ExecutionState.ACT_OK,
-                  ExecutionState.ACT_FAIL,
-                  ExecutionState.TASK_OK,
-                  ExecutionState.TASK_FAIL,
-                ];
-                if (content && traceStates.includes(state)) {
+                if (content && traceStates.includes(evt.state)) {
                   traceItemsToAdd.push({
-                    actor,
+                    actor: evt.actor || Actors.SYSTEM,
                     content,
-                    timestamp,
+                    timestamp: evt.timestamp || Date.now(),
                     pageUrl: evtData.pageUrl,
                     pageTitle: evtData.pageTitle,
                   });
                 }
-              } catch (e) {
-                console.log('[RestoreSession] Failed to extract trace from event:', e);
-              }
+              } catch {}
             }
-
-            // Add buffered trace items to restored metadata
             if (traceItemsToAdd.length > 0) {
-              console.log('[RestoreSession] Adding', traceItemsToAdd.length, 'buffered trace items to root', rootId);
               const existing = restoredMetadata[rootId] || {};
               const currentItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
-              restoredMetadata[rootId] = {
-                ...existing,
-                traceItems: [...currentItems, ...traceItemsToAdd],
-              };
+              restoredMetadata[rootId] = { ...existing, traceItems: [...currentItems, ...traceItemsToAdd] };
             }
           }
         }
 
-        // Set all metadata at once (persisted + buffered events)
-        console.log('[RestoreSession] Setting metadata with', Object.keys(restoredMetadata).length, 'keys');
-        const rootId = deps.agentTraceRootIdRef.current;
-        if (rootId) {
-          console.log(
-            '[RestoreSession] Root',
-            rootId,
-            'has',
-            restoredMetadata[rootId]?.traceItems?.length || 0,
-            'trace items',
-          );
-        }
         deps.setMessageMetadata(restoredMetadata as any);
 
         deps.logger.log('[RestoreSession] Restored active session:', data.sessionId);
+
+        // Apply any pending terminal event for this session (cached when panel was on another session)
+        try {
+          const pendingRes = await chrome.storage.local.get('pending_terminal_events');
+          const pending = pendingRes.pending_terminal_events || {};
+          const pendingEvent = pending[data.sessionId];
+          if (pendingEvent) {
+            const state = String(pendingEvent.state || '').toLowerCase();
+            if (state === 'task.ok' || state === 'task.fail' || state === 'task.cancel') {
+              const syntheticEvent: any = {
+                actor: Actors.SYSTEM,
+                state:
+                  state === 'task.ok'
+                    ? ExecutionState.TASK_OK
+                    : state === 'task.fail'
+                      ? ExecutionState.TASK_FAIL
+                      : ExecutionState.TASK_CANCEL,
+                data: pendingEvent.data || {},
+                timestamp: pendingEvent.timestamp || Date.now(),
+                content: pendingEvent.content,
+              };
+              try {
+                const systemHandler = createSystemHandler(deps as any);
+                systemHandler(syntheticEvent);
+              } catch (err) {
+                deps.logger.error('[RestoreSession] Failed to apply pending terminal event', err);
+              }
+            }
+            delete pending[data.sessionId];
+            await chrome.storage.local.set({ pending_terminal_events: pending });
+          }
+        } catch (err) {
+          deps.logger.error('[RestoreSession] Failed checking pending terminal events', err);
+        }
+
+        // Request fresh mirrors/preview on restore
+        try {
+          deps.portRef.current?.postMessage({ type: 'get-all-mirrors-for-cleanup' });
+        } catch {}
       } catch (err) {
         deps.logger.error('[RestoreSession] Failed:', err);
       }
+    },
+    /** Restore saved view state when panel reopens with no active workflow */
+    onRestoreViewState: async (data: { currentSessionId?: string; viewMode?: string }) => {
+      try {
+        // Restore view mode
+        if (data.viewMode === 'history') {
+          deps.setShowHistory(true);
+          deps.setShowDashboard(false);
+        } else if (data.viewMode === 'dashboard') {
+          deps.setShowDashboard(true);
+          deps.setShowHistory(false);
+        } else {
+          deps.setShowHistory(false);
+          deps.setShowDashboard(false);
+        }
+        // Restore session if specified
+        if (data.currentSessionId) {
+          deps.sessionIdRef.current = data.currentSessionId;
+          deps.setCurrentSessionId(data.currentSessionId);
+          const session = await chatHistoryStore.getSession(data.currentSessionId);
+          if (session?.messages) {
+            deps.setMessages(session.messages);
+            deps.setIsHistoricalSession(true);
+          }
+        }
+      } catch {}
     },
     onDisconnect: () => {
       deps.setInputEnabled(true);

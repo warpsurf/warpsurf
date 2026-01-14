@@ -29,6 +29,7 @@ type BackgroundHandlers = {
     workflowGraph?: any;
     bufferedEvents?: any[];
   }) => void;
+  onRestoreViewState?: (data: { currentSessionId?: string; viewMode?: string }) => void;
   onDisconnect?: (error?: any) => void;
 };
 
@@ -82,14 +83,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         throw new Error(chrome.runtime.lastError.message || 'Failed to connect to service worker');
       }
 
-      console.log('[Panel] Successfully connected to background script');
       try {
-        console.log('[Panel] Sending panel_opened message');
         portRef.current.postMessage({ type: 'panel_opened' });
-        console.log('[Panel] panel_opened message sent');
-      } catch (e) {
-        console.error('[Panel] Failed to send panel_opened:', e);
-      }
+      } catch {}
       logger.log('[Panel] Connection status:', {
         portName: portRef.current?.name,
         portState: portRef.current ? 'connected' : 'null',
@@ -114,20 +110,57 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         }
 
         if (message && (message.type === EventType.EXECUTION || message.type === 'execution')) {
-          // Discard foreign events for other sessions
+          // Discard foreign events for other sessions, but NEVER drop terminal events
           try {
             const d: any = (message as any)?.data || {};
             const incomingTaskId = d?.taskId || d?.workerId || d?.parentSessionId || d?.sessionId;
-            console.log(
-              '[Panel] Execution event received:',
-              message.state,
-              'taskId:',
-              incomingTaskId,
-              'sessionIdRef:',
-              sessionIdRef.current,
-            );
-            if (sessionIdRef.current && incomingTaskId && String(incomingTaskId) !== String(sessionIdRef.current)) {
-              console.log('[Panel] Discarding event - session mismatch');
+            const eventState = String((message as any)?.state || '').toLowerCase();
+            const isTerminalEvent =
+              eventState === 'task.ok' || eventState === 'task.fail' || eventState === 'task.cancel';
+            // Debug: log terminal events
+            if (isTerminalEvent) {
+              console.log('[Panel] Terminal event received:', {
+                eventState,
+                incomingTaskId,
+                currentSession: sessionIdRef.current,
+              });
+              // Persist terminal events for other sessions so they can be applied when user opens that session
+              try {
+                if (
+                  !sessionIdRef.current ||
+                  !incomingTaskId ||
+                  String(incomingTaskId) === String(sessionIdRef.current)
+                ) {
+                  // If this is the current session, ensure any pending entry is cleared
+                  chrome.storage.local.get('pending_terminal_events', res => {
+                    const pending = res.pending_terminal_events || {};
+                    if (incomingTaskId && pending[incomingTaskId]) {
+                      delete pending[incomingTaskId];
+                      chrome.storage.local.set({ pending_terminal_events: pending });
+                    }
+                  });
+                } else {
+                  chrome.storage.local.get('pending_terminal_events', res => {
+                    const pending = res.pending_terminal_events || {};
+                    pending[String(incomingTaskId)] = {
+                      state: eventState,
+                      data: d,
+                      timestamp: (message as any)?.timestamp || Date.now(),
+                      content: (message as any)?.data?.details || (message as any)?.content || '',
+                    };
+                    chrome.storage.local.set({ pending_terminal_events: pending });
+                  });
+                }
+              } catch {}
+            }
+            // Only filter non-terminal events - terminal events must always be processed
+            // to ensure UI updates even if user switched sessions mid-task
+            if (
+              !isTerminalEvent &&
+              sessionIdRef.current &&
+              incomingTaskId &&
+              String(incomingTaskId) !== String(sessionIdRef.current)
+            ) {
               return;
             }
           } catch {}
@@ -221,8 +254,9 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         } else if (message && message.type === 'kill_all_complete') {
           handlersRef.current.onKillAllComplete?.(message);
         } else if (message && message.type === 'restore_active_session') {
-          console.log('[Panel] Received restore_active_session:', message.data);
           handlersRef.current.onRestoreActiveSession?.(message.data || {});
+        } else if (message && message.type === 'restore_view_state') {
+          handlersRef.current.onRestoreViewState?.(message.data || {});
         } else if (message && message.type === 'heartbeat_ack') {
           // ignore
         }
