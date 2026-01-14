@@ -90,21 +90,21 @@ export async function extractTabContent(tabId: number, forceRefresh = false): Pr
     // Get tab info
     const tab = await chrome.tabs.get(tabId);
     if (!tab.url || !tab.title) {
-      logger.warn(`Tab ${tabId} has no URL or title`);
+      logger.warning(`Tab ${tabId} has no URL or title`);
       return null;
     }
 
     // Check firewall settings first
     const allowed = await isUrlAllowedByFirewall(tab.url);
     if (!allowed) {
-      logger.warn(`Tab ${tabId} blocked by firewall: ${tab.url}`);
+      logger.warning(`Tab ${tabId} blocked by firewall: ${tab.url}`);
       return null;
     }
 
     // Check for restricted URLs (additional safety check)
     const RESTRICTED = ['chrome://', 'chrome-extension://', 'about:', 'data:', 'javascript:'];
     if (RESTRICTED.some(p => tab.url!.startsWith(p))) {
-      logger.warn(`Tab ${tabId} has restricted URL: ${tab.url}`);
+      logger.warning(`Tab ${tabId} has restricted URL: ${tab.url}`);
       return null;
     }
 
@@ -118,7 +118,7 @@ export async function extractTabContent(tabId: number, forceRefresh = false): Pr
     if (markdownResult.status === 'fulfilled') {
       markdown = markdownResult.value;
     } else {
-      logger.warn(`Failed to extract markdown from tab ${tabId}:`, markdownResult.reason);
+      logger.warning(`Failed to extract markdown from tab ${tabId}:`, markdownResult.reason);
     }
 
     let domTree = '';
@@ -126,11 +126,11 @@ export async function extractTabContent(tabId: number, forceRefresh = false): Pr
       // Use includeAllText=true to capture full page content for context tabs
       domTree = domResult.value.elementTree.clickableElementsToString([], true);
     } else {
-      logger.warn(`Failed to extract DOM from tab ${tabId}:`, domResult.reason);
+      logger.warning(`Failed to extract DOM from tab ${tabId}:`, domResult.reason);
     }
 
     if (!markdown && !domTree) {
-      logger.warn(`No content extracted from tab ${tabId}`);
+      logger.warning(`No content extracted from tab ${tabId}`);
       return null;
     }
 
