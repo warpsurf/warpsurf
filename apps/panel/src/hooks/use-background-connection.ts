@@ -117,14 +117,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             const eventState = String((message as any)?.state || '').toLowerCase();
             const isTerminalEvent =
               eventState === 'task.ok' || eventState === 'task.fail' || eventState === 'task.cancel';
-            // Debug: log terminal events
             if (isTerminalEvent) {
-              console.log('[Panel] Terminal event received:', {
-                eventState,
-                incomingTaskId,
-                currentSession: sessionIdRef.current,
-              });
-              // Persist terminal events for other sessions so they can be applied when user opens that session
               try {
                 if (
                   !sessionIdRef.current ||

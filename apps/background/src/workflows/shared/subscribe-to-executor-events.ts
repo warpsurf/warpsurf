@@ -78,27 +78,12 @@ export async function subscribeToExecutorEvents(
         timestamp: event.timestamp,
       };
 
-      if (!currentPort) {
-        // Debug: log when port is missing for terminal events
-        if (isTerminal) {
-          console.log('[subscribeToExecutorEvents] No port for terminal event:', {
-            state: event.state,
-            taskId: event.data?.taskId,
-            hasBuffer: !!bufferOptions,
-          });
-        }
-        if (bufferOptions && bufferOptions.eventBuffer.length < bufferOptions.maxSize) {
-          bufferOptions.eventBuffer.push(outEvent);
-        }
+      if (!currentPort && bufferOptions && bufferOptions.eventBuffer.length < bufferOptions.maxSize) {
+        bufferOptions.eventBuffer.push(outEvent);
       }
 
       if (currentPort) {
-        // Debug: log when sending terminal events
         if (isTerminal) {
-          console.log('[subscribeToExecutorEvents] Sending terminal event:', {
-            state: event.state,
-            taskId: event.data?.taskId,
-          });
           try {
             const taskId: string | undefined = (event as any)?.data?.taskId;
             if (taskId) {
@@ -178,17 +163,12 @@ export async function subscribeToExecutorEvents(
 
         try {
           currentPort.postMessage(outEvent);
-          // Debug: confirm terminal event was posted
-          if (isTerminal) {
-            console.log('[subscribeToExecutorEvents] Terminal event posted successfully');
-          }
         } catch (postErr) {
-          console.error('[subscribeToExecutorEvents] Failed to post message:', postErr);
+          logger.debug('Failed to post message to side panel:', postErr);
           throw postErr;
         }
       }
     } catch (error) {
-      console.error('[subscribeToExecutorEvents] Error in event handler:', error);
       logger.debug('Failed to send message to side panel:', error);
     }
 
