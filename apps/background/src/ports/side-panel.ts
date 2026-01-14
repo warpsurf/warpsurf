@@ -216,12 +216,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           }
         }
         case 'cancel_task': {
-          console.log('[cancel_task] Received cancel request:', message);
           const requestId = message.requestId;
           const id = String(message.sessionId || message.taskId || '').trim();
-          console.log('[cancel_task] Parsed ID:', id);
-          console.log('[cancel_task] workflowsBySession keys:', [...workflowsBySession.keys()]);
-          console.log('[cancel_task] getCurrentExecutor:', !!getCurrentExecutor());
 
           if (!id) {
             safePostMessage(port, {
@@ -260,9 +256,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               }
             }
 
-            console.log('[cancel_task] Found workflow:', !!wf);
             if (wf) {
-              console.log('[cancel_task] Cancelling multiagent workflow');
               await wf.cancelAll();
               workflowsBySession.delete(id);
               for (const [key, w] of workflowsBySession.entries()) {
@@ -284,8 +278,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
 
             // Single-agent task cancellation
-            console.log('[cancel_task] Attempting single-agent cancellation for:', id);
-            console.log('[cancel_task] taskManager.tasks:', [...((taskManager as any).tasks?.keys?.() || [])]);
             await taskManager.cancelTask(id);
             try {
               await (taskManager as any).cancelAllForParentSession?.(id);
@@ -461,11 +453,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           break;
         }
         case 'panel_opened': {
-          console.log('[panel_opened] Panel opened, checking for running workflows...');
-          console.log('[panel_opened] runningWorkflowSessionIds:', [...runningWorkflowSessionIds]);
-          console.log('[panel_opened] hasExecutor:', !!getCurrentExecutor());
-          console.log('[panel_opened] eventBuffer length:', eventBuffer.length);
-
           // Prewarm: initialize provider costs, inject DOM/markdown helpers in active tab
           try {
             await initializeCostCalculator();
@@ -477,16 +464,28 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
           } catch {}
 
+          // Clean up stale running entries in dashboard storage
+          try {
+            const executorSessionId = (getCurrentExecutor() as any)?.context?.taskId;
+            const validRunningIds = new Set<string>([...runningWorkflowSessionIds]);
+            if (executorSessionId) validRunningIds.add(String(executorSessionId));
+
+            const stored = await chrome.storage.local.get('agent_dashboard_running');
+            const runningList: any[] = stored.agent_dashboard_running || [];
+            const cleaned = runningList.filter((a: any) => validRunningIds.has(String(a?.sessionId)));
+            if (cleaned.length !== runningList.length) {
+              await chrome.storage.local.set({ agent_dashboard_running: cleaned });
+            }
+          } catch {}
+
           // Collect buffered events to include in restore message
           const bufferedEvents = eventBuffer.length > 0 ? eventBuffer.splice(0, eventBuffer.length) : [];
-          console.log('[panel_opened] Collected', bufferedEvents.length, 'buffered events');
 
           // Restore running workflow state if any
           try {
             if (runningWorkflowSessionIds.size > 0) {
               const activeSessionId = [...runningWorkflowSessionIds][0];
               const workflow = workflowsBySession.get(activeSessionId);
-              console.log('[panel_opened] Restoring multiagent session:', activeSessionId);
               safePostMessage(port, {
                 type: 'restore_active_session',
                 data: {
@@ -500,7 +499,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             } else if (getCurrentExecutor()) {
               const executor = getCurrentExecutor();
               const sessionId = (executor as any)?.context?.taskId;
-              console.log('[panel_opened] Restoring single-agent session:', sessionId);
               if (sessionId) {
                 safePostMessage(port, {
                   type: 'restore_active_session',
@@ -508,12 +506,19 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                     sessionId,
                     agentType: (executor as any)?.manualAgentType || 'agent',
                     isRunning: true,
-                    bufferedEvents, // Include buffered events
+                    bufferedEvents,
                   },
                 });
               }
             } else {
-              console.log('[panel_opened] No running workflows to restore');
+              // No active workflow - restore saved view state
+              try {
+                const stored = await chrome.storage.local.get('panel_view_state');
+                const viewState = stored.panel_view_state;
+                if (viewState?.currentSessionId || viewState?.viewMode) {
+                  safePostMessage(port, { type: 'restore_view_state', data: viewState });
+                }
+              } catch {}
             }
           } catch (e) {
             logger.error('[panel_opened] Failed to restore session:', e);

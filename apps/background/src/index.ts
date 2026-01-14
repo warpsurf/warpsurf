@@ -245,11 +245,9 @@ chrome.runtime.onConnect.addListener(async port => {
       taskManager,
       logger,
       getCurrentPort: () => {
-        console.log('[getCurrentPort] Called, returning:', currentPort ? 'PORT_EXISTS' : 'NULL');
         return currentPort;
       },
       setCurrentPort: (p: chrome.runtime.Port | null) => {
-        console.log('[setCurrentPort] Setting port to:', p ? 'PORT' : 'NULL');
         currentPort = p;
       },
       getCurrentExecutor: () => currentExecutor,
