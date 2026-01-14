@@ -4,6 +4,7 @@ export {
   getProviderApiKey,
   getAllProviderApiKeys,
   getAllProvidersDecrypted,
+  getAllAgentModelsDecrypted,
   clearApiKeyCache,
   invalidateProviderCache,
 } from './service';

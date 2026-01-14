@@ -2,13 +2,12 @@ import BrowserContext from '../browser/context';
 import { Executor } from './executor';
 import { createChatModel } from '../workflows/models/factory';
 import {
-  agentModelStore,
   AgentNameEnum,
   firewallStore,
   generalSettingsStore,
   getDefaultDisplayNameFromProviderId,
 } from '@extension/storage';
-import { getAllProvidersDecrypted } from '../crypto';
+import { getAllProvidersDecrypted, getAllAgentModelsDecrypted } from '../crypto';
 type BaseChatModel = any;
 import { globalTokenTracker } from '../utils/token-tracker';
 import { createLogger } from '@src/log';
@@ -34,7 +33,7 @@ export async function setupExecutor(
   if (Object.keys(providers).length === 0) {
     throw new Error('Please configure API keys in the settings first');
   }
-  const agentModels = await agentModelStore.getAllAgentModels();
+  const agentModels = await getAllAgentModelsDecrypted();
 
   // Validate only the agents required for this workflow
   for (const agentName of getRequiredAgentsForWorkflow(agentType)) {

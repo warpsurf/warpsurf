@@ -1,8 +1,8 @@
 import { createChatModel } from '../workflows/models/factory';
-import { agentModelStore, generalSettingsStore, AgentNameEnum, getDefaultDisplayNameFromProviderId } from '@extension/storage';
+import { generalSettingsStore, AgentNameEnum, getDefaultDisplayNameFromProviderId } from '@extension/storage';
 import { Executor } from '../executor/executor';
 import BrowserContext from '../browser/context';
-import { getAllProvidersDecrypted } from '../crypto';
+import { getAllProvidersDecrypted, getAllAgentModelsDecrypted } from '../crypto';
 
 type BaseChatModel = any;
 
@@ -16,7 +16,7 @@ export async function createSingleAgentExecutor(input: SingleAgentFactoryInput):
   const { prompt, sessionId, manualAgentType } = input;
 
   const providers = await getAllProvidersDecrypted();
-  const agentModels = await agentModelStore.getAllAgentModels();
+  const agentModels = await getAllAgentModelsDecrypted();
 
   const navigatorCfg = agentModels[AgentNameEnum.AgentNavigator];
   if (!navigatorCfg) throw new Error('Please choose a model for the navigator in the settings first');
@@ -29,14 +29,18 @@ export async function createSingleAgentExecutor(input: SingleAgentFactoryInput):
   // Planner and validator are optional - only create if provider exists
   const plannerCfg = agentModels[AgentNameEnum.AgentPlanner] || null;
   const validatorCfg = agentModels[AgentNameEnum.AgentValidator] || null;
-  const plannerLLM: BaseChatModel | null = plannerCfg && providers[plannerCfg.provider] 
-    ? createChatModel(providers[plannerCfg.provider], plannerCfg) : null;
-  const validatorLLM: BaseChatModel | null = validatorCfg && providers[validatorCfg.provider] 
-    ? createChatModel(providers[validatorCfg.provider], validatorCfg) : null;
+  const plannerLLM: BaseChatModel | null =
+    plannerCfg && providers[plannerCfg.provider] ? createChatModel(providers[plannerCfg.provider], plannerCfg) : null;
+  const validatorLLM: BaseChatModel | null =
+    validatorCfg && providers[validatorCfg.provider]
+      ? createChatModel(providers[validatorCfg.provider], validatorCfg)
+      : null;
 
   const generalSettings = await generalSettingsStore.getSettings();
   const effectiveSettings: any = { ...generalSettings };
-  try { (effectiveSettings as any).useFullPlanningPipeline = false; } catch {}
+  try {
+    (effectiveSettings as any).useFullPlanningPipeline = false;
+  } catch {}
 
   const browserCtx = new BrowserContext({});
   const executor = new Executor(prompt, sessionId, browserCtx, navigatorLLM, {
@@ -68,7 +72,8 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
   const providers = await getAllProvidersDecrypted();
   const agentModels = await agentModelStore.getAllAgentModels();
 
-  const workerCfg = agentModels[workerModelPrefers || AgentNameEnum.AgentNavigator] || agentModels[AgentNameEnum.AgentNavigator];
+  const workerCfg =
+    agentModels[workerModelPrefers || AgentNameEnum.AgentNavigator] || agentModels[AgentNameEnum.AgentNavigator];
   if (!workerCfg) throw new Error('No worker-capable model configured');
   if (!providers[workerCfg.provider]) {
     const name = getDefaultDisplayNameFromProviderId(workerCfg.provider);
@@ -79,13 +84,15 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
   // Get planner/validator LLMs if multi-agent planner/validator is enabled
   const plannerCfg = agentModels[AgentNameEnum.AgentPlanner] || null;
   const validatorCfg = agentModels[AgentNameEnum.AgentValidator] || null;
-  const plannerLLM: BaseChatModel | null = plannerCfg && providers[plannerCfg.provider] 
-    ? createChatModel(providers[plannerCfg.provider], plannerCfg) : null;
-  const validatorLLM: BaseChatModel | null = validatorCfg && providers[validatorCfg.provider] 
-    ? createChatModel(providers[validatorCfg.provider], validatorCfg) : null;
+  const plannerLLM: BaseChatModel | null =
+    plannerCfg && providers[plannerCfg.provider] ? createChatModel(providers[plannerCfg.provider], plannerCfg) : null;
+  const validatorLLM: BaseChatModel | null =
+    validatorCfg && providers[validatorCfg.provider]
+      ? createChatModel(providers[validatorCfg.provider], validatorCfg)
+      : null;
 
   const generalSettings = await generalSettingsStore.getSettings();
-  
+
   // Map multi-agent settings to the single-agent executor settings
   // Workers use enableMultiagentPlanner/enableMultiagentValidator instead of enablePlanner/enableValidator
   const workerSettings = {
@@ -93,7 +100,7 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
     enablePlanner: generalSettings.enableMultiagentPlanner ?? false,
     enableValidator: generalSettings.enableMultiagentValidator ?? false,
   };
-  
+
   // Workers require isolated tabs/groups. Use worker-mode BrowserContext so first navigation opens a new tab
   // and emits TAB_CREATED for proper grouping/mirroring.
   const browserCtx = new BrowserContext({ forceNewTab: true });
@@ -110,9 +117,7 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
     },
     generalSettings: workerSettings,
     agentType: 'agent',
-    retainTokenLogs: true,  // Workers must retain tokens for session log aggregation
+    retainTokenLogs: true, // Workers must retain tokens for session log aggregation
   });
   return executor;
 }
-
-
