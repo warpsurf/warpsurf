@@ -79,27 +79,26 @@ export async function subscribeToExecutorEvents(
       };
 
       if (!currentPort) {
-        // Buffer the event for later replay
-        if (bufferOptions) {
-          if (bufferOptions.eventBuffer.length < bufferOptions.maxSize) {
-            bufferOptions.eventBuffer.push(outEvent);
-            console.log(
-              '[subscribeToExecutorEvents] Buffered event:',
-              event.state,
-              '(buffer size:',
-              bufferOptions.eventBuffer.length,
-              ')',
-            );
-          } else {
-            console.log('[subscribeToExecutorEvents] Buffer full, dropping event:', event.state);
-          }
-        } else {
-          console.log('[subscribeToExecutorEvents] No port or buffer, dropping event:', event.state);
+        // Debug: log when port is missing for terminal events
+        if (isTerminal) {
+          console.log('[subscribeToExecutorEvents] No port for terminal event:', {
+            state: event.state,
+            taskId: event.data?.taskId,
+            hasBuffer: !!bufferOptions,
+          });
+        }
+        if (bufferOptions && bufferOptions.eventBuffer.length < bufferOptions.maxSize) {
+          bufferOptions.eventBuffer.push(outEvent);
         }
       }
 
       if (currentPort) {
+        // Debug: log when sending terminal events
         if (isTerminal) {
+          console.log('[subscribeToExecutorEvents] Sending terminal event:', {
+            state: event.state,
+            taskId: event.data?.taskId,
+          });
           try {
             const taskId: string | undefined = (event as any)?.data?.taskId;
             if (taskId) {
@@ -177,9 +176,19 @@ export async function subscribeToExecutorEvents(
           }
         }
 
-        currentPort.postMessage(outEvent);
+        try {
+          currentPort.postMessage(outEvent);
+          // Debug: confirm terminal event was posted
+          if (isTerminal) {
+            console.log('[subscribeToExecutorEvents] Terminal event posted successfully');
+          }
+        } catch (postErr) {
+          console.error('[subscribeToExecutorEvents] Failed to post message:', postErr);
+          throw postErr;
+        }
       }
     } catch (error) {
+      console.error('[subscribeToExecutorEvents] Error in event handler:', error);
       logger.debug('Failed to send message to side panel:', error);
     }
 
