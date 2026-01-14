@@ -467,6 +467,7 @@ const SidePanel = () => {
     resetPerChatAcceptance,
     promptPerChatIfEnabled,
     handleSendMessage,
+    appendMessage,
   });
 
   // Subscribe to running agents count for dashboard badge

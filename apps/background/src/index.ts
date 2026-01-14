@@ -93,7 +93,13 @@ setupContextMenus();
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.windowId) return;
 
-  let pendingAction: { prompt: string; autoStart: boolean; workflowType: string; contextTabId?: number } | null = null;
+  let pendingAction: {
+    prompt: string;
+    autoStart: boolean;
+    workflowType: string;
+    contextTabId?: number;
+    errorMessage?: string;
+  } | null = null;
 
   if (info.menuItemId === 'explain-selection' && info.selectionText) {
     pendingAction = {
@@ -102,13 +108,47 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       workflowType: 'chat',
     };
   } else if (info.menuItemId === 'summarize-page') {
-    // Summarize the currently open tab (where right-click happened)
-    pendingAction = {
-      prompt: 'Summarize this page',
-      autoStart: true,
-      workflowType: 'chat',
-      contextTabId: tab.id, // Pass the tab ID so it's added as context
-    };
+    // Check if the tab URL is restricted before attempting to summarize
+    const tabUrl = tab.url || '';
+    const RESTRICTED_PREFIXES = [
+      'chrome://',
+      'chrome-extension://',
+      'about:',
+      'data:',
+      'javascript:',
+      'edge://',
+      'brave://',
+    ];
+    const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
+
+    if (isRestricted) {
+      // Show friendly error for restricted pages
+      pendingAction = {
+        prompt: '',
+        autoStart: false,
+        workflowType: 'chat',
+        errorMessage: `Cannot summarize this page. Browser system pages (like ${tabUrl.split('/')[0]}//...) are restricted and cannot be accessed by extensions for security reasons. Please try summarizing a regular web page instead.`,
+      };
+    } else {
+      // Check firewall settings
+      const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+      if (!allowedByFirewall) {
+        pendingAction = {
+          prompt: '',
+          autoStart: false,
+          workflowType: 'chat',
+          errorMessage: `Cannot summarize this page. The URL "${tabUrl}" is blocked by your firewall settings. You can adjust allowed/denied URLs in Settings > Web.`,
+        };
+      } else {
+        // Summarize the currently open tab (where right-click happened)
+        pendingAction = {
+          prompt: 'Summarize this page',
+          autoStart: true,
+          workflowType: 'chat',
+          contextTabId: tab.id, // Pass the tab ID so it's added as context
+        };
+      }
+    }
   }
 
   if (pendingAction) {

@@ -48,6 +48,7 @@ export function usePanelEffects(params: {
   resetPerChatAcceptance?: () => void;
   promptPerChatIfEnabled?: () => void;
   handleSendMessage?: (text: string) => void;
+  appendMessage?: (message: any, sessionId?: string | null) => void;
 }) {
   const {
     portRef,
@@ -95,6 +96,7 @@ export function usePanelEffects(params: {
     resetPerChatAcceptance,
     promptPerChatIfEnabled,
     handleSendMessage,
+    appendMessage,
   } = params;
 
   // Sync refs
@@ -161,28 +163,41 @@ export function usePanelEffects(params: {
               autoStart: boolean;
               workflowType?: string;
               contextTabId?: number;
+              errorMessage?: string;
             }
           | undefined;
         if (pendingAction) {
           await chrome.storage.session.remove('pendingAction');
+
+          // Handle error messages (e.g., restricted page errors)
+          if (pendingAction.errorMessage) {
+            if (appendMessage) {
+              appendMessage({ actor: 'system', content: pendingAction.errorMessage, timestamp: Date.now() });
+            }
+            return;
+          }
+
           // Set the workflow type if specified (e.g., 'chat')
           if (pendingAction.workflowType && setSelectedAgentRef.current) {
             setSelectedAgentRef.current(pendingAction.workflowType as any);
           }
-          // Add context tab if specified (e.g., for "Summarize this page")
-          if (pendingAction.contextTabId && setContextTabIdsRef.current) {
-            setContextTabIdsRef.current([pendingAction.contextTabId]);
-          }
-          if (setInputTextRef.current) {
-            setInputTextRef.current(pendingAction.prompt);
-          }
+
           if (pendingAction.autoStart && handleSendMessage) {
-            // Pass workflow type and context tabs to handleSendMessage
+            // For auto-run (context menu actions), submit immediately without setting input/context in UI
+            // The context tabs are passed directly to handleSendMessage and don't need to persist
             const contextTabs = pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined;
             // Small delay to let UI update
             setTimeout(() => {
               (handleSendMessage as any)(pendingAction.prompt, pendingAction.workflowType || 'chat', contextTabs);
             }, 50);
+          } else {
+            // For manual actions (panel opened but not auto-run), set input and context tabs in UI
+            if (pendingAction.contextTabId && setContextTabIdsRef.current) {
+              setContextTabIdsRef.current([pendingAction.contextTabId]);
+            }
+            if (setInputTextRef.current) {
+              setInputTextRef.current(pendingAction.prompt);
+            }
           }
         }
       } catch (error) {
@@ -204,7 +219,7 @@ export function usePanelEffects(params: {
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
-  }, [logger, setInputTextRef, setSelectedAgentRef, setContextTabIdsRef, handleSendMessage]);
+  }, [logger, setInputTextRef, setSelectedAgentRef, setContextTabIdsRef, handleSendMessage, appendMessage]);
 
   // Settings loading
   useEffect(() => {
