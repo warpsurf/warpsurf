@@ -58,38 +58,47 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 ## Demos
 
-These demos give a flavour of some of the features and capabilities of warpsurf. For some, playback speeds have been altered to make the demos more watchable, all playback speeds are clearly displayed.
+> **Click any preview below to expand to full size**
 
-### 🤖 Agent workflow
+<details>
+<summary><img src="images/agent_2x.gif" width="180"/> &nbsp; 🤖 <strong>Agent workflow</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+
 <img src="images/agent_2x.gif" alt="Agent workflow" width="100%"/>
-<br/>
-<em><strong>2x playback speed</strong> - Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring.</em>
-<br><br>
 
-### 🤖🤖 Multi-agent workflow
+*Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring.*
+</details>
 
-#### 🤖🤖🤖🤖 Workers
+<details>
+<summary><img src="images/magent_workers_1x.gif" width="180"/> &nbsp; 🤖🤖 <strong>Multi-agent Workers</strong> &nbsp;•&nbsp; <em>realtime</em></summary>
+
 <img src="images/magent_workers_1x.gif" alt="Multiagent workflow workers" width="100%"/>
-<br/>
-<em><strong>Realtime playback speed</strong> - Multiagent workflow parallel workers phase, using 5x Gemini 2.5 Flash worker agents (without vision/planner/validator/estimator/history summarization). The workers perform the subtasks allocated to them in their own tab groups. The workflow visualization displays the plan and status of each subtask.</em>
-<br>
 
-#### End-to-end: ♚ Planner + ✨ Refiner + 🤖 Workers
+*Multiagent workflow parallel workers phase, using 5x Gemini 2.5 Flash worker agents (without vision/planner/validator/estimator/history summarization). The workers perform the subtasks allocated to them in their own tab groups. The workflow visualization displays the plan and status of each subtask.*
+</details>
+
+<details>
+<summary><img src="images/magent_2x.gif" width="180"/> &nbsp; 🤖🤖 <strong>Multi-agent End-to-End</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+
 <img src="images/magent_2x.gif" alt="Multiagent workflow entire" width="100%"/>
-<br/>
-<em><strong>2x playback speed</strong> - Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed.</em>
-<br><br>
 
-### 🧠 + 🔍 Chat and Search workflows
+*Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed.*
+</details>
+
+<details>
+<summary><img src="images/chat+searchx2.gif" width="180"/> &nbsp; 🧠🔍 <strong>Chat and Search</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+
 <img src="images/chat+searchx2.gif" alt="warpsurf chat" width="100%"/>
-<br/>
-<em><strong>2x playback speed</strong> - Chat and Search workflows using Gemini 2.5 Flash. Through a single chat session, users can interact with LLMs for simple chat workflows, search-grounded requests and the agentic workflows. Chat history is carried across different workflows in a session.</em>
-<br><br>
 
-### <img src="apps/background/public/warpsurf_logo.png" alt="warpsurf" height="20" align="center"/> Panel and Options menu
+*Chat and Search workflows using Gemini 2.5 Flash. Through a single chat session, users can interact with LLMs for simple chat workflows, search-grounded requests and the agentic workflows. Chat history is carried across different workflows in a session.*
+</details>
+
+<details>
+<summary><img src="images/menu_2x.gif" width="180"/> &nbsp; ⚙️ <strong>Panel and Options</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+
 <img src="images/menu_2x.gif" alt="warpsurf interface" width="100%"/>
-<br/>
-<em><strong>2x playback speed</strong> - Users interact with warpsurf through a side panel. Settings are configured using the Options page, where users can add API keys, select models and model settings, configure web and live data settings.</em>
+
+*Users interact with warpsurf through a side panel. Settings are configured using the Options page, where users can add API keys, select models and model settings, configure web and live data settings.*
+</details>
 
 ## Existing Features
 
