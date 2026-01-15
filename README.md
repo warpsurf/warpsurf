@@ -108,12 +108,16 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 | 🔀 **Router** | Queries are automatically triaged to the right workflow |
 | 🧠 **Chat** | Conversational interface powered by leading LLMs |
 | 🔍 **Search** | Low latency search-grounded chat |
+| 🖱️ **Context Menus** | Right-click to Explain or Summarize selected text or pages |
+| 📡 **Streaming** | Real-time streaming responses for Chat and Search workflows |
 | 🤖 **Agent** | Navigates and interacts with any webpage |
 | 🤖🤖 **Multi-Agent** | Orchestrate multiple agents for complex or parallelisable workflows |
 | 📑 **Tab Management** | Agents operate using their own tab groups |
 | 🪟 **Tab Context** | Select tabs to add as context in agent workflows |
 | 🔒 **Privacy** | Runs locally in your browser; your data stays with you |
 | 👁️ **Monitor** | Watch agents work in real-time with tab streaming |
+| 📍 **Trajectory View** | Visual timeline of agent actions grouped by site |
+| 🔄 **Session Restore** | Workflows persist and resume when the panel is reopened |
 | 📈 **Usage Tracking** | Real-time token and cost statistics |
 | 💰 **Live Pricing** | Incorporate live pricing data for accurate cost predictions |
 | 🎮 **Take Control** | Agent workflows pass control back to you at critical junctures |
