@@ -55,16 +55,40 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 ## Demos
 
+<table>
+<tr>
+<td width="50%" align="center">🔵 <b>Summarize this</b> (realtime)<br><br><img src="images/summary.gif" width="100%"/></td>
+<td width="50%" align="center">🟢 <b>Agent workflow</b> (2x speed)<br><br><img src="images/agent_2x.gif" width="100%"/></td>
+</tr>
+</table>
+
 <details>
-<summary><code>EXPAND</code> &nbsp; 🤖 Agent workflow (2x speed)<br><br><img src="images/agent_2x.gif" width="180"/></summary>
+<summary>🔵 <code>EXPAND Summarize this</code></summary>
+
+<img src="images/summary.gif" alt="Summary workflow" width="100%"/>
+
+*Summarize this workflow using Gemini 2.5 Flash. Warpsurf rapidly summarizes the current page.*
+</details>
+
+<details>
+<summary>🟢 <code>EXPAND Agent workflow</code></summary>
 
 <img src="images/agent_2x.gif" alt="Agent workflow" width="100%"/>
 
 *Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring.*
 </details>
 
+---
+
+<table>
+<tr>
+<td width="50%" align="center">🟠 <b>Multi-agent Workers</b> (realtime)<br><br><img src="images/magent_workers_1x.gif" width="100%"/></td>
+<td width="50%" align="center">🟣 <b>Multi-agent End-to-End</b> (2x speed)<br><br><img src="images/magent_2x.gif" width="100%"/></td>
+</tr>
+</table>
+
 <details>
-<summary><code>EXPAND</code> &nbsp; 🤖🤖 Multi-agent Workers (realtime)<br><br><img src="images/magent_workers_1x.gif" width="180"/></summary>
+<summary>🟠 <code>EXPAND Multi-agent Workers</code></summary>
 
 <img src="images/magent_workers_1x.gif" alt="Multiagent workflow workers" width="100%"/>
 
@@ -72,15 +96,24 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><code>EXPAND</code> &nbsp; 🤖🤖 Multi-agent End-to-End (2x speed)<br><br><img src="images/magent_2x.gif" width="180"/></summary>
+<summary>🟣 <code>EXPAND Multi-agent End-to-End</code></summary>
 
 <img src="images/magent_2x.gif" alt="Multiagent workflow entire" width="100%"/>
 
 *Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed.*
 </details>
 
+---
+
+<table>
+<tr>
+<td width="50%" align="center">🔴 <b>Chat and Search</b> (2x speed)<br><br><img src="images/chat+searchx2.gif" width="100%"/></td>
+<td width="50%" align="center">🟡 <b>Panel and Options</b> (2x speed)<br><br><img src="images/menu_2x.gif" width="100%"/></td>
+</tr>
+</table>
+
 <details>
-<summary><code>EXPAND</code> &nbsp; 🧠🔍 Chat and Search (2x speed)<br><br><img src="images/chat+searchx2.gif" width="180"/></summary>
+<summary>🔴 <code>EXPAND Chat and Search</code></summary>
 
 <img src="images/chat+searchx2.gif" alt="warpsurf chat" width="100%"/>
 
@@ -88,7 +121,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><code>EXPAND</code> &nbsp; ⚙️ Panel and Options (2x speed)<br><br><img src="images/menu_2x.gif" width="180"/></summary>
+<summary>🟡 <code>EXPAND Panel and Options</code></summary>
 
 <img src="images/menu_2x.gif" alt="warpsurf interface" width="100%"/>
 
