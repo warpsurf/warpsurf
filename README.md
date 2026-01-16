@@ -144,10 +144,10 @@ warpsurf has only been tested in a Chrome browser.
 ### Option 2: GitHub Release (most recent warpsurf version)
 
 #### Download
-Download the `v1.0.X.zip` file from the latest warpsurf [GitHub release](https://github.com/warpsurf/warpsurf/releases).
+Download the `vX.Y.Z.zip` file from the latest warpsurf [GitHub release](https://github.com/warpsurf/warpsurf/releases).
 
 #### Install
-1. Unzip `v1.0.X.zip`.
+1. Unzip `vX.Y.Z.zip`.
 2. Navigate to chrome://extensions
 3. Enable "Developer mode"
 4. Click "Load unpacked"
