@@ -67,7 +67,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/summary.gif" alt="Summary workflow" width="100%"/>
 
-*Summarize this workflow using Gemini 2.5 Flash. Warpsurf rapidly summarizes the current page.*
+*Right-click "Summarize this" workflow using Gemini 2.5 Flash. Warpsurf rapidly summarizes the current page. [REAL TIME]*
 </details>
 
 <details>
@@ -75,7 +75,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/agent_2x.gif" alt="Agent workflow" width="100%"/>
 
-*Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring.*
+*Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring. [2x SPEED]*
 </details>
 
 ---
@@ -92,7 +92,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/magent_workers_1x.gif" alt="Multiagent workflow workers" width="100%"/>
 
-*Multiagent workflow parallel workers phase, using 5x Gemini 2.5 Flash worker agents (without vision/planner/validator/estimator/history summarization). The workers perform the subtasks allocated to them in their own tab groups. The workflow visualization displays the plan and status of each subtask.*
+*Multiagent workflow parallel workers phase, using 5x Gemini 2.5 Flash worker agents (without vision/planner/validator/estimator/history summarization). The workers perform the subtasks allocated to them in their own tab groups. The workflow visualization displays the plan and status of each subtask. [REAL TIME]*
 </details>
 
 <details>
@@ -100,7 +100,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/magent_2x.gif" alt="Multiagent workflow entire" width="100%"/>
 
-*Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed.*
+*Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed. [2x SPEED]*
 </details>
 
 ---
@@ -117,7 +117,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/chat+searchx2.gif" alt="warpsurf chat" width="100%"/>
 
-*Chat and Search workflows using Gemini 2.5 Flash. Through a single chat session, users can interact with LLMs for simple chat workflows, search-grounded requests and the agentic workflows. Chat history is carried across different workflows in a session.*
+*Chat and Search workflows using Gemini 2.5 Flash. Through a single chat session, users can interact with LLMs for simple chat workflows, search-grounded requests and the agentic workflows. Chat history is carried across different workflows in a session. [2x SPEED]*
 </details>
 
 <details>
@@ -125,7 +125,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 <img src="images/menu_2x.gif" alt="warpsurf interface" width="100%"/>
 
-*Users interact with warpsurf through a side panel. Settings are configured using the Options page, where users can add API keys, select models and model settings, configure web and live data settings.*
+*Users interact with warpsurf through a side panel. Settings are configured using the Options page, where users can add API keys, select models and model settings, configure web and live data settings. [2x SPEED]*
 </details>
 
 ## Existing Features
