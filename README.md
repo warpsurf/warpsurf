@@ -41,19 +41,16 @@ agents can operate in parallel in their own tab groups, which are streamed for r
 
 
 ## The warpsurf vision
-<figure style="text-align:center;"><img src="images/warpsurf_vision.png" alt="warpsurf vision" width="40%" style="display:block;margin:0 auto;"><figcaption><em>(GPT 5.1-generated)</em></figcaption></figure>
-<br>
 
-The browser is the door to the Internet. We believe this door should be open and accessible to everyone.
+<img src="images/warpsurf_vision.png" alt="warpsurf vision" width="240" align="right" style="margin-left:20px;margin-bottom:10px;"/>
 
-Using the web well is increasingly important for work and everyday life. AI-powered browser copilots can make complex, click-heavy workflows easier while keeping your data, sessions, and authentication in your browser. 
+The browser is the door to the Internet. We believe this door should be open and accessible to everyone. Using the web well is increasingly important for work and everyday life. AI-powered browser copilots can make complex, click-heavy workflows easier while keeping your data, sessions, and authentication in your browser. 
 
 For browser automation to be useful, it needs to be fast and enable “warpsurfing” - **warpsurf represents an early step in this direction**. For speed, warpsurf uses intelligent routing and parallel execution. With real-time tab streaming, you can watch agents work and step in at critical moments.
 
 We deliberately design for multi-agent, multi-step LLM usage (assuming intelligence per token will increase and token prices and latency will fall) and we’re building warpsurf as a model-agnostic open-source community tool, open to contributions, critique, and alternative visions. 
 
 As we wait for models to get faster, our goals are to help grow the browser automation ecosystem and find bugs, useful features and use cases. 
-
 ~ J O S T
 
 ## Demos
