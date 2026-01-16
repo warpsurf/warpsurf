@@ -55,10 +55,8 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 ## Demos
 
-> **Click any preview below to expand to full size**
-
 <details>
-<summary><img src="images/agent_2x.gif" width="180"/> &nbsp; 🤖 <strong>Agent workflow</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+<summary><code>EXPAND</code> &nbsp; 🤖 Agent workflow (2x speed)<br><br><img src="images/agent_2x.gif" width="180"/></summary>
 
 <img src="images/agent_2x.gif" alt="Agent workflow" width="100%"/>
 
@@ -66,7 +64,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><img src="images/magent_workers_1x.gif" width="180"/> &nbsp; 🤖🤖 <strong>Multi-agent Workers</strong> &nbsp;•&nbsp; <em>realtime</em></summary>
+<summary><code>EXPAND</code> &nbsp; 🤖🤖 Multi-agent Workers (realtime)<br><br><img src="images/magent_workers_1x.gif" width="180"/></summary>
 
 <img src="images/magent_workers_1x.gif" alt="Multiagent workflow workers" width="100%"/>
 
@@ -74,7 +72,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><img src="images/magent_2x.gif" width="180"/> &nbsp; 🤖🤖 <strong>Multi-agent End-to-End</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+<summary><code>EXPAND</code> &nbsp; 🤖🤖 Multi-agent End-to-End (2x speed)<br><br><img src="images/magent_2x.gif" width="180"/></summary>
 
 <img src="images/magent_2x.gif" alt="Multiagent workflow entire" width="100%"/>
 
@@ -82,7 +80,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><img src="images/chat+searchx2.gif" width="180"/> &nbsp; 🧠🔍 <strong>Chat and Search</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+<summary><code>EXPAND</code> &nbsp; 🧠🔍 Chat and Search (2x speed)<br><br><img src="images/chat+searchx2.gif" width="180"/></summary>
 
 <img src="images/chat+searchx2.gif" alt="warpsurf chat" width="100%"/>
 
@@ -90,7 +88,7 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 </details>
 
 <details>
-<summary><img src="images/menu_2x.gif" width="180"/> &nbsp; ⚙️ <strong>Panel and Options</strong> &nbsp;•&nbsp; <em>2x speed</em></summary>
+<summary><code>EXPAND</code> &nbsp; ⚙️ Panel and Options (2x speed)<br><br><img src="images/menu_2x.gif" width="180"/></summary>
 
 <img src="images/menu_2x.gif" alt="warpsurf interface" width="100%"/>
 
