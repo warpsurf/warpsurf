@@ -33,6 +33,7 @@ import {
   extractMultipleTabs,
   isUrlAllowedByFirewall,
 } from '../workflows/shared/context/context-tab-extractor';
+import { mergeContextTabIds } from '../workflows/shared/context/auto-tab-context-service';
 
 type BaseChatModel = any;
 
@@ -313,13 +314,34 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const query: string = String(message.query || '').trim();
             const maxWorkersOverride: number | undefined =
               typeof message.maxWorkersOverride === 'number' ? message.maxWorkersOverride : undefined;
-            // Extract context tab IDs from the message
-            const contextTabIds: number[] = Array.isArray(message.contextTabIds)
+            // Extract manually selected context tab IDs from the message
+            const manualContextTabIds: number[] = Array.isArray(message.contextTabIds)
               ? message.contextTabIds.filter((id: any) => typeof id === 'number' && id > 0)
               : [];
+            // If UI already merged auto-context (with exclusions), skip auto-merging here
+            const skipAutoContext: boolean = message.skipAutoContext === true;
             if (!sessionId || !query) {
               safePostMessage(port, { type: 'error', error: 'Missing sessionId or query for workflow v2' });
               return;
+            }
+
+            // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
+            let contextTabIds: number[] = manualContextTabIds;
+            if (!skipAutoContext) {
+              try {
+                contextTabIds = await mergeContextTabIds(manualContextTabIds);
+                if (contextTabIds.length !== manualContextTabIds.length) {
+                  logger.info(
+                    `[start_multi_agent_workflow_v2] Auto-context merged: ${manualContextTabIds.length} manual + ${contextTabIds.length - manualContextTabIds.length} auto = ${contextTabIds.length} total`,
+                  );
+                }
+              } catch (e) {
+                logger.error('[start_multi_agent_workflow_v2] Failed to merge auto-context tabs:', e);
+              }
+            } else {
+              logger.info(
+                `[start_multi_agent_workflow_v2] Using pre-merged context tabs from UI: ${contextTabIds.length} tabs`,
+              );
             }
             // Prevent duplicate starts for same session
             if (runningWorkflowSessionIds.has(sessionId)) {

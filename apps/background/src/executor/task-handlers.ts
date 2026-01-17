@@ -5,6 +5,7 @@ import { decideUseCurrentTab } from '@src/workflows/specialized/triage-tab-choic
 import { estimationService } from '../workflows/specialized/estimator/service';
 import { Actors, ExecutionState } from '../workflows/shared/event/types';
 import { generalSettingsStore, agentModelStore, AgentNameEnum } from '@extension/storage';
+import { mergeContextTabIds } from '@src/workflows/shared/context/auto-tab-context-service';
 import { globalTokenTracker } from '../utils/token-tracker';
 // Triage resolution happens via Auto; no direct provider/model imports needed here
 
@@ -155,12 +156,32 @@ export async function handleNewTask(message: any, deps: Deps) {
   const sessionId: string = String(message.taskId || '');
   const agentType: string | undefined = message.agentType ? String(message.agentType) : undefined;
   let tabId: number = typeof message.tabId === 'number' ? message.tabId : -1;
-  // Extract context tab IDs from the message
-  const contextTabIds: number[] = Array.isArray(message.contextTabIds)
+  // Extract manually selected context tab IDs from the message
+  const manualContextTabIds: number[] = Array.isArray(message.contextTabIds)
     ? message.contextTabIds.filter((id: any) => typeof id === 'number' && id > 0)
     : [];
+  const contextMenuAction: string | undefined = message.contextMenuAction;
+  // If UI already merged auto-context (with exclusions), skip auto-merging here
+  const skipAutoContext: boolean = message.skipAutoContext === true;
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
+  }
+
+  // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
+  let contextTabIds: number[] = manualContextTabIds;
+  if (!skipAutoContext) {
+    try {
+      contextTabIds = await mergeContextTabIds(manualContextTabIds, tabId > 0 ? tabId : undefined);
+      if (contextTabIds.length !== manualContextTabIds.length) {
+        deps.logger.info(
+          `[handleNewTask] Auto-context merged: ${manualContextTabIds.length} manual + ${contextTabIds.length - manualContextTabIds.length} auto = ${contextTabIds.length} total`,
+        );
+      }
+    } catch (e) {
+      deps.logger.warning('[handleNewTask] Failed to merge auto-context tabs:', e);
+    }
+  } else {
+    deps.logger.info(`[handleNewTask] Using pre-merged context tabs from UI: ${contextTabIds.length} tabs`);
   }
 
   // If agentType is 'auto', triage first and then map to manual agent type
@@ -306,7 +327,14 @@ export async function handleNewTask(message: any, deps: Deps) {
     } catch {}
   }
 
-  const executor = await setupExecutor(sessionId, task, browserContext, effectiveAgentType, contextTabIds);
+  const executor = await setupExecutor(
+    sessionId,
+    task,
+    browserContext,
+    effectiveAgentType,
+    contextTabIds,
+    contextMenuAction,
+  );
 
   setCurrentExecutor(executor);
 
@@ -354,12 +382,32 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
   const task: string = String(message.task || '').trim();
   const sessionId: string = String(message.taskId || '');
   let agentType: string | undefined = message.agentType ? String(message.agentType) : undefined;
-  // Extract context tab IDs from the message
-  const contextTabIds: number[] = Array.isArray(message.contextTabIds)
+  const tabId: number = typeof message.tabId === 'number' ? message.tabId : -1;
+  // Extract manually selected context tab IDs from the message
+  const manualContextTabIds: number[] = Array.isArray(message.contextTabIds)
     ? message.contextTabIds.filter((id: any) => typeof id === 'number' && id > 0)
     : [];
+  // If UI already merged auto-context (with exclusions), skip auto-merging here
+  const skipAutoContext: boolean = message.skipAutoContext === true;
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
+  }
+
+  // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
+  let contextTabIds: number[] = manualContextTabIds;
+  if (!skipAutoContext) {
+    try {
+      contextTabIds = await mergeContextTabIds(manualContextTabIds, tabId > 0 ? tabId : undefined);
+      if (contextTabIds.length !== manualContextTabIds.length) {
+        logger.info(
+          `[handleFollowUpTask] Auto-context merged: ${manualContextTabIds.length} manual + ${contextTabIds.length - manualContextTabIds.length} auto = ${contextTabIds.length} total`,
+        );
+      }
+    } catch (e) {
+      logger.warning('[handleFollowUpTask] Failed to merge auto-context tabs:', e);
+    }
+  } else {
+    logger.info(`[handleFollowUpTask] Using pre-merged context tabs from UI: ${contextTabIds.length} tabs`);
   }
 
   // If follow-up is 'auto', triage first to determine agent type
