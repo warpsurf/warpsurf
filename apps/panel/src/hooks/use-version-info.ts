@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const releaseNotes =
-    'Right-click context menus (Explain/Summarize), session restoration on panel reopen, task count badge, improved text input for contenteditable elements, performance optimizations.';
+    'Added page content to explain right-click action, added auto-tab context, page content is dynamically extracted based on model context limits.';
 
   useEffect(() => {
     try {
