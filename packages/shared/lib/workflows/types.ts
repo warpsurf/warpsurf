@@ -57,12 +57,14 @@ export interface ContextTabConfig {
 }
 
 /**
- * Context tab configuration per workflow type
+ * Context tab configuration per workflow type.
+ * Note: maxTabs is now a fallback limit. When model context is known,
+ * dynamic budgeting in context-budget.ts determines actual limits.
  */
 export const WORKFLOW_CONTEXT_CONFIG: Record<WorkflowType, ContextTabConfig> = {
-  [WorkflowType.CHAT]: { format: 'markdown', maxCharsPerTab: 50000, maxTotalChars: 250000, maxTabs: 5 },
-  [WorkflowType.SEARCH]: { format: 'markdown', maxCharsPerTab: 50000, maxTotalChars: 250000, maxTabs: 5 },
-  [WorkflowType.AUTO]: { format: 'markdown', maxCharsPerTab: 50000, maxTotalChars: 250000, maxTabs: 5 },
-  [WorkflowType.AGENT]: { format: 'dom', maxCharsPerTab: 50000, maxTotalChars: 250000, maxTabs: 5 },
-  [WorkflowType.MULTIAGENT]: { format: 'markdown', maxCharsPerTab: 50000, maxTotalChars: 250000, maxTabs: 5 },
+  [WorkflowType.CHAT]: { format: 'markdown', maxCharsPerTab: 100000, maxTotalChars: 500000, maxTabs: 50 },
+  [WorkflowType.SEARCH]: { format: 'markdown', maxCharsPerTab: 100000, maxTotalChars: 500000, maxTabs: 50 },
+  [WorkflowType.AUTO]: { format: 'markdown', maxCharsPerTab: 100000, maxTotalChars: 500000, maxTabs: 50 },
+  [WorkflowType.AGENT]: { format: 'dom', maxCharsPerTab: 100000, maxTotalChars: 500000, maxTabs: 50 },
+  [WorkflowType.MULTIAGENT]: { format: 'markdown', maxCharsPerTab: 100000, maxTotalChars: 500000, maxTabs: 50 },
 };
