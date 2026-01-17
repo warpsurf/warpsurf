@@ -10,6 +10,8 @@ export interface WarningsSettings {
   hasRespondedToLivePricingPrompt: boolean;
   /** When true, fetch live data from APIs; when false, use bundled cache */
   useLivePricingData: boolean;
+  /** Whether user has accepted the auto tab context privacy warning */
+  hasAcceptedAutoTabContextPrivacyWarning: boolean;
 }
 
 export type WarningsSettingsStorage = BaseStorage<WarningsSettings> & {
@@ -24,6 +26,7 @@ export const DEFAULT_WARNINGS_SETTINGS: WarningsSettings = {
   hasAcceptedHistoryPrivacyWarning: false,
   hasRespondedToLivePricingPrompt: false,
   useLivePricingData: false, // Default to cached (privacy-first)
+  hasAcceptedAutoTabContextPrivacyWarning: false,
 };
 
 const storage = createStorage<WarningsSettings>('warnings-settings', DEFAULT_WARNINGS_SETTINGS, {
@@ -52,5 +55,3 @@ export const warningsSettingsStore: WarningsSettingsStorage = {
     await storage.set(DEFAULT_WARNINGS_SETTINGS);
   },
 };
-
-
