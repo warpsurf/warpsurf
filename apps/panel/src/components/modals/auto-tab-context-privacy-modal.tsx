@@ -40,21 +40,16 @@ export default function AutoTabContextPrivacyModal({
 
           <p className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
             Enabling this feature will automatically extract and send content from open tabs in your current browser
-            window to third-party AI services.
+            window to third-party AI services with each request.
           </p>
 
           <ul className={`text-sm space-y-1 ml-4 list-disc ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            <li>All valid tabs in your window may be included</li>
-            <li>Content is limited based on your model's context window</li>
-            <li>Includes page content, URLs, and titles</li>
+            <li>
+              By default, all tabs allowed by your firewall settings in your window are included. Specific tabs can be
+              excluded.
+            </li>
+            <li>With many tabs open this can be expensive: includes page content, URLs, and titles for each tab.</li>
           </ul>
-
-          <p
-            className={`text-xs p-2 rounded ${isDarkMode ? 'bg-purple-900/30 text-purple-300 border border-purple-700/50' : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
-            This content will be transmitted to external AI servers with every request. Tabs blocked by your firewall
-            settings will be excluded.
-          </p>
-
           <div className="flex gap-3 justify-end pt-2">
             <button
               type="button"
