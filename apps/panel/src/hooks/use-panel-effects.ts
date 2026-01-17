@@ -164,17 +164,24 @@ export function usePanelEffects(params: {
               workflowType?: string;
               contextTabId?: number;
               errorMessage?: string;
+              contextMenuAction?: string;
+              infoMessage?: string;
             }
           | undefined;
         if (pendingAction) {
           await chrome.storage.session.remove('pendingAction');
 
-          // Handle error messages (e.g., restricted page errors)
+          // Handle error messages (e.g., restricted page errors) - blocks execution
           if (pendingAction.errorMessage) {
             if (appendMessage) {
               appendMessage({ actor: 'system', content: pendingAction.errorMessage, timestamp: Date.now() });
             }
             return;
+          }
+
+          // Handle info messages (e.g., context unavailable) - shows but continues
+          if (pendingAction.infoMessage && appendMessage) {
+            appendMessage({ actor: 'system', content: pendingAction.infoMessage, timestamp: Date.now() });
           }
 
           // Set the workflow type if specified (e.g., 'chat')
@@ -188,7 +195,12 @@ export function usePanelEffects(params: {
             const contextTabs = pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined;
             // Small delay to let UI update
             setTimeout(() => {
-              (handleSendMessage as any)(pendingAction.prompt, pendingAction.workflowType || 'chat', contextTabs);
+              (handleSendMessage as any)(
+                pendingAction.prompt,
+                pendingAction.workflowType || 'chat',
+                contextTabs,
+                pendingAction.contextMenuAction,
+              );
             }, 50);
           } else {
             // For manual actions (panel opened but not auto-run), set input and context tabs in UI
