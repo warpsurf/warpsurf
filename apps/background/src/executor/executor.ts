@@ -46,6 +46,8 @@ export interface ExecutorExtraArgs {
   retainTokenLogs?: boolean;
   /** Optional override for the initial SystemMessage (used by Multi-agent workers). */
   systemMessageOverride?: SystemMessage;
+  /** Context menu action identifier (e.g., 'explain-selection') for selecting bespoke prompts. */
+  contextMenuAction?: string;
 }
 
 export class Executor {
@@ -66,6 +68,7 @@ export class Executor {
   private retainTokenLogs?: boolean;
   private hasRunBrowserUse: boolean = false;
   private _hasReachedTerminalState: boolean = false;
+  private navigatorModelName?: string;
 
   public llmResponses: {
     auto: Array<{ request: string; response: any; timestamp: number }>;
@@ -134,13 +137,15 @@ export class Executor {
       prompt: this.validatorPrompt,
     });
 
-    this.chat = new ChatWorkflow(chatLLM, context);
+    this.chat = new ChatWorkflow(chatLLM, context, extraArgs?.contextMenuAction);
 
     this.search = new SearchWorkflow(searchLLM, context);
 
     this.autoService = new AutoWorkflow();
 
     this.context = context;
+    // Store model name for context budget calculations
+    this.navigatorModelName = (navigatorLLM as any).modelName || (navigatorLLM as any).model_name;
     // Initialize message history (allow optional messageContext for worker sessions)
     const systemMsg = extraArgs?.systemMessageOverride ?? this.navigatorPrompt.getSystemMessage();
     this.context.messageManager.initTaskMessages(systemMsg, task, extraArgs?.messageContext);
@@ -191,7 +196,11 @@ export class Executor {
     if (this.manualAgentType && this.manualAgentType !== 'agent' && this.manualAgentType !== 'auto') return;
 
     try {
-      const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.AGENT);
+      const contextMsg = await buildContextTabsSystemMessage(
+        this.context.contextTabIds,
+        WorkflowType.AGENT,
+        this.navigatorModelName,
+      );
       if (contextMsg) {
         // Insert at position 1 (after system message, before user_request)
         this.context.messageManager.addMessageWithTokens(contextMsg, 'context', 1);

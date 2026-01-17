@@ -4,6 +4,7 @@ import type { AgentContext, AgentOutput } from '../shared/agent-types';
 import { Actors, ExecutionState } from '@src/workflows/shared/event/types';
 import { isAbortedError, isTimeoutError } from '../shared/agent-errors';
 import { systemPrompt } from './chat-prompt';
+import { explainSystemPrompt } from './explain-prompt';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
@@ -28,10 +29,12 @@ export class ChatWorkflow {
   private currentTask?: string;
   private chatLLM: any;
   private context: AgentContext;
+  private contextMenuAction?: string;
 
-  constructor(chatLLM: any, context: AgentContext) {
+  constructor(chatLLM: any, context: AgentContext, contextMenuAction?: string) {
     this.chatLLM = chatLLM;
     this.context = context;
+    this.contextMenuAction = contextMenuAction;
   }
 
   setTask(task: string) {
@@ -44,14 +47,20 @@ export class ChatWorkflow {
 
       if (!this.currentTask) throw new Error('No task set');
 
-      const messages = buildLLMMessagesWithHistory(systemPrompt, await this.getSessionMessages(), this.currentTask, {
+      const prompt = this.contextMenuAction === 'explain-selection' ? explainSystemPrompt : systemPrompt;
+      const messages = buildLLMMessagesWithHistory(prompt, await this.getSessionMessages(), this.currentTask, {
         stripUserRequestTags: true,
       });
 
-      // Inject context tabs if available
+      // Inject context tabs if available (with dynamic budget based on model)
       if (this.context.contextTabIds.length > 0) {
         try {
-          const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.CHAT);
+          const modelName = this.chatLLM?.modelName;
+          const contextMsg = await buildContextTabsSystemMessage(
+            this.context.contextTabIds,
+            WorkflowType.CHAT,
+            modelName,
+          );
           if (contextMsg) {
             // Insert after system message (index 0)
             messages.splice(1, 0, contextMsg);
