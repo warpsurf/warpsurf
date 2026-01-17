@@ -1088,6 +1088,41 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           {/* Divider */}
           <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
 
+          {/* Auto Tab Context - pale purple */}
+          <div
+            className={`rounded-lg border p-4 ${isDarkMode ? 'border-purple-700/40 bg-purple-900/20' : 'border-purple-300/60 bg-purple-50/60'}`}>
+            <h3 className={`text-lg font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Auto Tab Context
+            </h3>
+            <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Automatically include content from all open tabs in your browser window as context for AI workflows.
+              Enable this feature in Agent Settings within the panel.
+            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Exclude Current Tab
+                </h4>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Don't include the tab you're currently viewing
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  updateSetting('autoTabContextExcludeCurrentTab', !settings.autoTabContextExcludeCurrentTab)
+                }
+                className={`toggle-slider ${settings.autoTabContextExcludeCurrentTab ? 'toggle-on' : 'toggle-off'}`}
+                aria-pressed={settings.autoTabContextExcludeCurrentTab}
+                aria-label="Exclude Current Tab toggle">
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
+
           {/* Workflow Estimation Model - pale blue */}
           <AgentModelsSection
             isDarkMode={isDarkMode}
