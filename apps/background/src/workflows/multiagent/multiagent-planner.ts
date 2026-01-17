@@ -182,7 +182,8 @@ export async function planSubtasksFromQuery(
       // Inject context tabs if available (for multi-agent planner)
       if (contextTabIds && contextTabIds.length > 0) {
         try {
-          const contextMsg = await buildContextTabsSystemMessage(contextTabIds, WorkflowType.MULTIAGENT);
+          const modelName = llm?.modelName || llm?.model_name;
+          const contextMsg = await buildContextTabsSystemMessage(contextTabIds, WorkflowType.MULTIAGENT, modelName);
           if (contextMsg) {
             msgs.push(contextMsg);
             logger.info(`Context tabs injected into Planner: ${contextTabIds.length} tabs`);

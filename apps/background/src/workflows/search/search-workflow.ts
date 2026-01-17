@@ -55,10 +55,15 @@ export class SearchWorkflow {
         stripUserRequestTags: true,
       });
 
-      // Inject context tabs if available
+      // Inject context tabs if available (with dynamic budget based on model)
       if (this.context.contextTabIds.length > 0) {
         try {
-          const contextMsg = await buildContextTabsSystemMessage(this.context.contextTabIds, WorkflowType.SEARCH);
+          const modelName = this.chatLLM?.modelName;
+          const contextMsg = await buildContextTabsSystemMessage(
+            this.context.contextTabIds,
+            WorkflowType.SEARCH,
+            modelName,
+          );
           if (contextMsg) {
             // Insert after system message (index 0)
             messages.splice(1, 0, contextMsg);
