@@ -141,8 +141,14 @@ export function createMessageSender(deps: MessageSenderDeps) {
     }
   }
 
-  return async function handleSendMessage(text: string, agentType?: string, contextTabIds?: number[]) {
-    logger.log('handleSendMessage', text, agentType, contextTabIds);
+  return async function handleSendMessage(
+    text: string,
+    agentType?: string,
+    contextTabIds?: number[],
+    contextMenuAction?: string,
+    skipAutoContext?: boolean,
+  ) {
+    logger.log('handleSendMessage', text, agentType, contextTabIds, contextMenuAction, skipAutoContext);
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
@@ -214,8 +220,15 @@ export function createMessageSender(deps: MessageSenderDeps) {
           query: trimmedText.replace(/^\/(chat|search|agent|agentv2)\b\s*/i, ''),
           sessionId: sessionIdRef.current,
           contextTabIds,
+          skipAutoContext,
         } as any);
-        logger.log('start_multi_agent_workflow_v2 sent', trimmedText, sessionIdRef.current, contextTabIds);
+        logger.log(
+          'start_multi_agent_workflow_v2 sent',
+          trimmedText,
+          sessionIdRef.current,
+          contextTabIds,
+          skipAutoContext,
+        );
         setCurrentTaskAgentType('multiagent');
       } else if (isFollowUpMode()) {
         await sendMessage({
@@ -225,8 +238,10 @@ export function createMessageSender(deps: MessageSenderDeps) {
           tabId,
           agentType: finalAgentType,
           contextTabIds,
+          contextMenuAction,
+          skipAutoContext,
         });
-        logger.log('follow_up_task sent', text, tabId, sessionIdRef.current, finalAgentType);
+        logger.log('follow_up_task sent', text, tabId, sessionIdRef.current, finalAgentType, skipAutoContext);
         setCurrentTaskAgentType(finalAgentType || null);
         try {
           if (sessionIdRef.current) {
@@ -250,8 +265,10 @@ export function createMessageSender(deps: MessageSenderDeps) {
           agentType: finalAgentType,
           maxWorkersOverride,
           contextTabIds,
+          contextMenuAction,
+          skipAutoContext,
         });
-        logger.log('new_task sent', text, tabId, sessionIdRef.current, finalAgentType);
+        logger.log('new_task sent', text, tabId, sessionIdRef.current, finalAgentType, skipAutoContext);
         setCurrentTaskAgentType(finalAgentType || null);
       }
     } catch (err) {
