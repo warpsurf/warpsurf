@@ -39,9 +39,8 @@ export interface GeneralSettingsConfig {
   showEmergencyStop?: boolean;
   // Response timeout for LLM calls (Chat, Auto, Search workflows)
   responseTimeoutSeconds?: number;
-  // Auto tab context settings (power user feature)
+  // Auto tab context (power user feature)
   enableAutoTabContext?: boolean;
-  autoTabContextExcludeCurrentTab?: boolean;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -79,10 +78,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   enableWorkflowEstimation: false,
   showEmergencyStop: true,
   responseTimeoutSeconds: 60, // 2 minutes default for LLM response timeout
-  // Auto tab context defaults (disabled by default, privacy-first)
-  // Limits are now dynamic based on model context window
+  // Auto tab context (disabled by default, privacy-first)
   enableAutoTabContext: false,
-  autoTabContextExcludeCurrentTab: false,
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {
