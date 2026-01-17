@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { type Message } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 const CommandPalette = lazy(() => import('./components/header/command-palette'));
@@ -156,12 +156,26 @@ const SidePanel = () => {
   } = useDisclaimerGates(isDarkMode);
   const { hasAcceptedHistoryPrivacy, promptHistoryPrivacy, resetHistoryPrivacy, historyPrivacyModal } =
     useHistoryPrivacyGate(isDarkMode);
-  const {
-    hasAcceptedAutoTabContextPrivacy,
-    promptAutoTabContextPrivacy,
-    resetAutoTabContextPrivacy,
-    autoTabContextPrivacyModal,
-  } = useAutoTabContextPrivacyGate(isDarkMode);
+  const { promptAutoTabContextPrivacy, resetAutoTabContextPrivacy, autoTabContextPrivacyModal } =
+    useAutoTabContextPrivacyGate(isDarkMode);
+
+  // Callback to toggle auto-context from TabContextSelector
+  const handleAutoContextToggle = useCallback(
+    async (enabled: boolean) => {
+      if (enabled) {
+        // Always show privacy warning when enabling
+        const accepted = await promptAutoTabContextPrivacy();
+        if (!accepted) return;
+      } else {
+        // Reset privacy acceptance so modal shows again on next enable
+        await resetAutoTabContextPrivacy();
+      }
+      try {
+        await generalSettingsStore.updateSettings({ enableAutoTabContext: enabled });
+      } catch {}
+    },
+    [promptAutoTabContextPrivacy, resetAutoTabContextPrivacy],
+  );
 
   // Track auto-context enabled state in a ref to avoid stale closures
   const autoContextEnabledRef = useRef(autoContextEnabled);
@@ -742,9 +756,6 @@ const SidePanel = () => {
                   hasAcceptedHistoryPrivacy={hasAcceptedHistoryPrivacy}
                   promptHistoryPrivacy={promptHistoryPrivacy}
                   resetHistoryPrivacy={resetHistoryPrivacy}
-                  hasAcceptedAutoTabContextPrivacy={hasAcceptedAutoTabContextPrivacy}
-                  promptAutoTabContextPrivacy={promptAutoTabContextPrivacy}
-                  resetAutoTabContextPrivacy={resetAutoTabContextPrivacy}
                 />
               </div>
             )}
@@ -884,6 +895,7 @@ const SidePanel = () => {
               autoContextTabIds={autoContextTabIds}
               excludedAutoTabIds={excludedAutoTabIds}
               onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
+              onAutoContextToggle={handleAutoContextToggle}
             />
           )}
         </div>

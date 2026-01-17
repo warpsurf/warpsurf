@@ -86,6 +86,7 @@ interface ChatInputProps {
   autoContextTabIds?: number[];
   excludedAutoTabIds?: number[];
   onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
+  onAutoContextToggle?: (enabled: boolean) => Promise<void>;
 }
 
 const MIN_HEIGHT = 40;
@@ -115,6 +116,7 @@ export default function ChatInput({
   autoContextTabIds = [],
   excludedAutoTabIds = [],
   onExcludedAutoTabIdsChange,
+  onAutoContextToggle,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -374,6 +376,7 @@ export default function ChatInput({
                 autoContextTabIds={autoContextTabIds}
                 excludedAutoTabIds={excludedAutoTabIds}
                 onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
+                onAutoContextToggle={onAutoContextToggle}
               />
             )}
           </div>

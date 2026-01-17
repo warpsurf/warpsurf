@@ -50,6 +50,7 @@ export interface ChatScreenProps {
   autoContextTabIds?: number[];
   excludedAutoTabIds?: number[];
   onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
+  onAutoContextToggle?: (enabled: boolean) => Promise<void>;
   logger: any;
   portRef: MutableRefObject<chrome.runtime.Port | null>;
   sessionIdRef: MutableRefObject<string | null>;
@@ -155,6 +156,7 @@ export function ChatScreen(props: ChatScreenProps) {
     autoContextTabIds = [],
     excludedAutoTabIds = [],
     onExcludedAutoTabIdsChange,
+    onAutoContextToggle,
   } = props;
 
   // Context tabs state lifted here to persist across ChatInput remounts
@@ -237,6 +239,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   autoContextTabIds={autoContextTabIds}
                   excludedAutoTabIds={excludedAutoTabIds}
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
+                  onAutoContextToggle={onAutoContextToggle}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -399,6 +402,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   autoContextTabIds={autoContextTabIds}
                   excludedAutoTabIds={excludedAutoTabIds}
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
+                  onAutoContextToggle={onAutoContextToggle}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {

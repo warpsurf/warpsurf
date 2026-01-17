@@ -19,6 +19,8 @@ interface TabContextSelectorProps {
   autoContextTabIds?: number[];
   excludedAutoTabIds?: number[];
   onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
+  // Auto-context toggle
+  onAutoContextToggle?: (enabled: boolean) => Promise<void>;
 }
 
 export default function TabContextSelector({
@@ -30,6 +32,7 @@ export default function TabContextSelector({
   autoContextTabIds = [],
   excludedAutoTabIds = [],
   onExcludedAutoTabIdsChange,
+  onAutoContextToggle,
 }: TabContextSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -251,21 +254,37 @@ export default function TabContextSelector({
   const dropdownContent = isOpen && (
     <div
       ref={dropdownRef}
-      className={`w-70 max-h-56 overflow-y-auto rounded-lg border shadow-lg ${
+      className={`w-70 max-h-64 overflow-y-auto rounded-lg border shadow-lg ${
         isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'
       }`}
       style={dropdownStyle}>
-      {/* Header for auto mode */}
+      {/* Auto-context toggle at top */}
+      {onAutoContextToggle && (
+        <button
+          type="button"
+          onClick={async e => {
+            e.stopPropagation();
+            await onAutoContextToggle(!autoContextEnabled);
+          }}
+          className={`w-full flex items-center justify-between px-3 py-2 border-b text-xs ${
+            isDarkMode ? 'border-slate-700 hover:bg-slate-700/50' : 'border-gray-200 hover:bg-gray-50'
+          }`}>
+          <div className="flex items-center gap-1.5">
+            <FaBolt
+              className={`w-3 h-3 ${autoContextEnabled ? 'text-purple-500' : isDarkMode ? 'text-slate-400' : 'text-gray-400'}`}
+            />
+            <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>Auto Tab Context</span>
+          </div>
+          <span className={`toggle-slider-sm ${autoContextEnabled ? 'toggle-on' : 'toggle-off'}`}>
+            <span className="toggle-knob-sm" />
+          </span>
+        </button>
+      )}
+      {/* Info when auto mode enabled */}
       {autoContextEnabled && (
         <div
-          className={`px-3 py-2 border-b text-xs font-medium ${isDarkMode ? 'border-slate-700 text-purple-300' : 'border-gray-200 text-purple-600'}`}>
-          <div className="flex items-center gap-1.5">
-            <FaBolt className="w-3 h-3" />
-            <span>Auto Tab Context</span>
-            <span className={`ml-auto text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-              {effectiveAutoTabIds.length} of {autoContextTabIds.length} tabs
-            </span>
-          </div>
+          className={`px-3 py-1.5 text-[10px] ${isDarkMode ? 'bg-purple-900/20 text-purple-300' : 'bg-purple-50 text-purple-600'}`}>
+          {effectiveAutoTabIds.length} of {autoContextTabIds.length} tabs included • Click to exclude
         </div>
       )}
       {tabs.length === 0 ? (
