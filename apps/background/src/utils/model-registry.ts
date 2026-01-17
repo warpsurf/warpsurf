@@ -1,10 +1,10 @@
 /**
  * Model Registry - Single source for model lists and pricing from all APIs
- * 
+ *
  * Data Sources (when useLivePricingData=true):
  * - Helicone API: Models + pricing for direct providers (OpenAI, Anthropic, Google, xAI)
  * - OpenRouter API: Models + pricing for OpenRouter (provider/model format)
- * 
+ *
  * When useLivePricingData=false, uses bundled cache from pricing-cache.ts
  */
 import { filterModelsForProvider } from './model-filters';
@@ -55,7 +55,7 @@ interface CachedProviderData {
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = 'model-registry-cache';
-const CACHE_VERSION = 6; // v6: Added Helicone pricing storage
+const CACHE_VERSION = 7; // v7: Added context length storage
 
 const HELICONE_PROVIDER_MAP: Record<string, string> = {
   openai: 'openai',
@@ -65,31 +65,46 @@ const HELICONE_PROVIDER_MAP: Record<string, string> = {
 };
 
 const OPENROUTER_PROVIDER_PRIORITY: Record<string, number> = {
-  openai: 1, anthropic: 2, google: 3, 'meta-llama': 4, mistralai: 5,
-  'x-ai': 6, deepseek: 7, cohere: 8, perplexity: 9,
+  openai: 1,
+  anthropic: 2,
+  google: 3,
+  'meta-llama': 4,
+  mistralai: 5,
+  'x-ai': 6,
+  deepseek: 7,
+  cohere: 8,
+  perplexity: 9,
 };
 
 const OPENROUTER_PROVIDER_NAMES: Record<string, string> = {
-  openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google',
-  'meta-llama': 'Meta Llama', mistralai: 'Mistral', 'x-ai': 'xAI',
-  deepseek: 'DeepSeek', cohere: 'Cohere', perplexity: 'Perplexity',
-  qwen: 'Qwen', microsoft: 'Microsoft',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google',
+  'meta-llama': 'Meta Llama',
+  mistralai: 'Mistral',
+  'x-ai': 'xAI',
+  deepseek: 'DeepSeek',
+  cohere: 'Cohere',
+  perplexity: 'Perplexity',
+  qwen: 'Qwen',
+  microsoft: 'Microsoft',
 };
 
 class ModelRegistry {
   private static instance: ModelRegistry;
   private providerCache: Record<string, CachedProviderData> = {};
   private openRouterGroups: OpenRouterProviderGroup[] = [];
-  
+
   // Pricing data from both sources
   private heliconePricing: Map<string, ModelPricing> = new Map();
   private openRouterPricing: Map<string, ModelPricing> = new Map();
+  private contextLengths: Map<string, number> = new Map();
   private loggedModels: Set<string> = new Set(); // Track which models we've logged
-  
+
   private openRouterFetchedAt = 0;
   private isInitialized = false;
   private initPromise: Promise<void> | null = null;
-  
+
   // Live vs cached mode
   private useLiveData = false;
   private cacheDate: string | null = null;
@@ -114,12 +129,12 @@ class ModelRegistry {
   private async doInitialize(): Promise<void> {
     // Check user preference for live vs cached data
     await this.loadPricingModeSetting();
-    
+
     if (this.useLiveData) {
       // Live mode: load from storage cache, then refresh from APIs
       await this.loadFromStorage();
       const hasCachedData = Object.keys(this.providerCache).length > 0 || this.openRouterGroups.length > 0;
-      
+
       if (!hasCachedData) {
         await this.refreshAllProviders();
         this.logSummary('Initialized (live)');
@@ -135,7 +150,7 @@ class ModelRegistry {
       this.logSummary('Initialized from bundled cache');
     }
   }
-  
+
   private async loadPricingModeSetting(): Promise<void> {
     try {
       const result = await chrome.storage.local.get('warnings-settings');
@@ -145,10 +160,10 @@ class ModelRegistry {
       this.useLiveData = false;
     }
   }
-  
+
   private loadFromStaticCache(): void {
     this.cacheDate = CACHED_PRICING_DATA.generatedAt;
-    
+
     // Load Helicone data
     for (const [provider, data] of Object.entries(CACHED_PRICING_DATA.helicone)) {
       this.providerCache[provider] = {
@@ -159,7 +174,7 @@ class ModelRegistry {
         this.heliconePricing.set(model, pricing);
       }
     }
-    
+
     // Load OpenRouter data
     this.openRouterGroups = CACHED_PRICING_DATA.openRouter.groups.map(g => ({
       id: g.id,
@@ -168,9 +183,16 @@ class ModelRegistry {
       models: g.models,
     }));
     this.openRouterFetchedAt = new Date(CACHED_PRICING_DATA.generatedAt).getTime();
-    
+
     for (const [model, pricing] of Object.entries(CACHED_PRICING_DATA.openRouter.pricing)) {
       this.openRouterPricing.set(model, pricing);
+    }
+
+    // Load context lengths
+    if (CACHED_PRICING_DATA.openRouter.contextLengths) {
+      for (const [model, length] of Object.entries(CACHED_PRICING_DATA.openRouter.contextLengths)) {
+        this.contextLengths.set(model, length);
+      }
     }
   }
 
@@ -195,16 +217,19 @@ class ModelRegistry {
         if (cached) await chrome.storage.local.remove(STORAGE_KEY);
         return;
       }
-      
+
       this.providerCache = cached.providerCache || {};
       this.openRouterGroups = cached.openRouterGroups || [];
       this.openRouterFetchedAt = cached.openRouterFetchedAt || 0;
-      
+
       if (cached.heliconePricing) {
         this.heliconePricing = new Map(Object.entries(cached.heliconePricing));
       }
       if (cached.openRouterPricing) {
         this.openRouterPricing = new Map(Object.entries(cached.openRouterPricing));
+      }
+      if (cached.contextLengths) {
+        this.contextLengths = new Map(Object.entries(cached.contextLengths));
       }
     } catch (e) {
       console.warn('[ModelRegistry] Failed to load from storage:', e);
@@ -221,6 +246,7 @@ class ModelRegistry {
           openRouterFetchedAt: this.openRouterFetchedAt,
           heliconePricing: Object.fromEntries(this.heliconePricing),
           openRouterPricing: Object.fromEntries(this.openRouterPricing),
+          contextLengths: Object.fromEntries(this.contextLengths),
         },
       });
     } catch (e) {
@@ -248,7 +274,7 @@ class ModelRegistry {
       const models = [...new Set(data.data.map(m => m.model))];
 
       this.providerCache[extensionProvider] = { models, fetchedAt: Date.now() };
-      
+
       // Store pricing data
       for (const entry of data.data) {
         this.heliconePricing.set(entry.model, {
@@ -282,6 +308,10 @@ class ModelRegistry {
         if (!isNaN(inputCost) && !isNaN(outputCost)) {
           this.openRouterPricing.set(model.id, { inputPerToken: inputCost, outputPerToken: outputCost });
         }
+
+        if (typeof model.context_length === 'number' && model.context_length > 0) {
+          this.contextLengths.set(model.id, model.context_length);
+        }
       }
 
       this.openRouterGroups = Array.from(groups.entries())
@@ -305,11 +335,14 @@ class ModelRegistry {
   }
 
   private formatProviderId(id: string): string {
-    return id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    return id
+      .split('-')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
   }
 
   // === Model List Methods ===
-  
+
   getModelsForProvider(provider: string): string[] {
     const cached = this.providerCache[provider];
     if (cached?.models.length) {
@@ -342,33 +375,37 @@ class ModelRegistry {
   }
 
   // === Pricing Methods ===
-  
+
   /** Get pricing for any model (checks OpenRouter first for '/' models, then Helicone) */
   getModelPricing(modelName: string): ModelPricing | null {
     const isFirstLookup = !this.loggedModels.has(modelName);
-    
+
     // OpenRouter models (have '/' in name)
     if (modelName.includes('/')) {
       const orPricing = this.openRouterPricing.get(modelName);
       if (orPricing) {
         if (isFirstLookup) {
           this.loggedModels.add(modelName);
-          console.log(`[ModelRegistry] Model "${modelName}" pricing: $${(orPricing.inputPerToken * 1e6).toFixed(2)}/$${(orPricing.outputPerToken * 1e6).toFixed(2)} per 1M (OpenRouter)`);
+          console.log(
+            `[ModelRegistry] Model "${modelName}" pricing: $${(orPricing.inputPerToken * 1e6).toFixed(2)}/$${(orPricing.outputPerToken * 1e6).toFixed(2)} per 1M (OpenRouter)`,
+          );
         }
         return orPricing;
       }
     }
-    
+
     // Helicone direct match
     const helPricing = this.heliconePricing.get(modelName);
     if (helPricing) {
       if (isFirstLookup) {
         this.loggedModels.add(modelName);
-        console.log(`[ModelRegistry] Model "${modelName}" pricing: $${(helPricing.inputPerToken * 1e6).toFixed(2)}/$${(helPricing.outputPerToken * 1e6).toFixed(2)} per 1M (Helicone)`);
+        console.log(
+          `[ModelRegistry] Model "${modelName}" pricing: $${(helPricing.inputPerToken * 1e6).toFixed(2)}/$${(helPricing.outputPerToken * 1e6).toFixed(2)} per 1M (Helicone)`,
+        );
       }
       return helPricing;
     }
-    
+
     // No match found
     if (isFirstLookup) {
       this.loggedModels.add(modelName);
@@ -387,8 +424,15 @@ class ModelRegistry {
     return this.openRouterPricing.get(modelId) || null;
   }
 
+  // === Context Length Methods ===
+
+  /** Get context length (in tokens) for a model. Returns null if unknown. */
+  getModelContextLength(modelName: string): number | null {
+    return this.contextLengths.get(modelName) ?? null;
+  }
+
   // === Utility Methods ===
-  
+
   private isCacheValid(fetchedAt: number): boolean {
     return Date.now() - fetchedAt < CACHE_TTL_MS;
   }
@@ -407,9 +451,10 @@ class ModelRegistry {
     this.openRouterGroups = [];
     this.heliconePricing.clear();
     this.openRouterPricing.clear();
+    this.contextLengths.clear();
     await this.refreshAllProviders();
   }
-  
+
   /** Reinitialize registry (call after changing useLivePricingData setting) */
   async reinitialize(): Promise<void> {
     this.isInitialized = false;
@@ -418,16 +463,17 @@ class ModelRegistry {
     this.openRouterGroups = [];
     this.heliconePricing.clear();
     this.openRouterPricing.clear();
+    this.contextLengths.clear();
     this.loggedModels.clear();
     this.cacheDate = null;
     await this.initialize();
   }
-  
+
   /** Check if using static bundled cache (vs live API data) */
   isUsingCachedData(): boolean {
     return !this.useLiveData;
   }
-  
+
   /** Get cache generation date (only relevant when using cached data) */
   getCacheDate(): string | null {
     return this.useLiveData ? null : this.cacheDate;
@@ -456,6 +502,7 @@ class ModelRegistry {
         helicone: this.heliconePricing.size,
         openRouter: this.openRouterPricing.size,
       },
+      contextLengths: this.contextLengths.size,
     };
   }
 }
@@ -469,6 +516,7 @@ export const getOpenRouterProviderGroups = () => modelRegistry.getOpenRouterProv
 export const getModelsForOpenRouterProviders = (ids: string[]) => modelRegistry.getModelsForOpenRouterProviders(ids);
 export const getModelPricing = (model: string) => modelRegistry.getModelPricing(model);
 export const hasModelPricing = (model: string) => modelRegistry.hasModelPricing(model);
+export const getModelContextLength = (model: string) => modelRegistry.getModelContextLength(model);
 export const getModelRegistryStats = () => modelRegistry.getStats();
 export const forceRefreshModelRegistry = () => modelRegistry.forceRefresh();
 export const getModelRegistryCachedCount = () => {

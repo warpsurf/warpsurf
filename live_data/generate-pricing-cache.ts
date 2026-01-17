@@ -31,6 +31,7 @@ interface HeliconeModel {
 
 interface OpenRouterModel {
   id: string;
+  context_length?: number;
   pricing?: { prompt: string; completion: string };
 }
 
@@ -62,6 +63,7 @@ async function fetchHeliconeData(
 async function fetchOpenRouterData(): Promise<{
   groups: Array<{ id: string; displayName: string; models: string[] }>;
   pricing: Record<string, { inputPerToken: number; outputPerToken: number }>;
+  contextLengths: Record<string, number>;
 }> {
   try {
     const res = await fetch('https://openrouter.ai/api/v1/models');
@@ -70,6 +72,7 @@ async function fetchOpenRouterData(): Promise<{
 
     const groupMap = new Map<string, string[]>();
     const pricing: Record<string, { inputPerToken: number; outputPerToken: number }> = {};
+    const contextLengths: Record<string, number> = {};
 
     const PROVIDER_NAMES: Record<string, string> = {
       openai: 'OpenAI',
@@ -95,6 +98,10 @@ async function fetchOpenRouterData(): Promise<{
       if (!isNaN(inputCost) && !isNaN(outputCost)) {
         pricing[model.id] = { inputPerToken: inputCost, outputPerToken: outputCost };
       }
+
+      if (typeof model.context_length === 'number' && model.context_length > 0) {
+        contextLengths[model.id] = model.context_length;
+      }
     }
 
     const groups = Array.from(groupMap.entries())
@@ -105,10 +112,10 @@ async function fetchOpenRouterData(): Promise<{
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-    return { groups, pricing };
+    return { groups, pricing, contextLengths };
   } catch (e) {
     console.error('Failed to fetch OpenRouter data:', e);
-    return { groups: [], pricing: {} };
+    return { groups: [], pricing: {}, contextLengths: {} };
   }
 }
 
@@ -133,7 +140,7 @@ async function main() {
   console.log('\nFetching OpenRouter data...');
   const openRouterData = await fetchOpenRouterData();
   console.log(
-    `  → ${openRouterData.groups.length} providers, ${Object.keys(openRouterData.pricing).length} models with pricing`,
+    `  → ${openRouterData.groups.length} providers, ${Object.keys(openRouterData.pricing).length} models with pricing, ${Object.keys(openRouterData.contextLengths).length} with context lengths`,
   );
 
   // Generate the cache file
@@ -167,6 +174,7 @@ export interface CachedPricingData {
   openRouter: {
     groups: CachedOpenRouterGroup[];
     pricing: Record<string, { inputPerToken: number; outputPerToken: number }>;
+    contextLengths: Record<string, number>;
   };
 }
 
