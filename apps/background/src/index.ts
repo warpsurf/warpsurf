@@ -99,30 +99,46 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     workflowType: string;
     contextTabId?: number;
     errorMessage?: string;
+    contextMenuAction?: string;
+    infoMessage?: string;
   } | null = null;
 
+  const tabUrl = tab.url || '';
+  const RESTRICTED_PREFIXES = [
+    'chrome://',
+    'chrome-extension://',
+    'about:',
+    'data:',
+    'javascript:',
+    'edge://',
+    'brave://',
+  ];
+  const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
+
   if (info.menuItemId === 'explain-selection' && info.selectionText) {
+    // Determine if we can include page context (not restricted and allowed by firewall)
+    let contextTabId: number | undefined;
+    let infoMessage: string | undefined;
+    if (isRestricted) {
+      infoMessage = 'Page context unavailable (restricted page).';
+    } else if (tab.id) {
+      const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+      if (allowedByFirewall) {
+        contextTabId = tab.id;
+      } else {
+        infoMessage = 'Page context unavailable (blocked by firewall).';
+      }
+    }
     pendingAction = {
       prompt: `Explain this:\n\n${info.selectionText}`,
       autoStart: true,
       workflowType: 'chat',
+      contextTabId,
+      contextMenuAction: 'explain-selection',
+      infoMessage,
     };
   } else if (info.menuItemId === 'summarize-page') {
-    // Check if the tab URL is restricted before attempting to summarize
-    const tabUrl = tab.url || '';
-    const RESTRICTED_PREFIXES = [
-      'chrome://',
-      'chrome-extension://',
-      'about:',
-      'data:',
-      'javascript:',
-      'edge://',
-      'brave://',
-    ];
-    const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
-
     if (isRestricted) {
-      // Show friendly error for restricted pages
       pendingAction = {
         prompt: '',
         autoStart: false,
@@ -130,7 +146,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         errorMessage: `Cannot summarize this page. Browser system pages (like ${tabUrl.split('/')[0]}//...) are restricted and cannot be accessed by extensions for security reasons. Please try summarizing a regular web page instead.`,
       };
     } else {
-      // Check firewall settings
       const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
       if (!allowedByFirewall) {
         pendingAction = {
@@ -140,12 +155,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           errorMessage: `Cannot summarize this page. The URL "${tabUrl}" is blocked by your firewall settings. You can adjust allowed/denied URLs in Settings > Web.`,
         };
       } else {
-        // Summarize the currently open tab (where right-click happened)
         pendingAction = {
           prompt: 'Summarize this page',
           autoStart: true,
           workflowType: 'chat',
-          contextTabId: tab.id, // Pass the tab ID so it's added as context
+          contextTabId: tab.id,
         };
       }
     }
