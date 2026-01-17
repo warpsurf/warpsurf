@@ -171,7 +171,7 @@ export async function handleNewTask(message: any, deps: Deps) {
   let contextTabIds: number[] = manualContextTabIds;
   if (!skipAutoContext) {
     try {
-      contextTabIds = await mergeContextTabIds(manualContextTabIds, tabId > 0 ? tabId : undefined);
+      contextTabIds = await mergeContextTabIds(manualContextTabIds);
       if (contextTabIds.length !== manualContextTabIds.length) {
         deps.logger.info(
           `[handleNewTask] Auto-context merged: ${manualContextTabIds.length} manual + ${contextTabIds.length - manualContextTabIds.length} auto = ${contextTabIds.length} total`,
@@ -397,7 +397,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
   let contextTabIds: number[] = manualContextTabIds;
   if (!skipAutoContext) {
     try {
-      contextTabIds = await mergeContextTabIds(manualContextTabIds, tabId > 0 ? tabId : undefined);
+      contextTabIds = await mergeContextTabIds(manualContextTabIds);
       if (contextTabIds.length !== manualContextTabIds.length) {
         logger.info(
           `[handleFollowUpTask] Auto-context merged: ${manualContextTabIds.length} manual + ${contextTabIds.length - manualContextTabIds.length} auto = ${contextTabIds.length} total`,

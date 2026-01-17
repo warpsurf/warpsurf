@@ -18,10 +18,9 @@ function isRestrictedUrl(url: string): boolean {
  * Returns empty array if feature is disabled or privacy not accepted.
  * All valid tabs are returned - the model's context budget determines actual content limits.
  *
- * @param currentTabId - Optional current tab ID to potentially exclude
  * @returns Array of valid tab IDs for auto-context
  */
-export async function getAutoContextTabIds(currentTabId?: number): Promise<number[]> {
+export async function getAutoContextTabIds(): Promise<number[]> {
   try {
     const settings = await generalSettingsStore.getSettings();
     const warnings = await warningsSettingsStore.getWarnings();
@@ -33,15 +32,10 @@ export async function getAutoContextTabIds(currentTabId?: number): Promise<numbe
 
     // Query all tabs in current window
     const tabs = await chrome.tabs.query({ currentWindow: true });
-    const excludeCurrentTab = settings.autoTabContextExcludeCurrentTab || false;
-
     const validTabIds: number[] = [];
 
     for (const tab of tabs) {
       if (!tab.id || !tab.url) continue;
-
-      // Skip current tab if configured
-      if (excludeCurrentTab && tab.id === currentTabId) continue;
 
       // Skip restricted URLs
       if (isRestrictedUrl(tab.url)) continue;
@@ -88,8 +82,8 @@ export async function warmAutoContextCache(): Promise<void> {
  * @param currentTabId - Optional current tab ID (for exclude setting)
  * @returns Merged array of unique tab IDs
  */
-export async function mergeContextTabIds(manualTabIds: number[], currentTabId?: number): Promise<number[]> {
-  const autoTabIds = await getAutoContextTabIds(currentTabId);
+export async function mergeContextTabIds(manualTabIds: number[]): Promise<number[]> {
+  const autoTabIds = await getAutoContextTabIds();
 
   if (autoTabIds.length === 0) {
     return manualTabIds;
