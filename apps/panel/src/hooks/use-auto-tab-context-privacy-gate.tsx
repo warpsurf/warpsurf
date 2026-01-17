@@ -31,6 +31,7 @@ export function useAutoTabContextPrivacyGate(isDarkMode: boolean) {
   }, []);
 
   const promptAutoTabContextPrivacy = useCallback(async (): Promise<boolean> => {
+    // Always show modal when enabling - user must acknowledge privacy implications each time
     setShowModal(true);
     return new Promise(resolve => {
       resolveRef.current = resolve;
