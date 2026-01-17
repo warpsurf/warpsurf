@@ -45,6 +45,11 @@ export interface ChatScreenProps {
   replayEnabled: boolean;
   showEmergencyStop?: boolean;
   isStopping?: boolean;
+  // Auto tab context props
+  autoContextEnabled?: boolean;
+  autoContextTabIds?: number[];
+  excludedAutoTabIds?: number[];
+  onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
   logger: any;
   portRef: MutableRefObject<chrome.runtime.Port | null>;
   sessionIdRef: MutableRefObject<string | null>;
@@ -146,6 +151,10 @@ export function ChatScreen(props: ChatScreenProps) {
     appendMessage,
     setupConnection,
     handleKillSwitch,
+    autoContextEnabled = false,
+    autoContextTabIds = [],
+    excludedAutoTabIds = [],
+    onExcludedAutoTabIdsChange,
   } = props;
 
   // Context tabs state lifted here to persist across ChatInput remounts
@@ -224,6 +233,10 @@ export function ChatScreen(props: ChatScreenProps) {
                   }}
                   contextTabIds={contextTabIds}
                   onContextTabsChange={setContextTabIds}
+                  autoContextEnabled={autoContextEnabled}
+                  autoContextTabIds={autoContextTabIds}
+                  excludedAutoTabIds={excludedAutoTabIds}
+                  onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -382,6 +395,10 @@ export function ChatScreen(props: ChatScreenProps) {
                   }}
                   contextTabIds={contextTabIds}
                   onContextTabsChange={setContextTabIds}
+                  autoContextEnabled={autoContextEnabled}
+                  autoContextTabIds={autoContextTabIds}
+                  excludedAutoTabIds={excludedAutoTabIds}
+                  onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {

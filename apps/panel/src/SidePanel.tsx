@@ -22,6 +22,8 @@ import { useAgentOrdinals } from './hooks/use-agent-ordinals';
 import { useBackgroundConnection } from './hooks/use-background-connection';
 import { useDisclaimerGates } from './hooks/use-disclaimer-gates';
 import { useHistoryPrivacyGate } from './hooks/use-history-privacy-gate';
+import { useAutoTabContextPrivacyGate } from './hooks/use-auto-tab-context-privacy-gate';
+import { generalSettingsStore, warningsSettingsStore } from '@extension/storage';
 import { createMessageSender } from './logic/message-sender';
 import { useVersionInfo } from './hooks/use-version-info';
 import { useChatHistory } from '@src/hooks/use-chat-history';
@@ -99,6 +101,10 @@ const SidePanel = () => {
   const [agentSettingsOpen, setAgentSettingsOpen] = useState<boolean>(false);
   const [feedbackMenuOpen, setFeedbackMenuOpen] = useState<boolean>(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(false);
+  // Auto tab context state
+  const [autoContextEnabled, setAutoContextEnabled] = useState<boolean>(false);
+  const [autoContextTabIds, setAutoContextTabIds] = useState<number[]>([]);
+  const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
 
   const isDarkMode = useDarkMode();
   const { showToast } = useToast();
@@ -150,6 +156,74 @@ const SidePanel = () => {
   } = useDisclaimerGates(isDarkMode);
   const { hasAcceptedHistoryPrivacy, promptHistoryPrivacy, resetHistoryPrivacy, historyPrivacyModal } =
     useHistoryPrivacyGate(isDarkMode);
+  const {
+    hasAcceptedAutoTabContextPrivacy,
+    promptAutoTabContextPrivacy,
+    resetAutoTabContextPrivacy,
+    autoTabContextPrivacyModal,
+  } = useAutoTabContextPrivacyGate(isDarkMode);
+
+  // Track auto-context enabled state in a ref to avoid stale closures
+  const autoContextEnabledRef = useRef(autoContextEnabled);
+  useEffect(() => {
+    autoContextEnabledRef.current = autoContextEnabled;
+  }, [autoContextEnabled]);
+
+  // Load and refresh auto-context tab IDs when enabled
+  useEffect(() => {
+    const loadAutoContextState = async () => {
+      try {
+        const settings = await generalSettingsStore.getSettings();
+        const warnings = await warningsSettingsStore.getWarnings();
+        const enabled = !!(settings.enableAutoTabContext && warnings.hasAcceptedAutoTabContextPrivacyWarning);
+        setAutoContextEnabled(enabled);
+
+        if (enabled) {
+          const tabs = await chrome.tabs.query({ currentWindow: true });
+          const restricted = ['chrome://', 'chrome-extension://', 'about:', 'data:', 'javascript:'];
+          const validIds = tabs
+            .filter(t => t.id && t.url && !restricted.some(r => t.url!.startsWith(r)))
+            .map(t => t.id!);
+          setAutoContextTabIds(validIds);
+        } else {
+          setAutoContextTabIds([]);
+          setExcludedAutoTabIds([]);
+        }
+      } catch {}
+    };
+
+    loadAutoContextState();
+
+    // Refresh on tab changes - use ref to get current enabled state
+    const handleTabChange = () => {
+      if (autoContextEnabledRef.current) loadAutoContextState();
+    };
+    chrome.tabs.onCreated?.addListener(handleTabChange);
+    chrome.tabs.onRemoved?.addListener(handleTabChange);
+    chrome.tabs.onUpdated?.addListener(handleTabChange);
+
+    // Subscribe to settings changes
+    let unsubGeneral: (() => void) | undefined;
+    let unsubWarnings: (() => void) | undefined;
+    try {
+      unsubGeneral = generalSettingsStore.subscribe(loadAutoContextState);
+    } catch {}
+    try {
+      unsubWarnings = warningsSettingsStore.subscribe(loadAutoContextState);
+    } catch {}
+
+    return () => {
+      chrome.tabs.onCreated?.removeListener(handleTabChange);
+      chrome.tabs.onRemoved?.removeListener(handleTabChange);
+      chrome.tabs.onUpdated?.removeListener(handleTabChange);
+      try {
+        unsubGeneral?.();
+      } catch {}
+      try {
+        unsubWarnings?.();
+      } catch {}
+    };
+  }, []); // Empty deps - loadAutoContextState always reads fresh from storage
 
   // Chat history
   const {
@@ -668,6 +742,9 @@ const SidePanel = () => {
                   hasAcceptedHistoryPrivacy={hasAcceptedHistoryPrivacy}
                   promptHistoryPrivacy={promptHistoryPrivacy}
                   resetHistoryPrivacy={resetHistoryPrivacy}
+                  hasAcceptedAutoTabContextPrivacy={hasAcceptedAutoTabContextPrivacy}
+                  promptAutoTabContextPrivacy={promptAutoTabContextPrivacy}
+                  resetAutoTabContextPrivacy={resetAutoTabContextPrivacy}
                 />
               </div>
             )}
@@ -803,6 +880,10 @@ const SidePanel = () => {
               appendMessage={appendMessage}
               setupConnection={setupConnection}
               handleKillSwitch={handleKillSwitch}
+              autoContextEnabled={autoContextEnabled}
+              autoContextTabIds={autoContextTabIds}
+              excludedAutoTabIds={excludedAutoTabIds}
+              onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
             />
           )}
         </div>
@@ -818,6 +899,7 @@ const SidePanel = () => {
       {livePricingModal}
       {perChatModal}
       {historyPrivacyModal}
+      {autoTabContextPrivacyModal}
     </>
   );
 };

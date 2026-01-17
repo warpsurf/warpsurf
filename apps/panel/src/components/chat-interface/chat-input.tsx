@@ -51,7 +51,13 @@ export const AGENT_OPTIONS: AgentSelection[] = [
 ];
 
 interface ChatInputProps {
-  onSendMessage: (text: string, agentType?: WorkflowType, contextTabIds?: number[]) => void;
+  onSendMessage: (
+    text: string,
+    agentType?: WorkflowType,
+    contextTabIds?: number[],
+    contextMenuAction?: string,
+    skipAutoContext?: boolean,
+  ) => void;
   onStopTask: () => void;
   disabled: boolean;
   showStopButton: boolean;
@@ -75,6 +81,11 @@ interface ChatInputProps {
   // Context tabs - lifted state from parent for persistence across renders
   contextTabIds?: number[];
   onContextTabsChange?: (tabIds: number[]) => void;
+  // Auto-context mode
+  autoContextEnabled?: boolean;
+  autoContextTabIds?: number[];
+  excludedAutoTabIds?: number[];
+  onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -100,6 +111,10 @@ export default function ChatInput({
   isStopping = false,
   contextTabIds: externalContextTabIds,
   onContextTabsChange,
+  autoContextEnabled = false,
+  autoContextTabIds = [],
+  excludedAutoTabIds = [],
+  onExcludedAutoTabIdsChange,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -224,15 +239,32 @@ export default function ChatInput({
         // Remove leading mode command if followed by content
         cleanText = cleanText.replace(/^\/(chat|search|agent|magent)\b\s*/i, '');
 
-        // Pass contextTabIds to all workflows
-        onSendMessage(cleanText || text, selectedAgent, contextTabIds.length ? contextTabIds : undefined);
+        // Compute final context tab IDs: merge auto-context (minus excluded) with manual tabs
+        let finalContextTabIds: number[] = contextTabIds;
+        let skipAutoContext = false;
+        if (autoContextEnabled) {
+          // Compute effective auto tabs (auto - excluded)
+          const effectiveAutoTabs = autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id));
+          // Merge with manual tabs (deduplicate)
+          finalContextTabIds = [...new Set([...effectiveAutoTabs, ...contextTabIds])];
+          // Tell background to skip auto-merging since we've already done it
+          skipAutoContext = true;
+        }
+
+        onSendMessage(
+          cleanText || text,
+          selectedAgent,
+          finalContextTabIds.length ? finalContextTabIds : undefined,
+          undefined,
+          skipAutoContext,
+        );
         setText('');
         // Don't clear context tabs - they persist until user removes them
         // Remember last manual choice; only reset if Auto
         setSelectedAgent(prev => (prev === WorkflowType.AUTO ? WorkflowType.AUTO : prev));
       }
     },
-    [text, onSendMessage, selectedAgent, contextTabIds],
+    [text, onSendMessage, selectedAgent, contextTabIds, autoContextEnabled, autoContextTabIds, excludedAutoTabIds],
   );
 
   const handleKeyDown = useCallback(
@@ -338,6 +370,10 @@ export default function ChatInput({
                 onSelectionChange={setContextTabIds}
                 isDarkMode={isDarkMode}
                 disabled={disabled}
+                autoContextEnabled={autoContextEnabled}
+                autoContextTabIds={autoContextTabIds}
+                excludedAutoTabIds={excludedAutoTabIds}
+                onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
               />
             )}
           </div>

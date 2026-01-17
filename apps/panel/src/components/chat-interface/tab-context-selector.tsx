@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FaPlus, FaTimes, FaChevronDown, FaCheck, FaSpinner, FaBan } from 'react-icons/fa';
+import { FaPlus, FaTimes, FaChevronDown, FaCheck, FaSpinner, FaBan, FaBolt } from 'react-icons/fa';
 
 export interface TabInfo {
   id: number;
@@ -14,6 +14,11 @@ interface TabContextSelectorProps {
   onSelectionChange: (tabIds: number[]) => void;
   isDarkMode?: boolean;
   disabled?: boolean;
+  // Auto-context mode props
+  autoContextEnabled?: boolean;
+  autoContextTabIds?: number[];
+  excludedAutoTabIds?: number[];
+  onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
 }
 
 export default function TabContextSelector({
@@ -21,6 +26,10 @@ export default function TabContextSelector({
   onSelectionChange,
   isDarkMode = false,
   disabled = false,
+  autoContextEnabled = false,
+  autoContextTabIds = [],
+  excludedAutoTabIds = [],
+  onExcludedAutoTabIdsChange,
 }: TabContextSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -32,6 +41,16 @@ export default function TabContextSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Compute effective auto tabs (auto - excluded)
+  const effectiveAutoTabIds = autoContextEnabled
+    ? autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id) && !blockedTabIds.has(id))
+    : [];
+
+  // Total context tabs count (auto + manual, deduplicated)
+  const totalContextCount = autoContextEnabled
+    ? new Set([...effectiveAutoTabIds, ...selectedTabIds]).size
+    : selectedTabIds.length;
 
   const loadTabs = useCallback(async () => {
     try {
@@ -90,7 +109,6 @@ export default function TabContextSelector({
     };
 
     const handleTabRemoved = (tabId: number) => {
-      // Use ref to get latest selectedTabIds to avoid stale closure
       const current = selectedTabIdsRef.current;
       if (current.includes(tabId)) {
         onSelectionChange(current.filter(id => id !== tabId));
@@ -109,7 +127,7 @@ export default function TabContextSelector({
     };
   }, [loadTabs, onSelectionChange]);
 
-  // Close dropdown when clicking outside (check both container and portal dropdown)
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -129,19 +147,14 @@ export default function TabContextSelector({
     if (!buttonRef.current) return;
 
     const rect = buttonRef.current.getBoundingClientRect();
-    const dropdownWidth = 256; // w-64
+    const dropdownWidth = 280;
     const gap = 4;
-
-    // Measure actual dropdown height if available, otherwise use max
-    const dropdownHeight = dropdownRef.current?.offsetHeight ?? 192; // max-h-48
+    const dropdownHeight = dropdownRef.current?.offsetHeight ?? 220;
 
     const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
-
-    // Choose direction: prefer upward, flip to downward if insufficient space above
     const openUpward = spaceAbove >= dropdownHeight || spaceAbove >= spaceBelow;
 
-    // Horizontal: prevent right overflow
     const left = Math.min(rect.left, window.innerWidth - dropdownWidth - 8);
 
     setDropdownStyle({
@@ -152,10 +165,8 @@ export default function TabContextSelector({
     });
   }, []);
 
-  // Reposition dropdown on scroll/resize while open, and after mount to measure actual height
   useEffect(() => {
     if (!isOpen) return;
-    // Recalculate after render to use actual dropdown height
     requestAnimationFrame(updateDropdownPosition);
     window.addEventListener('resize', updateDropdownPosition);
     window.addEventListener('scroll', updateDropdownPosition, true);
@@ -175,68 +186,101 @@ export default function TabContextSelector({
   };
 
   const toggleTab = (tabId: number) => {
-    // Don't allow selecting blocked tabs
     if (blockedTabIds.has(tabId)) return;
 
-    if (selectedTabIds.includes(tabId)) {
-      onSelectionChange(selectedTabIds.filter(id => id !== tabId));
-      setExtractedTabIds(prev => {
-        const next = new Set(prev);
-        next.delete(tabId);
-        return next;
-      });
-    } else {
-      const newSelection = [...selectedTabIds, tabId];
-      onSelectionChange(newSelection);
+    const isAutoTab = autoContextEnabled && autoContextTabIds.includes(tabId);
 
-      // Show extracting state and trigger extraction
-      setExtractingTabIds(prev => new Set(prev).add(tabId));
-      try {
-        chrome.runtime.sendMessage({ type: 'extract_context_tabs', tabIds: [tabId] }, response => {
+    if (isAutoTab) {
+      // Toggle exclusion for auto-included tabs
+      if (excludedAutoTabIds.includes(tabId)) {
+        onExcludedAutoTabIdsChange?.(excludedAutoTabIds.filter(id => id !== tabId));
+      } else {
+        onExcludedAutoTabIdsChange?.([...excludedAutoTabIds, tabId]);
+      }
+    } else {
+      // Manual tab selection
+      if (selectedTabIds.includes(tabId)) {
+        onSelectionChange(selectedTabIds.filter(id => id !== tabId));
+        setExtractedTabIds(prev => {
+          const next = new Set(prev);
+          next.delete(tabId);
+          return next;
+        });
+      } else {
+        const newSelection = [...selectedTabIds, tabId];
+        onSelectionChange(newSelection);
+
+        setExtractingTabIds(prev => new Set(prev).add(tabId));
+        try {
+          chrome.runtime.sendMessage({ type: 'extract_context_tabs', tabIds: [tabId] }, response => {
+            setExtractingTabIds(prev => {
+              const next = new Set(prev);
+              next.delete(tabId);
+              return next;
+            });
+            if (response?.success && response.tabIds?.includes(tabId)) {
+              setExtractedTabIds(prev => new Set(prev).add(tabId));
+            }
+          });
+        } catch {
           setExtractingTabIds(prev => {
             const next = new Set(prev);
             next.delete(tabId);
             return next;
           });
-          if (response?.success && response.tabIds?.includes(tabId)) {
-            setExtractedTabIds(prev => new Set(prev).add(tabId));
-          }
-        });
-      } catch {
-        setExtractingTabIds(prev => {
-          const next = new Set(prev);
-          next.delete(tabId);
-          return next;
-        });
+        }
       }
     }
   };
 
-  const removeTab = (tabId: number) => {
-    onSelectionChange(selectedTabIds.filter(id => id !== tabId));
+  const removeTab = (tabId: number, isAuto: boolean) => {
+    if (isAuto) {
+      onExcludedAutoTabIdsChange?.([...excludedAutoTabIds, tabId]);
+    } else {
+      onSelectionChange(selectedTabIds.filter(id => id !== tabId));
+    }
   };
-
-  const selectedTabs = tabs.filter(t => selectedTabIds.includes(t.id));
 
   const truncateTitle = (title: string, maxLen = 20) =>
     title.length > maxLen ? title.slice(0, maxLen) + '...' : title;
 
+  // Determine which tabs to show as pills
+  const autoTabsForPills = autoContextEnabled ? tabs.filter(t => effectiveAutoTabIds.includes(t.id)) : [];
+  const manualTabsForPills = tabs.filter(t => selectedTabIds.includes(t.id) && !autoContextTabIds.includes(t.id));
+
   const dropdownContent = isOpen && (
     <div
       ref={dropdownRef}
-      className={`w-64 max-h-48 overflow-y-auto rounded-lg border shadow-lg ${
+      className={`w-70 max-h-56 overflow-y-auto rounded-lg border shadow-lg ${
         isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'
       }`}
       style={dropdownStyle}>
+      {/* Header for auto mode */}
+      {autoContextEnabled && (
+        <div
+          className={`px-3 py-2 border-b text-xs font-medium ${isDarkMode ? 'border-slate-700 text-purple-300' : 'border-gray-200 text-purple-600'}`}>
+          <div className="flex items-center gap-1.5">
+            <FaBolt className="w-3 h-3" />
+            <span>Auto Tab Context</span>
+            <span className={`ml-auto text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+              {effectiveAutoTabIds.length} of {autoContextTabIds.length} tabs
+            </span>
+          </div>
+        </div>
+      )}
       {tabs.length === 0 ? (
         <div className={`p-3 text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>No tabs available</div>
       ) : (
         tabs.map(tab => {
-          const isSelected = selectedTabIds.includes(tab.id);
+          const isAutoTab = autoContextEnabled && autoContextTabIds.includes(tab.id);
+          const isExcluded = excludedAutoTabIds.includes(tab.id);
+          const isManualSelected = selectedTabIds.includes(tab.id);
+          const isEffectivelySelected = isAutoTab ? !isExcluded : isManualSelected;
           const isCurrent = tab.id === currentTabId;
           const isBlocked = blockedTabIds.has(tab.id);
           const isExtracting = extractingTabIds.has(tab.id);
           const isExtracted = extractedTabIds.has(tab.id);
+
           return (
             <button
               key={tab.id}
@@ -246,25 +290,41 @@ export default function TabContextSelector({
               className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
                 isBlocked
                   ? 'cursor-not-allowed opacity-50'
-                  : isSelected
+                  : isEffectivelySelected
                     ? isDarkMode
-                      ? 'bg-violet-900/40'
-                      : 'bg-violet-50'
+                      ? isAutoTab
+                        ? 'bg-purple-900/40'
+                        : 'bg-violet-900/40'
+                      : isAutoTab
+                        ? 'bg-purple-50'
+                        : 'bg-violet-50'
                     : isDarkMode
                       ? 'hover:bg-slate-700'
                       : 'hover:bg-gray-50'
               }`}>
+              {/* Auto indicator */}
+              {isAutoTab && !isBlocked && (
+                <FaBolt className={`w-2.5 h-2.5 flex-shrink-0 ${isExcluded ? 'text-slate-400' : 'text-purple-500'}`} />
+              )}
               {tab.favIconUrl ? (
                 <img
                   src={tab.favIconUrl}
                   alt=""
-                  className={`w-4 h-4 flex-shrink-0 rounded-sm ${isBlocked ? 'grayscale' : ''}`}
+                  className={`w-4 h-4 flex-shrink-0 rounded-sm ${isBlocked || isExcluded ? 'grayscale opacity-50' : ''}`}
                 />
               ) : (
                 <div className={`w-4 h-4 flex-shrink-0 rounded-sm ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`} />
               )}
               <span
-                className={`flex-1 truncate ${isBlocked ? (isDarkMode ? 'text-slate-500' : 'text-gray-400') : isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+                className={`flex-1 truncate ${
+                  isBlocked || isExcluded
+                    ? isDarkMode
+                      ? 'text-slate-500 line-through'
+                      : 'text-gray-400 line-through'
+                    : isDarkMode
+                      ? 'text-slate-200'
+                      : 'text-gray-800'
+                }`}>
                 {tab.title}
               </span>
               {isBlocked ? (
@@ -272,17 +332,22 @@ export default function TabContextSelector({
                   <FaBan className="w-2 h-2" />
                   Blocked
                 </span>
+              ) : isExcluded ? (
+                <span
+                  className={`flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${isDarkMode ? 'bg-slate-600 text-slate-300' : 'bg-gray-200 text-gray-500'}`}>
+                  Excluded
+                </span>
               ) : isCurrent ? (
                 <span
-                  className={`flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${
-                    isDarkMode ? 'bg-green-700 text-green-100' : 'bg-green-100 text-green-700'
-                  }`}>
+                  className={`flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${isDarkMode ? 'bg-green-700 text-green-100' : 'bg-green-100 text-green-700'}`}>
                   Current
                 </span>
               ) : null}
               {isExtracting && <FaSpinner className="w-3 h-3 text-violet-500 flex-shrink-0 animate-spin" />}
-              {isSelected && !isExtracting && (
-                <FaCheck className={`w-3 h-3 flex-shrink-0 ${isExtracted ? 'text-green-500' : 'text-violet-500'}`} />
+              {isEffectivelySelected && !isExtracting && !isBlocked && (
+                <FaCheck
+                  className={`w-3 h-3 flex-shrink-0 ${isExtracted || isAutoTab ? 'text-green-500' : 'text-violet-500'}`}
+                />
               )}
             </button>
           );
@@ -291,12 +356,15 @@ export default function TabContextSelector({
     </div>
   );
 
+  // Button text based on mode
+  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Add tab as context';
+  const ButtonIcon = autoContextEnabled ? FaBolt : FaPlus;
+
   return (
     <div ref={containerRef} className="relative">
-      {/* Dropdown rendered via portal to escape overflow clipping */}
       {isOpen && createPortal(dropdownContent, document.body)}
 
-      {/* Add Tab Button */}
+      {/* Main Button */}
       <button
         ref={buttonRef}
         type="button"
@@ -305,32 +373,66 @@ export default function TabContextSelector({
         className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
           disabled
             ? 'cursor-not-allowed opacity-50'
-            : isDarkMode
-              ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            : autoContextEnabled
+              ? isDarkMode
+                ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-800/60'
+                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+              : isDarkMode
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}>
-        <FaPlus className="w-2.5 h-2.5" />
-        <span>Add tab as context</span>
-        {selectedTabIds.length > 0 && (
+        <ButtonIcon className="w-2.5 h-2.5" />
+        <span>{buttonLabel}</span>
+        {!autoContextEnabled && selectedTabIds.length > 0 && (
           <span
-            className={`ml-1 rounded-full px-1.5 text-[10px] ${
-              isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'
-            }`}>
+            className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
             {selectedTabIds.length}
+          </span>
+        )}
+        {autoContextEnabled && manualTabsForPills.length > 0 && (
+          <span
+            className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
+            +{manualTabsForPills.length}
           </span>
         )}
         <FaChevronDown className={`w-2 h-2 ml-0.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Selected Tab Pills */}
-      {selectedTabs.length > 0 && (
+      {(autoTabsForPills.length > 0 || manualTabsForPills.length > 0) && (
         <div className="flex flex-wrap gap-1 mt-1.5">
-          {selectedTabs.map(tab => {
+          {/* Auto tabs pills */}
+          {autoTabsForPills.map(tab => (
+            <div
+              key={`auto-${tab.id}`}
+              className={`inline-flex items-center gap-1 rounded-full pl-1.5 pr-1 py-0.5 text-[11px] ${
+                isDarkMode ? 'bg-purple-900/40 text-purple-200' : 'bg-purple-100 text-purple-700'
+              }`}>
+              <FaBolt className="w-2.5 h-2.5 text-purple-500" />
+              {tab.favIconUrl ? (
+                <img src={tab.favIconUrl} alt="" className="w-3 h-3 rounded-sm" />
+              ) : (
+                <div className={`w-3 h-3 rounded-sm ${isDarkMode ? 'bg-slate-500' : 'bg-gray-300'}`} />
+              )}
+              <span className="max-w-[80px] truncate">{truncateTitle(tab.title, 15)}</span>
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  removeTab(tab.id, true);
+                }}
+                className={`p-0.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-purple-700 text-purple-400 hover:text-purple-200' : 'hover:bg-purple-200 text-purple-400 hover:text-purple-600'}`}>
+                <FaTimes className="w-2 h-2" />
+              </button>
+            </div>
+          ))}
+          {/* Manual tabs pills */}
+          {manualTabsForPills.map(tab => {
             const isExtracting = extractingTabIds.has(tab.id);
             const isExtracted = extractedTabIds.has(tab.id);
             return (
               <div
-                key={tab.id}
+                key={`manual-${tab.id}`}
                 className={`inline-flex items-center gap-1 rounded-full pl-1.5 pr-1 py-0.5 text-[11px] ${
                   isExtracted
                     ? isDarkMode
@@ -353,13 +455,9 @@ export default function TabContextSelector({
                   type="button"
                   onClick={e => {
                     e.stopPropagation();
-                    removeTab(tab.id);
+                    removeTab(tab.id, false);
                   }}
-                  className={`p-0.5 rounded-full transition-colors ${
-                    isDarkMode
-                      ? 'hover:bg-slate-600 text-slate-400 hover:text-slate-200'
-                      : 'hover:bg-gray-200 text-gray-400 hover:text-gray-600'
-                  }`}>
+                  className={`p-0.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-slate-600 text-slate-400 hover:text-slate-200' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-600'}`}>
                   <FaTimes className="w-2 h-2" />
                 </button>
               </div>

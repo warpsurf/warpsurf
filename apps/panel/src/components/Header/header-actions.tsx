@@ -32,6 +32,10 @@ interface HeaderActionsProps {
   hasAcceptedHistoryPrivacy?: boolean | null;
   promptHistoryPrivacy?: () => Promise<boolean>;
   resetHistoryPrivacy?: () => Promise<void>;
+  // Auto tab context
+  hasAcceptedAutoTabContextPrivacy?: boolean | null;
+  promptAutoTabContextPrivacy?: () => Promise<boolean>;
+  resetAutoTabContextPrivacy?: () => Promise<void>;
 }
 
 const HeaderActions: React.FC<HeaderActionsProps> = props => {
@@ -40,6 +44,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
   const [enableHistoryContext, setEnableHistoryContext] = useState(false);
   const [enableWorkflowEstimation, setEnableWorkflowEstimation] = useState(false);
   const [showEmergencyStop, setShowEmergencyStop] = useState(true);
+  const [enableAutoTabContext, setEnableAutoTabContext] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +58,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
           setEnableHistoryContext(!!(s.enableHistoryContext ?? false));
           setEnableWorkflowEstimation(!!(s.enableWorkflowEstimation ?? false));
           setShowEmergencyStop(!!(s.showEmergencyStop ?? true));
+          setEnableAutoTabContext(!!(s.enableAutoTabContext ?? false));
         }
       } catch {}
     })();
@@ -307,6 +313,36 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                 </span>
               </div>
               <span className={`ml-2 toggle-slider ${enableHistoryContext ? 'toggle-on' : 'toggle-off'}`}>
+                <span className="toggle-knob" />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                // If enabling, prompt privacy warning
+                if (!enableAutoTabContext && props.promptAutoTabContextPrivacy) {
+                  const accepted = await props.promptAutoTabContextPrivacy();
+                  if (!accepted) return;
+                }
+                // If disabling, reset privacy acceptance
+                if (enableAutoTabContext && props.resetAutoTabContextPrivacy) {
+                  await props.resetAutoTabContextPrivacy();
+                }
+                const next = !enableAutoTabContext;
+                setEnableAutoTabContext(next);
+                try {
+                  await generalSettingsStore.updateSettings({ enableAutoTabContext: next });
+                } catch {}
+              }}
+              className={`mt-1 flex w-full items-center justify-between rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+              <div className="flex flex-col items-start">
+                <span>Auto tab context</span>
+                <span className={`text-[10px] ${props.isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Auto-include all open tabs as context
+                </span>
+              </div>
+              <span className={`ml-2 toggle-slider ${enableAutoTabContext ? 'toggle-on' : 'toggle-off'}`}>
                 <span className="toggle-knob" />
               </span>
             </button>
