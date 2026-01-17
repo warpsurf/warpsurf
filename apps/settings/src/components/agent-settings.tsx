@@ -65,7 +65,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
   // Global model selection (apply same model to all visible agent roles)
   const [globalModelValue, setGlobalModelValue] = useState<string>('');
 
-  // Load general settings
+  // Load general settings and subscribe to changes
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -77,6 +77,18 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     };
 
     loadSettings();
+
+    // Subscribe to settings changes from other sources (e.g., panel UI)
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = generalSettingsStore.subscribe(loadSettings);
+    } catch {}
+
+    return () => {
+      try {
+        unsub?.();
+      } catch {}
+    };
   }, []);
 
   // Load providers and listen for storage changes
@@ -545,6 +557,43 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         responseTimeoutSeconds={settings.responseTimeoutSeconds ?? 120}
         onChangeTimeout={seconds => updateSetting('responseTimeoutSeconds', seconds)}
       />
+
+      {/* Auto Tab Context Toggle */}
+      <div
+        className={`rounded-xl border p-4 shadow-sm backdrop-blur-md ${
+          isDarkMode ? 'border-purple-700/40 bg-purple-900/20' : 'border-purple-300/60 bg-purple-50/60'
+        }`}>
+        <div className="flex items-center justify-between">
+          <div className="text-left">
+            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+              Auto Tab Context
+            </h3>
+            <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              {settings.enableAutoTabContext
+                ? 'Automatically including all open browser tabs as context'
+                : 'Enable from the panel\'s "Add tab as context" dropdown'}
+            </p>
+          </div>
+          {settings.enableAutoTabContext ? (
+            <button
+              type="button"
+              onClick={() => updateSetting('enableAutoTabContext', false)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                isDarkMode
+                  ? 'bg-red-900/50 text-red-200 hover:bg-red-800/60'
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}>
+              Disable
+            </button>
+          ) : (
+            <span
+              className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>
+              Disabled
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Auto Section */}
       <div
         className={`rounded-xl border ${getSectionColor(AgentNameEnum.Auto)} p-5 text-left shadow-sm backdrop-blur-md`}
@@ -1084,41 +1133,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </div>
             </div>
           </AgentModelsSection>
-
-          {/* Divider */}
-          <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
-
-          {/* Auto Tab Context - pale purple */}
-          <div
-            className={`rounded-lg border p-4 ${isDarkMode ? 'border-purple-700/40 bg-purple-900/20' : 'border-purple-300/60 bg-purple-50/60'}`}>
-            <h3 className={`text-lg font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Auto Tab Context
-            </h3>
-            <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Automatically include content from all open tabs in your browser window as context for AI workflows.
-              Enable this feature in Agent Settings within the panel.
-            </p>
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Exclude Current Tab
-                </h4>
-                <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Don't include the tab you're currently viewing
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  updateSetting('autoTabContextExcludeCurrentTab', !settings.autoTabContextExcludeCurrentTab)
-                }
-                className={`toggle-slider ${settings.autoTabContextExcludeCurrentTab ? 'toggle-on' : 'toggle-off'}`}
-                aria-pressed={settings.autoTabContextExcludeCurrentTab}
-                aria-label="Exclude Current Tab toggle">
-                <span className="toggle-knob" />
-              </button>
-            </div>
-          </div>
 
           {/* Divider */}
           <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
