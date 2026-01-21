@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-01-17 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-01-21 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-01-17T17:26:23.126Z',
+  generatedAt: '2026-01-21T17:54:25.182Z',
   version: 1,
   helicone: {
     openai: {
@@ -1548,6 +1548,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'openai/gpt-5.2-chat',
           'openai/gpt-5.2-codex',
           'openai/gpt-5.2-pro',
+          'openai/gpt-audio',
+          'openai/gpt-audio-mini',
           'openai/gpt-oss-120b',
           'openai/gpt-oss-120b:exacto',
           'openai/gpt-oss-20b',
@@ -1692,6 +1694,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         models: ['undi95/remm-slerp-l2-13b'],
       },
       {
+        id: 'writer',
+        displayName: 'Writer',
+        models: ['writer/palmyra-x5'],
+      },
+      {
         id: 'x-ai',
         displayName: 'xAI',
         models: [
@@ -1722,10 +1729,27 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'z-ai/glm-4.6:exacto',
           'z-ai/glm-4.6v',
           'z-ai/glm-4.7',
+          'z-ai/glm-4.7-flash',
         ],
       },
     ],
     pricing: {
+      'writer/palmyra-x5': {
+        inputPerToken: 6e-7,
+        outputPerToken: 0.000006,
+      },
+      'openai/gpt-audio': {
+        inputPerToken: 0.0000025,
+        outputPerToken: 0.00001,
+      },
+      'openai/gpt-audio-mini': {
+        inputPerToken: 6e-7,
+        outputPerToken: 0.0000024,
+      },
+      'z-ai/glm-4.7-flash': {
+        inputPerToken: 7e-8,
+        outputPerToken: 4e-7,
+      },
       'openai/gpt-5.2-codex': {
         inputPerToken: 0.00000175,
         outputPerToken: 0.000014,
@@ -2035,8 +2059,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 4e-7,
       },
       'qwen/qwen3-vl-235b-a22b-thinking': {
-        inputPerToken: 9.8e-7,
-        outputPerToken: 0.00000395,
+        inputPerToken: 4.5e-7,
+        outputPerToken: 0.0000035,
       },
       'qwen/qwen3-vl-235b-a22b-instruct': {
         inputPerToken: 2e-7,
@@ -2335,8 +2359,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00001,
       },
       'deepseek/deepseek-r1-0528': {
-        inputPerToken: 4.5e-7,
-        outputPerToken: 0.00000215,
+        inputPerToken: 4e-7,
+        outputPerToken: 0.00000175,
       },
       'anthropic/claude-opus-4': {
         inputPerToken: 0.000015,
@@ -2831,8 +2855,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00000148,
       },
       'nousresearch/hermes-2-pro-llama-3-8b': {
-        inputPerToken: 2.5e-8,
-        outputPerToken: 8e-8,
+        inputPerToken: 1.4e-7,
+        outputPerToken: 1.4e-7,
       },
       'mistralai/mistral-7b-instruct': {
         inputPerToken: 2e-7,
@@ -2956,6 +2980,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'writer/palmyra-x5': 1040000,
+      'openai/gpt-audio': 128000,
+      'openai/gpt-audio-mini': 128000,
+      'z-ai/glm-4.7-flash': 200000,
       'openai/gpt-5.2-codex': 400000,
       'allenai/olmo-3.1-32b-instruct': 65536,
       'bytedance-seed/seed-1.6-flash': 262144,
@@ -3033,7 +3061,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'relace/relace-apply-3': 256000,
       'google/gemini-2.5-flash-preview-09-2025': 1048576,
       'google/gemini-2.5-flash-lite-preview-09-2025': 1048576,
-      'qwen/qwen3-vl-235b-a22b-thinking': 131072,
+      'qwen/qwen3-vl-235b-a22b-thinking': 262144,
       'qwen/qwen3-vl-235b-a22b-instruct': 262144,
       'qwen/qwen3-max': 256000,
       'qwen/qwen3-coder-plus': 128000,
@@ -3108,7 +3136,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'x-ai/grok-3-mini': 131072,
       'x-ai/grok-3': 131072,
       'google/gemini-2.5-pro-preview': 1048576,
-      'deepseek/deepseek-r1-0528': 131072,
+      'deepseek/deepseek-r1-0528': 163840,
       'anthropic/claude-opus-4': 200000,
       'anthropic/claude-sonnet-4': 1000000,
       'google/gemma-3n-e4b-it': 32768,
