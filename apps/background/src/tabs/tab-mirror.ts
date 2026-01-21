@@ -1,5 +1,10 @@
 import { createLogger } from '../log';
-import { safePostMessage, safeClearInterval, safeDebuggerDetach, isDebuggerAttached } from '@extension/shared/lib/utils';
+import {
+  safePostMessage,
+  safeClearInterval,
+  safeDebuggerDetach,
+  isDebuggerAttached,
+} from '@extension/shared/lib/utils';
 import { tabExists } from '../utils';
 
 const logger = createLogger('TabMirrorService');
@@ -20,6 +25,8 @@ export interface TabMirrorData {
 export class TabMirrorService {
   private mirrorIntervals: Map<number, NodeJS.Timeout> = new Map();
   private dashboardPort?: chrome.runtime.Port;
+  private agentManagerPort?: chrome.runtime.Port;
+  private agentManagerInterval?: NodeJS.Timeout;
   private currentMirrors: Map<number, TabMirrorData> = new Map();
   private screenshotProviders: Map<number, () => Promise<string | undefined>> = new Map();
   private suspendedTabs: Set<number> = new Set();
@@ -48,6 +55,39 @@ export class TabMirrorService {
     }
   }
 
+  setAgentManagerPort(port: chrome.runtime.Port | undefined) {
+    // Clear existing interval
+    if (this.agentManagerInterval) {
+      clearInterval(this.agentManagerInterval);
+      this.agentManagerInterval = undefined;
+    }
+    this.agentManagerPort = port;
+
+    if (port) {
+      // Send initial data
+      this.sendPreviewsToAgentManager();
+      // Send at 1 FPS (1000ms) to agent manager - slower than dashboard's 3 FPS
+      this.agentManagerInterval = setInterval(() => {
+        this.sendPreviewsToAgentManager();
+      }, 1000);
+    }
+  }
+
+  private sendPreviewsToAgentManager() {
+    if (!this.agentManagerPort) return;
+    try {
+      const mirrors = this.getActiveMirrors();
+      safePostMessage(this.agentManagerPort, { type: 'previews-update', data: mirrors });
+    } catch {
+      // Port may be disconnected
+      this.agentManagerPort = undefined;
+      if (this.agentManagerInterval) {
+        clearInterval(this.agentManagerInterval);
+        this.agentManagerInterval = undefined;
+      }
+    }
+  }
+
   setVisionEnabled(enabled: boolean) {
     this.visionEnabled = !!enabled;
   }
@@ -66,7 +106,7 @@ export class TabMirrorService {
       logger.debug(`startMirroring: Tab ${tabId} doesn't exist, skipping setup`);
       return;
     }
-    
+
     const prev = this.mirrorIntervals.get(tabId);
     if (prev) {
       safeClearInterval(prev);
@@ -84,13 +124,13 @@ export class TabMirrorService {
       set.add(tabId);
     }
     await this.captureAndSendTabData(tabId, agentId, color, sessionId, true);
-    
+
     // Check if tab still exists after initial capture (captureAndSendTabData may have cleaned up)
     if (!this.currentMirrors.has(tabId)) {
       logger.debug(`startMirroring: Tab ${tabId} was cleaned up during initial capture, not starting interval`);
       return;
     }
-    
+
     const interval = setInterval(async () => {
       try {
         if (!this.mirrorIntervals.has(tabId)) {
@@ -213,10 +253,16 @@ export class TabMirrorService {
     return latest;
   }
 
-  private async captureAndSendTabData(tabId: number, agentId: string, color: string, sessionId?: string, force = false) {
+  private async captureAndSendTabData(
+    tabId: number,
+    agentId: string,
+    color: string,
+    sessionId?: string,
+    force = false,
+  ) {
     try {
       if (!force && !this.mirrorIntervals.has(tabId)) return;
-      
+
       // Safely check if the tab still exists before any operations
       const tab = await tabExists(tabId);
       if (!tab) {
@@ -225,7 +271,7 @@ export class TabMirrorService {
         this.stopMirroring(tabId);
         return;
       }
-      
+
       let screenshot: string | undefined;
       const provider = this.screenshotProviders.get(tabId);
       if (provider && this.visionEnabled) {
@@ -325,14 +371,14 @@ export class TabMirrorService {
   async forwardInteraction(tabId: number, interaction: any): Promise<void> {
     try {
       if (this.reservedByPuppeteer.has(tabId)) return;
-      
+
       // Verify tab exists before attempting debugger operations
       const tab = await tabExists(tabId);
       if (!tab) {
         logger.debug(`Tab ${tabId} no longer exists, skipping interaction forward`);
         return;
       }
-      
+
       const debuggeeId = { tabId } as chrome.debugger.Debuggee;
       const wasAlreadyAttached = await isDebuggerAttached(debuggeeId);
       if (!wasAlreadyAttached) {

@@ -15,6 +15,7 @@ import { attachRuntimeListeners } from './listeners/runtime';
 import { initInstrumentation } from './init/instrumentation';
 import { attachSidePanelPortHandlers } from './ports/side-panel';
 import { attachDashboardPortHandlers } from './ports/dashboard';
+import { attachAgentManagerPortHandlers } from './ports/agent-manager';
 import { workflowLogger } from './executor/workflow-logger';
 
 import { registerCryptoHandlers } from './crypto';
@@ -291,6 +292,14 @@ chrome.runtime.onConnect.addListener(async port => {
       logger,
       getCurrentPort: () => currentPort,
       setDashboardPort: (p: chrome.runtime.Port | undefined) => taskManager.setDashboardPort(p),
+    });
+    return;
+  }
+  if (port.name === 'agent-manager') {
+    attachAgentManagerPortHandlers(port, {
+      taskManager,
+      logger,
+      setAgentManagerPort: (p: chrome.runtime.Port | undefined) => taskManager.tabMirrorService.setAgentManagerPort(p),
     });
     return;
   }

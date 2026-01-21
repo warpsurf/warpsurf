@@ -23,7 +23,7 @@ import { useBackgroundConnection } from './hooks/use-background-connection';
 import { useDisclaimerGates } from './hooks/use-disclaimer-gates';
 import { useHistoryPrivacyGate } from './hooks/use-history-privacy-gate';
 import { useAutoTabContextPrivacyGate } from './hooks/use-auto-tab-context-privacy-gate';
-import { generalSettingsStore, warningsSettingsStore } from '@extension/storage';
+import { generalSettingsStore, warningsSettingsStore, chatHistoryStore, type ContextTabInfo } from '@extension/storage';
 import { createMessageSender } from './logic/message-sender';
 import { useVersionInfo } from './hooks/use-version-info';
 import { useChatHistory } from '@src/hooks/use-chat-history';
@@ -141,6 +141,8 @@ const SidePanel = () => {
   // Refs for cancellation state management (confirmation-based stop with timeout escalation)
   const isCancellingRef = useRef<boolean>(false);
   const cancelTimeoutRef = useRef<number | null>(null);
+  // Ref to store pending context tabs info from chat-input, used by message sender callback
+  const pendingContextTabsRef = useRef<ContextTabInfo[] | null>(null);
 
   const logger = useMemo(() => createLogger(portRef), []);
   const { extensionVersion, releaseNotes } = useVersionInfo();
@@ -438,6 +440,24 @@ const SidePanel = () => {
         loadChatSessions: async () => {},
         createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11),
         resetRunState,
+        // Callback when user message is created - store pending context tabs with correct timestamp
+        onUserMessageCreated: (timestamp: number) => {
+          const contextTabs = pendingContextTabsRef.current;
+          pendingContextTabsRef.current = null; // Clear for next message
+          if (!contextTabs || contextTabs.length === 0) return;
+          const messageId = `${timestamp}-user`;
+          setMessageMetadata((prev: any) => {
+            const existing = prev[messageId] || {};
+            const next = { ...prev, [messageId]: { ...existing, contextTabs } };
+            // Also persist to storage
+            try {
+              if (sessionIdRef.current) {
+                chatHistoryStore.storeMessageMetadata(sessionIdRef.current, next).catch(() => {});
+              }
+            } catch {}
+            return next;
+          });
+        },
       }),
     [
       logger,
@@ -577,6 +597,28 @@ const SidePanel = () => {
     chrome.storage.onChanged.addListener(listener);
     return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
+
+  // Listen for navigate-to-session events from agent manager
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const sessionId = (e as CustomEvent).detail?.sessionId;
+      if (sessionId) {
+        handleSessionSelect(sessionId);
+      }
+    };
+    document.addEventListener('navigate-to-session', handler as EventListener);
+    return () => document.removeEventListener('navigate-to-session', handler as EventListener);
+  }, [handleSessionSelect]);
+
+  // Listen for force-new-session events from agent manager
+  useEffect(() => {
+    const handler = () => {
+      // Clear current session to start fresh
+      handleNewChat();
+    };
+    document.addEventListener('force-new-session', handler);
+    return () => document.removeEventListener('force-new-session', handler);
+  }, [handleNewChat]);
 
   // Persist panel view state for restoration on reopen
   useEffect(() => {
@@ -896,6 +938,10 @@ const SidePanel = () => {
               excludedAutoTabIds={excludedAutoTabIds}
               onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
               onAutoContextToggle={handleAutoContextToggle}
+              setMessageMetadata={setMessageMetadata}
+              setPendingContextTabs={tabs => {
+                pendingContextTabsRef.current = tabs;
+              }}
             />
           )}
         </div>
