@@ -55,6 +55,14 @@ export interface RequestSummary {
   provider?: string;
 }
 
+// Tab context info for messages that used context tabs
+export interface ContextTabInfo {
+  id: number;
+  title: string;
+  favIconUrl?: string;
+  url?: string;
+}
+
 // Per-message metadata used by UI (trace items, search queries, etc.)
 export interface MessageMetadataValue {
   searchQueries?: string[];
@@ -63,8 +71,12 @@ export interface MessageMetadataValue {
   sourceItems?: Array<{ url: string; title?: string; author?: string }> | any[];
   traceItems?: Array<{ actor: string; content: string; timestamp: number }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  workerItems?: Array<{ workerId: string; text?: string; agentName?: string; color?: string; timestamp: number }> | any[];
+  workerItems?:
+    | Array<{ workerId: string; text?: string; agentName?: string; color?: string; timestamp: number }>
+    | any[];
   agentColor?: string;
+  // Context tabs that were provided with the request
+  contextTabs?: ContextTabInfo[];
 }
 
 // Aggregated per-session statistics surface in the UI footer

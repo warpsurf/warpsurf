@@ -37,6 +37,14 @@ export interface InlinePreview {
 
 export type InlinePreviewBatch = Array<InlinePreview & { agentId?: string; agentOrdinal?: number; agentName?: string }>;
 
+// Tab context info for messages that used context tabs
+export interface ContextTabInfo {
+  id: number;
+  title: string;
+  favIconUrl?: string;
+  url?: string;
+}
+
 export interface MessageMetadata {
   searchQueries?: string[];
   sourceUrls?: string[];
@@ -52,4 +60,6 @@ export interface MessageMetadata {
   controlRequest?: { type: string; tabId?: number; reason?: string };
   finalPreview?: InlinePreview;
   finalPreviewBatch?: InlinePreviewBatch;
+  // Context tabs that were provided with the request
+  contextTabs?: ContextTabInfo[];
 }

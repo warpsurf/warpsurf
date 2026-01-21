@@ -3,9 +3,10 @@ import { useMemo, useState, useRef, useEffect, lazy, Suspense, CSSProperties } f
 import { Actors } from '@extension/storage';
 import { FiCopy, FiClock, FiUser } from 'react-icons/fi';
 import { FaBrain, FaSearch, FaRobot, FaRandom, FaMagic, FaCog, FaChessKing } from 'react-icons/fa';
+import { FaFileAlt } from 'react-icons/fa';
 import { ACTOR_PROFILES } from '../../types/message';
 import { formatUsd, formatTimestamp, formatDuration, hexToRgba } from '../../utils';
-import type { JobSummary, MessageMetadata, TraceItem, WorkerItem } from './types';
+import type { JobSummary, MessageMetadata, TraceItem, WorkerItem, ContextTabInfo } from './types';
 import CodeBlock from './code-block';
 import { AgentTrajectory } from './agent-trajectory';
 
@@ -134,10 +135,13 @@ export default function MessageBlock({
   hasPreviewPanel = false,
 }: MessageBlockProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showTabContextTooltip, setShowTabContextTooltip] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
   const [copied, setCopied] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<'above' | 'below'>('below');
+  const [tabContextTooltipPosition, setTabContextTooltipPosition] = useState<'above' | 'below'>('below');
   const tooltipTriggerRef = useRef<HTMLDivElement>(null);
+  const tabContextTriggerRef = useRef<HTMLSpanElement>(null);
   const [pricingCacheStatus, setPricingCacheStatus] = useState<{
     isUsingCache: boolean;
     cacheDate: string | null;
@@ -342,6 +346,96 @@ export default function MessageBlock({
       </span>
     ) : null;
 
+  // Helper to truncate tab title
+  const truncateTabTitle = (title: string, maxLen = 25) =>
+    title.length > maxLen ? title.slice(0, maxLen) + '...' : title;
+
+  // Tab context tooltip component (inline) - shows for user messages with context tabs
+  const contextTabs: ContextTabInfo[] = metadata?.contextTabs || [];
+  const TabContextChip =
+    isUser && contextTabs.length > 0 ? (
+      <span
+        ref={tabContextTriggerRef}
+        className="relative ml-1 align-middle inline-flex"
+        onMouseEnter={() => {
+          if (tabContextTriggerRef.current) {
+            const rect = tabContextTriggerRef.current.getBoundingClientRect();
+            let parent = tabContextTriggerRef.current.parentElement;
+            let containerBottom = window.innerHeight;
+            while (parent) {
+              const style = getComputedStyle(parent);
+              if (
+                style.overflow === 'auto' ||
+                style.overflow === 'scroll' ||
+                style.overflowY === 'auto' ||
+                style.overflowY === 'scroll'
+              ) {
+                containerBottom = parent.getBoundingClientRect().bottom;
+                break;
+              }
+              parent = parent.parentElement;
+            }
+            setTabContextTooltipPosition(containerBottom - rect.bottom < 180 ? 'above' : 'below');
+          }
+          setShowTabContextTooltip(true);
+        }}
+        onMouseLeave={() => setShowTabContextTooltip(false)}>
+        <span
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full cursor-default text-[10px] font-medium ${isDarkMode ? 'bg-purple-900/60 text-purple-200 border border-purple-700/50' : 'bg-purple-100/80 text-purple-600 border border-purple-200/50'}`}>
+          <FaFileAlt size={9} />
+          <span>
+            {contextTabs.length} tab{contextTabs.length > 1 ? 's' : ''}
+          </span>
+        </span>
+        {showTabContextTooltip && (
+          <span
+            className={`absolute left-0 rounded-lg text-[11px] z-[1000] shadow-lg backdrop-blur-sm min-w-[200px] max-w-[300px] ${isDarkMode ? 'bg-slate-800/98 text-slate-200 border border-slate-600/50' : 'bg-white/98 text-gray-700 border border-gray-200/70'} ${tabContextTooltipPosition === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+            {tabContextTooltipPosition === 'above' ? (
+              <span
+                className={`absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent ${isDarkMode ? 'border-t-slate-800/98' : 'border-t-white/98'}`}
+              />
+            ) : (
+              <span
+                className={`absolute bottom-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent ${isDarkMode ? 'border-b-slate-800/98' : 'border-b-white/98'}`}
+              />
+            )}
+            <span className="block px-3 py-2">
+              <span
+                className={`block text-[10px] font-medium mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                Tab Context
+              </span>
+              <span className="block space-y-1.5">
+                {contextTabs.map((tab, idx) => (
+                  <span key={tab.id || idx} className="flex items-center gap-2">
+                    {tab.favIconUrl ? (
+                      <img
+                        src={tab.favIconUrl}
+                        alt=""
+                        className="w-4 h-4 flex-shrink-0 rounded-sm"
+                        onError={e => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className={`w-4 h-4 flex-shrink-0 rounded-sm flex items-center justify-center ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>
+                        <FaFileAlt size={8} className={isDarkMode ? 'text-slate-400' : 'text-gray-400'} />
+                      </span>
+                    )}
+                    <span
+                      className={`flex-1 truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}
+                      title={tab.title}>
+                      {truncateTabTitle(tab.title)}
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </span>
+          </span>
+        )}
+      </span>
+    ) : null;
+
   return (
     <div className={`group flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`${bubbleClass} ${actorTint} liquid-bubble`} style={dynamicStyles}>
@@ -473,7 +567,8 @@ export default function MessageBlock({
                 )}
                 {isAgentAggregate && collapsed && <span>{lastTrace?.content || content}</span>}
               </span>
-              {/* Inline timestamp and job summary - rendered after content */}
+              {/* Inline timestamp, tab context, and job summary - rendered after content */}
+              {TabContextChip}
               {JobSummaryChip}
               <span
                 className={`ml-1.5 whitespace-nowrap ${compactMode ? 'text-[9px]' : 'text-[10px]'} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>

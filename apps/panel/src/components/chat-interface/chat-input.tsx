@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
 import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS } from '@extension/shared';
 import TabContextSelector from './tab-context-selector';
+import type { ContextTabInfo } from './types';
 
 // Re-export for backward compatibility within this file
 export { WorkflowType as AgentType };
@@ -87,6 +88,8 @@ interface ChatInputProps {
   excludedAutoTabIds?: number[];
   onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
+  // Callback to store context tabs metadata when sending a message
+  onContextTabsCapture?: (timestamp: number, contextTabs: ContextTabInfo[]) => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -117,6 +120,7 @@ export default function ChatInput({
   excludedAutoTabIds = [],
   onExcludedAutoTabIdsChange,
   onAutoContextToggle,
+  onContextTabsCapture,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -212,7 +216,7 @@ export default function ChatInput({
   }, [isResizing]);
 
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
       if (text.trim()) {
         // Clean up text by removing prefixes if present
@@ -253,6 +257,32 @@ export default function ChatInput({
           skipAutoContext = true;
         }
 
+        // Capture full tab info for context tabs metadata BEFORE sending
+        // This will be associated with the user message
+        const timestamp = Date.now();
+        if (onContextTabsCapture && finalContextTabIds.length > 0) {
+          try {
+            const allTabs = await chrome.tabs.query({ currentWindow: true });
+            const contextTabsInfo: ContextTabInfo[] = [];
+            for (const tabId of finalContextTabIds) {
+              const tab = allTabs.find(t => t.id === tabId);
+              if (tab) {
+                contextTabsInfo.push({
+                  id: tabId,
+                  title: tab.title || 'Untitled',
+                  favIconUrl: tab.favIconUrl || undefined,
+                  url: tab.url || undefined,
+                });
+              }
+            }
+            if (contextTabsInfo.length > 0) {
+              onContextTabsCapture(timestamp, contextTabsInfo);
+            }
+          } catch {
+            // Ignore errors in capturing tab info
+          }
+        }
+
         onSendMessage(
           cleanText || text,
           selectedAgent,
@@ -266,7 +296,16 @@ export default function ChatInput({
         setSelectedAgent(prev => (prev === WorkflowType.AUTO ? WorkflowType.AUTO : prev));
       }
     },
-    [text, onSendMessage, selectedAgent, contextTabIds, autoContextEnabled, autoContextTabIds, excludedAutoTabIds],
+    [
+      text,
+      onSendMessage,
+      selectedAgent,
+      contextTabIds,
+      autoContextEnabled,
+      autoContextTabIds,
+      excludedAutoTabIds,
+      onContextTabsCapture,
+    ],
   );
 
   const handleKeyDown = useCallback(

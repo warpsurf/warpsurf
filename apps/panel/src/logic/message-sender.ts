@@ -23,6 +23,8 @@ export type MessageSenderDeps = {
   showToast?: (t: string) => void;
   createTaskId: () => string;
   resetRunState?: () => void;
+  // Callback when user message is created, receives the actual timestamp
+  onUserMessageCreated?: (timestamp: number) => void;
 };
 
 export function createMessageSender(deps: MessageSenderDeps) {
@@ -202,9 +204,12 @@ export function createMessageSender(deps: MessageSenderDeps) {
         }
       }
 
-      const userMessage = { actor: Actors.USER, content: text, timestamp: Date.now() };
+      const userMessageTimestamp = Date.now();
+      const userMessage = { actor: Actors.USER, content: text, timestamp: userMessageTimestamp };
       appendMessage(userMessage, sessionIdRef.current);
       lastUserPromptRef.current = text;
+      // Notify about user message creation with the actual timestamp
+      deps.onUserMessageCreated?.(userMessageTimestamp);
 
       if (!portRef.current) {
         setupConnection();

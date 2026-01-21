@@ -1,4 +1,4 @@
-import { type MutableRefObject, useState, useEffect } from 'react';
+import { type MutableRefObject, useState, useEffect, useCallback } from 'react';
 import { Actors } from '@extension/storage';
 import type { FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { INLINE_CHAT_DISCLAIMER } from '@extension/shared/lib/utils/disclaimers';
@@ -8,6 +8,7 @@ import AvailableChatSection from '../components/chat-interface/available-chat-se
 import SessionControls from '../components/footer/session-controls';
 import { DebugButtons } from '../components/footer/debug-buttons';
 import { formatUsd } from '../components/chat-interface/message-list';
+import type { ContextTabInfo } from '../components/chat-interface/types';
 
 export interface ChatScreenProps {
   isDarkMode: boolean;
@@ -82,6 +83,10 @@ export interface ChatScreenProps {
   appendMessage: (message: any) => void;
   setupConnection: () => void;
   handleKillSwitch?: () => void;
+  // For storing context tabs metadata
+  setMessageMetadata?: (updater: (prev: any) => any) => void;
+  // Callback to set pending context tabs (will be stored when user message is created)
+  setPendingContextTabs?: (tabs: ContextTabInfo[] | null) => void;
 }
 
 export function ChatScreen(props: ChatScreenProps) {
@@ -157,6 +162,8 @@ export function ChatScreen(props: ChatScreenProps) {
     excludedAutoTabIds = [],
     onExcludedAutoTabIdsChange,
     onAutoContextToggle,
+    setMessageMetadata,
+    setPendingContextTabs,
   } = props;
 
   // Context tabs state lifted here to persist across ChatInput remounts
@@ -173,6 +180,15 @@ export function ChatScreen(props: ChatScreenProps) {
       }
     };
   }, [setContextTabIdsRef]);
+
+  // Callback to capture context tabs info when sending a message
+  // This sets the pending tabs in SidePanel, which will be stored when user message is created
+  const handleContextTabsCapture = useCallback(
+    (_timestamp: number, contextTabs: ContextTabInfo[]) => {
+      setPendingContextTabs?.(contextTabs);
+    },
+    [setPendingContextTabs],
+  );
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -240,6 +256,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   excludedAutoTabIds={excludedAutoTabIds}
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
+                  onContextTabsCapture={handleContextTabsCapture}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -403,6 +420,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   excludedAutoTabIds={excludedAutoTabIds}
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
+                  onContextTabsCapture={handleContextTabsCapture}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
