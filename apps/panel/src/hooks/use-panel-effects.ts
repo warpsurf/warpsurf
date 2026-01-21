@@ -152,6 +152,44 @@ export function usePanelEffects(params: {
     };
   }, [logger, setHasConfiguredModels, setHasProviders]);
 
+  // Check for pending session navigation from agent manager
+  useEffect(() => {
+    const checkPendingSession = async () => {
+      try {
+        const result = await chrome.storage.local.get(['pending_sidepanel_session', 'pending_sidepanel_timestamp']);
+        if (result.pending_sidepanel_session) {
+          const age = Date.now() - (result.pending_sidepanel_timestamp || 0);
+          // Only navigate if the request is recent (within 5 seconds)
+          if (age < 5000) {
+            // Dispatch event for session navigation - handled by useChatHistory
+            document.dispatchEvent(
+              new CustomEvent('navigate-to-session', { detail: { sessionId: result.pending_sidepanel_session } }),
+            );
+          }
+          // Clear the pending state
+          await chrome.storage.local.remove(['pending_sidepanel_session', 'pending_sidepanel_timestamp']);
+        }
+      } catch (e) {
+        logger.error('Error checking pending session:', e);
+      }
+    };
+
+    // Check on mount
+    checkPendingSession();
+
+    // Listen for storage changes (when sidepanel is already open)
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.pending_sidepanel_session?.newValue) {
+        checkPendingSession();
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, [logger]);
+
   // Check for pending context menu actions (on mount and on storage change)
   useEffect(() => {
     const processPendingAction = async () => {
@@ -163,9 +201,11 @@ export function usePanelEffects(params: {
               autoStart: boolean;
               workflowType?: string;
               contextTabId?: number;
+              contextTabIds?: number[];
               errorMessage?: string;
               contextMenuAction?: string;
               infoMessage?: string;
+              forceNewSession?: boolean;
             }
           | undefined;
         if (pendingAction) {
@@ -177,6 +217,13 @@ export function usePanelEffects(params: {
               appendMessage({ actor: 'system', content: pendingAction.errorMessage, timestamp: Date.now() });
             }
             return;
+          }
+
+          // If forceNewSession, dispatch event to clear current session first
+          if (pendingAction.forceNewSession) {
+            document.dispatchEvent(new CustomEvent('force-new-session'));
+            // Small delay to let the session clear
+            await new Promise(r => setTimeout(r, 50));
           }
 
           // Handle info messages (e.g., context unavailable) - shows but continues
@@ -192,7 +239,8 @@ export function usePanelEffects(params: {
           if (pendingAction.autoStart && handleSendMessage) {
             // For auto-run (context menu actions), submit immediately without setting input/context in UI
             // The context tabs are passed directly to handleSendMessage and don't need to persist
-            const contextTabs = pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined;
+            const contextTabs =
+              pendingAction.contextTabIds || (pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined);
             // Small delay to let UI update
             setTimeout(() => {
               (handleSendMessage as any)(
@@ -204,8 +252,10 @@ export function usePanelEffects(params: {
             }, 50);
           } else {
             // For manual actions (panel opened but not auto-run), set input and context tabs in UI
-            if (pendingAction.contextTabId && setContextTabIdsRef.current) {
-              setContextTabIdsRef.current([pendingAction.contextTabId]);
+            const contextTabs =
+              pendingAction.contextTabIds || (pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined);
+            if (contextTabs && setContextTabIdsRef.current) {
+              setContextTabIdsRef.current(contextTabs);
             }
             if (setInputTextRef.current) {
               setInputTextRef.current(pendingAction.prompt);
