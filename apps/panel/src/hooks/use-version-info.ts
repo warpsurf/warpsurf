@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes =
-    'Added page content to explain right-click action, added auto-tab context, page content is dynamically extracted based on model context limits.';
+  const releaseNotes = 'Added agent manager & tab context to model responses.';
 
   useEffect(() => {
     try {
