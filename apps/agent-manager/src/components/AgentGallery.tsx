@@ -10,6 +10,8 @@ interface AgentGalleryProps {
   olderAgents: AgentData[];
   isDarkMode: boolean;
   onSelectAgent: (agent: AgentData) => void;
+  onDeleteAgent?: (agent: AgentData) => void;
+  searchQuery?: string;
 }
 
 interface SectionProps {
@@ -17,10 +19,11 @@ interface SectionProps {
   agents: AgentData[];
   isDarkMode: boolean;
   onSelectAgent: (agent: AgentData) => void;
+  onDeleteAgent?: (agent: AgentData) => void;
   showPreview: boolean;
 }
 
-function Section({ title, agents, isDarkMode, onSelectAgent, showPreview }: SectionProps) {
+function Section({ title, agents, isDarkMode, onSelectAgent, onDeleteAgent, showPreview }: SectionProps) {
   if (agents.length === 0) return null;
 
   return (
@@ -38,6 +41,7 @@ function Section({ title, agents, isDarkMode, onSelectAgent, showPreview }: Sect
                 agent={agent}
                 isDarkMode={isDarkMode}
                 onClick={() => onSelectAgent(agent)}
+                onDelete={onDeleteAgent ? () => onDeleteAgent(agent) : undefined}
               />
             ) : (
               <AgentTile
@@ -45,6 +49,7 @@ function Section({ title, agents, isDarkMode, onSelectAgent, showPreview }: Sect
                 agent={agent}
                 isDarkMode={isDarkMode}
                 onClick={() => onSelectAgent(agent)}
+                onDelete={onDeleteAgent ? () => onDeleteAgent(agent) : undefined}
               />
             ),
           )}
@@ -57,6 +62,7 @@ function Section({ title, agents, isDarkMode, onSelectAgent, showPreview }: Sect
               agent={agent}
               isDarkMode={isDarkMode}
               onClick={() => onSelectAgent(agent)}
+              onDelete={onDeleteAgent ? () => onDeleteAgent(agent) : undefined}
             />
           ))}
         </div>
@@ -71,6 +77,8 @@ export function AgentGallery({
   olderAgents,
   isDarkMode,
   onSelectAgent,
+  onDeleteAgent,
+  searchQuery,
 }: AgentGalleryProps) {
   const hasNoAgents = activeAgents.length === 0 && recentAgents.length === 0 && olderAgents.length === 0;
 
@@ -81,8 +89,10 @@ export function AgentGallery({
           isDarkMode ? 'text-slate-400' : 'text-gray-500'
         }`}>
         <FaRobot className="h-16 w-16 mb-4 opacity-50" />
-        <h2 className="text-lg font-medium mb-2">No agents running</h2>
-        <p className="text-sm opacity-75">Start a new task using the input above</p>
+        <h2 className="text-lg font-medium mb-2">{searchQuery ? 'No matching workflows' : 'No agents running'}</h2>
+        <p className="text-sm opacity-75">
+          {searchQuery ? 'Try a different search term' : 'Start a new task using the input above'}
+        </p>
       </div>
     );
   }
@@ -94,6 +104,7 @@ export function AgentGallery({
         agents={activeAgents}
         isDarkMode={isDarkMode}
         onSelectAgent={onSelectAgent}
+        onDeleteAgent={onDeleteAgent}
         showPreview={true}
       />
       <Section
@@ -101,6 +112,7 @@ export function AgentGallery({
         agents={recentAgents}
         isDarkMode={isDarkMode}
         onSelectAgent={onSelectAgent}
+        onDeleteAgent={onDeleteAgent}
         showPreview={false}
       />
       <Section
@@ -108,6 +120,7 @@ export function AgentGallery({
         agents={olderAgents}
         isDarkMode={isDarkMode}
         onSelectAgent={onSelectAgent}
+        onDeleteAgent={onDeleteAgent}
         showPreview={false}
       />
     </div>

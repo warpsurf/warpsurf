@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { FaRobot } from 'react-icons/fa';
+import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import type { AgentData, WorkerPreview } from '@src/types';
 
@@ -7,6 +8,7 @@ interface MultiAgentTileProps {
   agent: AgentData;
   isDarkMode: boolean;
   onClick: () => void;
+  onDelete?: () => void;
 }
 
 function formatTimeSince(timestamp: number): string {
@@ -46,7 +48,7 @@ function MiniPreview({ worker, isDarkMode }: { worker: WorkerPreview; isDarkMode
   );
 }
 
-export function MultiAgentTile({ agent, isDarkMode, onClick }: MultiAgentTileProps) {
+export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAgentTileProps) {
   const needsAttention = agent.status === 'needs_input';
   const workers = agent.workers || [];
   const isInactive = agent.status === 'completed' || agent.status === 'failed' || agent.status === 'cancelled';
@@ -61,53 +63,71 @@ export function MultiAgentTile({ agent, isDarkMode, onClick }: MultiAgentTilePro
   const gridCols = workers.length <= 2 ? 2 : workers.length <= 4 ? 2 : 3;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg ${
+    <div
+      className={`group relative w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg ${
         needsAttention ? 'attention-pulse' : ''
       } ${
         isDarkMode ? 'border-slate-700 bg-slate-800/60 hover:bg-slate-800' : 'border-gray-200 bg-white hover:bg-gray-50'
       }`}>
-      {/* Mini-grid of worker previews */}
-      <div className={`p-2 ${isDarkMode ? 'bg-slate-900/50' : 'bg-gray-50'} ${isInactive ? 'opacity-50' : ''}`}>
-        {workers.length > 0 ? (
-          <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
-            {workers.slice(0, 6).map((worker, idx) => (
-              <MiniPreview key={worker.workerId || idx} worker={worker} isDarkMode={isDarkMode} />
-            ))}
-          </div>
-        ) : (
-          <div
-            className={`flex items-center justify-center aspect-video rounded ${
-              isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
-            }`}>
-            <FaRobot className="h-8 w-8" />
-          </div>
-        )}
-      </div>
+      <button type="button" onClick={onClick} className="w-full text-left">
+        {/* Mini-grid of worker previews */}
+        <div className={`p-2 ${isDarkMode ? 'bg-slate-900/50' : 'bg-gray-50'} ${isInactive ? 'opacity-50' : ''}`}>
+          {workers.length > 0 ? (
+            <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
+              {workers.slice(0, 6).map((worker, idx) => (
+                <MiniPreview key={worker.workerId || idx} worker={worker} isDarkMode={isDarkMode} />
+              ))}
+            </div>
+          ) : (
+            <div
+              className={`flex items-center justify-center aspect-video rounded ${
+                isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
+              }`}>
+              <FaRobot className="h-8 w-8" />
+            </div>
+          )}
+        </div>
 
-      {/* Info */}
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-1">
-          <StatusBadge status={agent.status} isDarkMode={isDarkMode} />
-          <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-            {agent.endTime ? formatTimeSince(agent.endTime) : formatElapsed(agent.startTime)}
-          </span>
+        {/* Info */}
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-1">
+            <StatusBadge status={agent.status} isDarkMode={isDarkMode} />
+            <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+              {agent.endTime ? formatTimeSince(agent.endTime) : formatElapsed(agent.startTime)}
+            </span>
+          </div>
+          <div className={`text-sm font-medium truncate mb-1 ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+            {title}
+          </div>
+          <div className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            {agent.metrics?.totalCost !== undefined && <span>{formatCost(agent.metrics.totalCost)}</span>}
+            {agent.metrics?.totalCost !== undefined && <span>•</span>}
+            <span className="flex items-center gap-1">
+              <FaRobot className="h-3 w-3" />
+              <FaRobot className="h-3 w-3 -ml-1.5" />
+              Multi-Agent ({workers.length} workers)
+            </span>
+          </div>
         </div>
-        <div className={`text-sm font-medium truncate mb-1 ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
-          {title}
-        </div>
-        <div className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-          {agent.metrics?.totalCost !== undefined && <span>{formatCost(agent.metrics.totalCost)}</span>}
-          {agent.metrics?.totalCost !== undefined && <span>•</span>}
-          <span className="flex items-center gap-1">
-            <FaRobot className="h-3 w-3" />
-            <FaRobot className="h-3 w-3 -ml-1.5" />
-            Multi-Agent ({workers.length} workers)
-          </span>
-        </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${
+            isDarkMode
+              ? 'bg-slate-900/80 text-slate-400 hover:text-red-400'
+              : 'bg-white/80 text-gray-400 hover:text-red-500'
+          }`}
+          title="Delete workflow">
+          <FiTrash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }

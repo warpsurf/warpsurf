@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { FiSettings } from 'react-icons/fi';
+import { FiSettings, FiTrash2, FiSearch, FiX } from 'react-icons/fi';
 import { useAgentManagerConnection } from '@src/hooks/use-agent-manager-connection';
 import { AgentGallery } from '@src/components/AgentGallery';
 import { AgentInputBar } from '@src/components/AgentInputBar';
@@ -16,6 +16,8 @@ export default function AgentManager() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [autoContextEnabled, setAutoContextEnabled] = useState(false);
   const [autoContextTabIds, setAutoContextTabIds] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Privacy gate for auto-tab context
   const { promptAutoTabContextPrivacy, autoTabContextPrivacyModal } = useAutoTabContextPrivacyGate(isDarkMode);
@@ -105,6 +107,40 @@ export default function AgentManager() {
 
   const { agents, sendNewTask, openSidepanelToSession, isConnected } = useAgentManagerConnection();
 
+  // Filter agents by search query
+  const filteredAgents = useMemo(() => {
+    if (!searchQuery.trim()) return agents;
+    const q = searchQuery.toLowerCase();
+    return agents.filter(
+      agent => agent.sessionTitle?.toLowerCase().includes(q) || agent.taskDescription?.toLowerCase().includes(q),
+    );
+  }, [agents, searchQuery]);
+
+  // Delete all agents from storage
+  const handleDeleteAll = useCallback(async () => {
+    await chrome.storage.local.set({
+      agent_dashboard_running: [],
+      agent_dashboard_completed: [],
+    });
+    setShowDeleteConfirm(false);
+  }, []);
+
+  // Delete a specific agent from storage
+  const handleDeleteAgent = useCallback(async (agent: AgentData) => {
+    const [running, completed] = await Promise.all([
+      chrome.storage.local.get('agent_dashboard_running'),
+      chrome.storage.local.get('agent_dashboard_completed'),
+    ]);
+    await chrome.storage.local.set({
+      agent_dashboard_running: (running.agent_dashboard_running || []).filter(
+        (a: any) => a.sessionId !== agent.sessionId,
+      ),
+      agent_dashboard_completed: (completed.agent_dashboard_completed || []).filter(
+        (a: any) => a.sessionId !== agent.sessionId,
+      ),
+    });
+  }, []);
+
   // Categorize agents into Active, Recent, and Older
   const { activeAgents, recentAgents, olderAgents } = useMemo(() => {
     const now = Date.now();
@@ -112,7 +148,7 @@ export default function AgentManager() {
     const recent: AgentData[] = [];
     const older: AgentData[] = [];
 
-    for (const agent of agents) {
+    for (const agent of filteredAgents) {
       const isRunningStatus = ['running', 'paused', 'needs_input'].includes(agent.status);
       const lastActivity = agent.endTime || agent.startTime || 0;
       const isRecentlyActive = now - lastActivity < FIFTEEN_MINS_MS;
@@ -142,7 +178,7 @@ export default function AgentManager() {
     older.sort(sortByActivity);
 
     return { activeAgents: active, recentAgents: recent, olderAgents: older };
-  }, [agents]);
+  }, [filteredAgents]);
 
   const handleSendMessage = useCallback(
     async (text: string, agentType?: string, contextTabIds?: number[]) => {
@@ -173,13 +209,47 @@ export default function AgentManager() {
           <h1 className="text-xl font-semibold">Agent Manager</h1>
           {!isConnected && <span className="text-xs text-amber-500 ml-2">Connecting...</span>}
         </div>
-        <button
-          onClick={openSettings}
-          className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
-          title="Settings">
-          <FiSettings className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-red-400' : 'hover:bg-gray-100 text-gray-500 hover:text-red-500'}`}
+            title="Delete all workflows">
+            <FiTrash2 className="h-5 w-5" />
+          </button>
+          <button
+            onClick={openSettings}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+            title="Settings">
+            <FiSettings className="h-5 w-5" />
+          </button>
+        </div>
       </header>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className={`rounded-xl p-6 max-w-sm mx-4 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              Delete All Workflows?
+            </h3>
+            <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+              This will remove all workflow history. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white">
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Input bar */}
       <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
@@ -193,6 +263,28 @@ export default function AgentManager() {
         />
       </div>
 
+      {/* Search bar */}
+      <div className={`px-6 py-3 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+        <div
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'}`}>
+          <FiSearch className={`h-4 w-4 flex-shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`} />
+          <input
+            type="text"
+            placeholder="Search workflows..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className={`flex-1 bg-transparent outline-none text-sm ${isDarkMode ? 'text-slate-200 placeholder-slate-500' : 'text-gray-700 placeholder-gray-400'}`}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className={`p-0.5 rounded ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-400'}`}>
+              <FiX className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Gallery */}
       <main className="flex-1 overflow-y-auto p-6">
         <AgentGallery
@@ -201,6 +293,8 @@ export default function AgentManager() {
           olderAgents={olderAgents}
           isDarkMode={isDarkMode}
           onSelectAgent={handleSelectAgent}
+          onDeleteAgent={handleDeleteAgent}
+          searchQuery={searchQuery}
         />
       </main>
 

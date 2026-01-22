@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { FaBrain, FaSearch, FaRobot } from 'react-icons/fa';
+import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import type { AgentData } from '@src/types';
 
@@ -7,6 +8,7 @@ interface CompactAgentRowProps {
   agent: AgentData;
   isDarkMode: boolean;
   onClick: () => void;
+  onDelete?: () => void;
 }
 
 const agentTypeIcons: Record<string, typeof FaBrain> = {
@@ -29,7 +31,7 @@ function formatCost(cost?: number): string {
   return `$${cost.toFixed(3)}`;
 }
 
-export function CompactAgentRow({ agent, isDarkMode, onClick }: CompactAgentRowProps) {
+export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: CompactAgentRowProps) {
   const Icon = agentTypeIcons[agent.agentType] || FaRobot;
 
   const title = useMemo(() => {
@@ -49,48 +51,66 @@ export function CompactAgentRow({ agent, isDarkMode, onClick }: CompactAgentRowP
   const timeDisplay = agent.endTime ? formatTimeSince(agent.endTime) : formatTimeSince(agent.startTime);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left rounded-lg border p-3 transition-all hover:scale-[1.01] ${
+    <div
+      className={`group relative w-full text-left rounded-lg border p-3 transition-all hover:scale-[1.01] ${
         isDarkMode
           ? 'border-slate-700 bg-slate-800/40 hover:bg-slate-800/70'
           : 'border-gray-200 bg-white hover:bg-gray-50'
       }`}>
-      <div className="flex items-center gap-3">
-        {/* Icon */}
-        <div className={`flex-shrink-0 p-2 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`}>
-          {agent.agentType === 'multiagent' ? (
-            <div className="relative">
-              <FaRobot className="h-4 w-4" />
-              <FaRobot className="h-4 w-4 absolute -right-1 -bottom-1 opacity-60" />
-            </div>
-          ) : (
-            <Icon className="h-4 w-4" />
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-sm font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
-              {title}
-            </span>
-            <StatusBadge status={agent.status} isDarkMode={isDarkMode} compact />
+      <button type="button" onClick={onClick} className="w-full text-left">
+        <div className="flex items-center gap-3">
+          {/* Icon */}
+          <div className={`flex-shrink-0 p-2 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`}>
+            {agent.agentType === 'multiagent' ? (
+              <div className="relative">
+                <FaRobot className="h-4 w-4" />
+                <FaRobot className="h-4 w-4 absolute -right-1 -bottom-1 opacity-60" />
+              </div>
+            ) : (
+              <Icon className="h-4 w-4" />
+            )}
           </div>
-          {snippet && (
-            <p className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{snippet}</p>
-          )}
-        </div>
 
-        {/* Meta */}
-        <div className={`flex-shrink-0 text-right text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-          <div>{timeDisplay}</div>
-          {agent.metrics?.totalCost !== undefined && (
-            <div className="mt-0.5">{formatCost(agent.metrics.totalCost)}</div>
-          )}
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className={`text-sm font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+                {title}
+              </span>
+              <StatusBadge status={agent.status} isDarkMode={isDarkMode} compact />
+            </div>
+            {snippet && (
+              <p className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{snippet}</p>
+            )}
+          </div>
+
+          {/* Meta */}
+          <div className={`flex-shrink-0 text-right text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            <div>{timeDisplay}</div>
+            {agent.metrics?.totalCost !== undefined && (
+              <div className="mt-0.5">{formatCost(agent.metrics.totalCost)}</div>
+            )}
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${
+            isDarkMode
+              ? 'bg-slate-900/80 text-slate-400 hover:text-red-400'
+              : 'bg-white/80 text-gray-400 hover:text-red-500'
+          }`}
+          title="Delete workflow">
+          <FiTrash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }
