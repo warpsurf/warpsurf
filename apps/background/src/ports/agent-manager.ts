@@ -38,8 +38,14 @@ interface AgentData {
 }
 
 function taskToAgentData(task: Task, mirrors: any[]): AgentData {
-  // Find mirror for this task
-  const mirror = mirrors.find(m => m.agentId === task.id || m.tabId === task.tabId);
+  // Find all mirrors for this task, then pick the most recently updated one
+  const taskMirrors = mirrors.filter(m => m.agentId === task.id || m.tabId === task.tabId);
+  const mirror =
+    taskMirrors.length > 0
+      ? taskMirrors.reduce((latest, current) =>
+          (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
+        )
+      : undefined;
 
   // Map task status to agent status
   let status = task.status;
@@ -110,7 +116,16 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
       const workers = tasks
         .filter(t => t.workerIndex !== undefined || tasks.length > 1)
         .map(t => {
-          const m = sessionMirrors.find((mirror: any) => mirror.agentId === t.id || mirror.tabId === t.tabId);
+          // Find all mirrors for this worker, pick most recently updated
+          const workerMirrors = sessionMirrors.filter(
+            (mirror: any) => mirror.agentId === t.id || mirror.tabId === t.tabId,
+          );
+          const m =
+            workerMirrors.length > 0
+              ? workerMirrors.reduce((latest: any, current: any) =>
+                  (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
+                )
+              : undefined;
           return {
             workerId: t.id,
             workerIndex: t.workerIndex || 0,
@@ -156,6 +171,20 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
       const mirrors = taskManager.getAllMirrors();
       const agents = groupBySession(tasks, mirrors);
 
+      // Add cached screenshots for completed agents that don't have live preview
+      for (const agent of agents) {
+        if (!agent.preview?.screenshot) {
+          const cached = taskManager.tabMirrorService.getCachedScreenshot(agent.sessionId);
+          if (cached) {
+            agent.preview = {
+              screenshot: cached.screenshot,
+              url: cached.url,
+              title: cached.title,
+            };
+          }
+        }
+      }
+
       // Also include data from storage for completed agents
       chrome.storage.local.get(['agent_dashboard_running', 'agent_dashboard_completed'], result => {
         const storedRunning = (result.agent_dashboard_running || []) as any[];
@@ -166,6 +195,8 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
 
         for (const stored of [...storedRunning, ...storedCompleted]) {
           if (!liveSessionIds.has(stored.sessionId)) {
+            // Check for cached screenshot for this stored agent
+            const cached = taskManager.tabMirrorService.getCachedScreenshot(stored.sessionId);
             agents.push({
               sessionId: stored.sessionId,
               sessionTitle: stored.sessionTitle || stored.taskDescription,
@@ -174,6 +205,13 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
               endTime: stored.endTime,
               agentType: stored.agentType || 'agent',
               status: stored.status,
+              preview: cached
+                ? {
+                    screenshot: cached.screenshot,
+                    url: cached.url,
+                    title: cached.title,
+                  }
+                : undefined,
               metrics: {
                 totalCost: stored.totalCost || stored.cost,
                 totalLatencyMs: stored.totalLatencyMs || stored.latencyMs,

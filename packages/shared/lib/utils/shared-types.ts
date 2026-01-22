@@ -1,5 +1,16 @@
 export type ValueOf<T> = T[keyof T];
 
+/**
+ * Time constants for agent activity categorization
+ * Used by Agent Manager to categorize agents and by TabMirrorService for preview pruning
+ */
+export const AGENT_ACTIVITY_THRESHOLDS = {
+  /** Sessions active within this time are considered "Active" */
+  ACTIVE_MS: 15 * 60 * 1000, // 15 minutes
+  /** Sessions active within this time are considered "Recent" */
+  RECENT_MS: 24 * 60 * 60 * 1000, // 24 hours (1 day)
+} as const;
+
 export enum EventType {
   EXECUTION = 'execution',
 }

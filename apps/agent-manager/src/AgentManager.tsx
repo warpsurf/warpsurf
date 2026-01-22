@@ -7,10 +7,7 @@ import { useAutoTabContextPrivacyGate } from '@src/hooks/use-auto-tab-context-pr
 import { generalSettingsStore, warningsSettingsStore } from '@extension/storage';
 import type { AgentData } from '@src/types';
 import logoImage from '/warpsurflogo.png';
-
-// Time constants
-const FIFTEEN_MINS_MS = 15 * 60 * 1000;
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+import { AGENT_ACTIVITY_THRESHOLDS } from '@extension/shared/lib/utils';
 
 export default function AgentManager() {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -139,6 +136,10 @@ export default function AgentManager() {
         (a: any) => a.sessionId !== agent.sessionId,
       ),
     });
+    // Also remove persisted preview cache for this session
+    try {
+      await chrome.storage.local.remove(`preview_cache_${agent.sessionId}`);
+    } catch {}
   }, []);
 
   // Categorize agents into Active, Recent, and Older
@@ -151,10 +152,10 @@ export default function AgentManager() {
     for (const agent of filteredAgents) {
       const isRunningStatus = ['running', 'paused', 'needs_input'].includes(agent.status);
       const lastActivity = agent.endTime || agent.startTime || 0;
-      const isRecentlyActive = now - lastActivity < FIFTEEN_MINS_MS;
-      const isWithinDay = now - lastActivity < ONE_DAY_MS;
+      const isRecentlyActive = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS;
+      const isWithinDay = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.RECENT_MS;
 
-      // Active: running status OR was active within last 15 minutes
+      // Active: running status OR was active within AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS
       if (isRunningStatus || isRecentlyActive) {
         active.push(agent);
       } else if (isWithinDay) {

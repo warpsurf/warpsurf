@@ -4,6 +4,7 @@ import {
   safeClearInterval,
   safeDebuggerDetach,
   isDebuggerAttached,
+  AGENT_ACTIVITY_THRESHOLDS,
 } from '@extension/shared/lib/utils';
 import { tabExists } from '../utils';
 
@@ -35,10 +36,108 @@ export class TabMirrorService {
   private sessionToTabs: Map<string, Set<number>> = new Map();
   private tabWorkerIndex: Map<number, number> = new Map();
   private tabColor: Map<number, string> = new Map();
+  // In-memory cache for last screenshots when sessions complete (for Agent Manager display)
+  private cachedSessionScreenshots: Map<
+    string,
+    { screenshot: string; url?: string; title?: string; timestamp: number }
+  > = new Map();
+  private static readonly MAX_CACHED_SCREENSHOTS = 50;
+  private static readonly PREVIEW_STORAGE_PREFIX = 'preview_cache_';
+  private static readonly LOW_RES_WIDTH = 200; // Low-res preview width in pixels
 
   constructor() {
     chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
     chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this));
+    // Load persisted previews into memory cache on startup, then prune old ones
+    this.loadPersistedPreviews().then(() => this.pruneInactivePreviews());
+  }
+
+  /**
+   * Load persisted previews from storage into memory cache
+   */
+  private async loadPersistedPreviews() {
+    try {
+      const result = await chrome.storage.local.get(null);
+      for (const [key, value] of Object.entries(result)) {
+        if (key.startsWith(TabMirrorService.PREVIEW_STORAGE_PREFIX) && value) {
+          const sessionId = key.slice(TabMirrorService.PREVIEW_STORAGE_PREFIX.length);
+          const data = value as { screenshot: string; url?: string; title?: string; timestamp: number };
+          if (data.screenshot) {
+            this.cachedSessionScreenshots.set(sessionId, data);
+          }
+        }
+      }
+      logger.info(`[TabMirror] Loaded ${this.cachedSessionScreenshots.size} persisted previews`);
+    } catch (e) {
+      logger.error('[TabMirror] Failed to load persisted previews:', e);
+    }
+  }
+
+  /**
+   * Prune previews for sessions that are no longer active (based on AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS)
+   * Also removes from persistent storage
+   */
+  async pruneInactivePreviews() {
+    try {
+      const now = Date.now();
+      const toRemove: string[] = [];
+
+      for (const [sessionId, data] of this.cachedSessionScreenshots) {
+        const age = now - (data.timestamp || 0);
+        if (age > AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS) {
+          toRemove.push(sessionId);
+        }
+      }
+
+      if (toRemove.length > 0) {
+        logger.info(`[TabMirror] Pruning ${toRemove.length} inactive previews`);
+        for (const sessionId of toRemove) {
+          this.cachedSessionScreenshots.delete(sessionId);
+          await this.removePersistedPreview(sessionId);
+        }
+      }
+    } catch (e) {
+      logger.error('[TabMirror] Failed to prune inactive previews:', e);
+    }
+  }
+
+  /**
+   * Resize a base64 screenshot to low resolution for storage
+   */
+  private async resizeScreenshot(base64Screenshot: string, targetWidth: number): Promise<string> {
+    try {
+      // Fetch the base64 image and create a bitmap
+      const response = await fetch(base64Screenshot);
+      const blob = await response.blob();
+      const bitmap = await createImageBitmap(blob);
+
+      const aspectRatio = bitmap.height / bitmap.width;
+      const targetHeight = Math.round(targetWidth * aspectRatio);
+
+      // Use OffscreenCanvas for resizing in service worker
+      const canvas = new OffscreenCanvas(targetWidth, targetHeight);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        bitmap.close();
+        return base64Screenshot; // Fallback to original if canvas fails
+      }
+
+      ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+      bitmap.close();
+
+      // Convert to blob then to base64 using arrayBuffer
+      const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+      const arrayBuffer = await resizedBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i]);
+      }
+      return 'data:image/jpeg;base64,' + btoa(binary);
+    } catch (e) {
+      logger.error('[TabMirror] Failed to resize screenshot:', e);
+      return base64Screenshot; // Return original on error
+    }
   }
 
   setDashboardPort(port: chrome.runtime.Port | undefined) {
@@ -64,6 +163,8 @@ export class TabMirrorService {
     this.agentManagerPort = port;
 
     if (port) {
+      // Prune inactive previews when Agent Manager connects
+      this.pruneInactivePreviews();
       // Send initial data
       this.sendPreviewsToAgentManager();
       // Send at 1 FPS (1000ms) to agent manager - slower than dashboard's 3 FPS
@@ -235,9 +336,121 @@ export class TabMirrorService {
   freezeMirrorsForSession(sessionId: string) {
     const set = this.sessionToTabs.get(sessionId);
     if (!set || set.size === 0) return;
+
+    // Find the most recently updated mirror with a screenshot
+    let bestMirror: TabMirrorData | undefined;
+    for (const tabId of Array.from(set)) {
+      const mirror = this.currentMirrors.get(tabId);
+      if (mirror?.screenshot) {
+        if (!bestMirror || (mirror.lastUpdated || 0) > (bestMirror.lastUpdated || 0)) {
+          bestMirror = mirror;
+        }
+      }
+    }
+
+    // Cache the best screenshot before freezing
+    if (bestMirror?.screenshot) {
+      this.cacheSessionScreenshot(sessionId, bestMirror.screenshot, bestMirror.url, bestMirror.title);
+    }
+
     for (const tabId of Array.from(set)) {
       this.freezeMirroring(tabId);
     }
+  }
+
+  /**
+   * Cache a screenshot for a completed session (for Agent Manager display)
+   * Also persists a low-res version to chrome.storage.local
+   */
+  private async cacheSessionScreenshot(sessionId: string, screenshot: string, url?: string, title?: string) {
+    const timestamp = Date.now();
+
+    // Prune inactive previews and enforce max count
+    const now = Date.now();
+    const toRemove: string[] = [];
+
+    for (const [sid, data] of this.cachedSessionScreenshots) {
+      const age = now - (data.timestamp || 0);
+      if (age > AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS) {
+        toRemove.push(sid);
+      }
+    }
+
+    // Also prune if exceeding max count (remove oldest)
+    if (this.cachedSessionScreenshots.size - toRemove.length >= TabMirrorService.MAX_CACHED_SCREENSHOTS) {
+      const entries = Array.from(this.cachedSessionScreenshots.entries())
+        .filter(([sid]) => !toRemove.includes(sid))
+        .sort((a, b) => a[1].timestamp - b[1].timestamp);
+      const extraToRemove = entries.slice(0, 10).map(([sid]) => sid);
+      toRemove.push(...extraToRemove);
+    }
+
+    // Remove all marked entries
+    for (const sid of toRemove) {
+      this.cachedSessionScreenshots.delete(sid);
+      this.removePersistedPreview(sid);
+    }
+
+    // Store full-res in memory cache
+    this.cachedSessionScreenshots.set(sessionId, { screenshot, url, title, timestamp });
+
+    // Persist low-res version to storage
+    this.persistPreview(sessionId, screenshot, url, title, timestamp);
+  }
+
+  /**
+   * Persist a low-res preview to chrome.storage.local
+   */
+  private async persistPreview(
+    sessionId: string,
+    screenshot: string,
+    url?: string,
+    title?: string,
+    timestamp?: number,
+  ) {
+    try {
+      // Resize to low-res for storage
+      const lowResScreenshot = await this.resizeScreenshot(screenshot, TabMirrorService.LOW_RES_WIDTH);
+      const storageKey = TabMirrorService.PREVIEW_STORAGE_PREFIX + sessionId;
+      await chrome.storage.local.set({
+        [storageKey]: {
+          screenshot: lowResScreenshot,
+          url,
+          title,
+          timestamp: timestamp || Date.now(),
+        },
+      });
+    } catch (e) {
+      logger.error('[TabMirror] Failed to persist preview:', e);
+    }
+  }
+
+  /**
+   * Remove a persisted preview from storage
+   */
+  private async removePersistedPreview(sessionId: string) {
+    try {
+      const storageKey = TabMirrorService.PREVIEW_STORAGE_PREFIX + sessionId;
+      await chrome.storage.local.remove(storageKey);
+    } catch (e) {
+      logger.error('[TabMirror] Failed to remove persisted preview:', e);
+    }
+  }
+
+  /**
+   * Get cached screenshot for a completed session
+   */
+  getCachedScreenshot(sessionId: string): { screenshot: string; url?: string; title?: string } | undefined {
+    return this.cachedSessionScreenshots.get(sessionId);
+  }
+
+  /**
+   * Clear cached screenshot for a session (e.g., when deleted)
+   * Also removes from persistent storage
+   */
+  clearCachedScreenshot(sessionId: string) {
+    this.cachedSessionScreenshots.delete(sessionId);
+    this.removePersistedPreview(sessionId);
   }
 
   getCurrentMirrors(): TabMirrorData[] {
