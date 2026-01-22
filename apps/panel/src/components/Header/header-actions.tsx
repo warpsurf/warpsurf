@@ -68,10 +68,10 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
     setMoreMenuOpen,
   } = useHeaderOverflow({ pauseRecalculation: pauseMenusOpen });
 
-  const vCount = Math.max(0, Math.min(7, props.visibleActionsCountOverride ?? visibleActionsCount));
+  const vCount = Math.max(0, Math.min(6, props.visibleActionsCountOverride ?? visibleActionsCount));
 
-  type ActionKey = 'newChat' | 'history' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings';
-  const actionOrder: ActionKey[] = ['settings', 'newChat', 'history', 'dashboard', 'agentSettings', 'feedback', 'fish'];
+  type ActionKey = 'newChat' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings';
+  const actionOrder: ActionKey[] = ['settings', 'newChat', 'dashboard', 'agentSettings', 'feedback', 'fish'];
   const hiddenKeys: ActionKey[] = actionOrder.slice(vCount);
 
   useEffect(() => {
@@ -119,13 +119,6 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
             type="button"
             className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
             New Chat
-          </button>
-        </div>
-        <div ref={setMeasureRef('history')} className="inline-flex flex-shrink-0">
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium ${props.isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-            Previous Chats
           </button>
         </div>
         <div ref={setMeasureRef('dashboard')} className="inline-flex flex-shrink-0">
@@ -187,24 +180,11 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
         </button>
       </div>
 
-      {/* Previous Chats */}
-      <div
-        ref={setActionRef('history')}
-        className="inline-flex flex-shrink-0"
-        style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
-        <button
-          type="button"
-          onClick={props.onLoadHistory}
-          className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
-          Previous Chats
-        </button>
-      </div>
-
       {/* Agent Dashboard */}
       <div
         ref={setActionRef('dashboard')}
         className="inline-flex flex-shrink-0"
-        style={{ display: vCount >= 4 ? 'inline-flex' : 'none' }}>
+        style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
         <button
           type="button"
           onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('agent-manager/index.html') })}
@@ -222,7 +202,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('agentSettings')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 5 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 4 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -386,7 +366,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('feedback')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 6 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 5 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -412,7 +392,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('fish')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 7 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 6 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -479,7 +459,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       </div>
 
       {/* More menu trigger and menu stub (items still rendered in SidePanel for now) */}
-      {vCount < 7 && (
+      {vCount < 6 && (
         <div ref={moreMenuRef} className="relative flex-shrink-0 group" data-dropdown>
           <button
             type="button"
@@ -519,17 +499,6 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                   }}
                   className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>
                   New Chat
-                </button>
-              )}
-              {hiddenKeys.includes('history') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.onLoadHistory();
-                    setMoreMenuOpen(false);
-                  }}
-                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center rounded px-3 py-2`}>
-                  Previous Chats
                 </button>
               )}
               {hiddenKeys.includes('dashboard') && (
