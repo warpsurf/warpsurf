@@ -126,6 +126,22 @@ export function useEventSetup(params: {
     (newMessage: Message, sessionId?: string | null) => {
       const isProgressMessage =
         newMessage.content === 'Showing progress...' || newMessage.content === 'Estimating workflow...';
+
+      // Defense-in-depth: verify session matches before adding to UI
+      // If sessionId is explicitly provided and doesn't match current session, skip UI update
+      const currentSession = sessionIdRef.current;
+      if (sessionId !== undefined && sessionId !== null && currentSession) {
+        if (String(sessionId) !== String(currentSession)) {
+          // Message is for a different session - only persist, don't add to UI
+          if (!isProgressMessage && !incognitoMode) {
+            chatHistoryStore
+              .addMessage(sessionId, newMessage)
+              .catch(err => logger.error('Failed to save message to other session:', err));
+          }
+          return;
+        }
+      }
+
       setMessages((prev: Message[]) => {
         const filtered = prev.filter((msg, idx) => !(msg.content === 'Showing progress...' && idx === prev.length - 1));
         const last = filtered[filtered.length - 1];
