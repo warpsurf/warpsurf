@@ -227,12 +227,33 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         } else if (message && message.type === 'tabs-closed') {
           handlersRef.current.onTabsClosed?.(message);
         } else if (message && message.type === 'tab-mirror-update') {
+          // Filter mirror updates to only show for current session
+          const mirrorSessionId = message?.data?.sessionId;
+          if (mirrorSessionId && sessionIdRef.current && String(mirrorSessionId) !== String(sessionIdRef.current)) {
+            // Skip mirror updates for other sessions
+            return;
+          }
+          // Skip mirror updates for cancelled sessions
+          if (mirrorSessionId && cancelledSessionsRef.current.has(String(mirrorSessionId))) {
+            return;
+          }
           // Ensure Close Tabs is visible when we have a mirror for the current session
           try {
             (handlersRef.current as any)?.setShowCloseTabs?.(true);
           } catch {}
           handlersRef.current.onTabMirrorUpdate?.(message);
         } else if (message && message.type === 'tab-mirror-batch') {
+          // Filter batch to only include mirrors for current session
+          if (message?.data && Array.isArray(message.data) && sessionIdRef.current) {
+            const filtered = message.data.filter((m: any) => {
+              const sid = m?.sessionId;
+              // Skip mirrors without sessionId (can't verify they belong to current session)
+              if (!sid) return false;
+              if (cancelledSessionsRef.current.has(String(sid))) return false;
+              return String(sid) === String(sessionIdRef.current);
+            });
+            message = { ...message, data: filtered };
+          }
           handlersRef.current.onTabMirrorBatch?.(message);
         } else if (message && message.type === 'tab-mirror-batch-for-cleanup') {
           handlersRef.current.onTabMirrorBatchForCleanup?.(message);
@@ -250,6 +271,24 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           handlersRef.current.onRestoreActiveSession?.(message.data || {});
         } else if (message && message.type === 'restore_view_state') {
           handlersRef.current.onRestoreViewState?.(message.data || {});
+        } else if (message && message.type === 'buffered_session_events') {
+          // Process buffered events for a subscribed session
+          const events = message.events || [];
+          for (const event of events) {
+            if (event.type === 'execution' || event.type === EventType.EXECUTION) {
+              const normalized: any = {
+                type: EventType.EXECUTION,
+                actor: event.actor || event?.data?.actor || Actors.SYSTEM,
+                state: event.state || event?.data?.state,
+                data: event.data || {},
+                timestamp: event.timestamp || Date.now(),
+              };
+              handlersRef.current.onExecution?.(normalized as AgentEvent);
+            }
+          }
+        } else if (message && message.type === 'session_subscribed') {
+          // Session subscription confirmed - could trigger UI update if needed
+          logger.log('[Panel] Subscribed to session:', message.sessionId);
         } else if (message && message.type === 'heartbeat_ack') {
           // ignore
         }

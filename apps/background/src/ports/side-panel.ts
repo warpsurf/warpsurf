@@ -1034,6 +1034,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           try {
             logger.info('[KILLSWITCH] Received kill_all command');
             const { handleKillAll } = await import('../killswitch/handler');
+            // Get agent manager port for refresh notification
+            const agentManagerPort = (taskManager as any)?.tabMirrorService?.getAgentManagerPort?.();
             await handleKillAll({
               port,
               logger,
@@ -1044,6 +1046,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               setCurrentExecutor,
               setCurrentWorkflow,
               eventBuffer,
+              agentManagerPort,
             });
           } catch (e) {
             logger.error('[KILLSWITCH] Handler failed:', e instanceof Error ? e.message : String(e));
@@ -1090,6 +1093,55 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             safePostMessage(port, {
               type: 'error',
               error: e instanceof Error ? e.message : 'Failed to set visibility',
+            });
+            return;
+          }
+        }
+        case 'subscribe_to_session': {
+          // When sidepanel navigates to a session, send any buffered events and mirrors for that session
+          try {
+            const { sessionId } = message;
+            if (!sessionId) {
+              safePostMessage(port, { type: 'error', error: 'No session ID provided' });
+              return;
+            }
+            logger.info(`[SidePanel] Subscribing to session ${sessionId}`);
+
+            // Send buffered events for this session
+            const sessionEvents = eventBuffer.filter((e: any) => {
+              const eventSessionId = e?.data?.sessionId || e?.data?.taskId || e?.data?.parentSessionId;
+              return eventSessionId && String(eventSessionId) === String(sessionId);
+            });
+            if (sessionEvents.length > 0) {
+              safePostMessage(port, {
+                type: 'buffered_session_events',
+                sessionId,
+                events: sessionEvents,
+              });
+            }
+
+            // Send current mirrors for this session
+            try {
+              const allMirrors = taskManager.getAllMirrors?.() || [];
+              const sessionMirrors = allMirrors.filter((m: any) => {
+                const mirrorSessionId = m?.sessionId || m?.agentId;
+                return mirrorSessionId && String(mirrorSessionId) === String(sessionId);
+              });
+              if (sessionMirrors.length > 0) {
+                safePostMessage(port, {
+                  type: 'tab-mirror-batch',
+                  data: sessionMirrors.map((m: any) => ({ ...m, sessionId })),
+                });
+              }
+            } catch {}
+
+            safePostMessage(port, { type: 'session_subscribed', sessionId });
+            return;
+          } catch (e) {
+            logger.error('[SidePanel] subscribe_to_session failed:', e);
+            safePostMessage(port, {
+              type: 'error',
+              error: e instanceof Error ? e.message : 'Failed to subscribe to session',
             });
             return;
           }
