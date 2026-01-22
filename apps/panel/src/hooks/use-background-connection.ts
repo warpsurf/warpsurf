@@ -113,29 +113,37 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           // Discard foreign events for other sessions, but NEVER drop terminal events
           try {
             const d: any = (message as any)?.data || {};
-            const incomingTaskId = d?.taskId || d?.workerId || d?.parentSessionId || d?.sessionId;
+            // Collect ALL possible session/task IDs from the event
+            const possibleIds = [d?.taskId, d?.workerId, d?.parentSessionId, d?.sessionId].filter(Boolean);
+            const primaryId = possibleIds[0]; // For storage/logging purposes
             const eventState = String((message as any)?.state || '').toLowerCase();
             const isTerminalEvent =
               eventState === 'task.ok' || eventState === 'task.fail' || eventState === 'task.cancel';
+
+            // Check if ANY of the event's IDs match the current session
+            // Rules:
+            // - If no current session AND event has no IDs → match (system-wide events in initial state)
+            // - If no current session AND event has IDs → no match (event is for a specific session we're not viewing)
+            // - If current session is set → only match if event has a matching ID
+            const sessionMatches =
+              (!sessionIdRef.current && possibleIds.length === 0) ||
+              (sessionIdRef.current && possibleIds.some(id => String(id) === String(sessionIdRef.current)));
+
             if (isTerminalEvent) {
               try {
-                if (
-                  !sessionIdRef.current ||
-                  !incomingTaskId ||
-                  String(incomingTaskId) === String(sessionIdRef.current)
-                ) {
+                if (sessionMatches) {
                   // If this is the current session, ensure any pending entry is cleared
                   chrome.storage.local.get('pending_terminal_events', res => {
                     const pending = res.pending_terminal_events || {};
-                    if (incomingTaskId && pending[incomingTaskId]) {
-                      delete pending[incomingTaskId];
+                    if (primaryId && pending[primaryId]) {
+                      delete pending[primaryId];
                       chrome.storage.local.set({ pending_terminal_events: pending });
                     }
                   });
                 } else {
                   chrome.storage.local.get('pending_terminal_events', res => {
                     const pending = res.pending_terminal_events || {};
-                    pending[String(incomingTaskId)] = {
+                    pending[String(primaryId)] = {
                       state: eventState,
                       data: d,
                       timestamp: (message as any)?.timestamp || Date.now(),
@@ -148,12 +156,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             }
             // Only filter non-terminal events - terminal events must always be processed
             // to ensure UI updates even if user switched sessions mid-task
-            if (
-              !isTerminalEvent &&
-              sessionIdRef.current &&
-              incomingTaskId &&
-              String(incomingTaskId) !== String(sessionIdRef.current)
-            ) {
+            if (!isTerminalEvent && !sessionMatches) {
               return;
             }
           } catch {}
@@ -227,14 +230,22 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
         } else if (message && message.type === 'tabs-closed') {
           handlersRef.current.onTabsClosed?.(message);
         } else if (message && message.type === 'tab-mirror-update') {
-          // Filter mirror updates to only show for current session
+          // Strict session filtering for mirror updates
           const mirrorSessionId = message?.data?.sessionId;
-          if (mirrorSessionId && sessionIdRef.current && String(mirrorSessionId) !== String(sessionIdRef.current)) {
-            // Skip mirror updates for other sessions
+          // If no current session, ignore all mirror updates (prevents cross-session leakage)
+          if (!sessionIdRef.current) {
+            return;
+          }
+          // If mirror has no sessionId, ignore it (can't verify ownership)
+          if (!mirrorSessionId) {
+            return;
+          }
+          // If session IDs don't match, ignore
+          if (String(mirrorSessionId) !== String(sessionIdRef.current)) {
             return;
           }
           // Skip mirror updates for cancelled sessions
-          if (mirrorSessionId && cancelledSessionsRef.current.has(String(mirrorSessionId))) {
+          if (cancelledSessionsRef.current.has(String(mirrorSessionId))) {
             return;
           }
           // Ensure Close Tabs is visible when we have a mirror for the current session
@@ -243,8 +254,12 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           } catch {}
           handlersRef.current.onTabMirrorUpdate?.(message);
         } else if (message && message.type === 'tab-mirror-batch') {
-          // Filter batch to only include mirrors for current session
-          if (message?.data && Array.isArray(message.data) && sessionIdRef.current) {
+          // Strict session filtering for mirror batches
+          // If no current session, ignore all batches
+          if (!sessionIdRef.current) {
+            return;
+          }
+          if (message?.data && Array.isArray(message.data)) {
             const filtered = message.data.filter((m: any) => {
               const sid = m?.sessionId;
               // Skip mirrors without sessionId (can't verify they belong to current session)
