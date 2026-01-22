@@ -38,14 +38,23 @@ interface AgentData {
 }
 
 function taskToAgentData(task: Task, mirrors: any[]): AgentData {
-  // Find all mirrors for this task, then pick the most recently updated one
-  const taskMirrors = mirrors.filter(m => m.agentId === task.id || m.tabId === task.tabId);
-  const mirror =
-    taskMirrors.length > 0
-      ? taskMirrors.reduce((latest, current) =>
-          (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
-        )
-      : undefined;
+  const taskSessionId = task.parentSessionId || task.id;
+  const isRunning = ['running', 'paused'].includes(task.status) || (task as any).isPaused;
+
+  // Only use mirrors for running tasks - completed tasks should use cached screenshots
+  // This prevents running agent's live preview from appearing in completed agents
+  let mirror: any = undefined;
+  if (isRunning) {
+    // For running tasks, find mirrors that explicitly match this session
+    // Use sessionId matching (most reliable), fall back to agentId matching
+    const taskMirrors = mirrors.filter(m => (m.sessionId && m.sessionId === taskSessionId) || m.agentId === task.id);
+    mirror =
+      taskMirrors.length > 0
+        ? taskMirrors.reduce((latest, current) =>
+            (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
+          )
+        : undefined;
+  }
 
   // Map task status to agent status
   let status = task.status;
@@ -59,7 +68,7 @@ function taskToAgentData(task: Task, mirrors: any[]): AgentData {
   }
 
   return {
-    sessionId: task.parentSessionId || task.id,
+    sessionId: taskSessionId,
     sessionTitle: task.name,
     taskDescription: task.prompt,
     startTime: task.startedAt || task.createdAt,
@@ -99,33 +108,42 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
     sessionMap.get(sessionId)!.tasks.push(task);
   }
 
-  // Group mirrors by session
+  // Group mirrors by session - ONLY use explicit sessionId to prevent cross-contamination
+  // Do NOT fall back to agentId as that could match mirrors to wrong sessions
   for (const mirror of mirrors) {
-    const sessionId = mirror.sessionId || mirror.agentId;
-    if (sessionMap.has(sessionId)) {
-      sessionMap.get(sessionId)!.mirrors.push(mirror);
+    // Only group mirrors that have an explicit sessionId set
+    if (mirror.sessionId && sessionMap.has(mirror.sessionId)) {
+      sessionMap.get(mirror.sessionId)!.mirrors.push(mirror);
     }
   }
 
   const result: AgentData[] = [];
 
   for (const [sessionId, { tasks, mirrors: sessionMirrors }] of sessionMap) {
+    // Check if any task in this session is running
+    const hasRunningTask = tasks.some(t => ['running', 'paused'].includes(t.status) || (t as any).isPaused);
+
     // If multiple workers, it's a multi-agent task
     if (tasks.length > 1 || tasks.some(t => t.workerIndex !== undefined)) {
       const primary = tasks.find(t => !t.workerIndex) || tasks[0];
+
+      // Only include worker previews if the session has running tasks
       const workers = tasks
         .filter(t => t.workerIndex !== undefined || tasks.length > 1)
         .map(t => {
-          // Find all mirrors for this worker, pick most recently updated
-          const workerMirrors = sessionMirrors.filter(
-            (mirror: any) => mirror.agentId === t.id || mirror.tabId === t.tabId,
-          );
-          const m =
-            workerMirrors.length > 0
-              ? workerMirrors.reduce((latest: any, current: any) =>
-                  (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
-                )
-              : undefined;
+          let m: any = undefined;
+          // Only assign live mirrors to running workers
+          const isWorkerRunning = ['running', 'paused'].includes(t.status) || (t as any).isPaused;
+          if (isWorkerRunning && hasRunningTask) {
+            // Find mirrors for this worker using agentId (task.id)
+            const workerMirrors = sessionMirrors.filter((mirror: any) => mirror.agentId === t.id);
+            m =
+              workerMirrors.length > 0
+                ? workerMirrors.reduce((latest: any, current: any) =>
+                    (current.lastUpdated || 0) > (latest.lastUpdated || 0) ? current : latest,
+                  )
+                : undefined;
+          }
           return {
             workerId: t.id,
             workerIndex: t.workerIndex || 0,
