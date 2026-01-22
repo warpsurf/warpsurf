@@ -34,13 +34,19 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
         }
 
         if (type === 'previews-update') {
-          // Update previews for existing agents
+          // Update previews for existing agents - only for agents that are actively running
           const previews = message.data || [];
           setAgents(prev =>
             prev.map(agent => {
-              // Find matching preview for this agent
+              // Only update previews for running agents to avoid showing running preview in completed agents
+              const isRunning = ['running', 'paused', 'needs_input'].includes(agent.status);
+              if (!isRunning) {
+                return agent; // Don't update preview for completed/failed/cancelled agents
+              }
+
+              // Find matching preview for this agent - only match on explicit sessionId
               const preview = previews.find(
-                (p: any) => p.sessionId === agent.sessionId || p.agentId === agent.sessionId,
+                (p: any) => p.sessionId && agent.sessionId && p.sessionId === agent.sessionId,
               );
               if (preview) {
                 if (agent.agentType === 'multiagent' && agent.workers) {
