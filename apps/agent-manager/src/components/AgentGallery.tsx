@@ -7,7 +7,7 @@ import type { AgentData } from '@src/types';
 interface AgentGalleryProps {
   activeAgents: AgentData[];
   recentAgents: AgentData[];
-  olderAgents: AgentData[];
+  moreAgents: AgentData[];
   isDarkMode: boolean;
   onSelectAgent: (agent: AgentData) => void;
   onDeleteAgent?: (agent: AgentData) => void;
@@ -74,13 +74,13 @@ function Section({ title, agents, isDarkMode, onSelectAgent, onDeleteAgent, show
 export function AgentGallery({
   activeAgents,
   recentAgents,
-  olderAgents,
+  moreAgents,
   isDarkMode,
   onSelectAgent,
   onDeleteAgent,
   searchQuery,
 }: AgentGalleryProps) {
-  const hasNoAgents = activeAgents.length === 0 && recentAgents.length === 0 && olderAgents.length === 0;
+  const hasNoAgents = activeAgents.length === 0 && recentAgents.length === 0 && moreAgents.length === 0;
 
   if (hasNoAgents) {
     return (
@@ -113,11 +113,11 @@ export function AgentGallery({
         isDarkMode={isDarkMode}
         onSelectAgent={onSelectAgent}
         onDeleteAgent={onDeleteAgent}
-        showPreview={false}
+        showPreview={true}
       />
       <Section
-        title="Older"
-        agents={olderAgents}
+        title="More"
+        agents={moreAgents}
         isDarkMode={isDarkMode}
         onSelectAgent={onSelectAgent}
         onDeleteAgent={onDeleteAgent}

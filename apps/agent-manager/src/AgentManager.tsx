@@ -142,26 +142,27 @@ export default function AgentManager() {
     } catch {}
   }, []);
 
-  // Categorize agents into Active, Recent, and Older
-  const { activeAgents, recentAgents, olderAgents } = useMemo(() => {
+  // Categorize agents into Active, Recent, and More
+  const { activeAgents, recentAgents, moreAgents } = useMemo(() => {
     const now = Date.now();
     const active: AgentData[] = [];
     const recent: AgentData[] = [];
-    const older: AgentData[] = [];
+    const more: AgentData[] = [];
 
     for (const agent of filteredAgents) {
       const isRunningStatus = ['running', 'paused', 'needs_input'].includes(agent.status);
-      const lastActivity = agent.endTime || agent.startTime || 0;
-      const isRecentlyActive = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS;
-      const isWithinDay = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.RECENT_MS;
+      const lastActivity = agent.preview?.lastUpdated || agent.endTime || agent.startTime || 0;
+      const isWithinRecentWindow = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS;
 
-      // Active: running status OR was active within AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS
-      if (isRunningStatus || isRecentlyActive) {
+      // Active: currently running status only
+      if (isRunningStatus) {
         active.push(agent);
-      } else if (isWithinDay) {
+      } else if (isWithinRecentWindow) {
+        // Recent: not running, but last activity within 15 minutes
         recent.push(agent);
       } else {
-        older.push(agent);
+        // More: everything else
+        more.push(agent);
       }
     }
 
@@ -169,16 +170,16 @@ export default function AgentManager() {
     const sortByActivity = (a: AgentData, b: AgentData) => {
       if (a.status === 'needs_input' && b.status !== 'needs_input') return -1;
       if (b.status === 'needs_input' && a.status !== 'needs_input') return 1;
-      const timeA = a.endTime || a.startTime || 0;
-      const timeB = b.endTime || b.startTime || 0;
+      const timeA = a.preview?.lastUpdated || a.endTime || a.startTime || 0;
+      const timeB = b.preview?.lastUpdated || b.endTime || b.startTime || 0;
       return timeB - timeA;
     };
 
     active.sort(sortByActivity);
     recent.sort(sortByActivity);
-    older.sort(sortByActivity);
+    more.sort(sortByActivity);
 
-    return { activeAgents: active, recentAgents: recent, olderAgents: older };
+    return { activeAgents: active, recentAgents: recent, moreAgents: more };
   }, [filteredAgents]);
 
   const handleSendMessage = useCallback(
@@ -291,7 +292,7 @@ export default function AgentManager() {
         <AgentGallery
           activeAgents={activeAgents}
           recentAgents={recentAgents}
-          olderAgents={olderAgents}
+          moreAgents={moreAgents}
           isDarkMode={isDarkMode}
           onSelectAgent={handleSelectAgent}
           onDeleteAgent={handleDeleteAgent}

@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { FaBrain, FaSearch, FaRobot } from 'react-icons/fa';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import type { AgentData } from '@src/types';
@@ -10,13 +9,6 @@ interface CompactAgentRowProps {
   onClick: () => void;
   onDelete?: () => void;
 }
-
-const agentTypeIcons: Record<string, typeof FaBrain> = {
-  chat: FaBrain,
-  search: FaSearch,
-  agent: FaRobot,
-  multiagent: FaRobot,
-};
 
 function formatTimeSince(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -32,8 +24,6 @@ function formatCost(cost?: number): string {
 }
 
 export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: CompactAgentRowProps) {
-  const Icon = agentTypeIcons[agent.agentType] || FaRobot;
-
   const title = useMemo(() => {
     if (agent.taskDescription?.trim()) return agent.taskDescription.trim();
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
@@ -48,7 +38,8 @@ export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: Compac
     return truncated.length < text.length ? `${truncated}...` : truncated;
   }, [agent.lastMessage, agent.taskDescription]);
 
-  const timeDisplay = agent.endTime ? formatTimeSince(agent.endTime) : formatTimeSince(agent.startTime);
+  // Time since last update: prefer preview.lastUpdated, then endTime, then startTime
+  const lastUpdateTime = agent.preview?.lastUpdated || agent.endTime || agent.startTime;
 
   return (
     <div
@@ -59,18 +50,6 @@ export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: Compac
       }`}>
       <button type="button" onClick={onClick} className="w-full text-left">
         <div className="flex items-center gap-3">
-          {/* Icon */}
-          <div className={`flex-shrink-0 p-2 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`}>
-            {agent.agentType === 'multiagent' ? (
-              <div className="relative">
-                <FaRobot className="h-4 w-4" />
-                <FaRobot className="h-4 w-4 absolute -right-1 -bottom-1 opacity-60" />
-              </div>
-            ) : (
-              <Icon className="h-4 w-4" />
-            )}
-          </div>
-
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
@@ -86,7 +65,7 @@ export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: Compac
 
           {/* Meta */}
           <div className={`flex-shrink-0 text-right text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-            <div>{timeDisplay}</div>
+            <div>{formatTimeSince(lastUpdateTime)}</div>
             {agent.metrics?.totalCost !== undefined && (
               <div className="mt-0.5">{formatCost(agent.metrics.totalCost)}</div>
             )}

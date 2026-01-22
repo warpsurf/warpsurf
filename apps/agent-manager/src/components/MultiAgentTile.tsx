@@ -19,13 +19,6 @@ function formatTimeSince(timestamp: number): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-function formatElapsed(startTime: number): string {
-  const seconds = Math.floor((Date.now() - startTime) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-}
-
 function formatCost(cost?: number): string {
   if (cost === undefined || cost === null) return '';
   return `$${cost.toFixed(3)}`;
@@ -62,6 +55,9 @@ export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAg
   // Determine grid layout based on worker count
   const gridCols = workers.length <= 2 ? 2 : workers.length <= 4 ? 2 : 3;
 
+  // Time since last update: prefer preview.lastUpdated, then endTime, then startTime
+  const lastUpdateTime = agent.preview?.lastUpdated || agent.endTime || agent.startTime;
+
   return (
     <div
       className={`group relative w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg ${
@@ -93,21 +89,17 @@ export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAg
           <div className="flex items-center justify-between mb-1">
             <StatusBadge status={agent.status} isDarkMode={isDarkMode} />
             <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-              {agent.endTime ? formatTimeSince(agent.endTime) : formatElapsed(agent.startTime)}
+              {formatTimeSince(lastUpdateTime)}
             </span>
           </div>
           <div className={`text-sm font-medium truncate mb-1 ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
             {title}
           </div>
-          <div className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-            {agent.metrics?.totalCost !== undefined && <span>{formatCost(agent.metrics.totalCost)}</span>}
-            {agent.metrics?.totalCost !== undefined && <span>•</span>}
-            <span className="flex items-center gap-1">
-              <FaRobot className="h-3 w-3" />
-              <FaRobot className="h-3 w-3 -ml-1.5" />
-              Multi-Agent ({workers.length} workers)
-            </span>
-          </div>
+          {agent.metrics?.totalCost !== undefined && (
+            <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+              {formatCost(agent.metrics.totalCost)}
+            </div>
+          )}
         </div>
       </button>
 
