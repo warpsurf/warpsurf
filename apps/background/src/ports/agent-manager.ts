@@ -47,6 +47,10 @@ function taskToAgentData(task: Task, mirrors: any[]): AgentData {
   if (task.status === 'running' && (task as any).isPaused) {
     status = 'needs_input';
   }
+  // Ensure cancelled/completed tasks are reflected properly
+  if (task.status === 'cancelled' || task.status === 'completed' || task.status === 'failed') {
+    status = task.status;
+  }
 
   return {
     sessionId: task.parentSessionId || task.id,

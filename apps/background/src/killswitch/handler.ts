@@ -22,6 +22,7 @@ export interface KillswitchDeps {
   setCurrentExecutor: (e: any | null) => void;
   setCurrentWorkflow: (wf: any | null) => void;
   eventBuffer?: any[];
+  agentManagerPort?: chrome.runtime.Port | null;
 }
 
 export interface KillswitchResult {
@@ -109,6 +110,13 @@ export async function handleKillAll(deps: KillswitchDeps): Promise<void> {
       taskManager.tabMirrorService?.freezeAllMirrors?.();
     } catch {}
 
+    // 8. Notify Agent Manager to refresh (if connected)
+    if (deps.agentManagerPort) {
+      try {
+        safePostMessage(deps.agentManagerPort, { type: 'refresh-required' });
+      } catch {}
+    }
+
     logger.info(
       `[KILLSWITCH] Complete. Killed: ${killedWorkflows} workflows, ${killedTasks} tasks, ${killedMirrors} mirrors`,
     );
@@ -150,6 +158,7 @@ async function killAllTasks(
 
   try {
     // Cancel all running and pending tasks
+    // Note: cancelTask() already sets task.status='cancelled' and task.completedAt
     const allTasks = taskManager.getAllTasks?.() || [];
     for (const task of allTasks) {
       if (task && (task.status === 'running' || task.status === 'pending')) {
@@ -157,7 +166,11 @@ async function killAllTasks(
           await taskManager.cancelTask(task.id);
           killedTasks++;
         } catch (e) {
+          // If cancelTask fails, manually mark as cancelled for UI consistency
+          task.status = 'cancelled';
+          task.completedAt = Date.now();
           logger.error(`[KILLSWITCH] Failed to cancel task ${task.id}:`, e);
+          killedTasks++; // Still count it as killed
         }
       }
     }

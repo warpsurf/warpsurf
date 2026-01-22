@@ -88,6 +88,10 @@ export class TabMirrorService {
     }
   }
 
+  getAgentManagerPort(): chrome.runtime.Port | undefined {
+    return this.agentManagerPort;
+  }
+
   setVisionEnabled(enabled: boolean) {
     this.visionEnabled = !!enabled;
   }

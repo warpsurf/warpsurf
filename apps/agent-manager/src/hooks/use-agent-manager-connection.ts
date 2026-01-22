@@ -28,6 +28,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
           setAgents(data);
         }
 
+        // Handle refresh request (e.g., after killswitch)
+        if (type === 'refresh-required') {
+          port.postMessage({ type: 'get-agents' });
+        }
+
         if (type === 'previews-update') {
           // Update previews for existing agents
           const previews = message.data || [];
