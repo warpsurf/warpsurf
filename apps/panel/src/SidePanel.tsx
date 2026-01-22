@@ -600,10 +600,16 @@ const SidePanel = () => {
 
   // Listen for navigate-to-session events from agent manager
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handler = async (e: Event) => {
       const sessionId = (e as CustomEvent).detail?.sessionId;
       if (sessionId) {
-        handleSessionSelect(sessionId);
+        const success = await handleSessionSelect(sessionId);
+        // If successfully navigated to a session, subscribe to its events
+        if (success && portRef.current?.name === 'side-panel-connection') {
+          try {
+            portRef.current.postMessage({ type: 'subscribe_to_session', sessionId });
+          } catch {}
+        }
       }
     };
     document.addEventListener('navigate-to-session', handler as EventListener);
@@ -612,12 +618,15 @@ const SidePanel = () => {
 
   // Listen for force-new-session events from agent manager
   useEffect(() => {
-    const handler = () => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
       // Clear current session to start fresh
-      handleNewChat();
+      // If preservePerChatAcceptance is true, don't reset the per-chat acceptance
+      // This allows auto-started tasks to proceed if user already accepted earlier
+      handleNewChat(detail.preservePerChatAcceptance);
     };
-    document.addEventListener('force-new-session', handler);
-    return () => document.removeEventListener('force-new-session', handler);
+    document.addEventListener('force-new-session', handler as EventListener);
+    return () => document.removeEventListener('force-new-session', handler as EventListener);
   }, [handleNewChat]);
 
   // Persist panel view state for restoration on reopen

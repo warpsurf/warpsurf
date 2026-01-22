@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { agentModelStore, generalSettingsStore, chatHistoryStore, secureProviderClient } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 
@@ -191,7 +191,17 @@ export function usePanelEffects(params: {
   }, [logger]);
 
   // Check for pending context menu actions (on mount and on storage change)
+  // Use ref to track firstRunAccepted for retry logic (avoids stale closure)
+  const firstRunAcceptedRef = useRef(firstRunAccepted);
   useEffect(() => {
+    firstRunAcceptedRef.current = firstRunAccepted;
+  }, [firstRunAccepted]);
+
+  useEffect(() => {
+    let retryCount = 0;
+    const MAX_RETRIES = 20; // 20 * 100ms = 2 seconds max wait
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
     const processPendingAction = async () => {
       try {
         const result = await chrome.storage.session.get('pendingAction');
@@ -209,7 +219,20 @@ export function usePanelEffects(params: {
             }
           | undefined;
         if (pendingAction) {
+          // For auto-start tasks, wait for disclaimer states to be loaded
+          // Use ref to get current value (avoids stale closure in retry)
+          if (pendingAction.autoStart && firstRunAcceptedRef.current === null) {
+            if (retryCount < MAX_RETRIES) {
+              retryCount++;
+              retryTimeout = setTimeout(processPendingAction, 100);
+              return;
+            }
+            // Max retries reached, proceed anyway
+            logger.error('Pending action: disclaimer states not loaded after max retries');
+          }
+
           await chrome.storage.session.remove('pendingAction');
+          retryCount = 0;
 
           // Handle error messages (e.g., restricted page errors) - blocks execution
           if (pendingAction.errorMessage) {
@@ -219,9 +242,14 @@ export function usePanelEffects(params: {
             return;
           }
 
-          // If forceNewSession, dispatch event to clear current session first
+          // If forceNewSession, dispatch event to clear current session
+          // Pass flag to preserve per-chat acceptance for auto-start tasks
           if (pendingAction.forceNewSession) {
-            document.dispatchEvent(new CustomEvent('force-new-session'));
+            document.dispatchEvent(
+              new CustomEvent('force-new-session', {
+                detail: { preservePerChatAcceptance: pendingAction.autoStart },
+              }),
+            );
             // Small delay to let the session clear
             await new Promise(r => setTimeout(r, 50));
           }
@@ -238,7 +266,6 @@ export function usePanelEffects(params: {
 
           if (pendingAction.autoStart && handleSendMessage) {
             // For auto-run (context menu actions), submit immediately without setting input/context in UI
-            // The context tabs are passed directly to handleSendMessage and don't need to persist
             const contextTabs =
               pendingAction.contextTabIds || (pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined);
             // Small delay to let UI update
@@ -273,6 +300,8 @@ export function usePanelEffects(params: {
     // Listen for new pending actions (when panel is already open)
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'session' && changes.pendingAction?.newValue) {
+        retryCount = 0;
+        if (retryTimeout) clearTimeout(retryTimeout);
         processPendingAction();
       }
     };
@@ -280,6 +309,7 @@ export function usePanelEffects(params: {
 
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
+      if (retryTimeout) clearTimeout(retryTimeout);
     };
   }, [logger, setInputTextRef, setSelectedAgentRef, setContextTabIdsRef, handleSendMessage, appendMessage]);
 

@@ -120,74 +120,80 @@ export function usePanelHandlers(params: {
   // Ref to hold the killswitch function for use in timeout callbacks (avoids circular dependency)
   const killSwitchFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  const handleNewChat = useCallback(() => {
-    try {
-      const prevSid = sessionIdRef.current;
-      if (prevSid && portRef.current?.name === 'side-panel-connection') {
-        portRef.current.postMessage({ type: 'stop_all_mirroring_for_session', sessionId: prevSid });
+  const handleNewChat = useCallback(
+    (preservePerChatAcceptance?: boolean) => {
+      try {
+        const prevSid = sessionIdRef.current;
+        if (prevSid && portRef.current?.name === 'side-panel-connection') {
+          portRef.current.postMessage({ type: 'stop_all_mirroring_for_session', sessionId: prevSid });
+        }
+      } catch {}
+      // Only reset per-chat acceptance if not preserving it (e.g., for auto-start tasks)
+      if (!preservePerChatAcceptance) {
+        resetPerChatAcceptance();
+        promptPerChatIfEnabled();
       }
-    } catch {}
-    resetPerChatAcceptance();
-    promptPerChatIfEnabled();
-    setMessages([]);
-    setCurrentSessionId(null);
-    setShowDashboard(false);
-    setForceChatView(false);
-    sessionIdRef.current = null;
-    setInputEnabled(true);
-    setShowStopButton(false);
-    setIsFollowUpMode(false);
-    setIsAgentModeActive(false);
-    setCurrentTaskAgentType(null);
-    setAgentTraceRootId(null);
-    agentTraceActiveRef.current = false;
-    setMessageMetadata({});
-    setShowCloseTabs(false);
-    setIsPaused(false);
-    setMirrorPreview(null);
-    setMirrorPreviewBatch([]);
-    setHasFirstPreview(false);
-    setSessionStats({
-      totalRequests: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalLatency: 0,
-      totalCost: 0,
-      avgLatencyPerRequest: 0,
-    });
-    setRequestSummaries({});
-    setIsHistoricalSession(false);
-    processedJobSummariesRef.current.clear();
-    lastAgentMessageRef.current = null;
-    // Note: Don't disconnect/reconnect here - it would trigger restore_active_session
-    // which would override the new chat state. Just keep the existing connection.
-  }, [
-    sessionIdRef,
-    agentTraceActiveRef,
-    processedJobSummariesRef,
-    lastAgentMessageRef,
-    resetPerChatAcceptance,
-    promptPerChatIfEnabled,
-    setMessages,
-    setCurrentSessionId,
-    setShowDashboard,
-    setForceChatView,
-    setInputEnabled,
-    setShowStopButton,
-    setIsFollowUpMode,
-    setIsAgentModeActive,
-    setCurrentTaskAgentType,
-    setAgentTraceRootId,
-    setMessageMetadata,
-    setShowCloseTabs,
-    setIsPaused,
-    setMirrorPreview,
-    setMirrorPreviewBatch,
-    setHasFirstPreview,
-    setSessionStats,
-    setRequestSummaries,
-    setIsHistoricalSession,
-  ]);
+      setMessages([]);
+      setCurrentSessionId(null);
+      setShowDashboard(false);
+      setForceChatView(false);
+      sessionIdRef.current = null;
+      setInputEnabled(true);
+      setShowStopButton(false);
+      setIsFollowUpMode(false);
+      setIsAgentModeActive(false);
+      setCurrentTaskAgentType(null);
+      setAgentTraceRootId(null);
+      agentTraceActiveRef.current = false;
+      setMessageMetadata({});
+      setShowCloseTabs(false);
+      setIsPaused(false);
+      setMirrorPreview(null);
+      setMirrorPreviewBatch([]);
+      setHasFirstPreview(false);
+      setSessionStats({
+        totalRequests: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalLatency: 0,
+        totalCost: 0,
+        avgLatencyPerRequest: 0,
+      });
+      setRequestSummaries({});
+      setIsHistoricalSession(false);
+      processedJobSummariesRef.current.clear();
+      lastAgentMessageRef.current = null;
+      // Note: Don't disconnect/reconnect here - it would trigger restore_active_session
+      // which would override the new chat state. Just keep the existing connection.
+    },
+    [
+      sessionIdRef,
+      agentTraceActiveRef,
+      processedJobSummariesRef,
+      lastAgentMessageRef,
+      resetPerChatAcceptance,
+      promptPerChatIfEnabled,
+      setMessages,
+      setCurrentSessionId,
+      setShowDashboard,
+      setForceChatView,
+      setInputEnabled,
+      setShowStopButton,
+      setIsFollowUpMode,
+      setIsAgentModeActive,
+      setCurrentTaskAgentType,
+      setAgentTraceRootId,
+      setMessageMetadata,
+      setShowCloseTabs,
+      setIsPaused,
+      setMirrorPreview,
+      setMirrorPreviewBatch,
+      setHasFirstPreview,
+      setSessionStats,
+      setRequestSummaries,
+      setIsHistoricalSession,
+    ],
+  );
 
   /**
    * handleStopTask: Confirmation-based cancellation with timeout escalation
@@ -398,9 +404,10 @@ export function usePanelHandlers(params: {
   );
 
   const handleSessionSelect = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string): Promise<boolean> => {
       const ok = await handleSessionSelectHook(sessionId);
       if (ok) setShowHistory(false);
+      return ok;
     },
     [handleSessionSelectHook, setShowHistory],
   );
