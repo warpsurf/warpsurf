@@ -345,17 +345,33 @@ export function usePanelEffects(params: {
   ]);
 
   // Per-chat disclaimer
+  // Skip showing disclaimer if there's a pending auto-start task (shortcut/omnibox/context menu)
   useEffect(() => {
-    try {
-      if (firstRunAccepted !== true) return;
-      if (promptedOnOpenRef.current) return;
-      const isStartingFresh = !sessionIdRef.current && !isFollowUpMode && !isHistoricalSession;
-      if (isStartingFresh && !disablePerChatWarnings) {
+    const checkAndShowDisclaimer = async () => {
+      try {
+        if (firstRunAccepted !== true) return;
+        if (promptedOnOpenRef.current) return;
+        const isStartingFresh = !sessionIdRef.current && !isFollowUpMode && !isHistoricalSession;
+        if (!isStartingFresh || disablePerChatWarnings) return;
+
+        // CRITICAL: Check for pending auto-start tasks before showing disclaimer
+        // This prevents the disclaimer from appearing when user triggers action via shortcut/omnibox
+        try {
+          const result = await chrome.storage.session.get('pendingAction');
+          const pendingAction = result.pendingAction as { autoStart?: boolean } | undefined;
+          if (pendingAction?.autoStart) {
+            // Auto-start task pending - skip disclaimer, it will be preserved by handleNewChat
+            promptedOnOpenRef.current = true;
+            return;
+          }
+        } catch {}
+
         promptedOnOpenRef.current = true;
         resetPerChatAcceptance?.();
         promptPerChatIfEnabled?.();
-      }
-    } catch {}
+      } catch {}
+    };
+    checkAndShowDisclaimer();
   }, [
     firstRunAccepted,
     disablePerChatWarnings,
