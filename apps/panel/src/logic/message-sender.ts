@@ -189,18 +189,22 @@ export function createMessageSender(deps: MessageSenderDeps) {
       setShowStopButton(true);
 
       if (!isFollowUpMode()) {
-        if (incognitoMode()) {
-          const newId = deps.createTaskId();
-          sessionIdRef.current = newId;
-          setCurrentSessionId(newId);
-        } else {
-          const newSession = await chatHistoryStore.createSession(
-            text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-          );
-          logger.log('newSession', newSession);
-          const sessionId = newSession.id;
-          setCurrentSessionId(sessionId);
-          sessionIdRef.current = sessionId;
+        // CRITICAL: Generate and set session ID SYNCHRONOUSLY before any async operations
+        // This ensures events arriving immediately have a valid session ID to match against
+        const newId = deps.createTaskId();
+        sessionIdRef.current = newId;
+        setCurrentSessionId(newId);
+
+        if (!incognitoMode()) {
+          // Create session in storage with the pre-generated ID
+          // MUST await to ensure session exists before adding messages
+          try {
+            await chatHistoryStore.createSessionWithId(newId, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+            logger.log('newSession created with pre-generated ID:', newId);
+          } catch (err) {
+            logger.error('Failed to create session in storage:', err);
+            // Continue anyway - session will be created lazily if needed
+          }
         }
       }
 
@@ -217,6 +221,22 @@ export function createMessageSender(deps: MessageSenderDeps) {
       }
       if (!portRef.current || portRef.current.name !== 'side-panel-connection') {
         throw new Error('Connection not ready. Please try again.');
+      }
+
+      // CRITICAL: Ensure session ID exists before sending
+      // This handles race conditions where isFollowUpMode state hasn't updated yet
+      if (!sessionIdRef.current) {
+        logger.log('[MessageSender] No session ID found, creating new session');
+        const newId = createTaskId();
+        sessionIdRef.current = newId;
+        setCurrentSessionId(newId);
+        if (!incognitoMode()) {
+          try {
+            await chatHistoryStore.createSessionWithId(newId, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+          } catch (err) {
+            logger.error('Failed to create session:', err);
+          }
+        }
       }
 
       if (String(finalAgentType) === 'multiagent') {
