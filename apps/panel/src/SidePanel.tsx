@@ -264,6 +264,11 @@ const SidePanel = () => {
     setSessionStats,
     showToast,
     setFavoritePrompts,
+    // New parameters for background workflow trajectory support
+    agentTraceRootIdRef,
+    setAgentTraceRootId,
+    setMirrorPreview,
+    setMirrorPreviewBatch,
   });
 
   // Event setup (appendMessage, taskEventHandler, panelHandlers)
