@@ -21,6 +21,10 @@ export function useChatHistory({
   showToast,
   handleBackToChat,
   setFavoritePrompts,
+  agentTraceRootIdRef,
+  setAgentTraceRootId,
+  setMirrorPreview,
+  setMirrorPreviewBatch,
 }: {
   logger: { log: (...args: any[]) => void; error: (...args: any[]) => void };
   setMessages: (v: any) => void;
@@ -37,6 +41,10 @@ export function useChatHistory({
   showToast?: (msg: string) => void;
   handleBackToChat?: (reset?: boolean) => void;
   setFavoritePrompts?: (v: any) => void;
+  agentTraceRootIdRef?: MutableRefObject<string | null>;
+  setAgentTraceRootId?: (v: string | null) => void;
+  setMirrorPreview?: (v: any) => void;
+  setMirrorPreviewBatch?: (v: any) => void;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
 
@@ -53,72 +61,60 @@ export function useChatHistory({
     async (sessionId: string): Promise<boolean> => {
       try {
         const fullSession = await chatHistoryStore.getSession(sessionId);
+        const hasMessages = fullSession && fullSession.messages.length > 0;
 
-        // Always set session ID first for proper event filtering
-        // This is critical - even if session has no messages yet, we need to filter events
+        // Set session ID first for proper event filtering
         setCurrentSessionId(sessionId);
         sessionIdRef.current = sessionId;
         setShowDashboard(false);
 
-        if (fullSession && fullSession.messages.length > 0) {
-          logger.log('Loaded session messages count:', fullSession.messages.length);
-          try {
-            logger.log('First 3 messages snapshot:', fullSession.messages.slice(0, 3));
-          } catch {}
-          setMessages(fullSession.messages);
-          setIsFollowUpMode(true);
-          setIsHistoricalSession(false);
-          setInputEnabled(true);
-          try {
-            const runningKey = 'agent_dashboard_running';
-            const result = await chrome.storage.local.get(runningKey);
-            const running = Array.isArray(result[runningKey]) ? result[runningKey] : [];
-            const isRunning = running.some((a: any) => String(a.sessionId) === String(sessionId));
-            setShowStopButton(!!isRunning);
-          } catch {
-            setShowStopButton(false);
-          }
-          try {
-            const [savedSummaries, savedMetadata, savedStats] = await Promise.all([
-              chatHistoryStore.loadRequestSummaries(sessionId).catch(() => ({}) as any),
-              chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({}) as any),
-              chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
-            ]);
-            if (savedSummaries && typeof savedSummaries === 'object') setRequestSummaries(savedSummaries as any);
-            else setRequestSummaries({});
-            if (savedMetadata && typeof savedMetadata === 'object') setMessageMetadata(savedMetadata as any);
-            else setMessageMetadata({});
-            if (savedStats) setSessionStats(savedStats as any);
-            else setSessionStats((prev: any) => ({ ...prev }));
-          } catch (e) {
-            logger.error('Failed to load persisted summaries/metadata/stats:', e);
-            setRequestSummaries({});
-            setMessageMetadata({});
-          }
-          logger.log('history session selected', sessionId);
-          return true;
-        } else {
-          // Session not found or empty - but session ID is set for event filtering
-          // This handles newly started tasks that don't have saved history yet
-          logger.log('Session not found or empty, setting up for live events:', sessionId);
-          setMessages([]);
-          setIsFollowUpMode(true);
-          setIsHistoricalSession(false);
-          setInputEnabled(true);
+        // Clear preview state to prevent leakage between sessions
+        if (setMirrorPreview) setMirrorPreview(null);
+        if (setMirrorPreviewBatch) setMirrorPreviewBatch([]);
+
+        // Load persisted metadata FIRST before setting any UI state
+        // This prevents race conditions where events arrive before we've restored the rootId
+        let restoredRootId: string | null = null;
+        try {
+          const [savedSummaries, savedMetadata, savedStats] = await Promise.all([
+            chatHistoryStore.loadRequestSummaries(sessionId).catch(() => ({})),
+            chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({})),
+            chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
+          ]);
+
+          setRequestSummaries(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {});
+          setMessageMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {});
+          if (savedStats) setSessionStats(savedStats);
+
+          // Get stored rootId for restoration
+          restoredRootId = (savedMetadata as any)?.__sessionRootId || null;
+        } catch (e) {
+          logger.error('Failed to load session metadata:', e);
           setRequestSummaries({});
           setMessageMetadata({});
-          // Check if this session is currently running
-          try {
-            const runningKey = 'agent_dashboard_running';
-            const result = await chrome.storage.local.get(runningKey);
-            const running = Array.isArray(result[runningKey]) ? result[runningKey] : [];
-            const isRunning = running.some((a: any) => String(a.sessionId) === String(sessionId));
-            setShowStopButton(!!isRunning);
-          } catch {
-            setShowStopButton(false);
-          }
-          return true; // Return true since we successfully set up for this session
         }
+
+        // Now set trajectory ref - either to restored value or null
+        // CRITICAL: Do this AFTER loading metadata to prevent race condition
+        if (agentTraceRootIdRef) agentTraceRootIdRef.current = restoredRootId;
+        if (setAgentTraceRootId) setAgentTraceRootId(restoredRootId);
+
+        // Set messages and common state
+        setMessages(hasMessages ? fullSession.messages : []);
+        setIsFollowUpMode(true);
+        setIsHistoricalSession(false);
+        setInputEnabled(true);
+
+        // Check if session is running
+        try {
+          const result = await chrome.storage.local.get('agent_dashboard_running');
+          const running = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
+          setShowStopButton(running.some((a: any) => String(a.sessionId) === String(sessionId)));
+        } catch {
+          setShowStopButton(false);
+        }
+
+        return true;
       } catch (error) {
         logger.error('Failed to load session:', error);
         return false;
@@ -137,6 +133,10 @@ export function useChatHistory({
       setRequestSummaries,
       setMessageMetadata,
       setSessionStats,
+      agentTraceRootIdRef,
+      setAgentTraceRootId,
+      setMirrorPreview,
+      setMirrorPreviewBatch,
     ],
   );
 
