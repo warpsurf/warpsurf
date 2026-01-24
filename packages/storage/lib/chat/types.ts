@@ -108,6 +108,9 @@ export interface ChatHistoryStorage {
   // Create a new chat session
   createSession: (title: string) => Promise<ChatSession>;
 
+  // Create a new chat session with a specific ID (for synchronous ID generation)
+  createSessionWithId: (sessionId: string, title: string) => Promise<ChatSession>;
+
   // Update an existing chat session
   updateTitle: (sessionId: string, title: string) => Promise<ChatSessionMetadata>;
 
