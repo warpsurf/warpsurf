@@ -360,7 +360,19 @@ export function createAggregateRoot(
   deps.agentTraceActiveRef.current = true;
   deps.appendMessage({ actor, content, timestamp } as any);
   deps.lastAgentMessageRef.current = { timestamp, actor };
-  deps.setMessageMetadata(prev => ({ ...prev, [rootId]: { traceItems: [{ actor, content, timestamp }] } }));
+  // CRITICAL: Store rootId as __sessionRootId so it persists across session switches
+  deps.setMessageMetadata(prev => {
+    const updated = {
+      ...prev,
+      __sessionRootId: rootId, // Store the rootId for restoration
+      [rootId]: { traceItems: [{ actor, content, timestamp }] },
+    };
+    // Persist to storage
+    try {
+      if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
+    } catch {}
+    return updated;
+  });
   return rootId;
 }
 

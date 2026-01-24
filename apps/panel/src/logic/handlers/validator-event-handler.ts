@@ -6,19 +6,34 @@ import type { EventHandlerCreator } from './create-task-event-handler';
 import { createAggregateRoot, addTraceItem, updateAggregateRootContent } from './utils';
 
 /** Creates the Validator event handler */
-export const createValidatorHandler: EventHandlerCreator = (deps) => {
+export const createValidatorHandler: EventHandlerCreator = deps => {
   const { logger } = deps;
 
-  return (event) => {
+  /** Check if event belongs to current session */
+  const isEventForCurrentSession = (eventData: any): boolean => {
+    const eventTaskId = String(eventData?.taskId || '');
+    const currentSessionId = String(deps.sessionIdRef.current || '');
+    // If no session in panel, still process events
+    if (!currentSessionId) return true;
+    if (!eventTaskId) return true;
+    return eventTaskId === currentSessionId;
+  };
+
+  return event => {
     const state = event.state;
     const timestamp = event.timestamp || Date.now();
     const data = (event as any)?.data || {};
+
+    // Skip events definitively for a different session
+    if (!isEventForCurrentSession(data)) return;
+
     const content = data?.details ?? (event as any)?.content ?? '';
 
     switch (state) {
       case ExecutionState.STEP_START:
-        if (!deps.agentTraceRootIdRef.current && content) {
-          createAggregateRoot(Actors.AGENT_NAVIGATOR, content, timestamp, deps);
+        // Always create aggregate root on first STEP_START, even without content
+        if (!deps.agentTraceRootIdRef.current) {
+          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Validating...', timestamp, deps);
         }
         if (deps.agentTraceRootIdRef.current) {
           addTraceItem(Actors.AGENT_VALIDATOR, content || 'Validating output...', timestamp, deps);
@@ -50,4 +65,3 @@ export const createValidatorHandler: EventHandlerCreator = (deps) => {
     }
   };
 };
-

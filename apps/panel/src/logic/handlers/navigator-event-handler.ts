@@ -15,10 +15,29 @@ import {
 export const createNavigatorHandler: EventHandlerCreator = deps => {
   const { logger, setIsAgentModeActive } = deps;
 
+  /** Check if event belongs to current session */
+  const isEventForCurrentSession = (eventData: any): boolean => {
+    const eventTaskId = String(eventData?.taskId || '');
+    const currentSessionId = String(deps.sessionIdRef.current || '');
+    // If no session in panel, still process events (background handles storage)
+    if (!currentSessionId) return true;
+    // If event has no taskId, assume it's for current session
+    if (!eventTaskId) return true;
+    // Only skip if we can definitively say it's for a DIFFERENT session
+    return eventTaskId === currentSessionId;
+  };
+
   return event => {
     const state = event.state;
     const timestamp = event.timestamp || Date.now();
     const data = (event as any)?.data || {};
+
+    // Skip events definitively for a different session
+    if (!isEventForCurrentSession(data)) {
+      logger.log('[Navigator] Skipping event for different session:', data?.taskId);
+      return;
+    }
+
     const content = data?.details ?? (event as any)?.content ?? '';
     const workerId = data?.workerId;
     const agentName = data?.agentName;
@@ -53,8 +72,9 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
 
       case ExecutionState.STEP_START:
         setIsAgentModeActive(true);
-        if (!deps.agentTraceRootIdRef.current && content) {
-          createAggregateRoot(Actors.AGENT_NAVIGATOR, content, timestamp, deps);
+        // Always create aggregate root on first STEP_START, even without content
+        if (!deps.agentTraceRootIdRef.current) {
+          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Initializing browser agent...', timestamp, deps);
         }
         if (deps.agentTraceRootIdRef.current) {
           addTraceItem(

@@ -60,26 +60,32 @@ export const createSystemHandler: EventHandlerCreator = deps => {
         updateTabGroupColor(event, deps);
         break;
 
-      case ExecutionState.TASK_START:
-        deps.setIsJobActive(true);
-        deps.workflowEndedRef.current = false;
-        deps.setShowStopButton(true);
-        deps.setIsHistoricalSession(false);
-        // Clear preview state for all task types to ensure fresh preview on new tasks
-        deps.setHasFirstPreview(false);
-        deps.setMirrorPreview(null);
-        deps.setMirrorPreviewBatch([]);
-        deps.runStartedAtRef.current = timestamp;
-        deps.setWorkerTabGroups([]);
-        try {
-          deps.laneColorByLaneRef.current.clear();
-        } catch {}
-        if (deps.getCurrentTaskAgentType() !== 'multiagent') {
-          if (deps.agentTraceRootIdRef.current) markAggregateComplete(deps);
-          deps.setAgentTraceRootId(null);
-          deps.agentTraceActiveRef.current = false;
-          deps.setActiveAggregateMessageId(null);
+      case ExecutionState.TASK_START: {
+        // CRITICAL: Only reset trajectory state if this event is for the CURRENT session
+        // Otherwise we'd wipe out the restored rootId when switching between sessions
+        if (isEventForCurrentSession(data)) {
+          deps.setIsJobActive(true);
+          deps.workflowEndedRef.current = false;
+          deps.setShowStopButton(true);
+          deps.setIsHistoricalSession(false);
+          // Clear preview state for all task types to ensure fresh preview on new tasks
+          deps.setHasFirstPreview(false);
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.runStartedAtRef.current = timestamp;
+          deps.setWorkerTabGroups([]);
+          try {
+            deps.laneColorByLaneRef.current.clear();
+          } catch {}
+          if (deps.getCurrentTaskAgentType() !== 'multiagent') {
+            if (deps.agentTraceRootIdRef.current) markAggregateComplete(deps);
+            deps.setAgentTraceRootId(null);
+            deps.agentTraceActiveRef.current = false;
+            deps.setActiveAggregateMessageId(null);
+          }
+          deps.setShowCloseTabs(false);
         }
+        // Always update dashboard state regardless of which session the event is for
         try {
           const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
           if (taskId) addRunningAgent(taskId, deps);
@@ -90,8 +96,8 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             deps.lastAgentMessageByTaskRef.current.delete(String(data.taskId));
           }
         } catch {}
-        deps.setShowCloseTabs(false);
         break;
+      }
 
       case ExecutionState.TASK_OK: {
         const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
