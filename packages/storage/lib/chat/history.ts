@@ -96,28 +96,40 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       // Clear per-message request summaries
       try {
         const key = `chat_request_summaries_${sessionId}`;
-        const storage = createStorage<Record<string, RequestSummary>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
+        const storage = createStorage<Record<string, RequestSummary>>(
+          key,
+          {},
+          { storageEnum: StorageEnum.Local, liveUpdate: true },
+        );
         await storage.set({});
       } catch {}
 
       // Clear per-message metadata
       try {
         const key = `chat_message_metadata_${sessionId}`;
-        const storage = createStorage<Record<string, MessageMetadataValue>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
+        const storage = createStorage<Record<string, MessageMetadataValue>>(
+          key,
+          {},
+          { storageEnum: StorageEnum.Local, liveUpdate: true },
+        );
         await storage.set({});
       } catch {}
 
       // Reset aggregated session stats
       try {
         const key = `chat_session_stats_${sessionId}`;
-        const storage = createStorage<SessionStats>(key, {
-          totalRequests: 0,
-          totalInputTokens: 0,
-          totalOutputTokens: 0,
-          totalLatency: 0,
-          totalCost: 0,
-          avgLatencyPerRequest: 0,
-        }, { storageEnum: StorageEnum.Local, liveUpdate: true });
+        const storage = createStorage<SessionStats>(
+          key,
+          {
+            totalRequests: 0,
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalLatency: 0,
+            totalCost: 0,
+            avgLatencyPerRequest: 0,
+          },
+          { storageEnum: StorageEnum.Local, liveUpdate: true },
+        );
         await storage.set({
           totalRequests: 0,
           totalInputTokens: 0,
@@ -129,7 +141,9 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       } catch {}
 
       // Update session metadata counters
-      await chatSessionsMetaStorage.set(prev => prev.map(s => s.id === sessionId ? ({ ...s, updatedAt: getCurrentTimestamp(), messageCount: 0 }) : s));
+      await chatSessionsMetaStorage.set(prev =>
+        prev.map(s => (s.id === sessionId ? { ...s, updatedAt: getCurrentTimestamp(), messageCount: 0 } : s)),
+      );
     },
 
     // Get session metadata without messages (for UI listing)
@@ -182,11 +196,22 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       };
 
       let normalized: ChatMessage[] = (rawMessages as any[]).map((m: any) => {
-        const content = typeof m?.content === 'string' ? m.content : (typeof m?.text === 'string' ? m.text : String(m?.message ?? ''));
-        const timestamp = m?.timestamp !== undefined ? toNumber(m.timestamp) : (m?.createdAt !== undefined ? toNumber(m.createdAt) : Date.now());
+        const content =
+          typeof m?.content === 'string' ? m.content : typeof m?.text === 'string' ? m.text : String(m?.message ?? '');
+        const timestamp =
+          m?.timestamp !== undefined
+            ? toNumber(m.timestamp)
+            : m?.createdAt !== undefined
+              ? toNumber(m.createdAt)
+              : Date.now();
         const actorSource = m?.actor ?? m?.role ?? m?.sender ?? m?.author;
         const actor = normalizeActor(actorSource);
-        const id = typeof m?.id === 'string' && m.id.length > 0 ? m.id : (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `${timestamp}-${actor}`);
+        const id =
+          typeof m?.id === 'string' && m.id.length > 0
+            ? m.id
+            : typeof crypto?.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : `${timestamp}-${actor}`;
         return { id, content, timestamp, actor } as ChatMessage;
       });
 
@@ -198,25 +223,47 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
           for (const key of candidateKeys) {
             const val = (all as Record<string, unknown>)[key];
             if (Array.isArray(val) && val.length > 0) {
-              const looksLikeMessages = (val as any[]).every((m: any) => (
-                typeof m === 'object' && m !== null && (
-                  typeof (m as any).content === 'string' || typeof (m as any).text === 'string' || typeof (m as any).message === 'string'
-                )
-              ));
+              const looksLikeMessages = (val as any[]).every(
+                (m: any) =>
+                  typeof m === 'object' &&
+                  m !== null &&
+                  (typeof (m as any).content === 'string' ||
+                    typeof (m as any).text === 'string' ||
+                    typeof (m as any).message === 'string'),
+              );
               if (looksLikeMessages) {
                 normalized = (val as any[]).map((m: any) => {
-                  const content = typeof m?.content === 'string' ? m.content : (typeof m?.text === 'string' ? m.text : String(m?.message ?? ''));
-                  const timestamp = m?.timestamp !== undefined ? toNumber(m.timestamp) : (m?.createdAt !== undefined ? toNumber(m.createdAt) : Date.now());
+                  const content =
+                    typeof m?.content === 'string'
+                      ? m.content
+                      : typeof m?.text === 'string'
+                        ? m.text
+                        : String(m?.message ?? '');
+                  const timestamp =
+                    m?.timestamp !== undefined
+                      ? toNumber(m.timestamp)
+                      : m?.createdAt !== undefined
+                        ? toNumber(m.createdAt)
+                        : Date.now();
                   const actorSource = m?.actor ?? m?.role ?? m?.sender ?? m?.author;
                   const actor = normalizeActor(actorSource);
-                  const id = typeof m?.id === 'string' && m.id.length > 0 ? m.id : (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `${timestamp}-${actor}`);
+                  const id =
+                    typeof m?.id === 'string' && m.id.length > 0
+                      ? m.id
+                      : typeof crypto?.randomUUID === 'function'
+                        ? crypto.randomUUID()
+                        : `${timestamp}-${actor}`;
                   return { id, content, timestamp, actor } as ChatMessage;
                 });
                 // Persist recovered messages into the canonical key and update metadata
                 await messagesStorage.set(normalized);
-                await chatSessionsMetaStorage.set(prev => prev.map(meta => (
-                  meta.id === sessionId ? { ...meta, messageCount: normalized.length, updatedAt: getCurrentTimestamp() } : meta
-                )));
+                await chatSessionsMetaStorage.set(prev =>
+                  prev.map(meta =>
+                    meta.id === sessionId
+                      ? { ...meta, messageCount: normalized.length, updatedAt: getCurrentTimestamp() }
+                      : meta,
+                  ),
+                );
                 break;
               }
             }
@@ -226,16 +273,22 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
 
       // If normalization changed anything (e.g., missing actors), persist the normalized form back to storage
       try {
-        const changed = normalized.length !== (rawMessages as any[]).length || normalized.some((nm, idx) => {
-          const om: any = (rawMessages as any[])[idx] || {};
-          return !om?.actor || om?.actor !== nm.actor || typeof om?.timestamp !== 'number' || !om?.id;
-        });
+        const changed =
+          normalized.length !== (rawMessages as any[]).length ||
+          normalized.some((nm, idx) => {
+            const om: any = (rawMessages as any[])[idx] || {};
+            return !om?.actor || om?.actor !== nm.actor || typeof om?.timestamp !== 'number' || !om?.id;
+          });
         if (changed) {
           await messagesStorage.set(normalized);
           // Keep metadata roughly in sync
-          await chatSessionsMetaStorage.set(prev => prev.map(meta => (
-            meta.id === sessionId ? { ...meta, messageCount: normalized.length, updatedAt: getCurrentTimestamp() } : meta
-          )));
+          await chatSessionsMetaStorage.set(prev =>
+            prev.map(meta =>
+              meta.id === sessionId
+                ? { ...meta, messageCount: normalized.length, updatedAt: getCurrentTimestamp() }
+                : meta,
+            ),
+          );
         }
       } catch {}
 
@@ -258,6 +311,33 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
 
       // Create empty messages array for the new session
       const messagesStorage = getSessionMessagesStorage(newSessionId);
+      await messagesStorage.set([]);
+
+      // Add session metadata to the index
+      await chatSessionsMetaStorage.set(prevSessions => [...prevSessions, newSessionMeta]);
+
+      return {
+        ...newSessionMeta,
+        messages: [],
+      };
+    },
+
+    /**
+     * Create a session with a specific ID (for synchronous ID generation)
+     * This allows the caller to generate and use the ID immediately before the async session creation completes
+     */
+    createSessionWithId: async (sessionId: string, title: string): Promise<ChatSession> => {
+      const currentTime = getCurrentTimestamp();
+      const newSessionMeta: ChatSessionMetadata = {
+        id: sessionId,
+        title,
+        createdAt: currentTime,
+        updatedAt: currentTime,
+        messageCount: 0,
+      };
+
+      // Create empty messages array for the new session
+      const messagesStorage = getSessionMessagesStorage(sessionId);
       await messagesStorage.set([]);
 
       // Add session metadata to the index
@@ -333,12 +413,24 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
         });
       });
 
-      // Throw error if session wasn't found
+      // If session doesn't exist, create it automatically (resilient to race conditions)
       if (!sessionFound) {
-        throw new Error(`Session with ID ${sessionId} not found`);
+        const title =
+          typeof message.content === 'string'
+            ? message.content.substring(0, 50) + (message.content.length > 50 ? '...' : '')
+            : 'New Chat';
+        const now = getCurrentTimestamp();
+        const newSession: ChatSessionMetadata = {
+          id: sessionId,
+          title,
+          createdAt: now,
+          updatedAt: now,
+          messageCount: 1,
+        };
+        await chatSessionsMetaStorage.set(prevSessions => [...prevSessions, newSession]);
       }
 
-      // Only add the message if the session exists
+      // Add the message
       const messagesStorage = getSessionMessagesStorage(sessionId);
       await messagesStorage.set(prevMessages => [...prevMessages, newMessage]);
 
@@ -400,50 +492,109 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
     // Persist/load per-message request summaries
     storeRequestSummaries: async (sessionId: string, summaries: Record<string, RequestSummary>): Promise<void> => {
       const key = `chat_request_summaries_${sessionId}`;
-      const storage = createStorage<Record<string, RequestSummary>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
+      const storage = createStorage<Record<string, RequestSummary>>(
+        key,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
       await storage.set(summaries);
     },
     loadRequestSummaries: async (sessionId: string): Promise<Record<string, RequestSummary>> => {
       const key = `chat_request_summaries_${sessionId}`;
-      const storage = createStorage<Record<string, RequestSummary>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
+      const storage = createStorage<Record<string, RequestSummary>>(
+        key,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
       return await storage.get();
     },
 
     // Persist/load per-message metadata
+    // CRITICAL: This MERGES with existing metadata to prevent race conditions
     storeMessageMetadata: async (sessionId: string, metadata: Record<string, MessageMetadataValue>): Promise<void> => {
       const key = `chat_message_metadata_${sessionId}`;
-      const storage = createStorage<Record<string, MessageMetadataValue>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
-      await storage.set(metadata);
+      const storage = createStorage<Record<string, MessageMetadataValue>>(
+        key,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
+      // Merge with existing to prevent data loss from concurrent writes
+      const existing = await storage.get();
+      const merged: Record<string, MessageMetadataValue> = { ...existing };
+      for (const [msgId, msgMeta] of Object.entries(metadata)) {
+        if (msgId === '__sessionRootId') {
+          // Always update the session root ID
+          (merged as any).__sessionRootId = msgMeta;
+        } else if (typeof msgMeta === 'object' && msgMeta !== null) {
+          // For message metadata, merge trace items arrays
+          const existingMeta = (existing as any)?.[msgId] || {};
+          const newMeta = msgMeta as any;
+          const existingTraceItems = Array.isArray(existingMeta.traceItems) ? existingMeta.traceItems : [];
+          const newTraceItems = Array.isArray(newMeta.traceItems) ? newMeta.traceItems : [];
+          // Deduplicate trace items by timestamp+actor+content
+          const seen = new Set<string>();
+          const mergedTraceItems: any[] = [];
+          for (const item of [...existingTraceItems, ...newTraceItems]) {
+            const key = `${item.timestamp}-${item.actor}-${item.content}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              mergedTraceItems.push(item);
+            }
+          }
+          // Sort by timestamp
+          mergedTraceItems.sort((a, b) => a.timestamp - b.timestamp);
+          (merged as any)[msgId] = {
+            ...existingMeta,
+            ...newMeta,
+            traceItems: mergedTraceItems.length > 0 ? mergedTraceItems : undefined,
+          };
+        } else {
+          (merged as any)[msgId] = msgMeta;
+        }
+      }
+      await storage.set(merged);
     },
     loadMessageMetadata: async (sessionId: string): Promise<Record<string, MessageMetadataValue>> => {
       const key = `chat_message_metadata_${sessionId}`;
-      const storage = createStorage<Record<string, MessageMetadataValue>>(key, {}, { storageEnum: StorageEnum.Local, liveUpdate: true });
+      const storage = createStorage<Record<string, MessageMetadataValue>>(
+        key,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
       return await storage.get();
     },
 
     // Persist/load aggregated per-session statistics
     storeSessionStats: async (sessionId: string, stats: SessionStats): Promise<void> => {
       const key = `chat_session_stats_${sessionId}`;
-      const storage = createStorage<SessionStats>(key, {
-        totalRequests: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalLatency: 0,
-        totalCost: 0,
-        avgLatencyPerRequest: 0,
-      }, { storageEnum: StorageEnum.Local, liveUpdate: true });
+      const storage = createStorage<SessionStats>(
+        key,
+        {
+          totalRequests: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalLatency: 0,
+          totalCost: 0,
+          avgLatencyPerRequest: 0,
+        },
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
       await storage.set(stats);
     },
     loadSessionStats: async (sessionId: string): Promise<SessionStats | null> => {
       const key = `chat_session_stats_${sessionId}`;
-      const storage = createStorage<SessionStats>(key, {
-        totalRequests: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalLatency: 0,
-        totalCost: 0,
-        avgLatencyPerRequest: 0,
-      }, { storageEnum: StorageEnum.Local, liveUpdate: true });
+      const storage = createStorage<SessionStats>(
+        key,
+        {
+          totalRequests: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalLatency: 0,
+          totalCost: 0,
+          avgLatencyPerRequest: 0,
+        },
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
       const s = await storage.get();
       if (!s) return null;
       return s;
