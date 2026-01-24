@@ -335,15 +335,29 @@ export class TabMirrorService {
 
   freezeMirrorsForSession(sessionId: string) {
     const set = this.sessionToTabs.get(sessionId);
-    if (!set || set.size === 0) return;
 
     // Find the most recently updated mirror with a screenshot
     let bestMirror: TabMirrorData | undefined;
-    for (const tabId of Array.from(set)) {
-      const mirror = this.currentMirrors.get(tabId);
-      if (mirror?.screenshot) {
-        if (!bestMirror || (mirror.lastUpdated || 0) > (bestMirror.lastUpdated || 0)) {
-          bestMirror = mirror;
+
+    // First check sessionToTabs mapping
+    if (set && set.size > 0) {
+      for (const tabId of Array.from(set)) {
+        const mirror = this.currentMirrors.get(tabId);
+        if (mirror?.screenshot) {
+          if (!bestMirror || (mirror.lastUpdated || 0) > (bestMirror.lastUpdated || 0)) {
+            bestMirror = mirror;
+          }
+        }
+      }
+    }
+
+    // Fallback: check all mirrors for matching sessionId (in case sessionToTabs wasn't populated)
+    if (!bestMirror) {
+      for (const mirror of this.currentMirrors.values()) {
+        if (mirror.sessionId === sessionId && mirror.screenshot) {
+          if (!bestMirror || (mirror.lastUpdated || 0) > (bestMirror.lastUpdated || 0)) {
+            bestMirror = mirror;
+          }
         }
       }
     }
@@ -353,8 +367,11 @@ export class TabMirrorService {
       this.cacheSessionScreenshot(sessionId, bestMirror.screenshot, bestMirror.url, bestMirror.title);
     }
 
-    for (const tabId of Array.from(set)) {
-      this.freezeMirroring(tabId);
+    // Freeze mirrors from sessionToTabs if available
+    if (set && set.size > 0) {
+      for (const tabId of Array.from(set)) {
+        this.freezeMirroring(tabId);
+      }
     }
   }
 
