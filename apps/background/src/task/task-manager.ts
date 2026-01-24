@@ -16,6 +16,7 @@ import { TabGroupService } from './tab-group-service';
 import { MirrorCoordinator } from './mirror-coordinator';
 import { WorkerSessionManager } from './worker-session-manager';
 import { tabExists } from '../utils';
+import { trajectoryPersistence } from './trajectory-persistence';
 
 export interface Task {
   id: string;
@@ -410,21 +411,31 @@ export class TaskManager extends EventEmitter {
   }
 
   private forwardEventToPanel(task: Task, event: any): void {
-    try {
-      if (!this.sidePanelPort) return;
+    const sessionId = task.parentSessionId || task.id;
+    const enrichedData = {
+      ...event.data,
+      agentColor: task.color,
+      agentName: task.name,
+      workerId: task.id,
+      parentSessionId: task.parentSessionId,
+      sessionId,
+    };
 
+    // Persist trajectory BEFORE forwarding (ensures background workflows are recorded)
+    try {
+      trajectoryPersistence.processEvent(sessionId, { ...event, data: enrichedData });
+    } catch (e) {
+      this.logger.error('[TaskManager] Failed to persist trajectory:', e);
+    }
+
+    // Forward to panel
+    if (!this.sidePanelPort) return;
+    try {
       this.sidePanelPort.postMessage({
         type: EventType.EXECUTION,
         actor: event.actor,
         state: event.state,
-        data: {
-          ...event.data,
-          agentColor: task.color,
-          agentName: task.name,
-          workerId: task.id,
-          parentSessionId: task.parentSessionId,
-          sessionId: task.parentSessionId || task.id,
-        },
+        data: enrichedData,
         timestamp: event.timestamp,
       });
     } catch {}
@@ -749,8 +760,35 @@ export class TaskManager extends EventEmitter {
           : 'error';
     task.completedAt = Date.now();
 
-    this.mirrors.freezeSession(String(task.parentSessionId || task.id));
+    const sessionId = String(task.parentSessionId || task.id);
+    this.mirrors.freezeSession(sessionId);
+
+    // Mark trajectory as completed and schedule cleanup
+    try {
+      const activeMirrors = this.mirrors.getActiveMirrors();
+      const sessionMirrors = activeMirrors.filter((m: any) => m.sessionId === sessionId);
+      trajectoryPersistence.markCompleted(
+        sessionId,
+        sessionMirrors[0],
+        sessionMirrors.length > 1 ? sessionMirrors : undefined,
+      );
+    } catch {}
+
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: task.status });
     this.updateBadge();
+  }
+
+  /**
+   * Get the trajectory root ID for a session (for panel to use when restoring)
+   */
+  getTrajectoryRootId(sessionId: string): string | null {
+    return trajectoryPersistence.getRootId(sessionId);
+  }
+
+  /**
+   * Get the trajectory persistence service (for direct access if needed)
+   */
+  get trajectoryService() {
+    return trajectoryPersistence;
   }
 }
