@@ -933,6 +933,8 @@ export function createPanelHandlers(deps: any): any {
         const restoredMetadata = { ...(storedMetadata || {}) };
 
         // Update UI state based on running flag
+        // CRITICAL: Always set isFollowUpMode when restoring a session to ensure correct message routing
+        deps.setIsFollowUpMode(true);
         if (data.isRunning) {
           deps.setShowStopButton(true);
           deps.setInputEnabled(false);
@@ -1068,6 +1070,7 @@ export function createPanelHandlers(deps: any): any {
           if (session?.messages) {
             deps.setMessages(session.messages);
             deps.setIsHistoricalSession(true);
+            deps.setIsFollowUpMode(true); // Enable follow-up mode for restored sessions
           }
         }
       } catch {}
