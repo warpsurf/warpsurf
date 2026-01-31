@@ -9,7 +9,6 @@ import { safePostMessage, safeStorageRemove } from '@extension/shared/lib/utils'
 import { initializeCostCalculator } from '../utils/cost-calculator';
 import { canInjectScripts, injectBuildDomTree } from '../utils/injection';
 import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
-import { subscribeToExecutorEvents } from '../workflows/shared/subscribe-to-executor-events';
 import {
   handleGetTokenLog,
   handleGetCombinedTokenLog,
@@ -47,8 +46,6 @@ export type SidePanelDeps = {
   workflowsBySession: Map<string, MultiAgentWorkflow>;
   runningWorkflowSessionIds: Set<string>;
   setCurrentWorkflow: (wf: MultiAgentWorkflow | null) => void;
-  eventBuffer: any[];
-  maxEventBufferSize: number;
 };
 
 export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: SidePanelDeps): void {
@@ -62,8 +59,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
     workflowsBySession,
     runningWorkflowSessionIds,
     setCurrentWorkflow,
-    eventBuffer,
-    maxEventBufferSize,
   } = deps;
 
   logger.info('Side panel connected');
@@ -120,8 +115,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
-            eventBuffer,
-            maxEventBufferSize,
           });
           return;
         }
@@ -132,8 +125,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             getCurrentPort,
             getCurrentExecutor,
             setCurrentExecutor,
-            eventBuffer,
-            maxEventBufferSize,
           });
           return;
         }
@@ -500,14 +491,12 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
           } catch {}
 
-          // Collect buffered events to include in restore message
-          const bufferedEvents = eventBuffer.length > 0 ? eventBuffer.splice(0, eventBuffer.length) : [];
-
           // Restore running workflow state if any
           try {
             if (runningWorkflowSessionIds.size > 0) {
               const activeSessionId = [...runningWorkflowSessionIds][0];
               const workflow = workflowsBySession.get(activeSessionId);
+              const bufferedEvents = taskManager.getBufferedEvents?.(activeSessionId) || [];
               safePostMessage(port, {
                 type: 'restore_active_session',
                 data: {
@@ -522,6 +511,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               const executor = getCurrentExecutor();
               const sessionId = (executor as any)?.context?.taskId;
               if (sessionId) {
+                const bufferedEvents = taskManager.getBufferedEvents?.(sessionId) || [];
                 safePostMessage(port, {
                   type: 'restore_active_session',
                   data: {
@@ -867,20 +857,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           const { tabId, instructions } = message;
           logger.info(`Hand back control requested for tab ${tabId}`);
           try {
-            try {
-              if (getCurrentExecutor()) {
-                delete (getCurrentExecutor() as any).__backgroundSubscribed;
-              }
-            } catch {}
-            try {
-              await subscribeToExecutorEvents(
-                getCurrentExecutor() as any,
-                getCurrentPort(),
-                taskManager as any,
-                logger as any,
-                () => setCurrentExecutor(null),
-              );
-            } catch {}
             await handBackControl(
               typeof tabId === 'number' ? tabId : undefined,
               instructions,
@@ -920,12 +896,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               safePostMessage(port, { type: 'error', error: 'No active task to resume' });
               return;
             }
-            delete (current as any).__backgroundSubscribed;
-            try {
-              await subscribeToExecutorEvents(current as any, getCurrentPort(), taskManager as any, logger as any, () =>
-                setCurrentExecutor(null),
-              );
-            } catch {}
             await (current as any).resume?.();
             safePostMessage(port, { type: 'success' });
           } catch (e) {
@@ -1045,7 +1015,6 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               getCurrentExecutor,
               setCurrentExecutor,
               setCurrentWorkflow,
-              eventBuffer,
               agentManagerPort,
             });
           } catch (e) {
@@ -1098,20 +1067,52 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           }
         }
         case 'subscribe_to_session': {
-          // When sidepanel navigates to a session, send any buffered events and mirrors for that session
+          // When sidepanel navigates to a session, send trajectory state, buffered events, and mirrors
           try {
-            const { sessionId } = message;
+            const { sessionId, lastEventId } = message;
             if (!sessionId) {
               safePostMessage(port, { type: 'error', error: 'No session ID provided' });
               return;
             }
             logger.info(`[SidePanel] Subscribing to session ${sessionId}`);
 
-            // Send buffered events for this session
-            const sessionEvents = eventBuffer.filter((e: any) => {
-              const eventSessionId = e?.data?.sessionId || e?.data?.taskId || e?.data?.parentSessionId;
-              return eventSessionId && String(eventSessionId) === String(sessionId);
-            });
+            // 1. Send current trajectory state from memory (includes events not yet persisted)
+            let trajectoryState: any = null;
+            try {
+              trajectoryState = taskManager.trajectoryService?.getTrajectoryState?.(sessionId) || null;
+              console.log(
+                `[SidePanel] subscribe_to_session trajectory lookup:`,
+                `sessionId=${sessionId}`,
+                `hasTrajectory=${!!trajectoryState}`,
+                `traceItemCount=${trajectoryState?.traceItems?.length ?? 0}`,
+                `isCompleted=${trajectoryState?.isCompleted}`,
+                `hasFinalPreview=${!!trajectoryState?.finalPreview}`,
+                `hasFinalPreviewBatch=${!!trajectoryState?.finalPreviewBatch}`,
+                `finalPreviewBatchLen=${trajectoryState?.finalPreviewBatch?.length ?? 0}`,
+              );
+              if (trajectoryState) {
+                safePostMessage(port, {
+                  type: 'trajectory_state',
+                  sessionId,
+                  data: {
+                    rootId: trajectoryState.rootId,
+                    traceItems: trajectoryState.traceItems,
+                    workerItems: trajectoryState.workerItems,
+                    isCompleted: trajectoryState.isCompleted,
+                    finalPreview: trajectoryState.finalPreview,
+                    finalPreviewBatch: trajectoryState.finalPreviewBatch,
+                  },
+                });
+              }
+            } catch (e) {
+              console.error('[SidePanel] Failed to send trajectory_state:', e);
+            }
+
+            // 2. Send buffered events for this session (skip if completed)
+            const isCompleted = !!trajectoryState?.isCompleted;
+            const sessionEvents = !isCompleted
+              ? taskManager.getBufferedEvents?.(String(sessionId), lastEventId) || []
+              : [];
             if (sessionEvents.length > 0) {
               safePostMessage(port, {
                 type: 'buffered_session_events',
@@ -1120,22 +1121,33 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               });
             }
 
-            // Send current mirrors for this session
+            // 3. Send current mirrors for this session
             try {
               const allMirrors = taskManager.getAllMirrors?.() || [];
               const sessionMirrors = allMirrors.filter((m: any) => {
-                const mirrorSessionId = m?.sessionId || m?.agentId;
+                const mirrorSessionId = m?.sessionId;
                 return mirrorSessionId && String(mirrorSessionId) === String(sessionId);
               });
               if (sessionMirrors.length > 0) {
                 safePostMessage(port, {
                   type: 'tab-mirror-batch',
-                  data: sessionMirrors.map((m: any) => ({ ...m, sessionId })),
+                  data: sessionMirrors,
                 });
               }
             } catch {}
 
-            safePostMessage(port, { type: 'session_subscribed', sessionId });
+            let agentType: string | null = null;
+            try {
+              const task = taskManager.getTask?.(String(sessionId));
+              agentType = task?.agentType || (getCurrentExecutor() as any)?.manualAgentType || null;
+              if (runningWorkflowSessionIds.has(String(sessionId))) agentType = 'multiagent';
+            } catch {}
+            const isRunning =
+              runningWorkflowSessionIds.has(String(sessionId)) ||
+              String((getCurrentExecutor() as any)?.context?.taskId || '') === String(sessionId) ||
+              String(taskManager.getTask?.(String(sessionId))?.status || '') === 'running';
+
+            safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType });
             return;
           } catch (e) {
             logger.error('[SidePanel] subscribe_to_session failed:', e);

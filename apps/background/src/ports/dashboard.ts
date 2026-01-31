@@ -3,7 +3,6 @@ import { safePostMessage } from '@extension/shared/lib/utils';
 import { createChatModel } from '../workflows/models/factory';
 import { Executor } from '../executor/executor';
 import BrowserContext from '../browser/context';
-import { subscribeToExecutorEvents } from '../workflows/shared/subscribe-to-executor-events';
 import { setPreviewVisibility, sendTabMirror, sendAllMirrorsForCleanup } from '../tabs/handlers';
 import { getAllProvidersDecrypted } from '../crypto';
 
@@ -12,12 +11,11 @@ type BaseChatModel = any;
 export type DashboardDeps = {
   taskManager: any;
   logger: { info: Function; error: Function; debug?: Function };
-  getCurrentPort: () => chrome.runtime.Port | null; // side-panel port
   setDashboardPort: (p: chrome.runtime.Port | undefined) => void;
 };
 
 export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: DashboardDeps): void {
-  const { taskManager, logger, getCurrentPort, setDashboardPort } = deps;
+  const { taskManager, logger, setDashboardPort } = deps;
 
   setDashboardPort(port);
 
@@ -89,13 +87,12 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
               taskManager.tabMirrorService.setVisionEnabled(!!(generalSettings.showTabPreviews ?? true));
             } catch {}
             try {
-              taskManager.setSingleAgentExecutor(sessionId, executor as any, tabId > 0 ? tabId : 0);
+              taskManager.setSingleAgentExecutor(sessionId, executor as any, tabId > 0 ? tabId : 0, undefined, () => {
+                try {
+                  (executor as any)?.cleanup?.();
+                } catch {}
+              });
             } catch {}
-            delete (executor as any).__backgroundSubscribed;
-            try {
-              await subscribeToExecutorEvents(executor, getCurrentPort, taskManager, logger);
-            } catch {}
-
             // Initialize and run asynchronously
             (async () => {
               try {
@@ -126,10 +123,7 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
                 (task.executor as any).addFollowUpTask(query, manualAgentType);
               } catch {}
               try {
-                (task.executor as any).clearExecutionEvents?.();
-              } catch {}
-              try {
-                await subscribeToExecutorEvents(task.executor as any, getCurrentPort(), taskManager, logger);
+                taskManager.setSingleAgentExecutor(sessionId, task.executor as any, task.tabId ?? -1);
               } catch {}
               // CRITICAL FIX: Reactivate task in TaskManager so STOP button works on follow-ups
               try {

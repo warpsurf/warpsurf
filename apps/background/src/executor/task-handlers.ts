@@ -1,6 +1,5 @@
 import BrowserContext from '../browser/context';
 import { setupExecutor } from './setup-executor';
-import { subscribeToExecutorEvents } from '../workflows/shared/subscribe-to-executor-events';
 import { decideUseCurrentTab } from '@src/workflows/specialized/triage-tab-choice';
 import { estimationService } from '../workflows/specialized/estimator/service';
 import { Actors, ExecutionState } from '../workflows/shared/event/types';
@@ -15,8 +14,6 @@ type Deps = {
   getCurrentPort: () => chrome.runtime.Port | null;
   getCurrentExecutor: () => any | null;
   setCurrentExecutor: (e: any | null) => void;
-  eventBuffer?: any[];
-  maxEventBufferSize?: number;
 };
 
 // Map for pending estimation approvals
@@ -256,6 +253,12 @@ export async function handleNewTask(message: any, deps: Deps) {
   const taskName = isWebAgent ? 'Web Agent' : undefined;
   try {
     await taskManager.createTask(task, taskName, true, sessionId, sessionId);
+    try {
+      const created = (taskManager as any).getTask?.(sessionId);
+      if (created) {
+        created.agentType = agentTypeNorm || (isWebAgent ? 'agent' : 'chat');
+      }
+    } catch {}
   } catch {}
 
   // Workflow estimation (only for web agent tasks)
@@ -344,26 +347,12 @@ export async function handleNewTask(message: any, deps: Deps) {
   try {
     if (isWebAgent) {
       const tabIdForManager = hasContextTabs ? contextTabIds[0] : tabId > 0 ? tabId : 0;
-      taskManager.setSingleAgentExecutor(sessionId, executor, tabIdForManager);
+      taskManager.setSingleAgentExecutor(sessionId, executor, tabIdForManager, undefined, () =>
+        setCurrentExecutor(null),
+      );
     } else {
-      taskManager.setSingleAgentExecutor(sessionId, executor, -1);
+      taskManager.setSingleAgentExecutor(sessionId, executor, -1, undefined, () => setCurrentExecutor(null));
     }
-  } catch {}
-
-  // Forward events to side panel (pass getter for reconnection support)
-  try {
-    const bufferOpts =
-      deps.eventBuffer && deps.maxEventBufferSize
-        ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
-        : undefined;
-    await subscribeToExecutorEvents(
-      executor,
-      getCurrentPort,
-      taskManager,
-      deps.logger,
-      () => setCurrentExecutor(null),
-      bufferOpts,
-    );
   } catch {}
 
   // Execute
@@ -610,24 +599,9 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       (existing as any).clearExecutionEvents?.();
     } catch {}
     delete (existing as any).__backgroundSubscribed;
-    try {
-      const bufferOpts =
-        deps.eventBuffer && deps.maxEventBufferSize
-          ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
-          : undefined;
-      await subscribeToExecutorEvents(
-        existing,
-        getCurrentPort,
-        taskManager,
-        logger,
-        () => setCurrentExecutor(null),
-        bufferOpts,
-      );
-    } catch {}
-
     // Re-bind executor to TaskManager so TAB_CREATED triggers mirroring for new tabs
     try {
-      (taskManager as any).setSingleAgentExecutor?.(sessionId, existing, -1);
+      (taskManager as any).setSingleAgentExecutor?.(sessionId, existing, -1, undefined, () => setCurrentExecutor(null));
     } catch {}
 
     // CRITICAL FIX: Reactivate task in TaskManager so STOP button works on follow-ups
@@ -682,24 +656,8 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       logger.info('[handleFollowUpTask] Failed to reset executor state:', e);
     }
 
-    // Ensure execution events are subscribed after a prior cancel may have cleared them
     try {
-      (existing as any).clearExecutionEvents?.();
-    } catch {}
-    delete (existing as any).__backgroundSubscribed;
-    try {
-      const bufferOpts =
-        deps.eventBuffer && deps.maxEventBufferSize
-          ? { eventBuffer: deps.eventBuffer, maxSize: deps.maxEventBufferSize }
-          : undefined;
-      await subscribeToExecutorEvents(
-        existing,
-        getCurrentPort,
-        taskManager,
-        logger,
-        () => setCurrentExecutor(null),
-        bufferOpts,
-      );
+      (taskManager as any).setSingleAgentExecutor?.(sessionId, existing, -1, undefined, () => setCurrentExecutor(null));
     } catch {}
     // Restore reactivateTask - needed for stop button to work!
     // But mirroring is already stopped and marked disabled above

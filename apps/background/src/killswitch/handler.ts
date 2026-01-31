@@ -21,7 +21,6 @@ export interface KillswitchDeps {
   getCurrentExecutor: () => any | null;
   setCurrentExecutor: (e: any | null) => void;
   setCurrentWorkflow: (wf: any | null) => void;
-  eventBuffer?: any[];
   agentManagerPort?: chrome.runtime.Port | null;
 }
 
@@ -93,9 +92,9 @@ export async function handleKillAll(deps: KillswitchDeps): Promise<void> {
     setCurrentWorkflow(null);
 
     // 5. Clear event buffer
-    if (deps.eventBuffer) {
-      deps.eventBuffer.length = 0;
-    }
+    try {
+      taskManager.clearEventBuffer?.();
+    } catch {}
 
     // 6. Clear dashboard running list
     try {

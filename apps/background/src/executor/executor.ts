@@ -439,7 +439,8 @@ export class Executor {
       const responsesSummary = this.getLLMResponsesSummary();
       const jobSummary = this.getJobSummary(jobStartTime);
 
-      if (this.lastError) {
+      const alreadyTerminal = this._hasReachedTerminalState;
+      if (this.lastError && !alreadyTerminal) {
         const errorMessage = this.lastError instanceof Error ? this.lastError.message : String(this.lastError);
         if (!errorMessage.toLowerCase().includes('abort')) {
           workflowLogger.taskFailed(errorMessage, currentTaskNum);
@@ -447,21 +448,33 @@ export class Executor {
           this._hasReachedTerminalState = true;
         }
         this.lastError = undefined;
-      } else if (this.context.stopped) {
+      } else if (this.context.stopped && !alreadyTerminal) {
         workflowLogger.taskCancelled(currentTaskNum);
-      } else if (responsesSummary.total > 0) {
+      } else if (!alreadyTerminal && responsesSummary.total > 0) {
         workflowLogger.taskComplete(
           jobSummary.totalLatency,
           jobSummary.totalCost,
           jobSummary.totalTokens,
           currentTaskNum,
         );
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, 'Task completed successfully');
+        // Include job summary in event data for UI to display cost/latency
+        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, 'Task completed successfully', {
+          summary: {
+            totalInputTokens: jobSummary.totalInputTokens,
+            totalOutputTokens: jobSummary.totalOutputTokens,
+            totalCost: jobSummary.totalCost,
+            totalLatencySeconds: Math.round(jobSummary.totalLatency / 1000),
+            totalLatencyMs: Math.round(jobSummary.totalLatency),
+            apiCallCount: responsesSummary.total,
+          },
+        } as any);
         this._hasReachedTerminalState = true;
 
         if (!this.retainTokenLogs) {
           globalTokenTracker.clearTokensForTask(this.context.taskId);
         }
+      } else if (!this.retainTokenLogs) {
+        globalTokenTracker.clearTokensForTask(this.context.taskId);
       }
     }
   }
@@ -745,17 +758,55 @@ export class Executor {
           const results = Array.isArray((this.context as any).actionResults)
             ? ((this.context as any).actionResults as Array<any>)
             : [];
+          // DEBUG: Log all action results to understand output content extraction
+          logger.info('[TASK_OK Debug] Searching actionResults for output content', {
+            taskId: this.context.taskId,
+            totalResults: results.length,
+            resultsWithContent: results.filter(r => r?.extractedContent).length,
+            resultsWithDone: results.filter(r => r?.isDone).length,
+          });
           for (let i = results.length - 1; i >= 0; i--) {
             const r = results[i];
             if (r && (r.isDone === true || typeof r.extractedContent === 'string')) {
+              logger.info('[TASK_OK Debug] Found candidate result', {
+                index: i,
+                isDone: r.isDone,
+                hasExtractedContent: typeof r.extractedContent === 'string',
+                extractedContentLength: r.extractedContent?.length ?? 0,
+                extractedContentPreview: r.extractedContent?.substring?.(0, 200),
+              });
               if (typeof r.extractedContent === 'string' && r.extractedContent.trim().length > 0) {
-                finalDoneText = r.extractedContent.trim();
+                const text = r.extractedContent.trim();
+                finalDoneText = text;
+                logger.info('[TASK_OK Debug] Using extractedContent as finalDoneText', {
+                  length: text.length,
+                  preview: text.substring(0, 200),
+                });
                 break;
               }
             }
           }
-        } catch {}
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalDoneText || 'Task completed successfully');
+          if (!finalDoneText) {
+            logger.warning('[TASK_OK Debug] No extractedContent found, using fallback message');
+          }
+        } catch (err) {
+          logger.error('[TASK_OK Debug] Error extracting finalDoneText:', err);
+        }
+        // Get job summary for UI display
+        const agentJobSummary = this.getJobSummary();
+        const agentResponsesSummary = this.getLLMResponsesSummary();
+        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalDoneText || 'Task completed successfully', {
+          summary: {
+            totalInputTokens: agentJobSummary.totalInputTokens,
+            totalOutputTokens: agentJobSummary.totalOutputTokens,
+            totalCost: agentJobSummary.totalCost,
+            totalLatencySeconds: Math.round(agentJobSummary.totalLatency / 1000),
+            totalLatencyMs: Math.round(agentJobSummary.totalLatency),
+            apiCallCount: agentResponsesSummary.total,
+            modelName: agentJobSummary.modelName,
+            provider: agentJobSummary.provider,
+          },
+        } as any);
         this._hasReachedTerminalState = true;
       } else if (step >= allowedMaxSteps) {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, 'Task failed: Max steps reached');

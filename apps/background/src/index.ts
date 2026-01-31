@@ -35,14 +35,13 @@ let currentWorkflow: MultiAgentWorkflow | null = null;
 const runningWorkflowSessionIds = new Set<string>();
 // Track active MultiAgentWorkflow instances by sessionId for robust cancellation
 const workflowsBySession = new Map<string, MultiAgentWorkflow>();
-// Buffer events when panel is disconnected, replay on reconnect
-const eventBuffer: any[] = [];
 const MAX_EVENT_BUFFER_SIZE = 500; // Prevent memory bloat
 
 // Initialize task manager for parallel execution
 const taskManager = new TaskManager({
   maxConcurrentTasks: 3, // Allow up to 3 parallel agents
 });
+taskManager.setEventBuffering(MAX_EVENT_BUFFER_SIZE);
 
 // Setup side panel behavior
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error => console.error(error));
@@ -290,7 +289,6 @@ chrome.runtime.onConnect.addListener(async port => {
     attachDashboardPortHandlers(port, {
       taskManager,
       logger,
-      getCurrentPort: () => currentPort,
       setDashboardPort: (p: chrome.runtime.Port | undefined) => taskManager.setDashboardPort(p),
     });
     return;
@@ -322,8 +320,6 @@ chrome.runtime.onConnect.addListener(async port => {
       setCurrentWorkflow: (wf: any | null) => {
         currentWorkflow = wf;
       },
-      eventBuffer,
-      maxEventBufferSize: MAX_EVENT_BUFFER_SIZE,
     });
     return;
   }
