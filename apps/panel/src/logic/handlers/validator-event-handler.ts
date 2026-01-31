@@ -11,12 +11,11 @@ export const createValidatorHandler: EventHandlerCreator = deps => {
 
   /** Check if event belongs to current session */
   const isEventForCurrentSession = (eventData: any): boolean => {
-    const eventTaskId = String(eventData?.taskId || '');
+    const eventSessionId = String(eventData?.taskId || eventData?.sessionId || '');
     const currentSessionId = String(deps.sessionIdRef.current || '');
-    // If no session in panel, still process events
-    if (!currentSessionId) return true;
-    if (!eventTaskId) return true;
-    return eventTaskId === currentSessionId;
+    if (!currentSessionId) return false;
+    if (!eventSessionId) return false;
+    return eventSessionId === currentSessionId;
   };
 
   return event => {

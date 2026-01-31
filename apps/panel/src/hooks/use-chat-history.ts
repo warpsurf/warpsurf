@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import { chatHistoryStore } from '@extension/storage';
+import { Actors, chatHistoryStore } from '@extension/storage';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
@@ -25,6 +25,9 @@ export function useChatHistory({
   setAgentTraceRootId,
   setMirrorPreview,
   setMirrorPreviewBatch,
+  portRef,
+  setIsJobActive,
+  lastEventIdBySessionRef,
 }: {
   logger: { log: (...args: any[]) => void; error: (...args: any[]) => void };
   setMessages: (v: any) => void;
@@ -45,8 +48,70 @@ export function useChatHistory({
   setAgentTraceRootId?: (v: string | null) => void;
   setMirrorPreview?: (v: any) => void;
   setMirrorPreviewBatch?: (v: any) => void;
+  portRef?: MutableRefObject<chrome.runtime.Port | null>;
+  setIsJobActive?: (v: boolean) => void;
+  lastEventIdBySessionRef?: MutableRefObject<Map<string, string>>;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
+
+  const dedupeMessages = useCallback((messages: any[] | undefined | null) => {
+    const list = Array.isArray(messages) ? messages : [];
+    const WINDOW_MS = 5000;
+    const lastByActorContent = new Map<string, number>();
+    const lastNonSystemByContent = new Map<string, number>();
+    const systemIndexByContent = new Map<string, number>();
+    const out: any[] = [];
+
+    const removeSystemAt = (idx: number) => {
+      out.splice(idx, 1);
+      for (const [key, val] of systemIndexByContent.entries()) {
+        if (val === idx) systemIndexByContent.delete(key);
+        else if (val > idx) systemIndexByContent.set(key, val - 1);
+      }
+    };
+
+    for (const msg of list) {
+      const actor = String((msg as any)?.actor || '');
+      const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
+      const content = String((msg as any)?.content ?? '').trim();
+      const ts = Number((msg as any)?.timestamp || 0);
+      if (!content) {
+        out.push(msg);
+        continue;
+      }
+      const key = `${actor}|${content}`;
+      const last = lastByActorContent.get(key);
+      if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
+        continue;
+      }
+
+      if (isSystem) {
+        const lastNon = lastNonSystemByContent.get(content);
+        if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
+          continue;
+        }
+        const sysIdx = systemIndexByContent.get(content);
+        if (sysIdx != null) {
+          const prevTs = Number((out[sysIdx] as any)?.timestamp || 0);
+          if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
+        }
+        systemIndexByContent.set(content, out.length);
+      } else {
+        const sysIdx = systemIndexByContent.get(content);
+        if (sysIdx != null) {
+          const prevTs = Number((out[sysIdx] as any)?.timestamp || 0);
+          if (Math.abs(ts - prevTs) <= WINDOW_MS) {
+            removeSystemAt(sysIdx);
+          }
+        }
+        lastNonSystemByContent.set(content, ts);
+      }
+
+      lastByActorContent.set(key, ts);
+      out.push(msg);
+    }
+    return out;
+  }, []);
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -72,8 +137,7 @@ export function useChatHistory({
         if (setMirrorPreview) setMirrorPreview(null);
         if (setMirrorPreviewBatch) setMirrorPreviewBatch([]);
 
-        // Load persisted metadata FIRST before setting any UI state
-        // This prevents race conditions where events arrive before we've restored the rootId
+        // Load persisted metadata
         let restoredRootId: string | null = null;
         try {
           const [savedSummaries, savedMetadata, savedStats] = await Promise.all([
@@ -82,36 +146,67 @@ export function useChatHistory({
             chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
           ]);
 
-          setRequestSummaries(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {});
-          setMessageMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {});
-          if (savedStats) setSessionStats(savedStats);
-
           // Get stored rootId for restoration
           restoredRootId = (savedMetadata as any)?.__sessionRootId || null;
+
+          logger.log('[handleSessionSelect] Loaded metadata', {
+            sessionId,
+            restoredRootId,
+            hasMetadata: !!savedMetadata,
+            metadataKeys: savedMetadata ? Object.keys(savedMetadata) : [],
+            traceItemCount: restoredRootId ? (savedMetadata as any)?.[restoredRootId]?.traceItems?.length : 0,
+            isCompleted: restoredRootId ? (savedMetadata as any)?.[restoredRootId]?.isCompleted : undefined,
+            hasFinalPreview: restoredRootId ? !!(savedMetadata as any)?.[restoredRootId]?.finalPreview : false,
+            hasFinalPreviewBatch: restoredRootId
+              ? !!(savedMetadata as any)?.[restoredRootId]?.finalPreviewBatch?.length
+              : false,
+          });
+
+          setRequestSummaries(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {});
+          setMessageMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {});
+          try {
+            if (restoredRootId && lastEventIdBySessionRef) {
+              const traceItems = (savedMetadata as any)?.[restoredRootId]?.traceItems || [];
+              const lastWithId = [...traceItems].reverse().find((t: any) => t?.eventId);
+              if (lastWithId?.eventId) {
+                lastEventIdBySessionRef.current.set(String(sessionId), String(lastWithId.eventId));
+              }
+            }
+          } catch {}
+          if (savedStats) setSessionStats(savedStats);
         } catch (e) {
           logger.error('Failed to load session metadata:', e);
           setRequestSummaries({});
           setMessageMetadata({});
         }
 
-        // Now set trajectory ref - either to restored value or null
-        // CRITICAL: Do this AFTER loading metadata to prevent race condition
+        // Set trajectory refs
         if (agentTraceRootIdRef) agentTraceRootIdRef.current = restoredRootId;
         if (setAgentTraceRootId) setAgentTraceRootId(restoredRootId);
 
         // Set messages and common state
-        setMessages(hasMessages ? fullSession.messages : []);
+        setMessages(hasMessages ? dedupeMessages(fullSession.messages) : []);
         setIsFollowUpMode(true);
         setIsHistoricalSession(false);
         setInputEnabled(true);
 
-        // Check if session is running
+        // Check if session is running and subscribe to live events
+        let isRunning = false;
         try {
           const result = await chrome.storage.local.get('agent_dashboard_running');
           const running = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
-          setShowStopButton(running.some((a: any) => String(a.sessionId) === String(sessionId)));
-        } catch {
-          setShowStopButton(false);
+          isRunning = running.some((a: any) => String(a.sessionId) === String(sessionId));
+        } catch {}
+
+        setShowStopButton(isRunning);
+        if (setIsJobActive) setIsJobActive(isRunning);
+
+        // Subscribe to session events for live updates
+        if (portRef?.current?.name === 'side-panel-connection') {
+          try {
+            const lastEventId = lastEventIdBySessionRef?.current?.get(String(sessionId));
+            portRef.current.postMessage({ type: 'subscribe_to_session', sessionId, lastEventId });
+          } catch {}
         }
 
         return true;
@@ -137,6 +232,10 @@ export function useChatHistory({
       setAgentTraceRootId,
       setMirrorPreview,
       setMirrorPreviewBatch,
+      portRef,
+      setIsJobActive,
+      lastEventIdBySessionRef,
+      dedupeMessages,
     ],
   );
 

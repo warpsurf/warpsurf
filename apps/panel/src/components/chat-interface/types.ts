@@ -12,6 +12,7 @@ export interface TraceItem {
   actor: string;
   content: string;
   timestamp: number;
+  eventId?: string;
   controlRequest?: { type: string; tabId?: number; reason?: string };
   /** Current page URL when this trace was recorded */
   pageUrl?: string;

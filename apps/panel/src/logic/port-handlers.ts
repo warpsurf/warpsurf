@@ -10,6 +10,22 @@ let lastErrorTime = 0;
 
 export function createPanelHandlers(deps: any): any {
   return {
+    onSessionSubscribed: (message: any) => {
+      try {
+        const sessionId = String(message?.sessionId || '');
+        if (!sessionId) return;
+        if (deps.sessionIdRef.current && String(deps.sessionIdRef.current) !== sessionId) return;
+        const isRunning = !!message?.isRunning;
+        deps.setShowStopButton(isRunning);
+        deps.setIsJobActive?.(isRunning);
+        if (deps.jobActiveRef) deps.jobActiveRef.current = isRunning;
+        if (message?.agentType) {
+          try {
+            deps.setCurrentTaskAgentType?.(String(message.agentType));
+          } catch {}
+        }
+      } catch {}
+    },
     onShortcut: (text: string) => {
       try {
         // Prefer using SidePanel-provided setter when available to prefill input
@@ -489,28 +505,36 @@ export function createPanelHandlers(deps: any): any {
     },
     onTabMirrorUpdate: (message: any) => {
       const data = message.data;
+      deps.logger.log('[onTabMirrorUpdate] Received', {
+        hasData: !!data,
+        sessionId: data?.sessionId,
+        currentSession: deps.sessionIdRef.current,
+        jobActive: deps.jobActiveRef?.current,
+      });
       if (!data) {
-        // Keep last preview visible if workflow ended; only clear during active runs
-        try {
-          const ended = !!(deps as any)?.jobActiveRef && (deps as any).jobActiveRef.current === false;
-          if (!ended) {
-            deps.setHasFirstPreview(false);
-            deps.setMirrorPreview(null);
-            deps.setMirrorPreviewBatch([]);
-            deps.setIsAgentModeActive(false);
-          }
-        } catch {
+        deps.setHasFirstPreview(false);
+        deps.setMirrorPreview(null);
+        deps.setMirrorPreviewBatch([]);
+        deps.setIsAgentModeActive(false);
+      } else {
+        // Session gate: ignore updates when no session is active or session mismatches
+        const currentSession = deps.sessionIdRef.current ? String(deps.sessionIdRef.current) : '';
+        if (!currentSession) {
+          deps.logger.log('[onTabMirrorUpdate] Ignored - no current session');
+          return;
+        }
+        const targetSessionId = String((data as any)?.sessionId || (data as any)?.agentId || '');
+        if (!targetSessionId || targetSessionId !== currentSession) {
+          deps.logger.log('[onTabMirrorUpdate] Ignored - session mismatch', { targetSessionId, currentSession });
+          return;
+        }
+        if (!deps.jobActiveRef.current) {
           deps.setHasFirstPreview(false);
           deps.setMirrorPreview(null);
           deps.setMirrorPreviewBatch([]);
           deps.setIsAgentModeActive(false);
+          return;
         }
-      } else {
-        // Session gate: ignore updates when no session is active or session mismatches
-        const currentSession = deps.sessionIdRef.current ? String(deps.sessionIdRef.current) : '';
-        if (!currentSession) return;
-        const targetSessionId = String((data as any)?.sessionId || (data as any)?.agentId || '');
-        if (!targetSessionId || targetSessionId !== currentSession) return;
 
         if (deps.jobActiveRef.current) deps.setShowStopButton(true);
         try {
@@ -562,7 +586,11 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
         deps.setMirrorPreviewBatch([]);
-        if (data.screenshot || data.url || data.tabId) deps.setHasFirstPreview(true);
+        // Only set hasFirstPreview when job is actively running
+        // This prevents showing previews for completed sessions that receive stale mirror updates
+        if ((data.screenshot || data.url || data.tabId) && deps.jobActiveRef.current) {
+          deps.setHasFirstPreview(true);
+        }
       }
     },
     onTabMirrorBatch: (message: any) => {
@@ -574,22 +602,11 @@ export function createPanelHandlers(deps: any): any {
         (d: any) => String((d as any)?.sessionId || (d as any)?.agentId || '') === currentSession,
       );
 
-      if (filteredAll.length === 0) {
-        // Preserve last preview if job already ended; only clear during active runs
-        try {
-          const ended = !!(deps as any)?.jobActiveRef && (deps as any).jobActiveRef.current === false;
-          if (!ended) {
-            deps.setMirrorPreviewBatch([]);
-            deps.setMirrorPreview(null);
-            deps.setHasFirstPreview(false);
-            deps.setIsAgentModeActive(false);
-          }
-        } catch {
-          deps.setMirrorPreviewBatch([]);
-          deps.setMirrorPreview(null);
-          deps.setHasFirstPreview(false);
-          deps.setIsAgentModeActive(false);
-        }
+      if (filteredAll.length === 0 || !deps.jobActiveRef.current) {
+        deps.setMirrorPreviewBatch([]);
+        deps.setMirrorPreview(null);
+        deps.setHasFirstPreview(false);
+        deps.setIsAgentModeActive(false);
         return;
       }
 
@@ -639,8 +656,11 @@ export function createPanelHandlers(deps: any): any {
 
         deps.logger.log('[Panel] Setting mirror preview batch:', batch.length, 'items');
         deps.setMirrorPreviewBatch(batch);
-        deps.setHasFirstPreview(true);
-        deps.setIsAgentModeActive(true);
+        // Only enable preview when job is actively running
+        if (deps.jobActiveRef.current) {
+          deps.setHasFirstPreview(true);
+          deps.setIsAgentModeActive(true);
+        }
         deps.setMirrorPreview(null);
 
         try {
@@ -676,8 +696,11 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
         deps.setMirrorPreviewBatch([]);
-        deps.setHasFirstPreview(true);
-        deps.setIsAgentModeActive(true);
+        // Only enable preview when job is actively running
+        if (deps.jobActiveRef.current) {
+          deps.setHasFirstPreview(true);
+          deps.setIsAgentModeActive(true);
+        }
       }
     },
     onTabMirrorBatchForCleanup: (message: any) => {
@@ -909,7 +932,57 @@ export function createPanelHandlers(deps: any): any {
 
         // Restore messages if available
         if (session?.messages && Array.isArray(session.messages)) {
-          deps.setMessages(session.messages);
+          const WINDOW_MS = 5000;
+          const lastByActorContent = new Map<string, number>();
+          const lastNonSystemByContent = new Map<string, number>();
+          const systemIndexByContent = new Map<string, number>();
+          const deduped: any[] = [];
+          const removeSystemAt = (idx: number) => {
+            deduped.splice(idx, 1);
+            for (const [key, val] of systemIndexByContent.entries()) {
+              if (val === idx) systemIndexByContent.delete(key);
+              else if (val > idx) systemIndexByContent.set(key, val - 1);
+            }
+          };
+          for (const msg of session.messages) {
+            const actor = String((msg as any)?.actor || '');
+            const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
+            const content = String((msg as any)?.content ?? '').trim();
+            const ts = Number((msg as any)?.timestamp || 0);
+            if (!content) {
+              deduped.push(msg);
+              continue;
+            }
+            const key = `${actor}|${content}`;
+            const last = lastByActorContent.get(key);
+            if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
+              continue;
+            }
+            if (isSystem) {
+              const lastNon = lastNonSystemByContent.get(content);
+              if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
+                continue;
+              }
+              const sysIdx = systemIndexByContent.get(content);
+              if (sysIdx != null) {
+                const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
+                if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
+              }
+              systemIndexByContent.set(content, deduped.length);
+            } else {
+              const sysIdx = systemIndexByContent.get(content);
+              if (sysIdx != null) {
+                const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
+                if (Math.abs(ts - prevTs) <= WINDOW_MS) {
+                  removeSystemAt(sysIdx);
+                }
+              }
+              lastNonSystemByContent.set(content, ts);
+            }
+            lastByActorContent.set(key, ts);
+            deduped.push(msg);
+          }
+          deps.setMessages(deduped);
 
           // Find the last aggregate root message (agent message) to restore trajectory state
           const agentActors = [
@@ -977,6 +1050,7 @@ export function createPanelHandlers(deps: any): any {
               timestamp: number;
               pageUrl?: string;
               pageTitle?: string;
+              eventId?: string;
             }> = [];
             for (const evt of data.bufferedEvents) {
               try {
@@ -990,6 +1064,7 @@ export function createPanelHandlers(deps: any): any {
                     timestamp: evt.timestamp || Date.now(),
                     pageUrl: evtData.pageUrl,
                     pageTitle: evtData.pageTitle,
+                    eventId: evt.eventId || evtData.eventId,
                   });
                 }
               } catch {}
@@ -997,7 +1072,18 @@ export function createPanelHandlers(deps: any): any {
             if (traceItemsToAdd.length > 0) {
               const existing = restoredMetadata[rootId] || {};
               const currentItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
-              restoredMetadata[rootId] = { ...existing, traceItems: [...currentItems, ...traceItemsToAdd] };
+              const existingIds = new Set(
+                currentItems.map((t: any) => String((t as any)?.eventId || '')).filter(Boolean),
+              );
+              const existingTs = new Set(currentItems.map((t: any) => t.timestamp));
+              const merged = [
+                ...currentItems,
+                ...traceItemsToAdd.filter(t => {
+                  if (t.eventId) return !existingIds.has(String(t.eventId));
+                  return !existingTs.has(t.timestamp);
+                }),
+              ];
+              restoredMetadata[rootId] = { ...existing, traceItems: merged };
             }
           }
         }
@@ -1014,6 +1100,15 @@ export function createPanelHandlers(deps: any): any {
           if (pendingEvent) {
             const state = String(pendingEvent.state || '').toLowerCase();
             if (state === 'task.ok' || state === 'task.fail' || state === 'task.cancel') {
+              const pendingContent = String(pendingEvent.content || pendingEvent?.data?.details || '').trim();
+              const alreadyStored = !!session?.messages?.some(
+                (m: any) => String(m?.content || '').trim() === pendingContent && pendingContent.length > 0,
+              );
+              if (alreadyStored) {
+                delete pending[data.sessionId];
+                await chrome.storage.local.set({ pending_terminal_events: pending });
+                return;
+              }
               const syntheticEvent: any = {
                 actor: Actors.SYSTEM,
                 state:
@@ -1068,7 +1163,57 @@ export function createPanelHandlers(deps: any): any {
           deps.setCurrentSessionId(data.currentSessionId);
           const session = await chatHistoryStore.getSession(data.currentSessionId);
           if (session?.messages) {
-            deps.setMessages(session.messages);
+            const WINDOW_MS = 5000;
+            const lastByActorContent = new Map<string, number>();
+            const lastNonSystemByContent = new Map<string, number>();
+            const systemIndexByContent = new Map<string, number>();
+            const deduped: any[] = [];
+            const removeSystemAt = (idx: number) => {
+              deduped.splice(idx, 1);
+              for (const [key, val] of systemIndexByContent.entries()) {
+                if (val === idx) systemIndexByContent.delete(key);
+                else if (val > idx) systemIndexByContent.set(key, val - 1);
+              }
+            };
+            for (const msg of session.messages) {
+              const actor = String((msg as any)?.actor || '');
+              const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
+              const content = String((msg as any)?.content ?? '').trim();
+              const ts = Number((msg as any)?.timestamp || 0);
+              if (!content) {
+                deduped.push(msg);
+                continue;
+              }
+              const key = `${actor}|${content}`;
+              const last = lastByActorContent.get(key);
+              if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
+                continue;
+              }
+              if (isSystem) {
+                const lastNon = lastNonSystemByContent.get(content);
+                if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
+                  continue;
+                }
+                const sysIdx = systemIndexByContent.get(content);
+                if (sysIdx != null) {
+                  const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
+                  if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
+                }
+                systemIndexByContent.set(content, deduped.length);
+              } else {
+                const sysIdx = systemIndexByContent.get(content);
+                if (sysIdx != null) {
+                  const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
+                  if (Math.abs(ts - prevTs) <= WINDOW_MS) {
+                    removeSystemAt(sysIdx);
+                  }
+                }
+                lastNonSystemByContent.set(content, ts);
+              }
+              lastByActorContent.set(key, ts);
+              deduped.push(msg);
+            }
+            deps.setMessages(deduped);
             deps.setIsHistoricalSession(true);
             deps.setIsFollowUpMode(true); // Enable follow-up mode for restored sessions
           }
@@ -1078,5 +1223,8 @@ export function createPanelHandlers(deps: any): any {
     onDisconnect: () => {
       deps.setInputEnabled(true);
     },
+    // Exposed setters for trajectory_state handler in use-background-connection
+    setMessageMetadata: deps.setMessageMetadata,
+    setAgentTraceRootId: deps.setAgentTraceRootId,
   };
 }

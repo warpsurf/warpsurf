@@ -31,9 +31,15 @@ export const createSystemHandler: EventHandlerCreator = deps => {
 
   /** Check if a terminal event is for the current session */
   const isEventForCurrentSession = (eventData: any): boolean => {
-    const eventTaskId = String(eventData?.taskId || '');
+    // Check both taskId and sessionId (background sends sessionId, some events use taskId)
+    const eventSessionId = String(eventData?.taskId || eventData?.sessionId || '');
     const currentSessionId = String(deps.sessionIdRef.current || '');
-    return !eventTaskId || !currentSessionId || eventTaskId === currentSessionId;
+    // If no session in panel, don't update UI (background handles persistence)
+    if (!currentSessionId) return false;
+    // If event has no session identifier, skip (don't assume it's for current session)
+    if (!eventSessionId) return false;
+    // Only process if explicitly for current session
+    return eventSessionId === currentSessionId;
   };
 
   return event => {
@@ -100,7 +106,15 @@ export const createSystemHandler: EventHandlerCreator = deps => {
       }
 
       case ExecutionState.TASK_OK: {
-        const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
+        const taskId = String(data?.taskId || data?.sessionId || deps.sessionIdRef.current || '');
+        logger.log('[TASK_OK] Starting handler', {
+          taskId,
+          sessionId: deps.sessionIdRef.current,
+          hasContent: !!content,
+          contentPreview: content?.substring?.(0, 100),
+          agentTraceRootId: deps.agentTraceRootIdRef.current,
+          agentType: deps.getCurrentTaskAgentType?.(),
+        });
         // Always update dashboard
         try {
           if (taskId) moveToCompleted(taskId, 'completed', deps);
@@ -115,8 +129,13 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           });
         } catch {}
+
+        const isCurrentSession = isEventForCurrentSession(data);
+
+        // Background persistence handles non-current sessions to prevent duplicates.
+
         // Only update current session's UI
-        if (isEventForCurrentSession(data)) {
+        if (isCurrentSession) {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
@@ -134,27 +153,39 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           } catch {}
           deps.setIsAgentModeActive(false);
+          deps.setActiveAggregateMessageId(null); // Clear to prevent stale preview binding
+          logger.log('[TASK_OK] Persisting final preview');
           persistFinalPreview(deps);
-          const isCurrentlyBrowserUse =
-            deps.getCurrentTaskAgentType() === 'agent' || deps.getCurrentTaskAgentType() === 'agent';
+          // Clear live preview state so UI falls back to persisted finalPreview
+          logger.log('[TASK_OK] Clearing live preview state');
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.setHasFirstPreview(false);
+          const isCurrentlyBrowserUse = deps.getCurrentTaskAgentType() === 'agent';
+          logger.log('[TASK_OK] Checking if should add final trace', {
+            hasRootId: !!deps.agentTraceRootIdRef.current,
+            agentType: deps.getCurrentTaskAgentType?.(),
+            isCurrentlyBrowserUse,
+          });
           if (
             deps.agentTraceRootIdRef.current &&
             deps.getCurrentTaskAgentType() !== 'multiagent' &&
             isCurrentlyBrowserUse
           ) {
-            const finalText = content || 'Task completed successfully';
-            addTraceItem(Actors.SYSTEM, finalText, timestamp, deps);
+            // Only add a final trace item if we have actual output content
+            // Don't show generic "Task completed successfully" - it's redundant
+            if (content && content !== 'Task completed successfully') {
+              logger.log('[TASK_OK] Adding final trace item:', content.substring(0, 100));
+              addTraceItem(Actors.SYSTEM, content, timestamp, deps);
+            } else {
+              logger.log('[TASK_OK] Skipping generic completion message');
+            }
             markAggregateComplete(deps);
-            try {
-              if (deps.sessionIdRef.current)
-                chatHistoryStore.addMessage(deps.sessionIdRef.current, {
-                  actor: Actors.SYSTEM,
-                  content: finalText,
-                  timestamp,
-                } as any);
-            } catch {}
           } else if (deps.agentTraceRootIdRef.current && !isCurrentlyBrowserUse) {
+            logger.log('[TASK_OK] Marking aggregate complete (non-browser-use)');
             markAggregateComplete(deps);
+          } else {
+            logger.log('[TASK_OK] Skipping trace - no rootId or multiagent');
           }
           try {
             const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
@@ -168,11 +199,41 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           } catch {}
           const summary = parseJobSummary(data);
+          logger.log('[TASK_OK Debug] Summary parsing result', {
+            hasSummary: !!summary,
+            rawDataKeys: Object.keys(data || {}),
+            hasDataSummary: !!(data as any)?.summary,
+            hasDataMessage: !!(data as any)?.message,
+            summaryData: summary
+              ? {
+                  cost: summary.totalCost,
+                  inputTokens: summary.totalInputTokens,
+                  outputTokens: summary.totalOutputTokens,
+                  latency: summary.totalLatencySeconds,
+                }
+              : null,
+          });
           if (summary) {
-            const taskId = String(data?.taskId || deps.sessionIdRef.current || 'unknown');
+            const taskId = String(data?.taskId || data?.sessionId || deps.sessionIdRef.current || 'unknown');
+            logger.log('[TASK_OK Debug] Storing job summary', {
+              taskId,
+              agentTraceRootId: deps.agentTraceRootIdRef.current,
+              hasLastAgentMessage: !!deps.lastAgentMessageRef.current,
+              summaryTokens: summary.totalInputTokens + summary.totalOutputTokens,
+              summaryCost: summary.totalCost,
+            });
+            // storeJobSummary handles updateSessionStats with deduplication
             if (storeJobSummary(summary, taskId, 'task.ok', deps)) {
-              if (deps.lastAgentMessageRef.current) updateLastAgentMessageSummary(summary, deps);
-              if (deps.agentTraceRootIdRef.current) updateAggregateRootSummary(summary, deps);
+              if (deps.lastAgentMessageRef.current) {
+                logger.log('[TASK_OK Debug] Updating last agent message summary');
+                updateLastAgentMessageSummary(summary, deps);
+              }
+              if (deps.agentTraceRootIdRef.current) {
+                logger.log('[TASK_OK Debug] Updating aggregate root summary', {
+                  rootId: deps.agentTraceRootIdRef.current,
+                });
+                updateAggregateRootSummary(summary, deps);
+              }
               if (!deps.lastAgentMessageRef.current && deps.agentTraceRootIdRef.current) {
                 updateAggregateRootSummary(summary, deps);
                 deps.logger.log(
@@ -181,8 +242,15 @@ export const createSystemHandler: EventHandlerCreator = deps => {
                 );
               }
             }
+          } else {
+            logger.log('[TASK_OK Debug] No summary found in event data');
           }
-          if (deps.getCurrentTaskAgentType() !== 'multiagent') deps.agentTraceRootIdRef.current = null;
+          // Clear the aggregate root state (not just ref) so UI updates
+          // NOTE: We keep agentTraceRootIdRef.current set until multiagent is complete
+          // but clear the active state to hide the live preview panel
+          if (deps.getCurrentTaskAgentType() !== 'multiagent') {
+            deps.agentTraceRootIdRef.current = null;
+          }
         }
         break;
       }
@@ -203,8 +271,26 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           });
         } catch {}
+
+        const isFailCurrentSession = isEventForCurrentSession(data);
+        const failText = content || 'Task failed';
+
+        // Persist message to storage for non-current sessions
+        if (!isFailCurrentSession) {
+          const failedSessionId = String(data?.sessionId || data?.taskId || '');
+          if (failedSessionId) {
+            try {
+              chatHistoryStore.addMessage(failedSessionId, {
+                actor: Actors.SYSTEM,
+                content: failText,
+                timestamp,
+              } as any);
+            } catch {}
+          }
+        }
+
         // Only update current session's UI
-        if (isEventForCurrentSession(data)) {
+        if (isFailCurrentSession) {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
@@ -232,17 +318,8 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           }
           if (deps.getCurrentTaskAgentType() !== 'multiagent' && deps.agentTraceRootIdRef.current) {
-            const finalText = content || 'Task failed';
-            addTraceItem(Actors.SYSTEM, finalText, timestamp, deps);
+            addTraceItem(Actors.SYSTEM, failText, timestamp, deps);
             markAggregateComplete(deps);
-            try {
-              if (deps.sessionIdRef.current)
-                chatHistoryStore.addMessage(deps.sessionIdRef.current, {
-                  actor: Actors.SYSTEM,
-                  content: finalText,
-                  timestamp,
-                } as any);
-            } catch {}
           }
           try {
             const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
@@ -256,6 +333,10 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           } catch {}
           persistFinalPreview(deps);
+          // Clear live preview state so UI falls back to persisted finalPreview
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.setHasFirstPreview(false);
           if (deps.getCurrentTaskAgentType() !== 'multiagent') deps.agentTraceRootIdRef.current = null;
         }
         break;
@@ -277,8 +358,25 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             }
           });
         } catch {}
+
+        const isCancelCurrentSession = isEventForCurrentSession(data);
+
+        // Persist message to storage for non-current sessions
+        if (!isCancelCurrentSession) {
+          const cancelledSessionId = String(data?.sessionId || data?.taskId || '');
+          if (cancelledSessionId) {
+            try {
+              chatHistoryStore.addMessage(cancelledSessionId, {
+                actor: Actors.SYSTEM,
+                content: 'Task cancelled',
+                timestamp,
+              } as any);
+            } catch {}
+          }
+        }
+
         // Only update current session's UI
-        if (isEventForCurrentSession(data)) {
+        if (isCancelCurrentSession) {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
@@ -299,6 +397,10 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             prev.filter((msg: any, idx: number) => !(msg.content === 'Showing progress...' && idx === prev.length - 1)),
           );
           persistFinalPreview(deps);
+          // Clear live preview state so UI falls back to persisted finalPreview
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.setHasFirstPreview(false);
           try {
             const isAgentV2 = deps.getCurrentTaskAgentType() === 'multiagent';
             const cancelKey = `${deps.sessionIdRef.current || data?.taskId || 'unknown'}:cancelled`;

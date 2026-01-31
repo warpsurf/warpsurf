@@ -142,21 +142,38 @@ export function useEventSetup(params: {
         }
       }
 
+      let didAppend = false;
+      const incomingEventId = (newMessage as any)?.eventId ? String((newMessage as any).eventId) : '';
+      const normalizedContent = String(newMessage.content ?? '').trim();
+      const incomingActor = String((newMessage as any)?.actor || '');
+      const isSystemActor = incomingActor === Actors.SYSTEM || incomingActor.toLowerCase() === 'system';
       setMessages((prev: Message[]) => {
         const filtered = prev.filter((msg, idx) => !(msg.content === 'Showing progress...' && idx === prev.length - 1));
-        const last = filtered[filtered.length - 1];
-        if (
-          last &&
-          last.actor === newMessage.actor &&
-          last.timestamp === newMessage.timestamp &&
-          String(last.content) === String(newMessage.content)
-        ) {
-          return filtered;
+        const hasDuplicate = filtered.some(msg => {
+          if (incomingEventId && String((msg as any)?.eventId || '') === incomingEventId) return true;
+          return (
+            msg.actor === newMessage.actor &&
+            Number(msg.timestamp) === Number(newMessage.timestamp) &&
+            String(msg.content ?? '').trim() === normalizedContent
+          );
+        });
+        if (hasDuplicate) return filtered;
+        if (isSystemActor) {
+          const hasNonSystemDuplicate = filtered.some(msg => {
+            const actor = String((msg as any)?.actor || '');
+            if (actor === Actors.SYSTEM || actor.toLowerCase() === 'system') return false;
+            const content = String((msg as any)?.content ?? '').trim();
+            if (content !== normalizedContent) return false;
+            const ts = Number((msg as any)?.timestamp || 0);
+            return Math.abs(Number(newMessage.timestamp) - ts) <= 5000;
+          });
+          if (hasNonSystemDuplicate) return filtered;
         }
+        didAppend = true;
         return [...filtered, newMessage];
       });
       const effectiveSessionId = sessionId !== undefined ? sessionId : sessionIdRef.current;
-      if (effectiveSessionId && !isProgressMessage && !incognitoMode) {
+      if (didAppend && effectiveSessionId && !isProgressMessage && !incognitoMode) {
         chatHistoryStore
           .addMessage(effectiveSessionId, newMessage)
           .catch(err => logger.error('Failed to save message:', err));
@@ -168,10 +185,21 @@ export function useEventSetup(params: {
   const persistAgentMessage = useCallback(
     (actor: Actors, content: string, timestamp: number) => {
       try {
+        const actorText = String(actor || '').toLowerCase();
+        if (actorText === String(Actors.CHAT).toLowerCase() || actorText === String(Actors.SEARCH).toLowerCase()) {
+          return;
+        }
         const effectiveSessionId = sessionIdRef.current;
         if (!effectiveSessionId || incognitoMode) return;
+        const trimmed = String(content || '').trim();
+        if (!trimmed) return;
         chatHistoryStore
-          .addMessage(effectiveSessionId, { actor, content, timestamp })
+          .getSession(effectiveSessionId)
+          .then(session => {
+            const exists = session?.messages?.some(m => String(m.content || '').trim() === trimmed);
+            if (exists) return;
+            return chatHistoryStore.addMessage(effectiveSessionId, { actor, content: trimmed, timestamp });
+          })
           .catch(err => logger.error('Failed to save agent message:', err));
       } catch (e) {
         logger.error('persistAgentMessage failed', e);

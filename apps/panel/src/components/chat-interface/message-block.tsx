@@ -163,6 +163,20 @@ export default function MessageBlock({
   const isEstimator = message.actor === Actors.ESTIMATOR;
   const isEstimatorActive = isEstimator && metadata?.traceItems && !metadata?.estimation && !metadata?.isCompleted;
   const content = useMemo(() => String(message.content || ''), [message.content]);
+
+  // DEBUG: Detect if content looks like a raw session/task ID
+  useEffect(() => {
+    if (content && /^\d{13,15}$/.test(content.trim())) {
+      console.warn('[MessageBlock Debug] Content looks like a raw ID!', {
+        content,
+        actor: message.actor,
+        timestamp: message.timestamp,
+        messageId: `${message.timestamp}-${message.actor}`,
+        hasMetadata: !!metadata,
+        metadataKeys: metadata ? Object.keys(metadata) : [],
+      });
+    }
+  }, [content, message.actor, message.timestamp, metadata]);
   const currentPhase = useMemo((): 'planner' | 'processing' | 'refiner' | 'workers' | null => {
     const lower = content.toLowerCase();
     if (lower.startsWith('creating plan')) return 'planner';

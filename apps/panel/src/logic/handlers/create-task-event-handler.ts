@@ -49,7 +49,12 @@ export interface TaskEventHandlerDeps {
   runStartedAtRef: React.MutableRefObject<number | null>;
   setMessageMetadata: React.Dispatch<React.SetStateAction<Record<string, any>>>;
   setRequestSummaries: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-  updateSessionStats: (data: { totalInputTokens: number; totalOutputTokens: number; totalLatencyMs: number; totalCost: number }) => void;
+  updateSessionStats: (data: {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalLatencyMs: number;
+    totalCost: number;
+  }) => void;
   getCurrentTaskAgentType: () => string | null;
   getWorkerTabGroups: () => Array<any>;
   getChatSessions: () => Array<{ id: string; title: string; createdAt: number; updatedAt: number }>;
@@ -137,13 +142,23 @@ export function createTaskEventHandler(deps: TaskEventHandlerDeps) {
     if (!shouldSkipDefaultRendering && shouldSkipJobSummary(content)) shouldSkipDefaultRendering = true;
     if (!shouldSkipDefaultRendering && (content ?? '') !== '') {
       try {
-        appendMessage({ actor, content: content || '', timestamp: event.timestamp || Date.now() });
+        appendMessage({
+          actor,
+          content: content || '',
+          timestamp: event.timestamp || Date.now(),
+          eventId: (event as any)?.eventId || (event as any)?.data?.eventId,
+        } as any);
       } catch {}
     }
     try {
       if ((data as any)?.agentColor || (data as any)?.agentName) {
-        setMirrorPreview((prev: any) => ({ url: prev?.url, title: prev?.title, screenshot: prev?.screenshot,
-          tabId: prev?.tabId, color: (data as any)?.agentColor || prev?.color }));
+        setMirrorPreview((prev: any) => ({
+          url: prev?.url,
+          title: prev?.title,
+          screenshot: prev?.screenshot,
+          tabId: prev?.tabId,
+          color: (data as any)?.agentColor || prev?.color,
+        }));
       }
     } catch {}
   };

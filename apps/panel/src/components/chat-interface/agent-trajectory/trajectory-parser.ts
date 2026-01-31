@@ -290,6 +290,19 @@ const deduplicateActions = <T extends ParsedAction>(actions: T[]): T[] => {
   for (const curr of actions) {
     const prev = result[result.length - 1];
     if (prev && curr.actionName === prev.actionName && curr.timestamp - prev.timestamp < 10000) {
+      const prevArgs = prev.args || {};
+      const currArgs = curr.args || {};
+      const prevUrl = (typeof (prevArgs as any).url === 'string' ? (prevArgs as any).url : '') || prev.url || '';
+      const currUrl = (typeof (currArgs as any).url === 'string' ? (currArgs as any).url : '') || curr.url || '';
+      const prevTabId = (prevArgs as any).tabId ?? (prevArgs as any).tab_id ?? '';
+      const currTabId = (currArgs as any).tabId ?? (currArgs as any).tab_id ?? '';
+      const prevKey = `${prev.actionName}|${prevUrl}|${prevTabId}`;
+      const currKey = `${curr.actionName}|${currUrl}|${currTabId}`;
+      const hasKey = Boolean(prevUrl || prevTabId || currUrl || currTabId);
+      if (hasKey && prevKey !== currKey) {
+        result.push(curr);
+        continue;
+      }
       if (Object.keys(curr.args).length > Object.keys(prev.args).length) {
         result[result.length - 1] = curr;
       }

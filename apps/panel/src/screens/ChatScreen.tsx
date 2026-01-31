@@ -308,7 +308,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   jobSummaries={requestSummaries}
                   metadataByMessageId={messageMetadata}
                   inlinePreview={hasFirstPreview ? mirrorPreview : null}
-                  inlinePreviewBatch={mirrorPreviewBatch}
+                  inlinePreviewBatch={hasFirstPreview ? mirrorPreviewBatch : []}
                   isPreviewCollapsed={isPreviewCollapsed}
                   activeAggregateMessageId={agentTraceRootId}
                   onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
@@ -486,7 +486,7 @@ export function ChatScreen(props: ChatScreenProps) {
             jobSummaries={requestSummaries}
             metadataByMessageId={messageMetadata}
             inlinePreview={hasFirstPreview ? mirrorPreview : null}
-            inlinePreviewBatch={mirrorPreviewBatch}
+            inlinePreviewBatch={hasFirstPreview ? mirrorPreviewBatch : []}
             isPreviewCollapsed={isPreviewCollapsed}
             activeAggregateMessageId={agentTraceRootId}
             onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}

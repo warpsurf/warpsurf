@@ -97,12 +97,14 @@ export default memo(function MessageList({
           const messageId = `${message.timestamp}-${message.actor}`;
           const rootMeta = activeAggregateMessageId ? metadataByMessageId[activeAggregateMessageId] : undefined;
           const isCurrentRunRoot = activeAggregateMessageId === messageId;
-          const hasAnyPreview = !!(inlinePreview || inlinePreviewBatch?.length);
+          // Only consider LIVE previews, not final preview from metadata
+          const hasLivePreview = !!(inlinePreview || inlinePreviewBatch?.length);
           const isFallbackLastAgent =
             !activeAggregateMessageId &&
-            hasAnyPreview &&
+            hasLivePreview &&
             (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
-          const showPreviewHere = isCurrentRunRoot || isFallbackLastAgent;
+          // Only show preview panel when there's a live preview AND workflow is active
+          const showPreviewHere = hasLivePreview && (isCurrentRunRoot || isFallbackLastAgent);
           const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
           const agentColorHex =
             metadata?.agentColor || (activeAggregateMessageId === messageId ? inlinePreview?.color : undefined);
@@ -145,10 +147,8 @@ export default memo(function MessageList({
                 </div>
                 <div className="w-1/3 flex-shrink-0">
                   <PreviewPanel
-                    inlinePreview={inlinePreview || metadata?.finalPreview || null}
-                    inlinePreviewBatch={
-                      inlinePreviewBatch?.length ? inlinePreviewBatch : metadata?.finalPreviewBatch || []
-                    }
+                    inlinePreview={inlinePreview}
+                    inlinePreviewBatch={inlinePreviewBatch || []}
                     agentColorHex={agentColorHex}
                     isPaused={isPaused}
                     isPreviewCollapsed={isPreviewCollapsed}

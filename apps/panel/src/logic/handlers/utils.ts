@@ -283,35 +283,76 @@ export function addTraceItem(
   deps: TaskEventHandlerDeps,
   additionalData?: any,
 ): void {
-  if (!deps.agentTraceRootIdRef.current) return;
+  deps.logger.log('[addTraceItem] Called', {
+    actor,
+    contentPreview: content?.substring?.(0, 50),
+    rootId: deps.agentTraceRootIdRef.current,
+    sessionId: deps.sessionIdRef.current,
+  });
+  if (!deps.agentTraceRootIdRef.current) {
+    deps.logger.log('[addTraceItem] Skipped - no rootId');
+    return;
+  }
   try {
     const rootId = deps.agentTraceRootIdRef.current as string;
     deps.setMessageMetadata(prev => {
       const existing = (prev as any)[rootId] || {};
       const traceItems = (existing as any).traceItems || [];
       // Extract pageUrl and pageTitle from additionalData if present
-      const { pageUrl, pageTitle, ...rest } = additionalData || {};
+      const { pageUrl, pageTitle, eventId, ...rest } = additionalData || {};
+      const normalizedEventId = eventId ? String(eventId) : '';
+      if (normalizedEventId) {
+        const hasEventId = traceItems.some((t: any) => String(t?.eventId || '') === normalizedEventId);
+        if (hasEventId) return prev as any;
+      } else {
+        const hasDuplicate = traceItems.some(
+          (t: any) =>
+            Number(t?.timestamp || 0) === Number(timestamp) &&
+            String(t?.actor || '') === String(actor || '') &&
+            String(t?.content || '') === String(content || ''),
+        );
+        if (hasDuplicate) return prev as any;
+      }
       const newItem = {
         actor,
         content,
         timestamp,
+        ...(normalizedEventId && { eventId: normalizedEventId }),
         ...(pageUrl && { pageUrl }),
         ...(pageTitle && { pageTitle }),
         ...rest,
       };
       const updated = { ...prev, [rootId]: { ...existing, traceItems: [...traceItems, newItem] } } as any;
+      deps.logger.log('[addTraceItem] Added item', {
+        rootId,
+        newTraceCount: traceItems.length + 1,
+      });
       try {
-        if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
-      } catch {}
+        if (deps.sessionIdRef.current) {
+          chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
+          deps.logger.log('[addTraceItem] Persisted to storage');
+        }
+      } catch (e) {
+        deps.logger.error('[addTraceItem] Failed to persist:', e);
+      }
       return updated;
     });
-  } catch {}
+  } catch (e) {
+    deps.logger.error('[addTraceItem] Error:', e);
+  }
 }
 
 /** Marks aggregate message as completed */
 export function markAggregateComplete(deps: TaskEventHandlerDeps, rootId?: string): void {
   const targetRootId = rootId || deps.agentTraceRootIdRef.current;
-  if (!targetRootId) return;
+  deps.logger.log('[markAggregateComplete] Called', {
+    targetRootId,
+    sessionId: deps.sessionIdRef.current,
+  });
+  if (!targetRootId) {
+    deps.logger.log('[markAggregateComplete] Skipped - no rootId');
+    return;
+  }
   try {
     deps.setMessageMetadata(prev => {
       const existing = (prev as any)[targetRootId] || {};
@@ -326,25 +367,49 @@ export function markAggregateComplete(deps: TaskEventHandlerDeps, rootId?: strin
 
 /** Persists final preview snapshot to metadata */
 export function persistFinalPreview(deps: TaskEventHandlerDeps): void {
-  if (!deps.agentTraceRootIdRef.current) return;
+  deps.logger.log('[persistFinalPreview] Called', {
+    rootId: deps.agentTraceRootIdRef.current,
+    sessionId: deps.sessionIdRef.current,
+  });
+  if (!deps.agentTraceRootIdRef.current) {
+    deps.logger.log('[persistFinalPreview] Skipped - no rootId');
+    return;
+  }
   try {
     const rootId = deps.agentTraceRootIdRef.current as string;
     const batch = deps.getMirrorPreviewBatch?.();
+    deps.logger.log('[persistFinalPreview] Preview data', {
+      hasBatch: Array.isArray(batch) && batch.length > 0,
+      batchLength: batch?.length,
+    });
     deps.setMessageMetadata((prev: any) => {
       const existing: any = prev[rootId] || {};
       const next: any = { ...prev };
       if (Array.isArray(batch) && batch.length > 0) {
         next[rootId] = { ...existing, finalPreviewBatch: batch };
+        deps.logger.log('[persistFinalPreview] Saved finalPreviewBatch');
       } else {
         const singlePreview = (deps as any)?.mirrorPreview || existing.finalPreview;
-        if (singlePreview) next[rootId] = { ...existing, finalPreview: singlePreview };
+        if (singlePreview) {
+          next[rootId] = { ...existing, finalPreview: singlePreview };
+          deps.logger.log('[persistFinalPreview] Saved finalPreview');
+        } else {
+          deps.logger.log('[persistFinalPreview] No preview to save');
+        }
       }
       try {
-        if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);
-      } catch {}
+        if (deps.sessionIdRef.current) {
+          chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);
+          deps.logger.log('[persistFinalPreview] Persisted to storage');
+        }
+      } catch (e) {
+        deps.logger.error('[persistFinalPreview] Failed to persist:', e);
+      }
       return next;
     });
-  } catch {}
+  } catch (e) {
+    deps.logger.error('[persistFinalPreview] Error:', e);
+  }
 }
 
 /** Creates new aggregate root message */
@@ -410,6 +475,11 @@ interface DashboardAgent {
 
 /** Adds a running agent to the dashboard */
 export function addRunningAgent(taskId: string, deps: TaskEventHandlerDeps): void {
+  if (!taskId) {
+    deps.logger?.log?.('[addRunningAgent] Skipped - no taskId');
+    return;
+  }
+  deps.logger?.log?.('[addRunningAgent] Starting', { taskId });
   try {
     const sessionTitle = deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
     const agentTypeName = deps.getCurrentTaskAgentType() || 'Agent';
@@ -427,16 +497,27 @@ export function addRunningAgent(taskId: string, deps: TaskEventHandlerDeps): voi
       status: 'running',
       lastUpdate: Date.now(),
     };
-    chrome.storage.local
-      .get(RUNNING_KEY)
-      .then(result => {
+    deps.logger?.log?.('[addRunningAgent] Created entry', {
+      sessionId: taskId,
+      agentType: agentTypeName,
+      startTime: runningAgent.startTime,
+    });
+    // Use async IIFE to handle errors properly
+    (async () => {
+      try {
+        const result = await chrome.storage.local.get(RUNNING_KEY);
         const arr = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
         const filtered = arr.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
         filtered.push(runningAgent);
-        chrome.storage.local.set({ [RUNNING_KEY]: filtered });
-      })
-      .catch(() => {});
-  } catch {}
+        await chrome.storage.local.set({ [RUNNING_KEY]: filtered });
+        deps.logger?.log?.('[addRunningAgent] Storage updated', { newCount: filtered.length });
+      } catch (e) {
+        deps.logger?.error?.('[addRunningAgent] Storage error:', e);
+      }
+    })();
+  } catch (e) {
+    deps.logger?.error?.('[addRunningAgent] Error:', e);
+  }
 }
 
 /** Moves agent from running to completed */
@@ -445,35 +526,52 @@ export function moveToCompleted(
   status: 'completed' | 'failed' | 'cancelled',
   deps: TaskEventHandlerDeps,
 ): void {
-  try {
-    chrome.storage.local
-      .get([RUNNING_KEY, COMPLETED_KEY])
-      .then(result => {
-        const running = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
-        const completed = Array.isArray(result[COMPLETED_KEY]) ? result[COMPLETED_KEY] : [];
-        const existing = running.find((a: DashboardAgent) => String(a.sessionId) === taskId);
-        const sessionTitle =
-          existing?.sessionTitle || deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
-        const lastUserMsg =
-          deps.lastUserPromptRef.current ||
-          [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content ||
-          '';
-        const taskDescription = existing?.taskDescription || `Agent: ${lastUserMsg.substring(0, 120)}`;
-        const startTime = existing?.startTime || Date.now();
-        const agentTypeName = existing?.agentType || deps.getCurrentTaskAgentType() || 'auto';
-        const completedEntry: DashboardAgent = {
-          sessionId: taskId,
-          sessionTitle,
-          taskDescription,
-          startTime,
-          endTime: Date.now(),
-          agentType: agentTypeName,
-          status,
-        };
-        const newRunning = running.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
-        const nextCompleted = [...completed, completedEntry].slice(-MAX_COMPLETED);
-        chrome.storage.local.set({ [RUNNING_KEY]: newRunning, [COMPLETED_KEY]: nextCompleted });
-      })
-      .catch(() => {});
-  } catch {}
+  if (!taskId) {
+    deps.logger?.log?.('[moveToCompleted] Skipped - no taskId');
+    return;
+  }
+  deps.logger?.log?.('[moveToCompleted] Starting', { taskId, status });
+  // Use async IIFE to handle errors properly
+  (async () => {
+    try {
+      const result = await chrome.storage.local.get([RUNNING_KEY, COMPLETED_KEY]);
+      const running = Array.isArray(result[RUNNING_KEY]) ? result[RUNNING_KEY] : [];
+      const completed = Array.isArray(result[COMPLETED_KEY]) ? result[COMPLETED_KEY] : [];
+      deps.logger?.log?.('[moveToCompleted] Current storage', {
+        runningCount: running.length,
+        completedCount: completed.length,
+        foundInRunning: running.some((a: DashboardAgent) => String(a.sessionId) === taskId),
+      });
+      const existing = running.find((a: DashboardAgent) => String(a.sessionId) === taskId);
+      const sessionTitle =
+        existing?.sessionTitle || deps.getChatSessions().find(s => String(s.id) === taskId)?.title || '';
+      const lastUserMsg =
+        deps.lastUserPromptRef.current ||
+        [...deps.getMessages()].reverse().find(m => m.actor === Actors.USER)?.content ||
+        '';
+      const taskDescription = existing?.taskDescription || `Agent: ${lastUserMsg.substring(0, 120)}`;
+      const startTime = existing?.startTime || Date.now();
+      const agentTypeName = existing?.agentType || deps.getCurrentTaskAgentType() || 'auto';
+      const completedEntry: DashboardAgent = {
+        sessionId: taskId,
+        sessionTitle,
+        taskDescription,
+        startTime,
+        endTime: Date.now(),
+        agentType: agentTypeName,
+        status,
+      };
+      const newRunning = running.filter((a: DashboardAgent) => String(a.sessionId) !== taskId);
+      const nextCompleted = [...completed, completedEntry].slice(-MAX_COMPLETED);
+      deps.logger?.log?.('[moveToCompleted] Writing to storage', {
+        newRunningCount: newRunning.length,
+        newCompletedCount: nextCompleted.length,
+        addedEntry: { sessionId: taskId, status, endTime: completedEntry.endTime },
+      });
+      await chrome.storage.local.set({ [RUNNING_KEY]: newRunning, [COMPLETED_KEY]: nextCompleted });
+      deps.logger?.log?.('[moveToCompleted] Storage updated successfully');
+    } catch (e) {
+      deps.logger?.error?.('[moveToCompleted] Storage error:', e);
+    }
+  })();
 }

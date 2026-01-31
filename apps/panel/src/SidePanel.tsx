@@ -118,6 +118,8 @@ const SidePanel = () => {
   const setInputTextRef = useRef<((text: string) => void) | null>(null);
   const setSelectedAgentRef = useRef<((agent: AgentType) => void) | null>(null);
   const setContextTabIdsRef = useRef<((tabIds: number[]) => void) | null>(null);
+  const seenEventIdsRef = useRef<Map<string, Set<string>>>(new Map());
+  const lastEventIdBySessionRef = useRef<Map<string, string>>(new Map());
   const lastAgentMessageRef = useRef<{ timestamp: number; actor: string } | null>(null);
   const taskIdToRootIdRef = useRef<Map<string, string>>(new Map());
   const lastAgentMessageByTaskRef = useRef<Map<string, { timestamp: number; actor: string }>>(new Map());
@@ -264,11 +266,13 @@ const SidePanel = () => {
     setSessionStats,
     showToast,
     setFavoritePrompts,
-    // New parameters for background workflow trajectory support
     agentTraceRootIdRef,
     setAgentTraceRootId,
     setMirrorPreview,
     setMirrorPreviewBatch,
+    portRef,
+    setIsJobActive,
+    lastEventIdBySessionRef,
   });
 
   // Event setup (appendMessage, taskEventHandler, panelHandlers)
@@ -341,6 +345,7 @@ const SidePanel = () => {
     logger,
     appendMessage,
     handlers: panelHandlers,
+    eventIdRefs: { seenEventIdsRef, lastEventIdBySessionRef },
   });
 
   // All handlers
@@ -608,13 +613,8 @@ const SidePanel = () => {
     const handler = async (e: Event) => {
       const sessionId = (e as CustomEvent).detail?.sessionId;
       if (sessionId) {
-        const success = await handleSessionSelect(sessionId);
-        // If successfully navigated to a session, subscribe to its events
-        if (success && portRef.current?.name === 'side-panel-connection') {
-          try {
-            portRef.current.postMessage({ type: 'subscribe_to_session', sessionId });
-          } catch {}
-        }
+        // handleSessionSelect already calls subscribe_to_session internally
+        await handleSessionSelect(sessionId);
       }
     };
     document.addEventListener('navigate-to-session', handler as EventListener);

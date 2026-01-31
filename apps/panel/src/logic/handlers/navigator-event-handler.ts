@@ -17,14 +17,18 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
 
   /** Check if event belongs to current session */
   const isEventForCurrentSession = (eventData: any): boolean => {
-    const eventTaskId = String(eventData?.taskId || '');
+    // Check both taskId and sessionId (background sends sessionId, some events use taskId)
+    const eventSessionId = String(eventData?.taskId || eventData?.sessionId || '');
     const currentSessionId = String(deps.sessionIdRef.current || '');
-    // If no session in panel, still process events (background handles storage)
-    if (!currentSessionId) return true;
-    // If event has no taskId, assume it's for current session
-    if (!eventTaskId) return true;
-    // Only skip if we can definitively say it's for a DIFFERENT session
-    return eventTaskId === currentSessionId;
+    // If no session in panel, don't update UI (background handles persistence)
+    if (!currentSessionId) return false;
+    // If event has no session identifier, log and skip (don't assume it's for current session)
+    if (!eventSessionId) {
+      deps.logger.log('[Navigator] Skipping event with no session identifier');
+      return false;
+    }
+    // Only process if explicitly for current session
+    return eventSessionId === currentSessionId;
   };
 
   return event => {
