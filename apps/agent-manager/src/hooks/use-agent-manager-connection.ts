@@ -130,6 +130,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   }, []);
 
   const openSidepanelToSession = useCallback(async (sessionId: string) => {
+    // Pre-warm: notify background to persist trajectory data immediately
+    if (portRef.current) {
+      portRef.current.postMessage({ type: 'prewarm-session', sessionId });
+    }
+
     // Store target session for sidepanel to navigate to
     await chrome.storage.local.set({
       pending_sidepanel_session: sessionId,

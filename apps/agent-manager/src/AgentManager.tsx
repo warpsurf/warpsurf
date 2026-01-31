@@ -124,22 +124,46 @@ export default function AgentManager() {
 
   // Delete a specific agent from storage
   const handleDeleteAgent = useCallback(async (agent: AgentData) => {
-    const [running, completed] = await Promise.all([
-      chrome.storage.local.get('agent_dashboard_running'),
-      chrome.storage.local.get('agent_dashboard_completed'),
-    ]);
-    await chrome.storage.local.set({
-      agent_dashboard_running: (running.agent_dashboard_running || []).filter(
-        (a: any) => a.sessionId !== agent.sessionId,
-      ),
-      agent_dashboard_completed: (completed.agent_dashboard_completed || []).filter(
-        (a: any) => a.sessionId !== agent.sessionId,
-      ),
+    console.log('[AgentManager Debug] handleDeleteAgent called', {
+      sessionId: agent.sessionId,
+      taskDescription: agent.taskDescription?.substring(0, 50),
     });
-    // Also remove persisted preview cache for this session
     try {
-      await chrome.storage.local.remove(`preview_cache_${agent.sessionId}`);
-    } catch {}
+      const [running, completed] = await Promise.all([
+        chrome.storage.local.get('agent_dashboard_running'),
+        chrome.storage.local.get('agent_dashboard_completed'),
+      ]);
+      console.log('[AgentManager Debug] Current storage state', {
+        runningCount: (running.agent_dashboard_running || []).length,
+        completedCount: (completed.agent_dashboard_completed || []).length,
+      });
+      const filteredRunning = (running.agent_dashboard_running || []).filter(
+        (a: any) => a.sessionId !== agent.sessionId,
+      );
+      const filteredCompleted = (completed.agent_dashboard_completed || []).filter(
+        (a: any) => a.sessionId !== agent.sessionId,
+      );
+      console.log('[AgentManager Debug] After filtering', {
+        filteredRunningCount: filteredRunning.length,
+        filteredCompletedCount: filteredCompleted.length,
+        removedFromRunning: (running.agent_dashboard_running || []).length - filteredRunning.length,
+        removedFromCompleted: (completed.agent_dashboard_completed || []).length - filteredCompleted.length,
+      });
+      await chrome.storage.local.set({
+        agent_dashboard_running: filteredRunning,
+        agent_dashboard_completed: filteredCompleted,
+      });
+      console.log('[AgentManager Debug] Storage updated successfully');
+      // Also remove persisted preview cache for this session
+      try {
+        await chrome.storage.local.remove(`preview_cache_${agent.sessionId}`);
+        console.log('[AgentManager Debug] Preview cache removed');
+      } catch (cacheErr) {
+        console.warn('[AgentManager Debug] Failed to remove preview cache:', cacheErr);
+      }
+    } catch (err) {
+      console.error('[AgentManager Debug] Error in handleDeleteAgent:', err);
+    }
   }, []);
 
   // Categorize agents into Active, Recent, and More

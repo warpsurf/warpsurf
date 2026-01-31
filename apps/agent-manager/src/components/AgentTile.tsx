@@ -77,7 +77,9 @@ export function AgentTile({ agent, isDarkMode, onClick, onDelete }: AgentTilePro
         <button
           type="button"
           onClick={e => {
+            console.log('[AgentTile Debug] Delete button clicked', { sessionId: agent.sessionId });
             e.stopPropagation();
+            e.preventDefault();
             onDelete();
           }}
           className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${

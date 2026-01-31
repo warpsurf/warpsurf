@@ -208,9 +208,16 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
         const storedRunning = (result.agent_dashboard_running || []) as any[];
         const storedCompleted = (result.agent_dashboard_completed || []) as any[];
 
+        logger.info('[AgentManager] sendAgentData storage state', {
+          liveTaskCount: agents.length,
+          storedRunningCount: storedRunning.length,
+          storedCompletedCount: storedCompleted.length,
+        });
+
         // Merge stored data with live data
         const liveSessionIds = new Set(agents.map(a => a.sessionId));
 
+        let addedFromStorage = 0;
         for (const stored of [...storedRunning, ...storedCompleted]) {
           if (!liveSessionIds.has(stored.sessionId)) {
             // Check for cached screenshot for this stored agent
@@ -235,8 +242,19 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
                 totalLatencyMs: stored.totalLatencyMs || stored.latencyMs,
               },
             });
+            addedFromStorage++;
           }
         }
+
+        logger.info('[AgentManager] sendAgentData final', {
+          totalAgents: agents.length,
+          addedFromStorage,
+          agentsSummary: agents.map(a => ({
+            sessionId: a.sessionId.substring(0, 15),
+            status: a.status,
+            endTime: a.endTime,
+          })),
+        });
 
         safePostMessage(port, { type: 'agents-data', data: { agents } });
       });
@@ -312,6 +330,27 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
           }
 
           safePostMessage(port, { type: 'sidepanel-opened', sessionId });
+          break;
+        }
+
+        case 'prewarm-session': {
+          // Pre-warm: ensure trajectory data is persisted before sidepanel opens
+          const { sessionId } = message;
+          if (!sessionId) break;
+
+          try {
+            const trajectoryService = (taskManager as any).trajectoryService;
+            if (trajectoryService?.persistNow) {
+              await trajectoryService.persistNow(sessionId);
+            }
+            // Also cache the rootId for faster lookup
+            const rootId = trajectoryService?.getRootId?.(sessionId);
+            if (rootId) {
+              trajectoryService?.rootIdCache?.set(sessionId, rootId);
+            }
+          } catch (e) {
+            logger.error('[AgentManager] Prewarm failed:', e);
+          }
           break;
         }
 

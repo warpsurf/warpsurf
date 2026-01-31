@@ -108,7 +108,9 @@ export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAg
         <button
           type="button"
           onClick={e => {
+            console.log('[MultiAgentTile Debug] Delete button clicked', { sessionId: agent.sessionId });
             e.stopPropagation();
+            e.preventDefault();
             onDelete();
           }}
           className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${

@@ -36,6 +36,7 @@ export class TabMirrorService {
   private sessionToTabs: Map<string, Set<number>> = new Map();
   private tabWorkerIndex: Map<number, number> = new Map();
   private tabColor: Map<number, string> = new Map();
+  private previewLogInterval?: NodeJS.Timeout;
   // In-memory cache for last screenshots when sessions complete (for Agent Manager display)
   private cachedSessionScreenshots: Map<
     string,
@@ -50,6 +51,32 @@ export class TabMirrorService {
     chrome.tabs.onRemoved.addListener(this.handleTabRemoved.bind(this));
     // Load persisted previews into memory cache on startup, then prune old ones
     this.loadPersistedPreviews().then(() => this.pruneInactivePreviews());
+  }
+
+  private startPreviewLogging() {
+    if (this.previewLogInterval) return;
+    this.previewLogInterval = setInterval(() => {
+      if (this.currentMirrors.size === 0) return;
+      const sessions = new Set<string>();
+      const tabIds: number[] = [];
+      for (const mirror of this.currentMirrors.values()) {
+        if (mirror.sessionId) sessions.add(String(mirror.sessionId));
+        tabIds.push(mirror.tabId);
+      }
+      logger.info('[TabMirror] Active previews', {
+        mirrorCount: this.currentMirrors.size,
+        sessionCount: sessions.size,
+        sessions: Array.from(sessions).slice(0, 6),
+        tabIds: tabIds.slice(0, 8),
+      });
+    }, 10000);
+  }
+
+  private stopPreviewLoggingIfIdle() {
+    if (this.previewLogInterval && this.currentMirrors.size === 0) {
+      safeClearInterval(this.previewLogInterval);
+      this.previewLogInterval = undefined;
+    }
   }
 
   /**
@@ -251,6 +278,7 @@ export class TabMirrorService {
       }
     }, 333);
     this.mirrorIntervals.set(tabId, interval);
+    this.startPreviewLogging();
   }
 
   stopMirroring(tabId: number) {
@@ -298,6 +326,7 @@ export class TabMirrorService {
     this.reservedByPuppeteer.delete(tabId);
     this.tabWorkerIndex.delete(tabId);
     this.tabColor.delete(tabId);
+    this.stopPreviewLoggingIfIdle();
   }
 
   suspendMirroring(tabId: number) {
