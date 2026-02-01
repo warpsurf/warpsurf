@@ -584,6 +584,7 @@ const SidePanel = () => {
     showTabPreviews,
     resetPerChatAcceptance,
     promptPerChatIfEnabled,
+    ensurePerChatBeforeNewSession,
     handleSendMessage,
     appendMessage,
   });

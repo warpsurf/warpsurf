@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { warningsSettingsStore } from '@extension/storage';
 import type { AgentData, PreviewData } from '@src/types';
 
 interface UseAgentManagerConnectionResult {
@@ -125,8 +126,37 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   }, [connect]);
 
   const sendNewTask = useCallback(async (task: string, agentType?: string, contextTabIds?: number[]) => {
-    if (!portRef.current) return;
-    portRef.current.postMessage({ type: 'start-new-task', task, agentType, contextTabIds });
+    // Check if per-chat warnings are enabled
+    let warningsEnabled = false;
+    try {
+      const settings = await warningsSettingsStore.getWarnings();
+      warningsEnabled = !settings.disablePerChatWarnings;
+    } catch {}
+
+    if (warningsEnabled) {
+      // Route through side panel to show disclaimer first
+      await chrome.storage.session.set({
+        pendingAction: {
+          prompt: task,
+          autoStart: true,
+          workflowType: agentType || 'agent',
+          contextTabIds,
+          forceNewSession: true,
+          requireWarningCheck: true, // Flag to show disclaimer before executing
+        },
+      });
+      // Open side panel to process the pending action
+      try {
+        const currentWindow = await chrome.windows.getCurrent();
+        if (currentWindow?.id) {
+          await chrome.sidePanel.open({ windowId: currentWindow.id });
+        }
+      } catch {}
+    } else {
+      // Warnings disabled - send directly to background
+      if (!portRef.current) return;
+      portRef.current.postMessage({ type: 'start-new-task', task, agentType, contextTabIds });
+    }
   }, []);
 
   const openSidepanelToSession = useCallback(async (sessionId: string) => {

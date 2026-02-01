@@ -47,6 +47,7 @@ export function usePanelEffects(params: {
   showTabPreviews: boolean;
   resetPerChatAcceptance?: () => void;
   promptPerChatIfEnabled?: () => Promise<boolean>;
+  ensurePerChatBeforeNewSession?: (isFollowUpMode: boolean, hasSessionId: boolean) => Promise<void>;
   handleSendMessage?: (text: string) => void;
   appendMessage?: (message: any, sessionId?: string | null) => void;
 }) {
@@ -95,6 +96,7 @@ export function usePanelEffects(params: {
     showTabPreviews,
     resetPerChatAcceptance,
     promptPerChatIfEnabled,
+    ensurePerChatBeforeNewSession,
     handleSendMessage,
     appendMessage,
   } = params;
@@ -216,6 +218,7 @@ export function usePanelEffects(params: {
               contextMenuAction?: string;
               infoMessage?: string;
               forceNewSession?: boolean;
+              requireWarningCheck?: boolean; // When true, show per-chat warning before auto-starting
             }
           | undefined;
         if (pendingAction) {
@@ -243,15 +246,16 @@ export function usePanelEffects(params: {
           }
 
           // If forceNewSession, dispatch event to clear current session
-          // Pass flag to preserve per-chat acceptance for auto-start tasks
           if (pendingAction.forceNewSession) {
+            // For requireWarningCheck, don't preserve acceptance - we'll handle the warning explicitly
+            const shouldPreserveAcceptance = pendingAction.autoStart && !pendingAction.requireWarningCheck;
             document.dispatchEvent(
               new CustomEvent('force-new-session', {
-                detail: { preservePerChatAcceptance: pendingAction.autoStart },
+                detail: { preservePerChatAcceptance: shouldPreserveAcceptance },
               }),
             );
-            // Small delay to let the session clear
-            await new Promise(r => setTimeout(r, 50));
+            // Longer delay for requireWarningCheck to ensure handleNewChat completes
+            await new Promise(r => setTimeout(r, pendingAction.requireWarningCheck ? 150 : 50));
           }
 
           // Handle info messages (e.g., context unavailable) - shows but continues
@@ -265,7 +269,18 @@ export function usePanelEffects(params: {
           }
 
           if (pendingAction.autoStart && handleSendMessage) {
-            // For auto-run (context menu actions), submit immediately without setting input/context in UI
+            // For actions requiring warning check, show disclaimer and wait for acceptance
+            if (pendingAction.requireWarningCheck && ensurePerChatBeforeNewSession) {
+              // Reset acceptance state and show warning (handleNewChat should have done this,
+              // but we ensure it here in case of timing issues)
+              if (resetPerChatAcceptance) {
+                resetPerChatAcceptance();
+              }
+              // Show per-chat warning and wait for acceptance before executing
+              await ensurePerChatBeforeNewSession(false, false);
+            }
+
+            // Submit the task
             const contextTabs =
               pendingAction.contextTabIds || (pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined);
             // Small delay to let UI update
@@ -311,7 +326,15 @@ export function usePanelEffects(params: {
       chrome.storage.onChanged.removeListener(handleStorageChange);
       if (retryTimeout) clearTimeout(retryTimeout);
     };
-  }, [logger, setInputTextRef, setSelectedAgentRef, setContextTabIdsRef, handleSendMessage, appendMessage]);
+  }, [
+    logger,
+    setInputTextRef,
+    setSelectedAgentRef,
+    setContextTabIdsRef,
+    handleSendMessage,
+    appendMessage,
+    ensurePerChatBeforeNewSession,
+  ]);
 
   // Settings loading
   useEffect(() => {
