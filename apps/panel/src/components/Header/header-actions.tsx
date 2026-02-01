@@ -174,7 +174,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
         style={{ display: vCount >= 2 ? 'inline-flex' : 'none' }}>
         <button
           type="button"
-          onClick={props.onNewChat}
+          onClick={() => props.onNewChat()}
           className={`rounded-md px-2.5 py-0.5 text-[12px] font-medium transition-colors ${props.isDarkMode ? 'text-gray-200 hover:text-white hover:bg-white/10' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}>
           New Chat
         </button>

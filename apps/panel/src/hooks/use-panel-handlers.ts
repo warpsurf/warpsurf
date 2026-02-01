@@ -28,7 +28,7 @@ export function usePanelHandlers(params: {
   handleSessionSelectHook: (sessionId: string) => Promise<boolean>;
   handleSessionBookmarkFromHook: (sessionId: string) => Promise<void>;
   resetPerChatAcceptance: () => void;
-  promptPerChatIfEnabled: () => void;
+  promptPerChatIfEnabled: () => Promise<boolean>;
   setMessages: (v: any) => void;
   setCurrentSessionId: (v: string | null) => void;
   setShowDashboard: (v: boolean) => void;
@@ -121,18 +121,15 @@ export function usePanelHandlers(params: {
   const killSwitchFnRef = useRef<(() => Promise<void>) | null>(null);
 
   const handleNewChat = useCallback(
-    (preservePerChatAcceptance?: boolean) => {
+    async (preservePerChatAcceptance?: boolean) => {
       try {
         const prevSid = sessionIdRef.current;
         if (prevSid && portRef.current?.name === 'side-panel-connection') {
           portRef.current.postMessage({ type: 'stop_all_mirroring_for_session', sessionId: prevSid });
         }
       } catch {}
-      // Only reset per-chat acceptance if not preserving it (e.g., for auto-start tasks)
-      if (!preservePerChatAcceptance) {
-        resetPerChatAcceptance();
-        promptPerChatIfEnabled();
-      }
+
+      // Reset all UI state
       setMessages([]);
       setCurrentSessionId(null);
       setShowDashboard(false);
@@ -163,11 +160,16 @@ export function usePanelHandlers(params: {
       setIsHistoricalSession(false);
       processedJobSummariesRef.current.clear();
       lastAgentMessageRef.current = null;
-      // Note: Don't disconnect/reconnect here - it would trigger restore_active_session
-      // which would override the new chat state. Just keep the existing connection.
+
+      // Prompt per-chat warning unless preserving acceptance (e.g., auto-start tasks)
+      if (!preservePerChatAcceptance) {
+        resetPerChatAcceptance();
+        await promptPerChatIfEnabled();
+      }
     },
     [
       sessionIdRef,
+      portRef,
       agentTraceActiveRef,
       processedJobSummariesRef,
       lastAgentMessageRef,

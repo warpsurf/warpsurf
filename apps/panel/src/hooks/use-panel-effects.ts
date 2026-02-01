@@ -46,7 +46,7 @@ export function usePanelEffects(params: {
   isHistoricalSession: boolean;
   showTabPreviews: boolean;
   resetPerChatAcceptance?: () => void;
-  promptPerChatIfEnabled?: () => void;
+  promptPerChatIfEnabled?: () => Promise<boolean>;
   handleSendMessage?: (text: string) => void;
   appendMessage?: (message: any, sessionId?: string | null) => void;
 }) {
@@ -368,7 +368,7 @@ export function usePanelEffects(params: {
 
         promptedOnOpenRef.current = true;
         resetPerChatAcceptance?.();
-        promptPerChatIfEnabled?.();
+        await promptPerChatIfEnabled?.();
       } catch {}
     };
     checkAndShowDisclaimer();
