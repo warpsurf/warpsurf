@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-01-21 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-02-01 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-01-21T17:54:25.182Z',
+  generatedAt: '2026-02-01T12:27:06.161Z',
   version: 1,
   helicone: {
     openai: {
@@ -1416,7 +1416,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'minimax',
         displayName: 'Minimax',
-        models: ['minimax/minimax-01', 'minimax/minimax-m1', 'minimax/minimax-m2', 'minimax/minimax-m2.1'],
+        models: [
+          'minimax/minimax-01',
+          'minimax/minimax-m1',
+          'minimax/minimax-m2',
+          'minimax/minimax-m2-her',
+          'minimax/minimax-m2.1',
+        ],
       },
       {
         id: 'mistralai',
@@ -1464,6 +1470,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'moonshotai/kimi-k2-0905',
           'moonshotai/kimi-k2-0905:exacto',
           'moonshotai/kimi-k2-thinking',
+          'moonshotai/kimi-k2.5',
         ],
       },
       {
@@ -1734,6 +1741,14 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'moonshotai/kimi-k2.5': {
+        inputPerToken: 5e-7,
+        outputPerToken: 0.0000028,
+      },
+      'minimax/minimax-m2-her': {
+        inputPerToken: 3e-7,
+        outputPerToken: 0.0000012,
+      },
       'writer/palmyra-x5': {
         inputPerToken: 6e-7,
         outputPerToken: 0.000006,
@@ -1768,7 +1783,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
       'minimax/minimax-m2.1': {
         inputPerToken: 2.7e-7,
-        outputPerToken: 0.00000112,
+        outputPerToken: 0.0000011,
       },
       'z-ai/glm-4.7': {
         inputPerToken: 4e-7,
@@ -1791,8 +1806,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 2.9e-7,
       },
       'nvidia/nemotron-3-nano-30b-a3b': {
-        inputPerToken: 6e-8,
-        outputPerToken: 2.4e-7,
+        inputPerToken: 5e-8,
+        outputPerToken: 2e-7,
       },
       'openai/gpt-5.2-chat': {
         inputPerToken: 0.00000175,
@@ -2879,8 +2894,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00001,
       },
       'meta-llama/llama-3-70b-instruct': {
-        inputPerToken: 4e-7,
-        outputPerToken: 4e-7,
+        inputPerToken: 5.1e-7,
+        outputPerToken: 7.4e-7,
       },
       'meta-llama/llama-3-8b-instruct': {
         inputPerToken: 3e-8,
@@ -2931,8 +2946,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00000175,
       },
       'alpindale/goliath-120b': {
-        inputPerToken: 0.000006,
-        outputPerToken: 0.000008,
+        inputPerToken: 0.00000375,
+        outputPerToken: 0.0000075,
       },
       'openrouter/auto': {
         inputPerToken: -1,
@@ -2980,6 +2995,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'moonshotai/kimi-k2.5': 262144,
+      'minimax/minimax-m2-her': 65536,
       'writer/palmyra-x5': 1040000,
       'openai/gpt-audio': 128000,
       'openai/gpt-audio-mini': 128000,
