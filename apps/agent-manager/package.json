@@ -1,6 +1,6 @@
 {
   "name": "@warpsurf/agent-manager",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Warpsurf agent manager page",
   "private": true,
   "sideEffects": true,
