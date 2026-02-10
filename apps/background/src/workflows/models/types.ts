@@ -67,7 +67,7 @@ export interface ModelConfig {
   temperature?: number;
   maxTokens?: number;
   webSearch?: boolean;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  thinkingLevel?: 'high' | 'medium' | 'low' | 'off' | 'default';
   parameters?: Record<string, unknown>;
 }
 

@@ -29,6 +29,7 @@ export async function setupExecutor(
   agentType?: string,
   contextTabIds?: number[],
   contextMenuAction?: string,
+  preTriageResult?: any,
 ) {
   const providers = await getAllProvidersDecrypted();
   if (Object.keys(providers).length === 0) {
@@ -133,6 +134,7 @@ export async function setupExecutor(
     agentType: agentType,
     retainTokenLogs: true,
     contextMenuAction,
+    preTriageResult,
   });
 
   // Set context tabs BEFORE initialize() so they're available for injection

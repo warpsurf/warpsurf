@@ -389,6 +389,7 @@ const SidePanel = () => {
     messages,
     mirrorPreviewBatch,
     recalculatedEstimation,
+    setContextTabIdsRef,
   });
 
   // Keep STT error callback ref in sync

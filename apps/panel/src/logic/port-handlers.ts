@@ -1032,7 +1032,8 @@ export function createPanelHandlers(deps: any): any {
         }
 
         // Process buffered events - add trace items to restored metadata
-        if (data.bufferedEvents && data.bufferedEvents.length > 0) {
+        const bufferedEvents = data.bufferedEvents;
+        if (bufferedEvents && bufferedEvents.length > 0) {
           const rootId = deps.agentTraceRootIdRef.current as string;
           if (rootId) {
             const traceStates = [
@@ -1053,7 +1054,7 @@ export function createPanelHandlers(deps: any): any {
               pageTitle?: string;
               eventId?: string;
             }> = [];
-            for (const evt of data.bufferedEvents) {
+            for (const evt of bufferedEvents) {
               try {
                 if (!evt || evt.type !== 'execution') continue;
                 const evtData = evt.data || {};

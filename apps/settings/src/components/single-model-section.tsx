@@ -1,16 +1,16 @@
 import type { ReactNode } from 'react';
 import { cn } from './primitives';
 import { ModelSelect } from './model-select';
-import type { AgentNameEnum } from '@extension/storage';
+import type { AgentNameEnum, ThinkingLevel } from '@extension/storage';
 
 interface SingleModelSectionProps {
   isDarkMode: boolean;
-  title: string; // "Chat", "Search", etc.
+  title: string;
   agent: AgentNameEnum;
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedValue: string;
   modelParameters: { temperature: number | undefined; maxOutputTokens: number };
-  reasoningEffortValue?: 'low' | 'medium' | 'high';
+  thinkingLevelValue?: ThinkingLevel;
   showAllModels: boolean;
   getAgentDisplayName: (agent: AgentNameEnum) => string;
   getAgentDescription: (agent: AgentNameEnum) => string;
@@ -22,7 +22,7 @@ interface SingleModelSectionProps {
     param: 'temperature' | 'maxOutputTokens',
     value: number | undefined,
   ) => Promise<void> | void;
-  onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => Promise<void> | void;
+  onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => Promise<void> | void;
   children?: ReactNode;
 }
 
@@ -34,7 +34,7 @@ export function SingleModelSection(props: SingleModelSectionProps) {
     availableModels,
     selectedValue,
     modelParameters,
-    reasoningEffortValue,
+    thinkingLevelValue,
     showAllModels,
     getAgentDisplayName,
     getAgentDescription,
@@ -42,7 +42,7 @@ export function SingleModelSection(props: SingleModelSectionProps) {
     hasModelPricing,
     onChangeModel,
     onChangeParameter,
-    onChangeReasoning,
+    onChangeThinkingLevel,
     children,
   } = props;
 
@@ -56,7 +56,7 @@ export function SingleModelSection(props: SingleModelSectionProps) {
           availableModels={availableModels}
           selectedValue={selectedValue}
           modelParameters={modelParameters}
-          reasoningEffortValue={reasoningEffortValue}
+          thinkingLevelValue={thinkingLevelValue}
           showAllModels={showAllModels}
           getAgentDisplayName={getAgentDisplayName}
           getAgentDescription={getAgentDescription}
@@ -64,7 +64,7 @@ export function SingleModelSection(props: SingleModelSectionProps) {
           hasModelPricing={hasModelPricing}
           onChangeModel={onChangeModel}
           onChangeParameter={onChangeParameter}
-          onChangeReasoning={onChangeReasoning}
+          onChangeThinkingLevel={onChangeThinkingLevel}
         />
         {children}
       </div>

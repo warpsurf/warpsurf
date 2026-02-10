@@ -12,6 +12,7 @@ export enum Actors {
   MULTIAGENT = 'multiagent',
   // Utility actors
   ESTIMATOR = 'estimator',
+  TOOL = 'tool',
 }
 
 import { EventType, ExecutionState } from '@extension/shared/lib/utils';

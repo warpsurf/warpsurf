@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from './primitives';
 import { ModelSelect } from './model-select';
-import type { AgentNameEnum } from '@extension/storage';
+import type { AgentNameEnum, ThinkingLevel } from '@extension/storage';
 
 interface AgentModelsSectionProps {
   isDarkMode: boolean;
@@ -10,7 +10,7 @@ interface AgentModelsSectionProps {
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedModels: Record<AgentNameEnum, string>;
   modelParameters: Record<AgentNameEnum, { temperature: number | undefined; maxOutputTokens: number }>;
-  reasoningEffort: Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>;
+  thinkingLevel: Record<AgentNameEnum, ThinkingLevel | undefined>;
   showAllModels: boolean;
   getAgentDisplayName: (agent: AgentNameEnum) => string;
   getAgentDescription: (agent: AgentNameEnum) => string;
@@ -22,7 +22,7 @@ interface AgentModelsSectionProps {
     param: 'temperature' | 'maxOutputTokens',
     value: number | undefined,
   ) => Promise<void> | void;
-  onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => Promise<void> | void;
+  onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => Promise<void> | void;
   children?: ReactNode;
   colorOverride?: string;
 }
@@ -35,7 +35,7 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
     availableModels,
     selectedModels,
     modelParameters,
-    reasoningEffort,
+    thinkingLevel,
     showAllModels,
     getAgentDisplayName,
     getAgentDescription,
@@ -43,7 +43,7 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
     hasModelPricing,
     onChangeModel,
     onChangeParameter,
-    onChangeReasoning,
+    onChangeThinkingLevel,
     children,
     colorOverride,
   } = props;
@@ -66,7 +66,7 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
               availableModels={availableModels}
               selectedValue={selectedModels[agent] || ''}
               modelParameters={modelParameters[agent]}
-              reasoningEffortValue={reasoningEffort[agent]}
+              thinkingLevelValue={thinkingLevel[agent]}
               showAllModels={showAllModels}
               getAgentDisplayName={getAgentDisplayName}
               getAgentDescription={getAgentDescription}
@@ -74,7 +74,7 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
               hasModelPricing={hasModelPricing}
               onChangeModel={onChangeModel}
               onChangeParameter={onChangeParameter}
-              onChangeReasoning={onChangeReasoning}
+              onChangeThinkingLevel={onChangeThinkingLevel}
             />
           ))}
         </div>

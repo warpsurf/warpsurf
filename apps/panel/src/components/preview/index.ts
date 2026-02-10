@@ -1,1 +1,1 @@
-export { default as InlinePreviewWidget } from './inline-preview';
+export { default as InlinePreviewComponent } from './inline-preview';
