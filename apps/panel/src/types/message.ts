@@ -51,6 +51,11 @@ export const ACTOR_PROFILES = {
     icon: 'icons/system.svg',
     iconBackground: '#7c3aed',
   },
+  tool: {
+    name: 'Tool',
+    icon: 'icons/system.svg',
+    iconBackground: '#8B4513',
+  },
   // Multiagent workflow sub-roles (used in trace items)
   planner: {
     name: 'Planner',

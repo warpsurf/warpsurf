@@ -337,6 +337,7 @@ const SidePanel = () => {
     messages,
     mirrorPreviewBatch,
     recalculatedEstimation,
+    setContextTabIdsRef,
   });
 
   const { setupConnection, stopConnection, sendMessage } = useBackgroundConnection({

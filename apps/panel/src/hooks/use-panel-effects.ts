@@ -336,7 +336,7 @@ export function usePanelEffects(params: {
     ensurePerChatBeforeNewSession,
   ]);
 
-  // Settings loading
+  // Settings loading + live subscription (so tool workflow changes reflect in UI)
   useEffect(() => {
     const load = async () => {
       try {
@@ -355,6 +355,14 @@ export function usePanelEffects(params: {
       }
     };
     load();
+    // Subscribe to live changes so settings updated via tool workflow reflect immediately
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = (generalSettingsStore as any).subscribe?.(load);
+    } catch {}
+    return () => {
+      unsub?.();
+    };
   }, [
     logger,
     setReplayEnabled,
