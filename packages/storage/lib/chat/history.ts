@@ -185,6 +185,8 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
             return Actors.AUTO;
           case 'multiagent':
             return Actors.MULTIAGENT;
+          case 'tool':
+            return Actors.TOOL;
           default:
             return Actors.CHAT;
         }
