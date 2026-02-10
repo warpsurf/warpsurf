@@ -698,7 +698,7 @@ export default function MessageBlock({
             </>
           )}
         </div>
-        {!isProgress && onRetryRequest && message.actor === 'validator' && (
+        {!isProgress && onRetryRequest && message.actor === Actors.AGENT_VALIDATOR && (
           <div
             className={`mt-2 flex flex-wrap gap-2 ${isUser ? 'justify-end' : 'justify-start'} opacity-0 group-hover:opacity-100 transition-opacity`}>
             {['chat', 'search', 'agent'].map(type => (
