@@ -7,6 +7,7 @@
 
 import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
+import type { ThinkingLevel } from '@extension/storage';
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_REFERER = 'https://warpsurf.ai';
@@ -22,6 +23,7 @@ export interface NativeOpenRouterArgs {
   maxTokens?: number;
   webSearch?: boolean;
   maxRetries?: number;
+  thinkingLevel?: ThinkingLevel;
 }
 
 export class NativeOpenRouterChatModel {
@@ -31,10 +33,10 @@ export class NativeOpenRouterChatModel {
   private readonly maxTokens?: number;
   private readonly webSearchEnabled: boolean;
   private readonly maxRetries?: number;
+  private readonly thinkingLevel?: ThinkingLevel;
 
   constructor(args: NativeOpenRouterArgs) {
     this.modelName = args.model;
-    // OpenRouter uses OpenAI SDK with custom base URL and attribution headers
     this.client = new OpenAI({
       apiKey: args.apiKey,
       baseURL: args.baseUrl || DEFAULT_OPENROUTER_BASE_URL,
@@ -47,6 +49,29 @@ export class NativeOpenRouterChatModel {
     this.maxTokens = args.maxTokens;
     this.webSearchEnabled = !!args.webSearch;
     this.maxRetries = args.maxRetries;
+    this.thinkingLevel = args.thinkingLevel;
+  }
+
+  /**
+   * Build provider-specific thinking params based on the model prefix.
+   * OpenRouter passes these through to the underlying provider.
+   */
+  private getThinkingConfig(): Record<string, unknown> {
+    if (!this.thinkingLevel || this.thinkingLevel === 'default') return {};
+    const prefix = this.modelName.split('/')[0];
+    const model = this.modelName.split('/').slice(1).join('/');
+
+    if (prefix === 'openai' && /^(o1|o3|o4|gpt-5)/.test(model)) {
+      const effort = this.thinkingLevel === 'off' ? 'low' : this.thinkingLevel;
+      return { reasoning: { effort } };
+    }
+    if (prefix === 'google' && /^gemini-(2\.5|3-)/.test(model)) {
+      const budgetMap: Record<string, number> = { off: 0, low: 2048, medium: 8192, high: 24576 };
+      return { reasoning: { thinking_budget: budgetMap[this.thinkingLevel] ?? -1 } };
+    }
+    // For anthropic and other providers on OpenRouter, the thinking param
+    // is typically handled via provider-specific headers or not supported.
+    return {};
   }
 
   withStructuredOutput(schema: any, opts?: { includeRaw?: boolean; name?: string }) {
@@ -64,8 +89,8 @@ export class NativeOpenRouterChatModel {
           model: this.modelName,
           messages: payload,
           max_tokens: this.maxTokens,
-          // Only include temperature if explicitly set; omit to use provider default
           ...(this.temperature !== undefined && { temperature: this.temperature }),
+          ...this.getThinkingConfig(),
           response_format: responseFormat,
           ...(rest as object),
         };
@@ -131,8 +156,8 @@ export class NativeOpenRouterChatModel {
       model: this.modelName,
       messages: payload,
       max_tokens: this.maxTokens,
-      // Only include temperature if explicitly set; omit to use provider default
       ...(this.temperature !== undefined && { temperature: this.temperature }),
+      ...this.getThinkingConfig(),
       ...(rest as object),
     };
 

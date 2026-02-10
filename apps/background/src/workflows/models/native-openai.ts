@@ -5,6 +5,8 @@
 import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
 
+import type { ThinkingLevel } from '@extension/storage';
+
 export interface NativeOpenAIArgs {
   model: string;
   apiKey: string;
@@ -14,6 +16,7 @@ export interface NativeOpenAIArgs {
   maxTokens?: number;
   webSearch?: boolean;
   maxRetries?: number;
+  thinkingLevel?: ThinkingLevel;
 }
 
 export class NativeOpenAIChatModel {
@@ -23,6 +26,7 @@ export class NativeOpenAIChatModel {
   private readonly maxTokens?: number;
   private readonly webSearchEnabled: boolean;
   private readonly maxRetries?: number;
+  private readonly thinkingLevel?: ThinkingLevel;
 
   constructor(args: NativeOpenAIArgs) {
     this.modelName = args.model;
@@ -35,6 +39,7 @@ export class NativeOpenAIChatModel {
     this.maxTokens = args.maxTokens;
     this.webSearchEnabled = !!args.webSearch;
     this.maxRetries = args.maxRetries;
+    this.thinkingLevel = args.thinkingLevel;
   }
 
   withStructuredOutput(schema: any, opts?: { includeRaw?: boolean; name?: string }) {
@@ -58,8 +63,8 @@ export class NativeOpenAIChatModel {
           const body: any = {
             model: this.modelName,
             input,
-            // Newer models expect max_output_tokens/max_completion_tokens; prefer max_output_tokens
             max_output_tokens: this.maxTokens,
+            ...this.getReasoningConfig(),
           };
           // For search-preview models, avoid structured-output to prevent 400 errors.
           const allowStructured = !!schema && !this.isSearchPreviewModel();
@@ -224,6 +229,7 @@ export class NativeOpenAIChatModel {
         model: this.modelName,
         input,
         max_output_tokens: this.maxTokens,
+        ...this.getReasoningConfig(),
       };
       if (this.webSearchEnabled || this.isSearchPreviewModel()) {
         body.tools = [{ type: 'web_search' }];
@@ -395,10 +401,22 @@ export class NativeOpenAIChatModel {
     return name.includes('search-preview');
   }
 
-  private shouldUseResponsesAPI(): boolean {
+  private isReasoningModel(): boolean {
     const name = this.modelName ?? '';
-    // Route only o*/gpt-5* to Responses API; search-preview must use Chat Completions per docs
     return /^o\d|^o-|^gpt-5/.test(name);
+  }
+
+  private shouldUseResponsesAPI(): boolean {
+    // Route only o*/gpt-5* to Responses API; search-preview must use Chat Completions per docs
+    return this.isReasoningModel();
+  }
+
+  /** Build reasoning config for the Responses API. Only applies to reasoning models. */
+  private getReasoningConfig(): Record<string, unknown> {
+    if (!this.isReasoningModel() || !this.thinkingLevel || this.thinkingLevel === 'default') return {};
+    // OpenAI reasoning.effort: 'low' | 'medium' | 'high' (no 'off'; 'low' is minimum)
+    const effort = this.thinkingLevel === 'off' ? 'low' : this.thinkingLevel;
+    return { reasoning: { effort } };
   }
 
   private extractResponsesText(resp: any): string {

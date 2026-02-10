@@ -15,20 +15,21 @@ import {
   DEFAULT_GENERAL_SETTINGS,
   type GeneralSettingsConfig,
   type ProviderConfig,
+  type ThinkingLevel,
 } from '@extension/storage';
 import { hasModelPricing, initializeCostCalculator } from '../../../background/src/utils/cost-calculator';
 import { ModelSelect } from './model-select';
 import { GlobalSettings } from './global-settings';
 import { AgentModelsSection } from './agent-models-section';
 import { SingleModelSection } from './single-model-section';
-import { isOpenAIOModel } from './primitives';
+import { isThinkingCapableModel } from './primitives';
 import {
   getAgentDisplayName,
   getAgentDescription,
   getAgentSectionColor,
   createInitialSelectedModels,
   createInitialModelParameters,
-  createInitialReasoningEffort,
+  createInitialThinkingLevel,
   createInitialWebSearchEnabled,
 } from './agent-helpers';
 
@@ -45,8 +46,8 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     useState<Record<AgentNameEnum, { temperature: number | undefined; maxOutputTokens: number }>>(
       createInitialModelParameters,
     );
-  const [reasoningEffort, setReasoningEffort] =
-    useState<Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined>>(createInitialReasoningEffort);
+  const [thinkingLevel, setThinkingLevel] =
+    useState<Record<AgentNameEnum, ThinkingLevel | undefined>>(createInitialThinkingLevel);
   const [webSearchEnabled, setWebSearchEnabled] =
     useState<Record<AgentNameEnum, boolean>>(createInitialWebSearchEnabled);
 
@@ -147,10 +148,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 maxOutputTokens: (config.parameters?.maxOutputTokens as number) ?? prev[agent].maxOutputTokens,
               },
             }));
-            if (config.reasoningEffort) {
-              setReasoningEffort(prev => ({
+            if (config.thinkingLevel) {
+              setThinkingLevel(prev => ({
                 ...prev,
-                [agent]: config.reasoningEffort as 'low' | 'medium' | 'high' | undefined,
+                [agent]: config.thinkingLevel,
               }));
             }
             if (config.webSearch !== undefined) {
@@ -386,13 +387,13 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
     try {
       if (model) {
-        if (isOpenAIOModel(model)) {
-          setReasoningEffort(prev => ({
+        if (isThinkingCapableModel(model)) {
+          setThinkingLevel(prev => ({
             ...prev,
-            [agentName]: prev[agentName] || 'medium',
+            [agentName]: prev[agentName] || 'default',
           }));
         } else {
-          setReasoningEffort(prev => ({
+          setThinkingLevel(prev => ({
             ...prev,
             [agentName]: undefined,
           }));
@@ -403,12 +404,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           setWebSearchEnabled(prev => ({ ...prev, [agentName]: true }));
         }
 
-        // Only include maxOutputTokens in saved parameters (temperature undefined = provider default)
         await agentModelStore.setAgentModel(agentName, {
           provider,
           modelName: model,
           parameters: { maxOutputTokens: newParameters.maxOutputTokens },
-          reasoningEffort: isOpenAIOModel(model) ? reasoningEffort[agentName] || 'medium' : undefined,
+          thinkingLevel: isThinkingCapableModel(model) ? thinkingLevel[agentName] || 'default' : undefined,
           webSearch: shouldEnableWebSearch,
         });
       } else {
@@ -419,27 +419,23 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     }
   };
 
-  const handleReasoningEffortChange = async (agentName: AgentNameEnum, value: 'low' | 'medium' | 'high') => {
-    setReasoningEffort(prev => ({
-      ...prev,
-      [agentName]: value,
-    }));
+  const handleThinkingLevelChange = async (agentName: AgentNameEnum, value: ThinkingLevel) => {
+    setThinkingLevel(prev => ({ ...prev, [agentName]: value }));
 
-    if (selectedModels[agentName] && isOpenAIOModel(selectedModels[agentName])) {
+    if (selectedModels[agentName]) {
       try {
         const [provider, model] = selectedModels[agentName].split('>');
-
         if (provider) {
           await agentModelStore.setAgentModel(agentName, {
             provider,
             modelName: model,
             parameters: modelParameters[agentName],
-            reasoningEffort: value,
+            thinkingLevel: value,
             webSearch: webSearchEnabled[agentName] || false,
           });
         }
       } catch (error) {
-        console.error('Error saving reasoning effort:', error);
+        console.error('Error saving thinking level:', error);
       }
     }
   };
@@ -476,7 +472,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             provider,
             modelName: model,
             parameters: parametersToSave,
-            reasoningEffort: reasoningEffort[agentName],
+            thinkingLevel: thinkingLevel[agentName],
             webSearch: webSearchEnabled[agentName] || false,
           });
         }
@@ -525,7 +521,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       availableModels={availableModels}
       selectedValue={selectedModels[agentName] || ''}
       modelParameters={modelParameters[agentName]}
-      reasoningEffortValue={reasoningEffort[agentName]}
+      thinkingLevelValue={thinkingLevel[agentName]}
       showAllModels={showAllModels}
       getAgentDisplayName={getAgentDisplayName}
       getAgentDescription={getAgentDescription}
@@ -533,7 +529,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       hasModelPricing={hasModelPricing}
       onChangeModel={handleModelChange}
       onChangeParameter={handleParameterChange}
-      onChangeReasoning={handleReasoningEffortChange}
+      onChangeThinkingLevel={handleThinkingLevelChange}
     />
   );
 
@@ -618,7 +614,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         availableModels={availableModels}
         selectedValue={selectedModels[AgentNameEnum.Chat] || ''}
         modelParameters={modelParameters[AgentNameEnum.Chat]}
-        reasoningEffortValue={reasoningEffort[AgentNameEnum.Chat]}
+        thinkingLevelValue={thinkingLevel[AgentNameEnum.Chat]}
         showAllModels={showAllModels}
         getAgentDisplayName={getAgentDisplayName}
         getAgentDescription={getAgentDescription}
@@ -626,7 +622,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
-        onChangeReasoning={handleReasoningEffortChange}
+        onChangeThinkingLevel={handleThinkingLevelChange}
       />
 
       {/* Search Section */}
@@ -637,7 +633,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         availableModels={availableModels}
         selectedValue={selectedModels[AgentNameEnum.Search] || ''}
         modelParameters={modelParameters[AgentNameEnum.Search]}
-        reasoningEffortValue={reasoningEffort[AgentNameEnum.Search]}
+        thinkingLevelValue={thinkingLevel[AgentNameEnum.Search]}
         showAllModels={showAllModels}
         getAgentDisplayName={getAgentDisplayName}
         getAgentDescription={getAgentDescription}
@@ -645,7 +641,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
-        onChangeReasoning={handleReasoningEffortChange}
+        onChangeThinkingLevel={handleThinkingLevelChange}
       />
 
       {/* Agent & Multi-Agent Section (Navigator, Planner, Validator) */}
@@ -1013,7 +1009,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
-            reasoningEffort={reasoningEffort}
+            thinkingLevel={thinkingLevel}
             showAllModels={showAllModels}
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
@@ -1021,7 +1017,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             hasModelPricing={hasModelPricing}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
-            onChangeReasoning={handleReasoningEffortChange}
+            onChangeThinkingLevel={handleThinkingLevelChange}
           />
           <AgentModelsSection
             isDarkMode={isDarkMode}
@@ -1030,7 +1026,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
-            reasoningEffort={reasoningEffort}
+            thinkingLevel={thinkingLevel}
             showAllModels={showAllModels}
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
@@ -1038,7 +1034,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             hasModelPricing={hasModelPricing}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
-            onChangeReasoning={handleReasoningEffortChange}
+            onChangeThinkingLevel={handleThinkingLevelChange}
           />
 
           {/* Divider */}
@@ -1052,7 +1048,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
-            reasoningEffort={reasoningEffort}
+            thinkingLevel={thinkingLevel}
             showAllModels={showAllModels}
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
@@ -1060,7 +1056,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             hasModelPricing={hasModelPricing}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
-            onChangeReasoning={handleReasoningEffortChange}
+            onChangeThinkingLevel={handleThinkingLevelChange}
             colorOverride={isDarkMode ? 'border-green-700/40 bg-green-900/20' : 'border-green-300/60 bg-green-50/60'}>
             <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Configure how browser history is processed and sent to the AI for summarization.
@@ -1145,7 +1141,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             availableModels={availableModels}
             selectedModels={selectedModels}
             modelParameters={modelParameters}
-            reasoningEffort={reasoningEffort}
+            thinkingLevel={thinkingLevel}
             showAllModels={showAllModels}
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
@@ -1153,7 +1149,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             hasModelPricing={hasModelPricing}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
-            onChangeReasoning={handleReasoningEffortChange}
+            onChangeThinkingLevel={handleThinkingLevelChange}
             colorOverride={isDarkMode ? 'border-blue-700/40 bg-blue-900/20' : 'border-blue-300/60 bg-blue-50/60'}
           />
         </div>

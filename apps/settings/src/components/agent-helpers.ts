@@ -2,7 +2,7 @@
  * Agent Helpers
  * Shared utilities for agent settings components
  */
-import { AgentNameEnum } from '@extension/storage';
+import { AgentNameEnum, type ThinkingLevel } from '@extension/storage';
 
 /** Warning message for web search compatibility (shown when selecting models for Search) */
 export const WEB_SEARCH_COMPATIBILITY_WARNING =
@@ -160,11 +160,14 @@ export function createInitialModelParameters(): Record<
 }
 
 /**
- * Create initial reasoning effort state (all undefined)
+ * Create initial thinking level state (all undefined = default)
  */
-export function createInitialReasoningEffort(): Record<AgentNameEnum, 'low' | 'medium' | 'high' | undefined> {
+export function createInitialThinkingLevel(): Record<AgentNameEnum, ThinkingLevel | undefined> {
   return createAgentStateMap(undefined);
 }
+
+/** @deprecated Use createInitialThinkingLevel */
+export const createInitialReasoningEffort = createInitialThinkingLevel;
 
 /**
  * Create initial web search enabled state (all false)

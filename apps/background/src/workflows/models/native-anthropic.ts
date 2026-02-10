@@ -3,6 +3,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import type { ThinkingLevel } from '@extension/storage';
 // Relax message types to avoid strict dependency on LangChain at build time
 type BaseMessage = any;
 
@@ -17,6 +18,7 @@ export interface NativeAnthropicArgs {
   maxTokens?: number;
   webSearch?: boolean;
   maxRetries?: number;
+  thinkingLevel?: ThinkingLevel;
 }
 
 export class NativeAnthropicChatModel {
@@ -26,15 +28,54 @@ export class NativeAnthropicChatModel {
   private readonly maxTokens: number;
   private readonly webSearchEnabled: boolean;
   private readonly maxRetries?: number;
+  private readonly thinkingLevel?: ThinkingLevel;
 
   constructor(args: NativeAnthropicArgs) {
     this.modelName = args.model;
     // Enable browser usage in extension context to satisfy CORS header requirements
     this.client = new Anthropic({ apiKey: args.apiKey, dangerouslyAllowBrowser: true } as any);
     this.temperature = args.temperature;
-    this.maxTokens = Math.max(256, Math.min(8192, args.maxTokens ?? 2048));
     this.webSearchEnabled = !!args.webSearch;
     this.maxRetries = args.maxRetries;
+    this.thinkingLevel = args.thinkingLevel;
+
+    // When thinking is enabled, max_tokens must exceed budget_tokens
+    const requestedMax = args.maxTokens ?? 2048;
+    const thinkingBudget = this.getThinkingBudget();
+    const minTokens = thinkingBudget > 0 ? thinkingBudget + 1024 : 256;
+    this.maxTokens = Math.max(minTokens, Math.min(65536, requestedMax));
+  }
+
+  /** Whether this model supports extended thinking */
+  private isThinkingCapable(): boolean {
+    const l = this.modelName.toLowerCase();
+    return /^claude-(opus-4|sonnet-4|sonnet-3-7|3-7-sonnet|haiku-4-5)/.test(l);
+  }
+
+  /** Get the thinking budget tokens for the configured level. 0 = thinking disabled. */
+  private getThinkingBudget(): number {
+    if (!this.isThinkingCapable()) return 0;
+    switch (this.thinkingLevel) {
+      case 'low':
+        return 2048;
+      case 'medium':
+        return 8192;
+      case 'high':
+        return 32768;
+      default:
+        return 0; // 'off', 'default', undefined -> no thinking
+    }
+  }
+
+  /** Build the thinking and temperature params for a request. */
+  private getThinkingParams(): Record<string, unknown> {
+    const budget = this.getThinkingBudget();
+    if (budget <= 0) {
+      // No thinking: include temperature normally
+      return this.temperature !== undefined ? { temperature: this.temperature } : {};
+    }
+    // Anthropic: temperature must be omitted (or set to 1) when thinking is enabled
+    return { thinking: { type: 'enabled', budget_tokens: budget } };
   }
 
   withStructuredOutput(_schema: any, _opts?: { includeRaw?: boolean; name?: string }): WithStructuredOutputResult {
@@ -55,8 +96,7 @@ export class NativeAnthropicChatModel {
               {
                 model: this.modelName,
                 max_tokens: this.maxTokens,
-                // Only include temperature if explicitly set; omit to use provider default
-                ...(this.temperature !== undefined && { temperature: this.temperature }),
+                ...this.getThinkingParams(),
                 system: system || undefined,
                 messages: anthropicMessages,
                 ...(rest as object),
@@ -128,8 +168,7 @@ export class NativeAnthropicChatModel {
           {
             model: this.modelName,
             max_tokens: this.maxTokens,
-            // Only include temperature if explicitly set; omit to use provider default
-            ...(this.temperature !== undefined && { temperature: this.temperature }),
+            ...this.getThinkingParams(),
             system: system || undefined,
             messages: anthropicMessages,
             tools: this.webSearchEnabled
@@ -299,10 +338,10 @@ export class NativeAnthropicChatModel {
       {
         model: this.modelName,
         max_tokens: this.maxTokens,
-        temperature: this.temperature,
+        ...this.getThinkingParams(),
         system: system || undefined,
         messages: this.toAnthropicMessages(chatMessages),
-      },
+      } as any,
       { signal },
     );
 
