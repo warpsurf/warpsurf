@@ -483,7 +483,7 @@ export function usePanelHandlers(params: {
   );
 
   const handleOpenSettings = useCallback(
-    async (tab?: 'api-keys' | 'workflow-settings' | 'web-settings' | 'warnings' | 'help') => {
+    async (tab?: 'api-keys' | 'workflow-settings' | 'web-settings' | 'voice' | 'warnings' | 'help') => {
       try {
         if (tab) await chrome.storage.local.set({ 'settings.pendingTab': tab });
         chrome.runtime.openOptionsPage();

@@ -31,6 +31,8 @@ import { ChatScreen } from './screens/ChatScreen';
 import { usePanelHandlers } from './hooks/use-panel-handlers';
 import { usePanelEffects } from './hooks/use-panel-effects';
 import { useEventSetup } from './hooks/use-event-setup';
+import { useSpeechToText, MicrophonePermissionOverlay } from '@extension/shared';
+import { speechToTextModelStore } from '@extension/storage';
 
 const SidePanel = () => {
   // State
@@ -105,6 +107,10 @@ const SidePanel = () => {
   const [autoContextEnabled, setAutoContextEnabled] = useState<boolean>(false);
   const [autoContextTabIds, setAutoContextTabIds] = useState<number[]>([]);
   const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
+
+  // Speech-to-text state
+  const [sttConfigured, setSttConfigured] = useState(false);
+  const [sttAutoSubmit, setSttAutoSubmit] = useState(false);
 
   const isDarkMode = useDarkMode();
   const { showToast } = useToast();
@@ -243,6 +249,52 @@ const SidePanel = () => {
     };
   }, []); // Empty deps - loadAutoContextState always reads fresh from storage
 
+  // Load STT configuration state
+  useEffect(() => {
+    const loadSttConfig = async () => {
+      try {
+        const config = await speechToTextModelStore.getConfig();
+        setSttConfigured(!!config?.provider && !!config?.modelName);
+        setSttAutoSubmit(!!config?.autoSubmit);
+      } catch {}
+    };
+    loadSttConfig();
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = speechToTextModelStore.subscribe(loadSttConfig);
+    } catch {}
+    return () => {
+      try {
+        unsub?.();
+      } catch {}
+    };
+  }, []);
+
+  // Refs for STT callbacks (avoids stale closure over handleSendMessage/appendMessage defined later)
+  const sttAutoSubmitRef = useRef(sttAutoSubmit);
+  useEffect(() => {
+    sttAutoSubmitRef.current = sttAutoSubmit;
+  }, [sttAutoSubmit]);
+  const handleSendMessageRef = useRef<any>(null);
+  const appendMessageRef = useRef<any>(null);
+
+  // Speech-to-text hook
+  const stt = useSpeechToText({
+    portRef,
+    onTranscription: useCallback((text: string) => {
+      if (sttAutoSubmitRef.current && handleSendMessageRef.current) {
+        handleSendMessageRef.current(text);
+      } else if (setInputTextRef.current) {
+        setInputTextRef.current(text);
+      }
+    }, []),
+    onError: useCallback((error: string) => {
+      if (appendMessageRef.current) {
+        appendMessageRef.current({ actor: 'system', content: `Voice input error: ${error}`, timestamp: Date.now() });
+      }
+    }, []),
+  });
+
   // Chat history
   const {
     chatSessions,
@@ -339,12 +391,19 @@ const SidePanel = () => {
     recalculatedEstimation,
   });
 
+  // Keep STT error callback ref in sync
+  appendMessageRef.current = appendMessage;
+
   const { setupConnection, stopConnection, sendMessage } = useBackgroundConnection({
     portRef,
     sessionIdRef,
     logger,
     appendMessage,
-    handlers: panelHandlers,
+    handlers: {
+      ...panelHandlers,
+      onSpeechToTextResult: (msg: any) => stt.handleSttResult(msg?.text || ''),
+      onSpeechToTextError: (msg: any) => stt.handleSttError(msg?.error || 'Transcription failed'),
+    },
     eventIdRefs: { seenEventIdsRef, lastEventIdBySessionRef },
   });
 
@@ -490,6 +549,9 @@ const SidePanel = () => {
       resetRunState,
     ],
   );
+
+  // Keep STT auto-submit ref in sync with latest handleSendMessage
+  handleSendMessageRef.current = handleSendMessage;
 
   const handleReplay = useMemo(
     () => async (historySessionId: string) => {
@@ -957,6 +1019,19 @@ const SidePanel = () => {
               setPendingContextTabs={tabs => {
                 pendingContextTabsRef.current = tabs;
               }}
+              onMicClick={stt.handleMicClick}
+              onMicStop={stt.stopRecording}
+              isRecording={stt.isRecording}
+              isProcessingSpeech={stt.isProcessing}
+              recordingDurationMs={stt.recordingDurationMs}
+              audioLevel={stt.audioLevel}
+              sttConfigured={sttConfigured}
+              onOpenVoiceSettings={() => {
+                try {
+                  chrome.storage.local.set({ 'settings.pendingTab': 'voice' });
+                  chrome.runtime.openOptionsPage();
+                } catch {}
+              }}
             />
           )}
         </div>
@@ -973,6 +1048,14 @@ const SidePanel = () => {
       {perChatModal}
       {historyPrivacyModal}
       {autoTabContextPrivacyModal}
+      {stt.showPermissionOverlay && (
+        <MicrophonePermissionOverlay
+          permissionState={stt.permissionState}
+          isDarkMode={isDarkMode}
+          onRequestPermission={stt.openPermissionPopup}
+          onDismiss={stt.dismissPermissionOverlay}
+        />
+      )}
     </>
   );
 };

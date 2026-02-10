@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
-import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS } from '@extension/shared';
+import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, MicrophoneButton } from '@extension/shared';
 import TabContextSelector from './tab-context-selector';
 import type { ContextTabInfo } from './types';
 
@@ -90,6 +90,15 @@ interface ChatInputProps {
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
   // Callback to store context tabs metadata when sending a message
   onContextTabsCapture?: (timestamp: number, contextTabs: ContextTabInfo[]) => void;
+  // Speech-to-text props
+  onMicClick?: () => void;
+  onMicStop?: () => void;
+  isRecording?: boolean;
+  isProcessingSpeech?: boolean;
+  recordingDurationMs?: number;
+  audioLevel?: number;
+  sttConfigured?: boolean;
+  onOpenVoiceSettings?: () => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -121,6 +130,14 @@ export default function ChatInput({
   onExcludedAutoTabIdsChange,
   onAutoContextToggle,
   onContextTabsCapture,
+  onMicClick,
+  onMicStop,
+  isRecording = false,
+  isProcessingSpeech = false,
+  recordingDurationMs = 0,
+  audioLevel = 0,
+  sttConfigured = false,
+  onOpenVoiceSettings,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -416,6 +433,21 @@ export default function ChatInput({
                 excludedAutoTabIds={excludedAutoTabIds}
                 onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                 onAutoContextToggle={onAutoContextToggle}
+              />
+            )}
+            {/* Microphone button for voice input */}
+            {onMicClick && !showStopButton && (
+              <MicrophoneButton
+                isRecording={isRecording}
+                isProcessing={isProcessingSpeech}
+                recordingDurationMs={recordingDurationMs}
+                audioLevel={audioLevel}
+                onClick={onMicClick}
+                onStopClick={onMicStop || (() => {})}
+                isDarkMode={isDarkMode}
+                disabled={!sttConfigured || disabled}
+                disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
+                onOpenSettings={onOpenVoiceSettings}
               />
             )}
           </div>
