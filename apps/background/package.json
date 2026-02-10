@@ -24,7 +24,7 @@
     "@google/generative-ai": "^0.24.1",
     "@langchain/anthropic": "0.3.21",
     "@langchain/cerebras": "^0.0.1",
-    "@langchain/core": "0.3.57",
+    "@langchain/core": ">=0.3.80",
     "@langchain/deepseek": "^0.0.2",
     "@langchain/google-genai": "0.2.10",
     "@langchain/groq": "^0.2.2",
@@ -40,7 +40,7 @@
     "zod-to-json-schema": "^3.24.5"
   },
   "overrides": {
-    "@langchain/core": "0.3.57"
+    "@langchain/core": ">=0.3.80"
   },
   "devDependencies": {
     "@extension/dev-utils": "workspace:*",
