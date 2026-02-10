@@ -144,7 +144,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 const { agentModelStore, AgentNameEnum } = await import('@extension/storage');
                 const providers = await getAllProvidersDecrypted();
                 const agentModels = await agentModelStore.getAllAgentModels();
-                const navigatorModel = agentModels[AgentNameEnum.Navigator];
+                const navigatorModel = agentModels[AgentNameEnum.AgentNavigator];
 
                 if (navigatorModel && navigatorModel.modelName !== selectedModel) {
                   // Find the provider for this model
@@ -158,7 +158,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
                   if (modelProvider) {
                     // Update navigator model temporarily
-                    await agentModelStore.setAgentModel(AgentNameEnum.Navigator, {
+                    await agentModelStore.setAgentModel(AgentNameEnum.AgentNavigator, {
                       provider: modelProvider,
                       modelName: selectedModel,
                       parameters: navigatorModel.parameters,
@@ -799,7 +799,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
 
             // Step 4: Store globally
-            await storeHistoryContext(result.result, windowHours);
+            await storeHistoryContext(result.result!, windowHours);
 
             logger.info('History context stored globally - will be used by all agents');
 

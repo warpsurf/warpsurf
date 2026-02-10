@@ -45,7 +45,7 @@ export class EstimationService {
       if (!estimatorConfig) {
         // Fallback to planner model if no estimator configured
         logger.info('No estimator model configured, falling back to planner');
-        const plannerConfig = agentModels[AgentNameEnum.Planner];
+        const plannerConfig = agentModels[AgentNameEnum.AgentPlanner];
 
         if (!plannerConfig) {
           logger.warning('No planner model available either, estimation will fail');

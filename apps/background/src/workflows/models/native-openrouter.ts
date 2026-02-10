@@ -257,7 +257,7 @@ export class NativeOpenRouterChatModel {
     );
 
     let usage: any = null;
-    for await (const chunk of stream) {
+    for await (const chunk of stream as unknown as AsyncIterable<any>) {
       if (chunk.usage) usage = chunk.usage;
       const text = chunk.choices?.[0]?.delta?.content;
       if (text) yield { text, done: false };

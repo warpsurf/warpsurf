@@ -57,13 +57,13 @@ function taskToAgentData(task: Task, mirrors: any[]): AgentData {
   }
 
   // Map task status to agent status
-  let status = task.status;
+  let status: string = task.status;
   // Check if task needs human input (paused state)
   if (task.status === 'running' && (task as any).isPaused) {
     status = 'needs_input';
   }
   // Ensure cancelled/completed tasks are reflected properly
-  if (task.status === 'cancelled' || task.status === 'completed' || task.status === 'failed') {
+  if (task.status === 'cancelled' || task.status === 'completed' || task.status === 'error') {
     status = task.status;
   }
 

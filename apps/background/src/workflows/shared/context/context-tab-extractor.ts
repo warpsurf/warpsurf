@@ -177,7 +177,7 @@ export async function hasTabContentChanged(tabId: number): Promise<boolean> {
  * Get cached content for a tab, extracting if not cached.
  */
 export async function getTabContent(tabId: number, format: 'markdown' | 'dom'): Promise<string | null> {
-  let content = contextTabCache.get(tabId);
+  let content = contextTabCache.get(tabId) ?? null;
   if (!content) {
     content = await extractTabContent(tabId);
     if (!content) return null;

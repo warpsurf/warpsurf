@@ -404,7 +404,7 @@ export class TaskManager extends EventEmitter {
               url: cached.url || '',
               title: cached.title || '',
               screenshot: cached.screenshot,
-              lastUpdated: cached.timestamp,
+              lastUpdated: (cached as any).timestamp,
             } as any;
           }
         }
@@ -458,7 +458,7 @@ export class TaskManager extends EventEmitter {
     }
 
     const agentModels = await agentModelStore.getAllAgentModels();
-    const navigatorModel = agentModels[AgentNameEnum.Navigator];
+    const navigatorModel = agentModels[AgentNameEnum.AgentNavigator];
     if (!navigatorModel) {
       throw new Error('Please choose a model for the navigator in the settings first');
     }
@@ -466,13 +466,13 @@ export class TaskManager extends EventEmitter {
     const navigatorLLM = createChatModel(providers[navigatorModel.provider], navigatorModel);
 
     let plannerLLM: BaseChatModel | null = null;
-    const plannerModel = agentModels[AgentNameEnum.Planner];
+    const plannerModel = agentModels[AgentNameEnum.AgentPlanner];
     if (plannerModel) {
       plannerLLM = createChatModel(providers[plannerModel.provider], plannerModel);
     }
 
     let validatorLLM: BaseChatModel | null = null;
-    const validatorModel = agentModels[AgentNameEnum.Validator];
+    const validatorModel = agentModels[AgentNameEnum.AgentValidator];
     if (validatorModel) {
       validatorLLM = createChatModel(providers[validatorModel.provider], validatorModel);
     }

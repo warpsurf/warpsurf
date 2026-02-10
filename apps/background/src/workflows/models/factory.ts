@@ -14,13 +14,14 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
   // Temperature is undefined when user wants provider's default; only pass through if explicitly set
   const temperature = modelConfig.parameters?.temperature as number | undefined;
   const maxTokens = (modelConfig.parameters?.maxOutputTokens ?? 8192) as number;
+  const apiKey = providerConfig.apiKey || '';
 
   switch (modelConfig.provider) {
     case ProviderTypeEnum.OpenAI: {
       // Use native OpenAI SDK
       return new NativeOpenAIChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
@@ -32,7 +33,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       // Use native Anthropic SDK with optional web search
       return new NativeAnthropicChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         webSearch: !!modelConfig.webSearch,
@@ -43,7 +44,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       // Use native Google GenAI SDK with Google Search grounding
       return new NativeGeminiChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         webSearch: !!modelConfig.webSearch,
@@ -54,7 +55,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       // Use native Grok (xAI) SDK with Live Search support
       return new NativeGrokChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         webSearch: !!modelConfig.webSearch,
@@ -66,7 +67,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       // See: https://openrouter.ai/docs/quickstart
       return new NativeOpenRouterChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
@@ -83,7 +84,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       }
       return new NativeCustomOpenAIChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey, // May be empty for local models
+        apiKey, // May be empty for local models
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
