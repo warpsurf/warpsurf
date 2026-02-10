@@ -23,8 +23,9 @@ import { wrapUntrustedContent } from '@src/workflows/shared/messages';
 import { URLNotAllowedError } from '../browser/views';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { AgentStepHistory } from '@src/workflows/shared/step-history';
-import type { GeneralSettingsConfig } from '@extension/storage';
-import { AutoWorkflow, type AutoAction } from '@src/workflows/auto';
+import { generalSettingsStore, type GeneralSettingsConfig } from '@extension/storage';
+import { AutoWorkflow, type AutoAction, type AutoResult } from '@src/workflows/auto';
+import { ToolWorkflow } from '@src/workflows/tool';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils';
 import { tabExists } from '@src/utils';
@@ -48,6 +49,8 @@ export interface ExecutorExtraArgs {
   systemMessageOverride?: SystemMessage;
   /** Context menu action identifier (e.g., 'explain-selection') for selecting bespoke prompts. */
   contextMenuAction?: string;
+  /** Pre-computed triage result from task-handlers to avoid duplicate AUTO calls. */
+  preTriageResult?: AutoResult;
 }
 
 export class Executor {
@@ -56,6 +59,7 @@ export class Executor {
   private readonly validator: AgentValidator;
   private readonly chat: ChatWorkflow;
   private readonly search: SearchWorkflow;
+  private readonly tool: ToolWorkflow;
   private readonly context: AgentContext;
   private readonly plannerPrompt: PlannerPrompt;
   private readonly navigatorPrompt: NavigatorPrompt;
@@ -63,6 +67,7 @@ export class Executor {
   private readonly generalSettings: GeneralSettingsConfig | undefined;
   private readonly autoService: AutoWorkflow;
   private manualAgentType?: string;
+  private preTriageResult?: AutoResult;
   private tasks: string[] = [];
   private lastError?: any;
   private retainTokenLogs?: boolean;
@@ -74,6 +79,7 @@ export class Executor {
     auto: Array<{ request: string; response: any; timestamp: number }>;
     chat: Array<{ request: string; response: any; timestamp: number }>;
     search: Array<{ request: string; response: any; timestamp: number }>;
+    tool: Array<{ request: string; response: any; timestamp: number }>;
     navigator: Array<{ step: number; response: any; timestamp: number }>;
     planner: Array<{ step: number; response: any; timestamp: number }>;
     validator: Array<{ step: number; response: any; timestamp: number }>;
@@ -81,6 +87,7 @@ export class Executor {
     auto: [],
     chat: [],
     search: [],
+    tool: [],
     navigator: [],
     planner: [],
     validator: [],
@@ -111,6 +118,7 @@ export class Executor {
     this.generalSettings = extraArgs?.generalSettings;
     this.retainTokenLogs = !!extraArgs?.retainTokenLogs;
     this.manualAgentType = extraArgs?.agentType;
+    this.preTriageResult = extraArgs?.preTriageResult;
     this.tasks.push(task);
     this.navigatorPrompt = new NavigatorPrompt(context.options.maxActionsPerStep);
     this.plannerPrompt = new PlannerPrompt();
@@ -140,6 +148,8 @@ export class Executor {
     this.chat = new ChatWorkflow(chatLLM, context, extraArgs?.contextMenuAction);
 
     this.search = new SearchWorkflow(searchLLM, context);
+
+    this.tool = new ToolWorkflow(chatLLM, context);
 
     this.autoService = new AutoWorkflow();
 
@@ -219,8 +229,12 @@ export class Executor {
     this.context.eventManager.clearSubscribers(EventType.EXECUTION);
   }
 
-  addFollowUpTask(task: string, agentType?: string): void {
+  addFollowUpTask(task: string, agentType?: string, preTriageResult?: AutoResult): void {
     this.tasks.push(task);
+    // Store pre-triage result if provided (for tool actions)
+    if (preTriageResult) {
+      this.preTriageResult = preTriageResult;
+    }
     // Normalize agent type: if not provided, inherit the existing manual agent type for this session
     const normalizedType = agentType ?? this.manualAgentType;
     // For agent sessions, avoid adding another "ultimate task" block.
@@ -373,37 +387,41 @@ export class Executor {
     const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType);
 
     try {
-      let autoAction: AutoAction;
+      let autoResult: AutoResult;
 
-      if (this.manualAgentType && this.manualAgentType !== 'auto') {
+      // Use pre-computed triage result if available (avoids duplicate AUTO calls)
+      if (this.preTriageResult) {
+        autoResult = this.preTriageResult;
+        // Clear after use so follow-up tasks triage fresh
+        this.preTriageResult = undefined;
+        workflowLogger.autoRouting(autoResult.action, autoResult.confidence);
+      } else if (this.manualAgentType && this.manualAgentType !== 'auto') {
         switch (this.manualAgentType) {
           case 'chat':
-            autoAction = 'chat';
+            autoResult = { action: 'chat', confidence: 1 };
             this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_START, 'Processing request...');
             break;
           case 'search':
-            autoAction = 'search';
+            autoResult = { action: 'search', confidence: 1 };
             this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_START, 'Searching and processing...');
             break;
           case 'agent':
-            autoAction = 'agent';
+            autoResult = { action: 'agent', confidence: 1 };
             this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_START, 'Initializing browser agent...');
             break;
           default:
-            const autoResult = await this.triageRequest(task);
-            autoAction = autoResult.action;
+            autoResult = await this.triageRequest(task);
             workflowLogger.autoRouting(autoResult.action, autoResult.confidence);
             break;
         }
       } else {
-        const autoResult = await this.triageRequest(task);
-        autoAction = autoResult.action;
+        autoResult = await this.triageRequest(task);
         workflowLogger.autoRouting(autoResult.action, autoResult.confidence);
       }
 
-      workflowLogger.workflowStart(autoAction);
+      workflowLogger.workflowStart(autoResult.action);
 
-      switch (autoAction) {
+      switch (autoResult.action) {
         case 'chat':
           this.context.emitEvent(
             Actors.SYSTEM,
@@ -421,6 +439,35 @@ export class Executor {
           );
           await this.executeSearchWorkflow();
           break;
+
+        case 'tool': {
+          this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, 'Processing settings/configuration request');
+          const toolSummary = await this.executeToolWorkflow();
+          // Only chain to the follow-up workflow if tools were actually executed.
+          // If no tools ran (e.g. LLM asked for clarification), stop here.
+          if (toolSummary && autoResult.afterTool && autoResult.afterTool !== 'none') {
+            await this.reloadGeneralSettings();
+            // Push a modified task so the follow-up workflow knows the tool part is done.
+            // The tool output is also persisted to chat history for full context.
+            const original = this.tasks[this.tasks.length - 1];
+            this.tasks.push(
+              `[Tool actions completed: ${toolSummary}] ` +
+                `Handle the remaining part of the user's request: ${original}`,
+            );
+            switch (autoResult.afterTool) {
+              case 'chat':
+                await this.executeChatWorkflow();
+                break;
+              case 'search':
+                await this.executeSearchWorkflow();
+                break;
+              case 'agent':
+                await this.executeAgentWorkflow();
+                break;
+            }
+          }
+          break;
+        }
 
         case 'agent':
         default:
@@ -479,45 +526,29 @@ export class Executor {
     }
   }
 
-  private async triageRequest(
-    request: string,
-  ): Promise<{ action: AutoAction; confidence: number; reasoning?: string }> {
+  private async triageRequest(request: string): Promise<AutoResult> {
     this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_START, 'Analyzing request...');
 
     try {
       const result = await this.autoService.triageRequest(request, this.context.taskId, this.context.contextTabIds);
-      // Enforce no 'request_more_info' downstream
       if (result.action === 'request_more_info') {
         result.action = 'chat';
       }
 
-      this.llmResponses.auto.push({
-        request,
-        response: result,
-        timestamp: Date.now(),
-      });
-
+      this.llmResponses.auto.push({ request, response: result, timestamp: Date.now() });
       this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_OK, `Request categorized as: ${result.action}`);
-
       return result;
     } catch (error) {
-      const errorResponse = {
-        action: 'agent' as AutoAction,
+      const errorResponse: AutoResult = {
+        action: 'agent',
         confidence: 0.3,
         reasoning: 'Fallback due to auto failure',
-        error: error instanceof Error ? error.message : String(error),
       };
 
-      this.llmResponses.auto.push({
-        request,
-        response: errorResponse,
-        timestamp: Date.now(),
-      });
-
+      this.llmResponses.auto.push({ request, response: errorResponse, timestamp: Date.now() });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_FAIL, `Auto failed: ${errorMessage}`);
 
-      // Return a fallback result
       return {
         action: 'agent',
         confidence: 0.3,
@@ -595,6 +626,57 @@ export class Executor {
       logger.error(`Search execution failed: ${errorMessage}`);
       // Re-throw to let the main finally block handle job summary
       throw error;
+    }
+  }
+
+  /**
+   * Returns a summary of completed tool actions, or null if no tools were executed
+   * (e.g. the LLM asked for clarification instead).
+   */
+  private async executeToolWorkflow(): Promise<string | null> {
+    try {
+      logger.info('Executing tool workflow...');
+      const currentTask = this.tasks[this.tasks.length - 1];
+      this.tool.setTask(currentTask);
+      const result = await this.tool.execute();
+
+      this.llmResponses.tool.push({ request: currentTask, response: result, timestamp: Date.now() });
+
+      if (result.error) throw new Error(result.error);
+
+      const executed = result.result?.toolResults ?? [];
+      if (executed.length === 0) return null;
+      return executed.map(r => r.message).join('; ');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.llmResponses.tool.push({
+        request: this.tasks[this.tasks.length - 1],
+        response: { error: errorMessage },
+        timestamp: Date.now(),
+      });
+      logger.error(`Tool execution failed: ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Re-read general settings and update context.options so that any
+   * settings changed by the tool workflow take effect for the follow-up workflow.
+   */
+  private async reloadGeneralSettings(): Promise<void> {
+    try {
+      const settings = await generalSettingsStore.getSettings();
+      const opts = this.context.options;
+      opts.maxSteps = settings.maxSteps;
+      opts.maxFailures = settings.maxFailures;
+      opts.maxActionsPerStep = settings.maxActionsPerStep;
+      opts.retryDelay = settings.retryDelay;
+      opts.maxInputTokens = settings.maxInputTokens;
+      opts.useVision = settings.useVision;
+      opts.planningInterval = settings.planningInterval;
+      logger.info('Reloaded general settings after tool workflow');
+    } catch (e) {
+      logger.warning('Failed to reload general settings:', e);
     }
   }
 
