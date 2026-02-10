@@ -1,5 +1,10 @@
 import { createChatModel } from '../workflows/models/factory';
-import { generalSettingsStore, AgentNameEnum, getDefaultDisplayNameFromProviderId } from '@extension/storage';
+import {
+  generalSettingsStore,
+  agentModelStore,
+  AgentNameEnum,
+  getDefaultDisplayNameFromProviderId,
+} from '@extension/storage';
 import { Executor } from '../executor/executor';
 import BrowserContext from '../browser/context';
 import { getAllProvidersDecrypted, getAllAgentModelsDecrypted } from '../crypto';

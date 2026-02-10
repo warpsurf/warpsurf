@@ -224,7 +224,7 @@ export async function getContextTabsContent(
   for (const tabId of tabIds) {
     if (totalChars >= maxTotalChars) break;
 
-    let content = contextTabCache.get(tabId);
+    let content = contextTabCache.get(tabId) ?? null;
     if (!content) {
       content = await extractTabContent(tabId);
     }

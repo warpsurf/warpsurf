@@ -370,7 +370,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Include all models, not just those with pricing data
           // Models without pricing will display costs as NaN
           models.push(
-            ...providerModels.map(model => ({
+            ...providerModels.map((model: string) => ({
               provider,
               providerName: config.name || provider,
               model,

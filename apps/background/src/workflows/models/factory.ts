@@ -13,13 +13,14 @@ type BaseChatModel = any;
 export function createChatModel(providerConfig: ProviderConfig, modelConfig: ModelConfig): BaseChatModel {
   const temperature = modelConfig.parameters?.temperature as number | undefined;
   const maxTokens = (modelConfig.parameters?.maxOutputTokens ?? 8192) as number;
+  const apiKey = providerConfig.apiKey || '';
   const thinkingLevel = modelConfig.thinkingLevel;
 
   switch (modelConfig.provider) {
     case ProviderTypeEnum.OpenAI:
       return new NativeOpenAIChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
@@ -31,7 +32,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     case ProviderTypeEnum.Anthropic:
       return new NativeAnthropicChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         thinkingLevel,
@@ -42,7 +43,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     case ProviderTypeEnum.Gemini:
       return new NativeGeminiChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         thinkingLevel,
@@ -53,7 +54,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     case ProviderTypeEnum.Grok:
       return new NativeGrokChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
         thinkingLevel,
@@ -64,7 +65,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     case ProviderTypeEnum.OpenRouter:
       return new NativeOpenRouterChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,

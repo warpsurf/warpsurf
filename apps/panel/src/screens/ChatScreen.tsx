@@ -87,6 +87,15 @@ export interface ChatScreenProps {
   setMessageMetadata?: (updater: (prev: any) => any) => void;
   // Callback to set pending context tabs (will be stored when user message is created)
   setPendingContextTabs?: (tabs: ContextTabInfo[] | null) => void;
+  // Speech-to-text props
+  onMicClick?: () => void;
+  onMicStop?: () => void;
+  isRecording?: boolean;
+  isProcessingSpeech?: boolean;
+  recordingDurationMs?: number;
+  audioLevel?: number;
+  sttConfigured?: boolean;
+  onOpenVoiceSettings?: () => void;
 }
 
 export function ChatScreen(props: ChatScreenProps) {
@@ -164,6 +173,14 @@ export function ChatScreen(props: ChatScreenProps) {
     onAutoContextToggle,
     setMessageMetadata,
     setPendingContextTabs,
+    onMicClick,
+    onMicStop,
+    isRecording: isRecordingProp = false,
+    isProcessingSpeech: isProcessingSpeechProp = false,
+    recordingDurationMs: recordingDurationMsProp = 0,
+    audioLevel: audioLevelProp = 0,
+    sttConfigured: sttConfiguredProp = false,
+    onOpenVoiceSettings,
   } = props;
 
   // Context tabs state lifted here to persist across ChatInput remounts
@@ -257,6 +274,14 @@ export function ChatScreen(props: ChatScreenProps) {
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
                   onContextTabsCapture={handleContextTabsCapture}
+                  onMicClick={onMicClick}
+                  onMicStop={onMicStop}
+                  isRecording={isRecordingProp}
+                  isProcessingSpeech={isProcessingSpeechProp}
+                  recordingDurationMs={recordingDurationMsProp}
+                  audioLevel={audioLevelProp}
+                  sttConfigured={sttConfiguredProp}
+                  onOpenVoiceSettings={onOpenVoiceSettings}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -421,6 +446,14 @@ export function ChatScreen(props: ChatScreenProps) {
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
                   onContextTabsCapture={handleContextTabsCapture}
+                  onMicClick={onMicClick}
+                  onMicStop={onMicStop}
+                  isRecording={isRecordingProp}
+                  isProcessingSpeech={isProcessingSpeechProp}
+                  recordingDurationMs={recordingDurationMsProp}
+                  audioLevel={audioLevelProp}
+                  sttConfigured={sttConfiguredProp}
+                  onOpenVoiceSettings={onOpenVoiceSettings}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {

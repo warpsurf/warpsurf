@@ -1027,7 +1027,7 @@ export function createPanelHandlers(deps: any): any {
 
         // Restore workflow graph for multiagent
         if (data.agentType === 'multiagent' && data.workflowGraph) {
-          restoredMetadata.__workflowGraph = data.workflowGraph;
+          (restoredMetadata as any).__workflowGraph = data.workflowGraph;
           deps.setShowInlineWorkflow(true);
         }
 

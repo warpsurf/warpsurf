@@ -70,7 +70,7 @@ async function runEstimationIfEnabled(
   let navigatorModelName: string | undefined;
   try {
     const agentModels = await agentModelStore.getAllAgentModels();
-    navigatorModelName = agentModels[AgentNameEnum.Navigator]?.modelName;
+    navigatorModelName = agentModels[AgentNameEnum.AgentNavigator]?.modelName;
   } catch {}
 
   const estimation = await estimationService.estimateTask(task, navigatorModelName, sessionId);
@@ -244,8 +244,8 @@ export async function handleNewTask(message: any, deps: Deps) {
       } catch {
         effectiveAgentType = 'agent';
       } finally {
-        globalTokenTracker.setCurrentTaskId(prevTaskId);
-        globalTokenTracker.setCurrentRole(prevRole);
+        globalTokenTracker.setCurrentTaskId(prevTaskId || '');
+        globalTokenTracker.setCurrentRole(prevRole || '');
       }
     }
   } catch {}
@@ -471,8 +471,8 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       } catch {
         // Keep original agentType on error
       } finally {
-        globalTokenTracker.setCurrentTaskId(prevTaskId);
-        globalTokenTracker.setCurrentRole(prevRole);
+        globalTokenTracker.setCurrentTaskId(prevTaskId || '');
+        globalTokenTracker.setCurrentRole(prevRole || '');
       }
     }
   } catch {}
