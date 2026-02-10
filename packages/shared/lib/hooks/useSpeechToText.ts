@@ -47,8 +47,8 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const permissionGrantedRef = useRef(false);
 
-  // Stable refs for callbacks to avoid stale closures
   const onTranscriptionRef = useRef(onTranscription);
   const onErrorRef = useRef(onError);
   useEffect(() => {
@@ -58,7 +58,6 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
     onErrorRef.current = onError;
   }, [onError]);
 
-  // Handlers called by the consumer when port messages arrive (avoids stale port listener)
   const handleSttResult = useCallback((text: string) => {
     setIsProcessing(false);
     if (text) onTranscriptionRef.current(text);
@@ -121,6 +120,7 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      permissionGrantedRef.current = true;
       streamRef.current = stream;
       audioChunksRef.current = [];
 
@@ -132,8 +132,6 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
       };
 
       mediaRecorder.onstop = () => {
-        // Stop timers/visualisation but DON'T release stream yet — sendAudioToBackground
-        // only needs the already-collected chunks (Blobs), not the live stream.
         stopTimers();
         releaseStream();
         if (audioChunksRef.current.length > 0) {
@@ -141,7 +139,6 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
         }
       };
 
-      // Audio level analysis
       try {
         const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
@@ -160,15 +157,13 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
           animFrameRef.current = requestAnimationFrame(updateLevel);
         };
         updateLevel();
-      } catch {} // Audio analysis is best-effort
+      } catch {}
 
-      // Duration timer
       startTimeRef.current = Date.now();
       durationIntervalRef.current = window.setInterval(() => {
         setRecordingDurationMs(Date.now() - startTimeRef.current);
       }, 100);
 
-      // Max duration safety
       recordingTimerRef.current = window.setTimeout(() => {
         if (mediaRecorderRef.current?.state === 'recording') {
           mediaRecorderRef.current.stop();
@@ -187,9 +182,8 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
-      // Set processing immediately to avoid UI flash between recording and processing states
       if (audioChunksRef.current.length > 0) setIsProcessing(true);
-      mediaRecorderRef.current.stop(); // triggers onstop -> sendAudioToBackground
+      mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
   }, []);
@@ -204,16 +198,19 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
         chrome.windows.onRemoved.removeListener(onClose);
         setTimeout(async () => {
           try {
-            const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-            if (status.state === 'granted') {
-              setShowPermissionOverlay(false);
-              setPermissionState(null);
-              startRecording();
+            const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            testStream.getTracks().forEach(t => t.stop());
+            permissionGrantedRef.current = true;
+            setShowPermissionOverlay(false);
+            setPermissionState(null);
+            startRecording();
+          } catch (err: unknown) {
+            const name = err instanceof DOMException ? err.name : '';
+            if (name === 'NotAllowedError') {
+              setPermissionState('denied');
             } else {
-              setPermissionState(status.state === 'denied' ? 'denied' : 'prompt');
+              setPermissionState('prompt');
             }
-          } catch {
-            setPermissionState('prompt');
           }
         }, 500);
       };
@@ -228,6 +225,17 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
     }
     if (isProcessing) return;
 
+    if (permissionGrantedRef.current) {
+      try {
+        await startRecording();
+      } catch {
+        permissionGrantedRef.current = false;
+        setPermissionState('prompt');
+        setShowPermissionOverlay(true);
+      }
+      return;
+    }
+
     try {
       const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
       if (status.state === 'denied') {
@@ -235,14 +243,13 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
         setShowPermissionOverlay(true);
         return;
       }
-      if (status.state !== 'granted') {
-        setPermissionState('prompt');
-        setShowPermissionOverlay(true);
+      if (status.state === 'granted') {
+        await startRecording();
         return;
       }
-      await startRecording();
+      setPermissionState('prompt');
+      setShowPermissionOverlay(true);
     } catch {
-      // Permissions API may not be available; try direct getUserMedia
       try {
         await startRecording();
       } catch {
@@ -256,7 +263,6 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
     setPermissionState(null);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
