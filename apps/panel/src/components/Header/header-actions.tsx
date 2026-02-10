@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiChevronDown, FiMoreHorizontal, FiSettings, FiHelpCircle } from 'react-icons/fi';
-import { FaFish, FaRobot, FaHistory } from 'react-icons/fa';
-import { RxDiscordLogo, RxGithubLogo } from 'react-icons/rx';
+import { FaFish, FaRobot, FaHistory, FaChrome } from 'react-icons/fa';
+import { RxGithubLogo } from 'react-icons/rx';
 import { useHeaderOverflow } from '../../hooks/use-header-overflow';
 import { generalSettingsStore } from '@extension/storage';
 import FeedbackMenu from './feedback-menu';
@@ -654,12 +654,12 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                   <div className="px-3 pb-1 font-medium opacity-80">Feedback</div>
                   <div className="px-3 py-1 text-xs opacity-70">Feedback is greatly appreciated</div>
                   <a
-                    href="https://github.com/warpsurf/warpsurf"
+                    href="https://chromewebstore.google.com/detail/warpsurf/ekmohjijmhcdpgficcolmennloeljhod"
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex items-center gap-2 rounded px-3 py-2`}>
-                    <RxDiscordLogo className="h-3.5 w-3.5" />
-                    <span>Join discord community</span>
+                    <FaChrome className="h-3.5 w-3.5" />
+                    <span>Chrome store</span>
                   </a>
                   <a
                     href="https://github.com/warpsurf/warpsurf"
