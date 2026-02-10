@@ -34,11 +34,12 @@ const manifest = deepmerge(
     icons: {
       128: 'warpsurf_logo.png',
     },
-    // No web_accessible_resources needed:
-    // - Scripts are injected via chrome.scripting.executeScript (doesn't require WAR)
-    // - All styles are applied inline via JavaScript
-    // - Images/assets are only used in extension pages (which have automatic access)
-    // Removing WAR prevents extension fingerprinting by malicious websites
+    web_accessible_resources: [
+      {
+        resources: ['permission/index.html', 'permission/permission.js'],
+        matches: ['<all_urls>'],
+      },
+    ],
   },
   {
     side_panel: {

@@ -1158,6 +1158,26 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             return;
           }
         }
+        case 'speech_to_text': {
+          if (!message.audio) {
+            safePostMessage(port, { type: 'speech_to_text_error', error: 'No audio data received' });
+            return;
+          }
+          try {
+            const { SpeechToTextService } = await import('../services/speech-to-text');
+            const service = await SpeechToTextService.create();
+            let audio = String(message.audio);
+            if (audio.startsWith('data:')) audio = audio.split(',')[1];
+            const text = await service.transcribe(audio, 'audio/webm');
+            safePostMessage(port, { type: 'speech_to_text_result', text });
+          } catch (e) {
+            safePostMessage(port, {
+              type: 'speech_to_text_error',
+              error: e instanceof Error ? e.message : 'Transcription failed',
+            });
+          }
+          return;
+        }
         default: {
           try {
             const msgTypeLog = String(((message as any)?.type ?? (message as any)?.messageType) || '');

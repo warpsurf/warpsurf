@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microphone Permission</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+      background: #0f172a; color: #e2e8f0;
+    }
+    .card { text-align: center; padding: 1.5rem; }
+    .icon {
+      width: 36px; height: 36px; margin: 0 auto 0.75rem;
+      border-radius: 50%; background: rgba(139,92,246,0.15);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon svg { width: 18px; height: 18px; color: #a78bfa; }
+    h1 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.35rem; }
+    p { font-size: 0.8rem; color: #94a3b8; margin-bottom: 1rem; line-height: 1.4; }
+    #status {
+      font-size: 0.8rem; min-height: 1.2rem;
+      color: #94a3b8; transition: color 0.2s;
+    }
+    #status.success { color: #4ade80; }
+    #status.error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+    </div>
+    <h1>Microphone Access</h1>
+    <p>Please allow microphone access when prompted by your browser.</p>
+    <div id="status">Requesting permission…</div>
+  </div>
+  <script src="permission.js"></script>
+</body>
+</html>
