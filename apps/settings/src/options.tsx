@@ -9,16 +9,26 @@ import { WebSettings } from './components/web-settings';
 import { Help } from './components/help';
 import { Warnings } from './components/warnings';
 import { PricingDataSettings } from './components/pricing-data-settings';
+import { VoiceSettings } from './components/voice-settings';
 import { WarpSurfLauncher } from './components/warpsurf-launcher';
 import { warningsSettingsStore } from '@extension/storage';
 
-type TabTypes = 'warpsurf' | 'api-keys' | 'workflow-settings' | 'web-settings' | 'pricing-data' | 'warnings' | 'help';
+type TabTypes =
+  | 'warpsurf'
+  | 'api-keys'
+  | 'workflow-settings'
+  | 'web-settings'
+  | 'voice'
+  | 'pricing-data'
+  | 'warnings'
+  | 'help';
 
 const TABS: { id: TabTypes; icon: string; label: string; isLogo?: boolean }[] = [
   { id: 'warpsurf', icon: '', label: 'warpsurf', isLogo: true },
   { id: 'api-keys', icon: '🔑', label: 'API Keys' },
   { id: 'workflow-settings', icon: '🤖', label: 'Workflow Settings' },
   { id: 'web-settings', icon: '🌐', label: 'Web Settings' },
+  { id: 'voice', icon: '🎙️', label: 'Voice' },
   { id: 'pricing-data', icon: '💰', label: 'Pricing & Model Data' },
   { id: 'warnings', icon: '⚠️', label: 'Warnings' },
   { id: 'help', icon: '📚', label: 'Help & Information' },
@@ -28,8 +38,10 @@ const Options = () => {
   const [activeTab, setActiveTab] = useState<TabTypes>(() => {
     try {
       const v = localStorage.getItem('settings.activeTab') as TabTypes | null;
-      return (v && (TABS as any).some((t: any) => t.id === v)) ? v : 'warpsurf';
-    } catch { return 'warpsurf'; }
+      return v && (TABS as any).some((t: any) => t.id === v) ? v : 'warpsurf';
+    } catch {
+      return 'warpsurf';
+    }
   });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [firstRunAccepted, setFirstRunAccepted] = useState<boolean | null>(null);
@@ -37,13 +49,16 @@ const Options = () => {
   // Check for pending tab navigation from panel (on mount and on storage change)
   useEffect(() => {
     const checkPendingTab = () => {
-      chrome.storage.local.get('settings.pendingTab').then(result => {
-        const pending = result['settings.pendingTab'] as TabTypes | undefined;
-        if (pending && TABS.some(t => t.id === pending)) {
-          setActiveTab(pending);
-          chrome.storage.local.remove('settings.pendingTab');
-        }
-      }).catch(() => {});
+      chrome.storage.local
+        .get('settings.pendingTab')
+        .then(result => {
+          const pending = result['settings.pendingTab'] as TabTypes | undefined;
+          if (pending && TABS.some(t => t.id === pending)) {
+            setActiveTab(pending);
+            chrome.storage.local.remove('settings.pendingTab');
+          }
+        })
+        .catch(() => {});
     };
     checkPendingTab();
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
@@ -70,43 +85,66 @@ const Options = () => {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      try { const w = await warningsSettingsStore.getWarnings(); if (mounted) setFirstRunAccepted(!!w.hasAcceptedFirstRun); } catch {}
+      try {
+        const w = await warningsSettingsStore.getWarnings();
+        if (mounted) setFirstRunAccepted(!!w.hasAcceptedFirstRun);
+      } catch {}
     };
     load();
     let unsubscribe: (() => void) | undefined;
-    try { unsubscribe = warningsSettingsStore.subscribe(load); } catch {}
-    return () => { mounted = false; try { unsubscribe && unsubscribe(); } catch {} };
+    try {
+      unsubscribe = warningsSettingsStore.subscribe(load);
+    } catch {}
+    return () => {
+      mounted = false;
+      try {
+        unsubscribe && unsubscribe();
+      } catch {}
+    };
   }, []);
 
   const handleTabClick = (tabId: TabTypes) => {
     setActiveTab(tabId);
-    try { localStorage.setItem('settings.activeTab', tabId); } catch {}
+    try {
+      localStorage.setItem('settings.activeTab', tabId);
+    } catch {}
   };
 
   const renderTabContent = () => {
     const map: Record<TabTypes, JSX.Element> = {
-      'warpsurf': <WarpSurfLauncher isDarkMode={isDarkMode} />,
+      warpsurf: <WarpSurfLauncher isDarkMode={isDarkMode} />,
       'api-keys': <ApiKeysSettings isDarkMode={isDarkMode} />,
       'workflow-settings': <AgentSettings isDarkMode={isDarkMode} />,
       'web-settings': <WebSettings isDarkMode={isDarkMode} />,
+      voice: <VoiceSettings isDarkMode={isDarkMode} />,
       'pricing-data': <PricingDataSettings isDarkMode={isDarkMode} />,
-      'warnings': <Warnings isDarkMode={isDarkMode} />,
-      'help': <Help isDarkMode={isDarkMode} />,
+      warnings: <Warnings isDarkMode={isDarkMode} />,
+      help: <Help isDarkMode={isDarkMode} />,
     };
     return map[activeTab] || null;
   };
 
   if (firstRunAccepted === false) {
     return (
-      <div className={`flex min-h-screen min-w-[768px] items-center justify-center ${isDarkMode ? 'bg-slate-900 text-gray-200' : 'bg-white text-gray-900'}`}>
-        <div className={`max-w-lg rounded-lg border p-6 shadow text-center ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white'}`}>
+      <div
+        className={`flex min-h-screen min-w-[768px] items-center justify-center ${isDarkMode ? 'bg-slate-900 text-gray-200' : 'bg-white text-gray-900'}`}>
+        <div
+          className={`max-w-lg rounded-lg border p-6 shadow text-center ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white'}`}>
           <img src="/warpsurflogo_tagline.png" alt="warpsurf Logo" className="mx-auto mb-3 h-16 w-auto" />
-          <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{FIRST_RUN_DISCLAIMER_MESSAGE}</p>
+          <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+            {FIRST_RUN_DISCLAIMER_MESSAGE}
+          </p>
           <button
             type="button"
-            onClick={async () => { try { await warningsSettingsStore.updateWarnings({ hasAcceptedFirstRun: true }); } catch {}; setFirstRunAccepted(true); }}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-500'}`}
-          >Accept</button>
+            onClick={async () => {
+              try {
+                await warningsSettingsStore.updateWarnings({ hasAcceptedFirstRun: true });
+              } catch {}
+              setFirstRunAccepted(true);
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
+            Accept
+          </button>
         </div>
       </div>
     );
