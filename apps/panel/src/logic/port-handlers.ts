@@ -4,6 +4,7 @@ import { ExecutionState } from '@extension/shared/lib/utils';
 import { computeRequestSummaryFromSessionLogs } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
 import { createAggregateRoot, addTraceItem, updateAggregateRootContent } from './handlers/utils';
+import { createSystemHandler } from './handlers/system-event-handler';
 
 let lastErrorContent: string | null = null;
 let lastErrorTime = 0;
@@ -1003,7 +1004,7 @@ export function createPanelHandlers(deps: any): any {
         }
 
         // Restore the PERSISTED metadata (including trajectory trace items from before panel closed)
-        const restoredMetadata = { ...(storedMetadata || {}) };
+        const restoredMetadata: Record<string, any> = { ...(storedMetadata || {}) };
 
         // Update UI state based on running flag
         // CRITICAL: Always set isFollowUpMode when restoring a session to ensure correct message routing
@@ -1026,12 +1027,12 @@ export function createPanelHandlers(deps: any): any {
 
         // Restore workflow graph for multiagent
         if (data.agentType === 'multiagent' && data.workflowGraph) {
-          restoredMetadata.__workflowGraph = data.workflowGraph;
+          (restoredMetadata as any).__workflowGraph = data.workflowGraph;
           deps.setShowInlineWorkflow(true);
         }
 
         // Process buffered events - add trace items to restored metadata
-        if (data.bufferedEvents?.length > 0) {
+        if (data.bufferedEvents && data.bufferedEvents.length > 0) {
           const rootId = deps.agentTraceRootIdRef.current as string;
           if (rootId) {
             const traceStates = [

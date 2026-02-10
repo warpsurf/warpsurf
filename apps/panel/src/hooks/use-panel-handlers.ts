@@ -2,7 +2,7 @@ import { useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, generalSettingsStore } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import type { AgentType } from '../components/chat-interface/chat-input';
-import type { PaletteAction } from '../components/header/command-palette';
+import type { PaletteAction } from '../components/Header/command-palette';
 
 // Timeout for cancel confirmation before escalating to kill_all
 const CANCEL_TIMEOUT_MS = 5000;

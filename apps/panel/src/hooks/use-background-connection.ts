@@ -168,7 +168,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             // - If current session is set → only match if event has a matching ID
             sessionMatches =
               (!sessionIdRef.current && possibleIds.length === 0) ||
-              (sessionIdRef.current && possibleIds.some(id => String(id) === String(sessionIdRef.current)));
+              !!(sessionIdRef.current && possibleIds.some(id => String(id) === String(sessionIdRef.current)));
 
             if (isTerminalEvent) {
               try {
