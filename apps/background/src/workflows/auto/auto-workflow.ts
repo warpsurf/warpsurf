@@ -17,12 +17,14 @@ interface TabMetadata {
 
 const logger = createLogger('AutoWorkflow');
 
-export type AutoAction = 'request_more_info' | 'chat' | 'search' | 'agent';
+export type AutoAction = 'request_more_info' | 'chat' | 'search' | 'agent' | 'tool';
 
 export interface AutoResult {
   action: AutoAction;
   confidence: number;
   reasoning?: string;
+  /** When action is 'tool', indicates what to do after tool calls complete. */
+  afterTool?: 'chat' | 'search' | 'agent' | 'none';
 }
 
 /**
@@ -186,14 +188,20 @@ ${request}`;
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           logger.info(`Parsed auto result: ${JSON.stringify(parsed)}`);
-          if (parsed.action && ['request_more_info', 'chat', 'search', 'agent'].includes(parsed.action)) {
+          if (parsed.action && ['request_more_info', 'chat', 'search', 'agent', 'tool'].includes(parsed.action)) {
             // Enforce no 'request_more_info' usage
             const normalizedAction = parsed.action === 'request_more_info' ? 'chat' : parsed.action;
-            return {
+            const result: AutoResult = {
               action: normalizedAction as AutoAction,
               confidence: parsed.confidence || 0.8,
               reasoning: parsed.reasoning,
             };
+            if (normalizedAction === 'tool') {
+              result.afterTool = ['chat', 'search', 'agent', 'none'].includes(parsed.after_tool)
+                ? parsed.after_tool
+                : 'none';
+            }
+            return result;
           }
         }
       }
@@ -218,45 +226,45 @@ ${request}`;
   }
 
   private fallbackTriage(request: string): AutoResult {
-    // Simple keyword-based fallback logic
-    const lowerRequest = request.toLowerCase();
+    const lower = request.toLowerCase();
 
-    // Check for current/news related queries FIRST (higher priority)
-    if (
-      lowerRequest.includes('current') ||
-      lowerRequest.includes('latest') ||
-      lowerRequest.includes('news') ||
-      lowerRequest.includes('today') ||
-      lowerRequest.includes('weather')
-    ) {
-      return {
-        action: 'search',
-        confidence: 0.7,
-        reasoning: 'Detected as requiring current information based on keywords',
-      };
+    // Check for tool/settings-related requests FIRST (highest priority)
+    const toolPatterns = [
+      'turn on',
+      'turn off',
+      'enable',
+      'disable',
+      'toggle',
+      'set temperature',
+      'set max',
+      'set timeout',
+      'switch model',
+      'change model',
+      'use model',
+      'what model',
+      'show settings',
+      'current settings',
+      'add tabs to context',
+      'add my tabs',
+      'include tabs',
+      'vision mode',
+      'useVision',
+    ];
+    if (toolPatterns.some(p => lower.includes(p))) {
+      return { action: 'tool', confidence: 0.7, afterTool: 'none', reasoning: 'Detected settings/tool request' };
     }
 
-    // Check for simple questions SECOND (lower priority)
-    if (
-      lowerRequest.includes('what is') ||
-      lowerRequest.includes('who is') ||
-      lowerRequest.includes('explain') ||
-      lowerRequest.includes('define') ||
-      lowerRequest.includes('how does') ||
-      lowerRequest.includes('why')
-    ) {
-      return {
-        action: 'chat',
-        confidence: 0.7,
-        reasoning: 'Detected as a simple question based on keywords',
-      };
+    // Check for current/news related queries
+    if (['current', 'latest', 'news', 'today', 'weather'].some(k => lower.includes(k))) {
+      return { action: 'search', confidence: 0.7, reasoning: 'Detected as requiring current information' };
+    }
+
+    // Check for simple questions
+    if (['what is', 'who is', 'explain', 'define', 'how does', 'why'].some(k => lower.includes(k))) {
+      return { action: 'chat', confidence: 0.7, reasoning: 'Detected as a simple question' };
     }
 
     // Default to browser use for complex tasks
-    return {
-      action: 'agent',
-      confidence: 0.5,
-      reasoning: 'Defaulting to browser use for potentially complex task',
-    };
+    return { action: 'agent', confidence: 0.5, reasoning: 'Defaulting to browser use for potentially complex task' };
   }
 }

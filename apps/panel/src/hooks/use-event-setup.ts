@@ -64,6 +64,7 @@ export function useEventSetup(params: {
   messages: any[];
   mirrorPreviewBatch: any[];
   recalculatedEstimation: any;
+  setContextTabIdsRef?: MutableRefObject<((tabIds: number[]) => void) | null>;
 }) {
   const {
     portRef,
@@ -309,6 +310,7 @@ export function useEventSetup(params: {
         runStartedAtRef,
         setPendingEstimation,
         getRecalculatedEstimation: () => params.recalculatedEstimation,
+        setContextTabIdsRef: params.setContextTabIdsRef,
       }),
     [
       logger,

@@ -274,7 +274,7 @@ export function useChatHistory({
             else if (actor === 'multiagent') agentType = 'multiagent';
             else if (actor === 'agent_navigator' || actor === 'agent_planner' || actor === 'agent_validator')
               agentType = 'agent';
-            else if (actor === 'auto') agentType = 'auto';
+            else if (actor === 'auto' || actor === 'tool') agentType = 'auto';
           }
 
           await favoritesStorage.addPrompt(title, taskContent, agentType);

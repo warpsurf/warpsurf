@@ -5,6 +5,7 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { BaseMessage } from '@langchain/core/messages';
+import type { ThinkingLevel } from '@extension/storage';
 
 export interface NativeGeminiArgs {
   model: string;
@@ -13,6 +14,7 @@ export interface NativeGeminiArgs {
   maxTokens?: number;
   webSearch?: boolean;
   maxRetries?: number;
+  thinkingLevel?: ThinkingLevel;
 }
 
 export class NativeGeminiChatModel {
@@ -22,15 +24,39 @@ export class NativeGeminiChatModel {
   private readonly maxTokens?: number;
   private readonly webSearchEnabled: boolean;
   private readonly maxRetries?: number;
+  private readonly thinkingLevel?: ThinkingLevel;
 
   constructor(args: NativeGeminiArgs) {
     this.modelName = args.model;
-    // Google SDK expects the API key string in the constructor
     this.client = new GoogleGenerativeAI(args.apiKey as any);
     this.temperature = args.temperature;
     this.maxTokens = args.maxTokens;
     this.webSearchEnabled = !!args.webSearch;
     this.maxRetries = args.maxRetries;
+    this.thinkingLevel = args.thinkingLevel;
+  }
+
+  /** Build thinkingConfig for the generation request based on model family. */
+  private getThinkingConfig(): Record<string, unknown> {
+    if (!this.thinkingLevel || this.thinkingLevel === 'default') return {};
+    const name = this.modelName.toLowerCase();
+
+    // Gemini 3 models: use thinkingLevel parameter
+    if (name.startsWith('gemini-3')) {
+      const levelMap: Record<string, string> = { off: 'minimal', low: 'low', medium: 'medium', high: 'high' };
+      return { thinkingConfig: { thinkingLevel: levelMap[this.thinkingLevel] || 'high' } };
+    }
+
+    // Gemini 2.5 models: use thinkingBudget parameter
+    if (name.startsWith('gemini-2.5')) {
+      const budgetMap: Record<string, number> = { off: 0, low: 2048, medium: 8192, high: 24576 };
+      let budget = budgetMap[this.thinkingLevel] ?? -1;
+      // gemini-2.5-pro cannot disable thinking (min 128)
+      if (name.includes('pro') && budget < 128) budget = 128;
+      return { thinkingConfig: { thinkingBudget: budget } };
+    }
+
+    return {};
   }
 
   withStructuredOutput(schema: any, _opts?: { includeRaw?: boolean; name?: string }) {
@@ -52,9 +78,9 @@ export class NativeGeminiChatModel {
           contents,
           systemInstruction: system || undefined,
           generationConfig: {
-            // Only include temperature if explicitly set; omit to use provider default
             ...(this.temperature !== undefined && { temperature: this.temperature }),
             maxOutputTokens: this.maxTokens,
+            ...this.getThinkingConfig(),
             ...(useStructuredHints
               ? {
                   responseMimeType: 'application/json',
@@ -151,9 +177,9 @@ export class NativeGeminiChatModel {
       contents,
       systemInstruction: system || undefined,
       generationConfig: {
-        // Only include temperature if explicitly set; omit to use provider default
         ...(this.temperature !== undefined && { temperature: this.temperature }),
         maxOutputTokens: this.maxTokens,
+        ...this.getThinkingConfig(),
       },
       tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,
     };
@@ -314,7 +340,11 @@ export class NativeGeminiChatModel {
     const result = await model.generateContentStream({
       contents: this.toGeminiContents(chatMessages),
       systemInstruction: system || undefined,
-      generationConfig: { temperature: this.temperature, maxOutputTokens: this.maxTokens },
+      generationConfig: {
+        temperature: this.temperature,
+        maxOutputTokens: this.maxTokens,
+        ...this.getThinkingConfig(),
+      },
     });
 
     // Iterate through the stream

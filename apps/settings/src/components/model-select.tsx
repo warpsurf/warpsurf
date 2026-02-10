@@ -1,6 +1,5 @@
-import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn } from './primitives';
-import { AgentNameEnum } from '@extension/storage';
-import { isOpenAIOModel } from './primitives';
+import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn, isThinkingCapableModel } from './primitives';
+import { AgentNameEnum, type ThinkingLevel } from '@extension/storage';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 
 interface ModelSelectProps {
@@ -9,7 +8,7 @@ interface ModelSelectProps {
   availableModels: Array<{ provider: string; providerName: string; model: string }>;
   selectedValue: string;
   modelParameters: { temperature: number | undefined; maxOutputTokens: number };
-  reasoningEffortValue?: 'low' | 'medium' | 'high';
+  thinkingLevelValue?: ThinkingLevel;
   showAllModels: boolean;
   getAgentDisplayName: (agent: AgentNameEnum) => string;
   getAgentDescription: (agent: AgentNameEnum) => string;
@@ -21,7 +20,7 @@ interface ModelSelectProps {
     param: 'temperature' | 'maxOutputTokens',
     value: number | undefined,
   ) => void;
-  onChangeReasoning: (agent: AgentNameEnum, value: 'low' | 'medium' | 'high') => void;
+  onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => void;
 }
 
 export function ModelSelect(props: ModelSelectProps) {
@@ -31,7 +30,7 @@ export function ModelSelect(props: ModelSelectProps) {
     availableModels,
     selectedValue,
     modelParameters,
-    reasoningEffortValue,
+    thinkingLevelValue,
     showAllModels,
     getAgentDisplayName,
     getAgentDescription,
@@ -39,21 +38,14 @@ export function ModelSelect(props: ModelSelectProps) {
     hasModelPricing,
     onChangeModel,
     onChangeParameter,
-    onChangeReasoning,
+    onChangeThinkingLevel,
   } = props;
 
   const sectionTone = getAgentSectionColor(agentName);
-  const options = (() => {
-    const arr = availableModels.map(({ provider, providerName, model }) => {
-      const optionValue = `${provider}>${model}`;
-      const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
-      return {
-        value: optionValue,
-        label: `${providerName} > ${model}${costNote}`,
-      };
-    });
-    return arr;
-  })();
+  const options = availableModels.map(({ provider, providerName, model }) => {
+    const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
+    return { value: `${provider}>${model}`, label: `${providerName} > ${model}${costNote}` };
+  });
 
   return (
     <div className={cn('rounded-xl border p-4 shadow-sm', sectionTone)}>
@@ -83,7 +75,6 @@ export function ModelSelect(props: ModelSelectProps) {
           </div>
         </div>
 
-        {/* Warning for Search agent */}
         {agentName === AgentNameEnum.Search && selectedValue && (
           <div
             className={cn(
@@ -138,26 +129,28 @@ export function ModelSelect(props: ModelSelectProps) {
           </div>
         </div>
 
-        {selectedValue && isOpenAIOModel(selectedValue) && (
+        {selectedValue && isThinkingCapableModel(selectedValue) && (
           <div className="flex items-center">
             <LabelWithTooltip
               isDarkMode={isDarkMode}
-              htmlFor={`${agentName}-reasoning-effort`}
-              label="Reasoning"
-              tooltip="O-series depth vs. speed"
+              htmlFor={`${agentName}-thinking-level`}
+              label="Thinking"
+              tooltip="Controls how much reasoning the model performs before responding"
             />
             <div className="flex flex-1 items-center space-x-2">
               <select
-                id={`${agentName}-reasoning-effort`}
-                value={reasoningEffortValue || 'medium'}
-                onChange={e => onChangeReasoning(agentName, e.target.value as 'low' | 'medium' | 'high')}
+                id={`${agentName}-thinking-level`}
+                value={thinkingLevelValue || 'default'}
+                onChange={e => onChangeThinkingLevel(agentName, e.target.value as ThinkingLevel)}
                 className={cn(
                   'flex-1 rounded-md border px-3 py-2 text-sm',
                   isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
                 )}>
-                <option value="low">Low (Faster)</option>
+                <option value="default">Default</option>
+                <option value="high">High (Thorough)</option>
                 <option value="medium">Medium (Balanced)</option>
-                <option value="high">High (More thorough)</option>
+                <option value="low">Low (Faster)</option>
+                <option value="off">Off (Suppress)</option>
               </select>
             </div>
           </div>

@@ -6,6 +6,7 @@
 
 import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
+import type { ThinkingLevel } from '@extension/storage';
 
 export interface NativeGrokArgs {
   model: string;
@@ -14,6 +15,7 @@ export interface NativeGrokArgs {
   maxTokens?: number;
   webSearch?: boolean;
   maxRetries?: number;
+  thinkingLevel?: ThinkingLevel;
 }
 
 export class NativeGrokChatModel {
@@ -23,10 +25,10 @@ export class NativeGrokChatModel {
   private readonly maxTokens?: number;
   private readonly webSearchEnabled: boolean;
   private readonly maxRetries?: number;
+  private readonly thinkingLevel?: ThinkingLevel;
 
   constructor(args: NativeGrokArgs) {
     this.modelName = args.model;
-    // xAI API uses OpenAI SDK with custom base URL
     this.client = new OpenAI({
       apiKey: args.apiKey,
       baseURL: 'https://api.x.ai/v1',
@@ -35,6 +37,17 @@ export class NativeGrokChatModel {
     this.maxTokens = args.maxTokens;
     this.webSearchEnabled = !!args.webSearch;
     this.maxRetries = args.maxRetries;
+    this.thinkingLevel = args.thinkingLevel;
+  }
+
+  /** Build reasoning_effort param. Only grok-3-mini supports it; grok-4 errors on it. */
+  private getReasoningConfig(): Record<string, unknown> {
+    if (!this.thinkingLevel || this.thinkingLevel === 'default') return {};
+    const name = this.modelName.toLowerCase();
+    // Only grok-3-mini supports reasoning_effort ('low' | 'high')
+    if (!name.startsWith('grok-3-mini')) return {};
+    const effort = this.thinkingLevel === 'off' || this.thinkingLevel === 'low' ? 'low' : 'high';
+    return { reasoning_effort: effort };
   }
 
   withStructuredOutput(schema: any, opts?: { includeRaw?: boolean; name?: string }) {
@@ -52,8 +65,8 @@ export class NativeGrokChatModel {
           model: this.modelName,
           messages: payload,
           max_tokens: this.maxTokens,
-          // Only include temperature if explicitly set; omit to use provider default
           ...(this.temperature !== undefined && { temperature: this.temperature }),
+          ...this.getReasoningConfig(),
           response_format: responseFormat,
           ...(rest as object),
         };
@@ -124,8 +137,8 @@ export class NativeGrokChatModel {
       model: this.modelName,
       messages: payload,
       max_tokens: this.maxTokens,
-      // Only include temperature if explicitly set; omit to use provider default
       ...(this.temperature !== undefined && { temperature: this.temperature }),
+      ...this.getReasoningConfig(),
       ...(rest as object),
     };
 

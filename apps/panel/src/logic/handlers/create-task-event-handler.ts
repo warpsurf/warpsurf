@@ -11,6 +11,7 @@ import { createChatHandler } from './chat-event-handler';
 import { createSearchHandler } from './search-event-handler';
 import { createAutoHandler } from './auto-event-handler';
 import { createEstimatorHandler } from './estimator-event-handler';
+import { createToolHandler } from './tool-event-handler';
 import { normalizeEvent, shouldSkipJobSummary } from './utils';
 
 /** Dependencies injected into event handlers */
@@ -65,6 +66,7 @@ export interface TaskEventHandlerDeps {
   portRef: React.MutableRefObject<chrome.runtime.Port | null>;
   setPendingEstimation: (estimation: any | null) => void;
   getRecalculatedEstimation: () => any | null;
+  setContextTabIdsRef?: React.MutableRefObject<((tabIds: number[]) => void) | null>;
 }
 
 export type EventHandler = (event: AgentEvent) => void;
@@ -116,6 +118,7 @@ export function createTaskEventHandler(deps: TaskEventHandlerDeps) {
     [Actors.SEARCH]: createSearchHandler(deps),
     [Actors.AUTO]: createAutoHandler(deps),
     [Actors.ESTIMATOR]: createEstimatorHandler(deps),
+    [Actors.TOOL]: createToolHandler(deps),
     [Actors.USER]: () => {},
   };
 

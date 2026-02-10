@@ -9,6 +9,7 @@
  */
 import { filterModelsForProvider } from './model-filters';
 import { CACHED_PRICING_DATA } from './pricing-cache';
+import { llmProviderModelNames } from '@extension/storage';
 
 interface HeliconeModel {
   provider: string;
@@ -438,12 +439,7 @@ class ModelRegistry {
   }
 
   private getFallbackModels(provider: string): string[] {
-    try {
-      const { llmProviderModelNames } = require('@extension/storage');
-      return llmProviderModelNames[provider] || [];
-    } catch {
-      return [];
-    }
+    return (llmProviderModelNames as Record<string, string[]>)[provider] || [];
   }
 
   async forceRefresh(): Promise<void> {
