@@ -271,12 +271,19 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         cancelled = true;
         return agentOutput;
       }
-      // emit event
-      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_OK, 'Navigation done');
+      // Check if the task is done and extract the final message
       let done = false;
+      let doneMessage = 'Navigation done';
       if (actionResults.length > 0 && actionResults[actionResults.length - 1].isDone) {
         done = true;
+        // Use the done action's extracted content as the final message
+        const doneResult = actionResults[actionResults.length - 1];
+        if (doneResult.extractedContent && doneResult.extractedContent.trim().length > 0) {
+          doneMessage = doneResult.extractedContent.trim();
+        }
       }
+      // emit event with the appropriate message
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_OK, doneMessage);
       agentOutput.result = { done };
       return agentOutput;
     } catch (error) {
