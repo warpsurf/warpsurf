@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-02-10 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-02-12 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-02-10T14:42:00.514Z',
+  generatedAt: '2026-02-12T16:32:07.433Z',
   version: 1,
   helicone: {
     openai: {
@@ -918,6 +918,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         'claude-opus-4-1-20250805',
         'claude-opus-4-20250514',
         'claude-opus-4-5',
+        'claude-opus-4-6',
         'claude-sonnet-4-20250514',
         'claude-sonnet-4-5-20250929',
         'claude-v1',
@@ -980,6 +981,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           outputPerToken: 0.000075,
         },
         'claude-opus-4-5': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000025,
+        },
+        'claude-opus-4-6': {
           inputPerToken: 0.000005,
           outputPerToken: 0.000025,
         },
@@ -1419,6 +1424,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'minimax/minimax-m2',
           'minimax/minimax-m2-her',
           'minimax/minimax-m2.1',
+          'minimax/minimax-m2.5',
         ],
       },
       {
@@ -1430,9 +1436,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'mistralai/devstral-medium',
           'mistralai/devstral-small',
           'mistralai/ministral-14b-2512',
-          'mistralai/ministral-3b',
           'mistralai/ministral-3b-2512',
-          'mistralai/ministral-8b',
           'mistralai/ministral-8b-2512',
           'mistralai/mistral-7b-instruct',
           'mistralai/mistral-7b-instruct-v0.1',
@@ -1450,7 +1454,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'mistralai/mistral-small-3.1-24b-instruct',
           'mistralai/mistral-small-3.2-24b-instruct',
           'mistralai/mistral-small-creative',
-          'mistralai/mistral-tiny',
           'mistralai/mixtral-8x22b-instruct',
           'mistralai/mixtral-8x7b-instruct',
           'mistralai/pixtral-12b',
@@ -1577,13 +1580,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'openrouter',
         displayName: 'Openrouter',
-        models: [
-          'openrouter/aurora-alpha',
-          'openrouter/auto',
-          'openrouter/bodybuilder',
-          'openrouter/free',
-          'openrouter/pony-alpha',
-        ],
+        models: ['openrouter/aurora-alpha', 'openrouter/auto', 'openrouter/bodybuilder', 'openrouter/free'],
       },
       {
         id: 'perplexity',
@@ -1670,6 +1667,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         ],
       },
       {
+        id: 'stepfun',
+        displayName: 'Stepfun',
+        models: ['stepfun/step-3.5-flash'],
+      },
+      {
         id: 'switchpoint',
         displayName: 'Switchpoint',
         models: ['switchpoint/router'],
@@ -1736,19 +1738,24 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'z-ai/glm-4.6v',
           'z-ai/glm-4.7',
           'z-ai/glm-4.7-flash',
+          'z-ai/glm-5',
         ],
       },
     ],
     pricing: {
+      'minimax/minimax-m2.5': {
+        inputPerToken: 3e-7,
+        outputPerToken: 0.0000012,
+      },
+      'z-ai/glm-5': {
+        inputPerToken: 8e-7,
+        outputPerToken: 0.00000256,
+      },
       'qwen/qwen3-max-thinking': {
         inputPerToken: 0.0000012,
         outputPerToken: 0.000006,
       },
       'openrouter/aurora-alpha': {
-        inputPerToken: 0,
-        outputPerToken: 0,
-      },
-      'openrouter/pony-alpha': {
         inputPerToken: 0,
         outputPerToken: 0,
       },
@@ -1763,6 +1770,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openrouter/free': {
         inputPerToken: 0,
         outputPerToken: 0,
+      },
+      'stepfun/step-3.5-flash': {
+        inputPerToken: 1e-7,
+        outputPerToken: 3e-7,
       },
       'moonshotai/kimi-k2.5': {
         inputPerToken: 4.5e-7,
@@ -2445,8 +2456,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 2.4e-7,
       },
       'qwen/qwen3-235b-a22b': {
-        inputPerToken: 2e-7,
-        outputPerToken: 6e-7,
+        inputPerToken: 3e-7,
+        outputPerToken: 0.0000012,
       },
       'tngtech/deepseek-r1t-chimera': {
         inputPerToken: 3e-7,
@@ -2744,14 +2755,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000006,
         outputPerToken: 0.00003,
       },
-      'mistralai/ministral-8b': {
-        inputPerToken: 1e-7,
-        outputPerToken: 1e-7,
-      },
-      'mistralai/ministral-3b': {
-        inputPerToken: 4e-8,
-        outputPerToken: 4e-8,
-      },
       'qwen/qwen-2.5-7b-instruct': {
         inputPerToken: 4e-8,
         outputPerToken: 1e-7,
@@ -2909,8 +2912,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.000006,
       },
       'microsoft/wizardlm-2-8x22b': {
-        inputPerToken: 4.8e-7,
-        outputPerToken: 4.8e-7,
+        inputPerToken: 6.2e-7,
+        outputPerToken: 6.2e-7,
       },
       'openai/gpt-4-turbo': {
         inputPerToken: 0.00001,
@@ -2931,10 +2934,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openai/gpt-4-turbo-preview': {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
-      },
-      'mistralai/mistral-tiny': {
-        inputPerToken: 2.5e-7,
-        outputPerToken: 2.5e-7,
       },
       'mistralai/mistral-7b-instruct-v0.2': {
         inputPerToken: 2e-7,
@@ -2998,12 +2997,14 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'minimax/minimax-m2.5': 204800,
+      'z-ai/glm-5': 202752,
       'qwen/qwen3-max-thinking': 262144,
       'openrouter/aurora-alpha': 128000,
-      'openrouter/pony-alpha': 200000,
       'anthropic/claude-opus-4.6': 1000000,
       'qwen/qwen3-coder-next': 262144,
       'openrouter/free': 200000,
+      'stepfun/step-3.5-flash': 256000,
       'moonshotai/kimi-k2.5': 262144,
       'minimax/minimax-m2-her': 65536,
       'writer/palmyra-x5': 1040000,
@@ -3249,8 +3250,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'anthropic/claude-3.5-haiku': 200000,
       'anthracite-org/magnum-v4-72b': 16384,
       'anthropic/claude-3.5-sonnet': 200000,
-      'mistralai/ministral-8b': 131072,
-      'mistralai/ministral-3b': 131072,
       'qwen/qwen-2.5-7b-instruct': 32768,
       'nvidia/llama-3.1-nemotron-70b-instruct': 131072,
       'inflection/inflection-3-pi': 8000,
@@ -3290,13 +3289,12 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'meta-llama/llama-3-70b-instruct': 8192,
       'meta-llama/llama-3-8b-instruct': 8192,
       'mistralai/mixtral-8x22b-instruct': 65536,
-      'microsoft/wizardlm-2-8x22b': 65536,
+      'microsoft/wizardlm-2-8x22b': 65535,
       'openai/gpt-4-turbo': 128000,
       'anthropic/claude-3-haiku': 200000,
       'mistralai/mistral-large': 128000,
       'openai/gpt-3.5-turbo-0613': 4095,
       'openai/gpt-4-turbo-preview': 128000,
-      'mistralai/mistral-tiny': 32768,
       'mistralai/mistral-7b-instruct-v0.2': 32768,
       'mistralai/mixtral-8x7b-instruct': 32768,
       'neversleep/noromaid-20b': 4096,
