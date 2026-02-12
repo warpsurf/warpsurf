@@ -18,7 +18,7 @@ import { normalizeEvent, shouldSkipJobSummary } from './utils';
 export interface TaskEventHandlerDeps {
   logger: { log: (...args: any[]) => void; error: (...args: any[]) => void };
   appendMessage: (m: Message, sessionId?: string | null) => void;
-  persistAgentMessage: (actor: any, content: string, timestamp: number) => void;
+  persistAgentMessage: (actor: any, content: string, timestamp: number, eventId?: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setIsJobActive: (v: boolean) => void;
   setShowStopButton: (v: boolean) => void;

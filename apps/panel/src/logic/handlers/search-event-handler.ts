@@ -41,7 +41,7 @@ export const createSearchHandler: EventHandlerCreator = deps => {
           // Stream complete - persist and cleanup
           const stream = activeStreams.get(streamId);
           if (stream) {
-            persistAgentMessage(actor, stream.content, stream.originalTimestamp);
+            persistAgentMessage(actor, stream.content, stream.originalTimestamp, `stream:${streamId}`);
             // CRITICAL: Use the ORIGINAL timestamp for message ID matching
             lastAgentMessageRef.current = { timestamp: stream.originalTimestamp, actor };
             activeStreams.delete(streamId);

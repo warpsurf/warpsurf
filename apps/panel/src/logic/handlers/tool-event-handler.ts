@@ -15,6 +15,7 @@ export const createToolHandler: EventHandlerCreator = deps => {
     const state = event.state;
     const timestamp = event.timestamp || Date.now();
     const data = (event as any)?.data || {};
+    const eventId = (event as any)?.eventId || data?.eventId;
     const content = data?.details ?? (event as any)?.content ?? '';
     const streamId = data?.streamId;
     const isFinal = data?.isFinal;
@@ -52,7 +53,7 @@ export const createToolHandler: EventHandlerCreator = deps => {
         if (isFinal) {
           const stream = activeStreams.get(streamId);
           if (stream) {
-            persistAgentMessage(actor, stream.content, stream.originalTimestamp);
+            persistAgentMessage(actor, stream.content, stream.originalTimestamp, `stream:${streamId}`);
             lastAgentMessageRef.current = { timestamp: stream.originalTimestamp, actor };
             activeStreams.delete(streamId);
           }
@@ -100,7 +101,7 @@ export const createToolHandler: EventHandlerCreator = deps => {
             }
             return [...prev, { actor: Actors.TOOL, content, timestamp }];
           });
-          persistAgentMessage(actor, content, timestamp);
+          persistAgentMessage(actor, content, timestamp, eventId);
           lastAgentMessageRef.current = { timestamp, actor };
         }
         break;
