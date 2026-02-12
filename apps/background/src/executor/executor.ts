@@ -202,6 +202,11 @@ export class Executor {
    * Context tabs are inserted at position 1 (after system message, before user_request).
    */
   private async injectContextTabsForAgent(): Promise<void> {
+    // Upsert semantics: remove any stale blocks first
+    try {
+      this.context.messageManager.removeContextTabsBlocks();
+    } catch {}
+
     if (this.context.contextTabIds.length === 0) return;
     if (this.manualAgentType && this.manualAgentType !== 'agent' && this.manualAgentType !== 'auto') return;
 
@@ -213,6 +218,32 @@ export class Executor {
       );
       if (contextMsg) {
         // Insert at position 1 (after system message, before user_request)
+        this.context.messageManager.addMessageWithTokens(contextMsg, 'context', 1);
+        logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
+      }
+    } catch (e) {
+      logger.warning('Failed to inject context tabs for agent:', e);
+    }
+  }
+
+  /**
+   * Ensure context tabs are available to the agent after tool workflow updates.
+   * This is required when chaining tool → agent in the same session (manualAgentType may be 'tool').
+   */
+  private async forceInjectContextTabsForAgent(): Promise<void> {
+    try {
+      this.context.messageManager.removeContextTabsBlocks();
+    } catch {}
+
+    if (this.context.contextTabIds.length === 0) return;
+
+    try {
+      const contextMsg = await buildContextTabsSystemMessage(
+        this.context.contextTabIds,
+        WorkflowType.AGENT,
+        this.navigatorModelName,
+      );
+      if (contextMsg) {
         this.context.messageManager.addMessageWithTokens(contextMsg, 'context', 1);
         logger.info(`Injected context tabs (DOM) for Agent workflow: ${this.context.contextTabIds.length} tabs`);
       }
@@ -447,6 +478,14 @@ export class Executor {
           // If no tools ran (e.g. LLM asked for clarification), stop here.
           if (toolSummary && autoResult.afterTool && autoResult.afterTool !== 'none') {
             await this.reloadGeneralSettings();
+            // If tool workflow updated context tabs and we are chaining into the agent workflow,
+            // make sure BrowserContext owns those tabs and the agent prompt includes them.
+            if (autoResult.afterTool === 'agent') {
+              try {
+                this.context.browserContext.setContextTabs(this.context.contextTabIds);
+              } catch {}
+              await this.forceInjectContextTabsForAgent();
+            }
             // Push a modified task so the follow-up workflow knows the tool part is done.
             // The tool output is also persisted to chat history for full context.
             const original = this.tasks[this.tasks.length - 1];

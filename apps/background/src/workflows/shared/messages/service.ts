@@ -411,6 +411,22 @@ export default class MessageManager {
   }
 
   /**
+   * Remove any existing <context_tabs> SystemMessage blocks.
+   * Used to keep context tabs injection idempotent across workflow chaining.
+   */
+  public removeContextTabsBlocks(): void {
+    try {
+      const msgs: any[] = (this as any).history?.messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i]?.message;
+        if (m instanceof SystemMessage && typeof m.content === 'string' && m.content.startsWith('<context_tabs>')) {
+          (this as any).history.removeMessage(i);
+        }
+      }
+    } catch {}
+  }
+
+  /**
    * Upsert Chat History block: remove any existing Chat History blocks and insert the provided block
    * immediately after the system prompt (or after the task history marker if present).
    */
