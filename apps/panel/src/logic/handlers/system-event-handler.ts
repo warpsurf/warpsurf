@@ -440,12 +440,18 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             addTraceItem(Actors.SYSTEM, 'Task cancelled', timestamp, deps);
             markAggregateComplete(deps);
             try {
-              if (deps.sessionIdRef.current)
-                chatHistoryStore.addMessage(deps.sessionIdRef.current, {
+              const sid = deps.sessionIdRef.current;
+              const cancelKey = `${String(sid || data?.taskId || 'unknown')}:cancelled`;
+              // Only persist a SYSTEM cancel line if we didn't already append one.
+              // (Non-v2 paths append via deps.appendMessage and mark cancelKey.)
+              if (sid && !deps.processedJobSummariesRef.current.has(cancelKey)) {
+                chatHistoryStore.addMessage(sid, {
                   actor: Actors.SYSTEM,
                   content: 'Task cancelled',
                   timestamp,
                 } as any);
+                deps.processedJobSummariesRef.current.add(cancelKey);
+              }
             } catch {}
           }
           try {

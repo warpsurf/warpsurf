@@ -262,10 +262,6 @@ export function createPanelHandlers(deps: any): any {
         } else {
           // Fallback for non-v2 flows: append as SYSTEM
           deps.appendMessage({ actor: Actors.SYSTEM, content: text, timestamp: ts });
-          try {
-            const sid = deps.sessionIdRef.current;
-            if (sid) chatHistoryStore.addMessage(sid, { actor: Actors.SYSTEM, content: text, timestamp: ts } as any);
-          } catch {}
         }
       }
       deps.setInputEnabled(true);
