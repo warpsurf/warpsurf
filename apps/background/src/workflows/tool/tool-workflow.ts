@@ -36,6 +36,21 @@ export class ToolWorkflow {
     this.currentTask = task;
   }
 
+  /**
+   * Keep BrowserContext in sync with contextTabIds so worker-mode agent workflows
+   * can access tabs that were added via the tool workflow.
+   */
+  private syncContextTabsToBrowserContext(tabIds: number[]): void {
+    try {
+      const browserContext: any = this.context?.browserContext as any;
+      if (browserContext && typeof browserContext.setContextTabs === 'function') {
+        browserContext.setContextTabs(tabIds);
+      }
+    } catch (e) {
+      logger.debug('Failed to sync context tabs to browser context', e);
+    }
+  }
+
   async execute(): Promise<AgentOutput<ToolWorkflowResult>> {
     try {
       this.context.emitEvent(Actors.TOOL, ExecutionState.STEP_START, 'Processing tool request...');
@@ -68,11 +83,13 @@ export class ToolWorkflow {
       const toolCtx: ToolContext = {
         setContextTabIds: (ids: number[]) => {
           this.context.contextTabIds = ids;
+          this.syncContextTabsToBrowserContext(ids);
           updatedContextTabIds = ids;
           logger.info(`Tool set ${ids.length} context tabs`);
         },
         removeContextTabIds: (idsToRemove: Set<number>) => {
           this.context.contextTabIds = this.context.contextTabIds.filter(id => !idsToRemove.has(id));
+          this.syncContextTabsToBrowserContext(this.context.contextTabIds);
           updatedContextTabIds = this.context.contextTabIds;
           logger.info(`Tool removed tabs, ${this.context.contextTabIds.length} remaining`);
         },
@@ -129,14 +146,17 @@ export class ToolWorkflow {
         // Otherwise, no text response — the tool status messages are sufficient
       }
 
+      let responseStreamId: string | undefined;
+      let responseStreamTimestamp: number | undefined;
       if (textResponse) {
-        const streamId = `tool_${Date.now()}`;
-        await this.context.emitStreamChunk(Actors.TOOL, textResponse, streamId);
-        await this.context.emitStreamChunk(Actors.TOOL, '', streamId, true);
+        responseStreamTimestamp = Date.now();
+        responseStreamId = `tool_${responseStreamTimestamp}`;
+        await this.context.emitStreamChunk(Actors.TOOL, textResponse, responseStreamId);
+        await this.context.emitStreamChunk(Actors.TOOL, '', responseStreamId, true);
       }
 
       // Persist tool output to chat history so follow-up workflows see it
-      await this.persistToHistory(results, textResponse);
+      await this.persistToHistory(results, textResponse, responseStreamId, responseStreamTimestamp);
 
       return { id: 'Tool', result: { toolResults: results, textResponse } };
     } catch (error) {
@@ -294,7 +314,12 @@ export class ToolWorkflow {
   }
 
   /** Persist tool actions to chat history so follow-up workflows and future sessions see them. */
-  private async persistToHistory(results: ToolCallResult[], textResponse?: string): Promise<void> {
+  private async persistToHistory(
+    results: ToolCallResult[],
+    textResponse?: string,
+    responseStreamId?: string,
+    responseStreamTimestamp?: number,
+  ): Promise<void> {
     try {
       const sessionId = this.context.taskId;
       if (!sessionId) return;
@@ -314,7 +339,8 @@ export class ToolWorkflow {
         await chatHistoryStore.addMessage(sessionId, {
           actor: StorageActors.TOOL,
           content: textResponse,
-          timestamp: Date.now(),
+          timestamp: typeof responseStreamTimestamp === 'number' ? responseStreamTimestamp : Date.now(),
+          eventId: responseStreamId ? `stream:${responseStreamId}` : undefined,
         });
       }
     } catch (e) {
