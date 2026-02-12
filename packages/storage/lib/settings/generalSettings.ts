@@ -41,6 +41,8 @@ export interface GeneralSettingsConfig {
   responseTimeoutSeconds?: number;
   // Auto tab context (power user feature)
   enableAutoTabContext?: boolean;
+  // Theme mode: 'auto' follows system, 'light' or 'dark' overrides system preference
+  themeMode?: 'auto' | 'light' | 'dark';
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -80,6 +82,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   responseTimeoutSeconds: 60, // 2 minutes default for LLM response timeout
   // Auto tab context (disabled by default, privacy-first)
   enableAutoTabContext: false,
+  // Theme mode defaults to auto (follows system preference)
+  themeMode: 'auto',
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {

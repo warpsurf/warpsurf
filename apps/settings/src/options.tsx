@@ -70,15 +70,33 @@ const Options = () => {
 
   // Check for dark mode preference
   useEffect(() => {
-    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDarkMode(darkModeMediaQuery.matches);
+    const getSystemPreference = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    const handleChange = (e: MediaQueryListEvent) => {
-      setIsDarkMode(e.matches);
+    const checkDarkMode = async () => {
+      try {
+        const settings = await generalSettingsStore.getSettings();
+        const themeMode = settings.themeMode || 'auto';
+
+        setIsDarkMode(themeMode === 'dark' ? true : themeMode === 'light' ? false : getSystemPreference());
+      } catch {
+        setIsDarkMode(getSystemPreference());
+      }
     };
 
-    darkModeMediaQuery.addEventListener('change', handleChange);
-    return () => darkModeMediaQuery.removeEventListener('change', handleChange);
+    checkDarkMode();
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', checkDarkMode);
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = generalSettingsStore.subscribe(checkDarkMode);
+    } catch {}
+
+    return () => {
+      mediaQuery.removeEventListener('change', checkDarkMode);
+      unsubscribe?.();
+    };
   }, []);
 
   // Load first-run acceptance to gate the entire settings UI

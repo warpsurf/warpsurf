@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiChevronDown, FiMoreHorizontal, FiSettings, FiHelpCircle } from 'react-icons/fi';
+import { FiChevronDown, FiMoreHorizontal, FiSettings, FiHelpCircle, FiSun, FiMoon } from 'react-icons/fi';
 import { FaFish, FaRobot, FaHistory, FaChrome } from 'react-icons/fa';
-import { RxGithubLogo } from 'react-icons/rx';
+import { RxDiscordLogo, RxGithubLogo } from 'react-icons/rx';
 import { useHeaderOverflow } from '../../hooks/use-header-overflow';
 import { generalSettingsStore } from '@extension/storage';
 import FeedbackMenu from './feedback-menu';
@@ -40,6 +40,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
   const [enableHistoryContext, setEnableHistoryContext] = useState(false);
   const [enableWorkflowEstimation, setEnableWorkflowEstimation] = useState(false);
   const [showEmergencyStop, setShowEmergencyStop] = useState(true);
+  const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
           setEnableHistoryContext(!!(s.enableHistoryContext ?? false));
           setEnableWorkflowEstimation(!!(s.enableWorkflowEstimation ?? false));
           setShowEmergencyStop(!!(s.showEmergencyStop ?? true));
+          setThemeMode(s.themeMode || 'auto');
         }
       } catch {}
     })();
@@ -68,11 +70,19 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
     setMoreMenuOpen,
   } = useHeaderOverflow({ pauseRecalculation: pauseMenusOpen });
 
-  const vCount = Math.max(0, Math.min(6, props.visibleActionsCountOverride ?? visibleActionsCount));
+  const vCount = Math.max(0, Math.min(7, props.visibleActionsCountOverride ?? visibleActionsCount));
 
-  type ActionKey = 'newChat' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings';
-  const actionOrder: ActionKey[] = ['settings', 'newChat', 'dashboard', 'agentSettings', 'feedback', 'fish'];
+  type ActionKey = 'newChat' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings' | 'theme';
+  const actionOrder: ActionKey[] = ['settings', 'theme', 'newChat', 'dashboard', 'agentSettings', 'feedback', 'fish'];
   const hiddenKeys: ActionKey[] = actionOrder.slice(vCount);
+
+  const handleThemeToggle = async () => {
+    const nextMode = themeMode === 'auto' ? 'light' : themeMode === 'light' ? 'dark' : 'auto';
+    setThemeMode(nextMode);
+    try {
+      await generalSettingsStore.updateSettings({ themeMode: nextMode });
+    } catch {}
+  };
 
   useEffect(() => {
     if (!moreMenuOpen) return;
@@ -112,6 +122,13 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
             type="button"
             className={`header-icon ${props.isDarkMode ? 'text-gray-400 rounded-md p-1' : 'text-gray-600 rounded-md p-1'}`}>
             <FiSettings size={20} />
+          </button>
+        </div>
+        <div ref={setMeasureRef('theme')} className="inline-flex flex-shrink-0">
+          <button
+            type="button"
+            className={`header-icon ${props.isDarkMode ? 'text-gray-400 rounded-md p-1' : 'text-gray-600 rounded-md p-1'}`}>
+            <FiSun size={20} />
           </button>
         </div>
         <div ref={setMeasureRef('newChat')} className="inline-flex flex-shrink-0">
@@ -167,11 +184,33 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
         </button>
       </div>
 
+      {/* Theme Toggle */}
+      <div
+        ref={setActionRef('theme')}
+        className="inline-flex flex-shrink-0"
+        style={{ display: vCount >= 2 ? 'inline-flex' : 'none' }}>
+        <button
+          type="button"
+          onClick={handleThemeToggle}
+          title={`Theme: ${themeMode === 'auto' ? 'Auto (System)' : themeMode === 'light' ? 'Light' : 'Dark'}`}
+          className={`header-icon transition-colors ${props.isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10 rounded-md p-1' : 'text-gray-600 hover:text-gray-900 hover:bg-black/5 rounded-md p-1'} cursor-pointer`}>
+          {themeMode === 'dark' ? (
+            <FiMoon size={20} />
+          ) : themeMode === 'light' ? (
+            <FiSun size={20} />
+          ) : props.isDarkMode ? (
+            <FiMoon size={20} className="opacity-70" />
+          ) : (
+            <FiSun size={20} className="opacity-70" />
+          )}
+        </button>
+      </div>
+
       {/* New Chat */}
       <div
         ref={setActionRef('newChat')}
         className="inline-flex flex-shrink-0"
-        style={{ display: vCount >= 2 ? 'inline-flex' : 'none' }}>
+        style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
         <button
           type="button"
           onClick={() => props.onNewChat()}
@@ -184,7 +223,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('dashboard')}
         className="inline-flex flex-shrink-0"
-        style={{ display: vCount >= 3 ? 'inline-flex' : 'none' }}>
+        style={{ display: vCount >= 4 ? 'inline-flex' : 'none' }}>
         <button
           type="button"
           onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('agent-manager/index.html') })}
@@ -202,7 +241,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('agentSettings')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 4 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 5 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -366,7 +405,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('feedback')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 5 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 6 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -392,7 +431,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       <div
         ref={setActionRef('fish')}
         className="relative inline-block flex-shrink-0 group"
-        style={{ display: vCount >= 6 ? 'inline-block' : 'none' }}
+        style={{ display: vCount >= 7 ? 'inline-block' : 'none' }}
         data-dropdown>
         <button
           type="button"
@@ -459,7 +498,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
       </div>
 
       {/* More menu trigger and menu stub (items still rendered in SidePanel for now) */}
-      {vCount < 6 && (
+      {vCount < 7 && (
         <div ref={moreMenuRef} className="relative flex-shrink-0 group" data-dropdown>
           <button
             type="button"
@@ -488,6 +527,20 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                   }}
                   className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center rounded px-3 py-2`}>
                   Settings
+                </button>
+              )}
+              {hiddenKeys.includes('theme') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleThemeToggle();
+                    setMoreMenuOpen(false);
+                  }}
+                  className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} flex w-full items-center justify-between rounded px-3 py-2`}>
+                  <span>Theme</span>
+                  <span className="text-xs opacity-70">
+                    {themeMode === 'auto' ? 'Auto' : themeMode === 'light' ? 'Light' : 'Dark'}
+                  </span>
                 </button>
               )}
               {hiddenKeys.includes('newChat') && (

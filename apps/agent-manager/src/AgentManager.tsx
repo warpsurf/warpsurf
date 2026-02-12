@@ -20,13 +20,35 @@ export default function AgentManager() {
   // Privacy gate for auto-tab context
   const { promptAutoTabContextPrivacy, autoTabContextPrivacyModal } = useAutoTabContextPrivacyGate(isDarkMode);
 
-  // Detect system dark mode preference
+  // Detect dark mode preference (manual setting or system preference)
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setIsDarkMode(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    const getSystemPreference = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const checkDarkMode = async () => {
+      try {
+        const settings = await generalSettingsStore.getSettings();
+        const themeMode = settings.themeMode || 'auto';
+
+        setIsDarkMode(themeMode === 'dark' ? true : themeMode === 'light' ? false : getSystemPreference());
+      } catch {
+        setIsDarkMode(getSystemPreference());
+      }
+    };
+
+    checkDarkMode();
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', checkDarkMode);
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = generalSettingsStore.subscribe(checkDarkMode);
+    } catch {}
+
+    return () => {
+      mediaQuery.removeEventListener('change', checkDarkMode);
+      unsubscribe?.();
+    };
   }, []);
 
   // Load and refresh auto-context state
