@@ -206,6 +206,8 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
             : m?.createdAt !== undefined
               ? toNumber(m.createdAt)
               : Date.now();
+        const eventIdRaw = m?.eventId ?? m?.event_id;
+        const eventId = eventIdRaw ? String(eventIdRaw) : undefined;
         const actorSource = m?.actor ?? m?.role ?? m?.sender ?? m?.author;
         const actor = normalizeActor(actorSource);
         const id =
@@ -214,7 +216,7 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
             : typeof crypto?.randomUUID === 'function'
               ? crypto.randomUUID()
               : `${timestamp}-${actor}`;
-        return { id, content, timestamp, actor } as ChatMessage;
+        return { id, content, timestamp, actor, eventId } as ChatMessage;
       });
 
       // Fallback recovery: if no messages were found, try to discover legacy keys that include this sessionId
@@ -247,6 +249,8 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
                       : m?.createdAt !== undefined
                         ? toNumber(m.createdAt)
                         : Date.now();
+                  const eventIdRaw = m?.eventId ?? m?.event_id;
+                  const eventId = eventIdRaw ? String(eventIdRaw) : undefined;
                   const actorSource = m?.actor ?? m?.role ?? m?.sender ?? m?.author;
                   const actor = normalizeActor(actorSource);
                   const id =
@@ -255,7 +259,7 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
                       : typeof crypto?.randomUUID === 'function'
                         ? crypto.randomUUID()
                         : `${timestamp}-${actor}`;
-                  return { id, content, timestamp, actor } as ChatMessage;
+                  return { id, content, timestamp, actor, eventId } as ChatMessage;
                 });
                 // Persist recovered messages into the canonical key and update metadata
                 await messagesStorage.set(normalized);
@@ -272,6 +276,24 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
           }
         } catch {}
       }
+
+      // Deduplicate messages (eventId-first, then actor+timestamp+content).
+      // This prevents legacy double-writes and replay-related duplicates from showing up in the UI.
+      try {
+        const seen = new Set<string>();
+        const deduped: ChatMessage[] = [];
+        for (const m of normalized || []) {
+          const eventId = (m as any)?.eventId ? String((m as any).eventId).trim() : '';
+          const actor = String((m as any)?.actor || '');
+          const ts = Number((m as any)?.timestamp || 0);
+          const content = String((m as any)?.content ?? '').trim();
+          const key = eventId ? `event:${eventId}` : `${actor}|${ts}|${content}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(m);
+        }
+        if (deduped.length !== normalized.length) normalized = deduped;
+      } catch {}
 
       // If normalization changed anything (e.g., missing actors), persist the normalized form back to storage
       try {
@@ -393,50 +415,123 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
     },
 
     addMessage: async (sessionId: string, message: Message): Promise<ChatMessage> => {
-      const newMessage: ChatMessage = {
-        ...message,
-        id: crypto.randomUUID(),
-      };
+      const sid = String(sessionId || '').trim();
+      if (!sid) throw new Error('sessionId is required');
 
-      // First check if session exists and update metadata in a single operation
-      let sessionFound = false;
+      const actor = (message as any)?.actor;
+      const rawContent =
+        typeof (message as any)?.content === 'string'
+          ? (message as any).content
+          : String((message as any)?.content ?? '');
+      const ts =
+        typeof (message as any)?.timestamp === 'number'
+          ? (message as any).timestamp
+          : Number((message as any)?.timestamp ?? Date.now());
+      const timestamp = Number.isFinite(ts) ? ts : getCurrentTimestamp();
+      const eventIdRaw = (message as any)?.eventId;
+      const incomingEventId = eventIdRaw ? String(eventIdRaw).trim() : '';
 
-      await chatSessionsMetaStorage.set(prevSessions => {
-        return prevSessions.map(session => {
-          if (session.id === sessionId) {
-            sessionFound = true;
-            return {
-              ...session,
-              updatedAt: getCurrentTimestamp(),
-              messageCount: session.messageCount + 1,
-            };
+      // Dedupe within a session across multiple persistence paths.
+      const actorKey = String(actor || '');
+      const contentKey = String(rawContent ?? '').trim();
+
+      const messagesStorage = getSessionMessagesStorage(sid);
+      let stored: ChatMessage | null = null;
+      let didAdd = false;
+      let finalCount = 0;
+
+      await messagesStorage.set(prevMessages => {
+        const prev = Array.isArray(prevMessages) ? prevMessages : [];
+        finalCount = prev.length;
+
+        // Primary: eventId-based dedupe (stable across systems)
+        if (incomingEventId) {
+          const existing = prev.find(m => String((m as any)?.eventId || '').trim() === incomingEventId);
+          if (existing) {
+            stored = existing as ChatMessage;
+            return prev;
           }
-          return session;
-        });
+        }
+
+        // Fallback: exact actor+timestamp+trim(content)
+        if (contentKey) {
+          const existing = prev.find(m => {
+            if (String((m as any)?.actor || '') !== actorKey) return false;
+            if (Number((m as any)?.timestamp || 0) !== Number(timestamp)) return false;
+            return String((m as any)?.content ?? '').trim() === contentKey;
+          });
+          if (existing) {
+            stored = existing as ChatMessage;
+            return prev;
+          }
+        }
+
+        const id =
+          typeof crypto?.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${timestamp}-${actorKey}-${Math.random().toString(36).slice(2)}`;
+        const newMessage: ChatMessage = {
+          ...(message as any),
+          actor,
+          content: rawContent,
+          timestamp,
+          ...(incomingEventId ? { eventId: incomingEventId } : {}),
+          id,
+        } as ChatMessage;
+
+        stored = newMessage;
+        didAdd = true;
+        finalCount = prev.length + 1;
+        return [...prev, newMessage];
       });
 
-      // If session doesn't exist, create it automatically (resilient to race conditions)
-      if (!sessionFound) {
+      // Update/create session metadata ONLY when we actually added a message (or if metadata is missing).
+      const now = getCurrentTimestamp();
+      await chatSessionsMetaStorage.set(prevSessions => {
+        const idx = prevSessions.findIndex(s => s.id === sid);
+        if (idx !== -1) {
+          if (!didAdd) return prevSessions;
+          const updated = [...prevSessions];
+          const session = prevSessions[idx];
+          updated[idx] = {
+            ...session,
+            updatedAt: now,
+            messageCount: (session.messageCount ?? 0) + 1,
+          };
+          return updated;
+        }
+
+        // Session metadata missing — create it so the session can be listed.
         const title =
-          typeof message.content === 'string'
-            ? message.content.substring(0, 50) + (message.content.length > 50 ? '...' : '')
+          typeof rawContent === 'string'
+            ? rawContent.substring(0, 50) + (rawContent.length > 50 ? '...' : '')
             : 'New Chat';
-        const now = getCurrentTimestamp();
         const newSession: ChatSessionMetadata = {
-          id: sessionId,
+          id: sid,
           title,
           createdAt: now,
           updatedAt: now,
-          messageCount: 1,
+          messageCount: didAdd ? 1 : Math.max(0, finalCount),
         };
-        await chatSessionsMetaStorage.set(prevSessions => [...prevSessions, newSession]);
+        return [...prevSessions, newSession];
+      });
+
+      if (!stored) {
+        // Should be unreachable, but keep the return type stable.
+        stored = {
+          ...(message as any),
+          actor,
+          content: rawContent,
+          timestamp,
+          ...(incomingEventId ? { eventId: incomingEventId } : {}),
+          id:
+            typeof crypto?.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : `${timestamp}-${actorKey}-${Math.random().toString(36).slice(2)}`,
+        } as ChatMessage;
       }
 
-      // Add the message
-      const messagesStorage = getSessionMessagesStorage(sessionId);
-      await messagesStorage.set(prevMessages => [...prevMessages, newMessage]);
-
-      return newMessage;
+      return stored;
     },
 
     deleteMessage: async (sessionId: string, messageId: string): Promise<void> => {
