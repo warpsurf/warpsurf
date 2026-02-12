@@ -23,6 +23,7 @@ Here are some examples of requests and the appropriate action to take:
 - "Set temperature to 0.3" -> tool (after_tool: "none")
 - "Switch to Claude for all models" -> tool (after_tool: "none")
 - "Add my tabs and summarise them" -> tool (after_tool: "chat")
+- "Summarise my tabs in a google doc" -> tool (after_tool: "agent")
 - "Enable vision and then go to amazon.com" -> tool (after_tool: "agent")
 - "Set temp to 0.3 and search for latest AI news" -> tool (after_tool: "search")
 
@@ -37,7 +38,7 @@ Respond with a JSON object in this exact format:
 }
 
 The "after_tool" field is ONLY required when action is "tool". It indicates what should happen after tool calls:
-- "none": Request is fully handled by tool calls alone.
+- "none": Request is fully handled by tool calls alone. If the request is just a tool call, set this to "none".
 - "chat": After tools, answer the remaining question via chat.
 - "search": After tools, handle the remaining query via web search.
 - "agent": After tools, handle the remaining task via browser agent.
