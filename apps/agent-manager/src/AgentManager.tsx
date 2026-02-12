@@ -4,7 +4,8 @@ import { useAgentManagerConnection } from '@src/hooks/use-agent-manager-connecti
 import { AgentGallery } from '@src/components/AgentGallery';
 import { AgentInputBar } from '@src/components/AgentInputBar';
 import { useAutoTabContextPrivacyGate } from '@src/hooks/use-auto-tab-context-privacy-gate';
-import { generalSettingsStore, warningsSettingsStore } from '@extension/storage';
+import { generalSettingsStore, warningsSettingsStore, speechToTextModelStore } from '@extension/storage';
+import { useSpeechToText, MicrophonePermissionOverlay } from '@extension/shared';
 import type { AgentData } from '@src/types';
 import logoImage from '/warpsurflogo.png';
 import { AGENT_ACTIVITY_THRESHOLDS } from '@extension/shared/lib/utils';
@@ -102,7 +103,51 @@ export default function AgentManager() {
     [promptAutoTabContextPrivacy],
   );
 
-  const { agents, sendNewTask, openSidepanelToSession, isConnected } = useAgentManagerConnection();
+  const { agents, sendNewTask, openSidepanelToSession, isConnected, portRef, addPortListener, removePortListener } =
+    useAgentManagerConnection();
+
+  // Speech-to-text
+  const [sttConfigured, setSttConfigured] = useState(false);
+  const setInputTextRef = useRef<((text: string) => void) | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const config = await speechToTextModelStore.getConfig();
+        setSttConfigured(!!config?.provider && !!config?.modelName);
+      } catch {}
+    };
+    load();
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = speechToTextModelStore.subscribe(load);
+    } catch {}
+    return () => {
+      try {
+        unsub?.();
+      } catch {}
+    };
+  }, []);
+
+  const stt = useSpeechToText({
+    portRef,
+    onTranscription: useCallback((text: string) => {
+      if (setInputTextRef.current) setInputTextRef.current(text);
+    }, []),
+    onError: useCallback((error: string) => {
+      console.error('[AgentManager STT]', error);
+    }, []),
+  });
+
+  // Wire STT port messages through the connection's listener system
+  useEffect(() => {
+    const listener = (message: any) => {
+      if (message?.type === 'speech_to_text_result') stt.handleSttResult(message.text || '');
+      else if (message?.type === 'speech_to_text_error') stt.handleSttError(message.error || 'Transcription failed');
+    };
+    addPortListener(listener);
+    return () => removePortListener(listener);
+  }, [stt.handleSttResult, stt.handleSttError, addPortListener, removePortListener]);
 
   // Filter agents by search query
   const filteredAgents = useMemo(() => {
@@ -286,6 +331,19 @@ export default function AgentManager() {
           autoContextEnabled={autoContextEnabled}
           autoContextTabIds={autoContextTabIds}
           onAutoContextToggle={handleAutoContextToggle}
+          onMicClick={stt.handleMicClick}
+          onMicStop={stt.stopRecording}
+          isRecording={stt.isRecording}
+          isProcessingSpeech={stt.isProcessing}
+          recordingDurationMs={stt.recordingDurationMs}
+          audioLevel={stt.audioLevel}
+          sttConfigured={sttConfigured}
+          onOpenVoiceSettings={() => {
+            try {
+              chrome.storage.local.set({ 'settings.pendingTab': 'voice' });
+              chrome.runtime.openOptionsPage();
+            } catch {}
+          }}
         />
       </div>
 
@@ -326,6 +384,16 @@ export default function AgentManager() {
 
       {/* Privacy modal */}
       {autoTabContextPrivacyModal}
+
+      {/* Microphone permission overlay */}
+      {stt.showPermissionOverlay && (
+        <MicrophonePermissionOverlay
+          permissionState={stt.permissionState}
+          isDarkMode={isDarkMode}
+          onRequestPermission={stt.openPermissionPopup}
+          onDismiss={stt.dismissPermissionOverlay}
+        />
+      )}
     </div>
   );
 }

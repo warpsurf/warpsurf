@@ -32,6 +32,8 @@ type BackgroundHandlers = {
   onRestoreViewState?: (data: { currentSessionId?: string; viewMode?: string }) => void;
   onSessionSubscribed?: (message: any) => void;
   onDisconnect?: (error?: any) => void;
+  onSpeechToTextResult?: (message: any) => void;
+  onSpeechToTextError?: (message: any) => void;
 };
 
 interface UseBackgroundConnectionParams {
@@ -166,7 +168,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             // - If current session is set → only match if event has a matching ID
             sessionMatches =
               (!sessionIdRef.current && possibleIds.length === 0) ||
-              (sessionIdRef.current && possibleIds.some(id => String(id) === String(sessionIdRef.current)));
+              !!(sessionIdRef.current && possibleIds.some(id => String(id) === String(sessionIdRef.current)));
 
             if (isTerminalEvent) {
               try {
@@ -421,6 +423,10 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
               logger.error('[Panel] Failed to apply trajectory_state:', e);
             }
           }
+        } else if (message && message.type === 'speech_to_text_result') {
+          handlersRef.current.onSpeechToTextResult?.(message);
+        } else if (message && message.type === 'speech_to_text_error') {
+          handlersRef.current.onSpeechToTextError?.(message);
         } else if (message && message.type === 'heartbeat_ack') {
           // ignore
         }

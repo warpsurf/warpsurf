@@ -1,7 +1,7 @@
 import { StorageEnum } from '../base/enums';
 import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
-import type { AgentNameEnum } from './types';
+import type { AgentNameEnum, ThinkingLevel } from './types';
 // Parameter defaults are now UI-driven (ModelSettings). No provider defaults here.
 
 // Interface for a single model configuration
@@ -10,7 +10,8 @@ export interface ModelConfig {
   provider: string;
   modelName: string;
   parameters?: Record<string, unknown>;
-  reasoningEffort?: 'low' | 'medium' | 'high'; // For o-series models (OpenAI and Azure)
+  thinkingLevel?: ThinkingLevel; // Controls thinking/reasoning depth across all providers
+  reasoningEffort?: 'low' | 'medium' | 'high'; // @deprecated - migrated to thinkingLevel on read
   webSearch?: boolean; // For Claude and Gemini models to enable web search tools
 }
 
@@ -73,9 +74,13 @@ export const agentModelStore: AgentModelStorage = {
     const config = data.agents[agent];
     if (!config) return undefined;
 
-    // Return stored parameters; if missing, apply neutral fallback
+    // Migrate legacy reasoningEffort -> thinkingLevel
+    const thinkingLevel = config.thinkingLevel ?? config.reasoningEffort;
+
     return {
       ...config,
+      thinkingLevel,
+      reasoningEffort: undefined, // drop legacy field
       parameters: {
         ...getNeutralParameters(),
         ...config.parameters,

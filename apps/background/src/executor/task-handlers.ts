@@ -70,7 +70,7 @@ async function runEstimationIfEnabled(
   let navigatorModelName: string | undefined;
   try {
     const agentModels = await agentModelStore.getAllAgentModels();
-    navigatorModelName = agentModels[AgentNameEnum.Navigator]?.modelName;
+    navigatorModelName = agentModels[AgentNameEnum.AgentNavigator]?.modelName;
   } catch {}
 
   const estimation = await estimationService.estimateTask(task, navigatorModelName, sessionId);
@@ -183,6 +183,7 @@ export async function handleNewTask(message: any, deps: Deps) {
 
   // If agentType is 'auto', triage first and then map to manual agent type
   let effectiveAgentType: string | undefined = agentType;
+  let preTriageResult: any = undefined; // Store full triage result for tool actions
   try {
     const at = String(agentType || '').toLowerCase();
     if (at === 'auto') {
@@ -219,7 +220,11 @@ export async function handleNewTask(message: any, deps: Deps) {
         const action = String(triageResult?.action || '').toLowerCase();
         if (action === 'chat') effectiveAgentType = 'chat';
         else if (action === 'search') effectiveAgentType = 'search';
-        else effectiveAgentType = 'agent';
+        else if (action === 'tool') {
+          // Pass full triage result to executor to avoid duplicate AUTO call
+          effectiveAgentType = 'tool';
+          preTriageResult = triageResult;
+        } else effectiveAgentType = 'agent';
 
         // Emit triage completion event to UI
         try {
@@ -239,8 +244,8 @@ export async function handleNewTask(message: any, deps: Deps) {
       } catch {
         effectiveAgentType = 'agent';
       } finally {
-        globalTokenTracker.setCurrentTaskId(prevTaskId);
-        globalTokenTracker.setCurrentRole(prevRole);
+        globalTokenTracker.setCurrentTaskId(prevTaskId || '');
+        globalTokenTracker.setCurrentRole(prevRole || '');
       }
     }
   } catch {}
@@ -337,6 +342,7 @@ export async function handleNewTask(message: any, deps: Deps) {
     effectiveAgentType,
     contextTabIds,
     contextMenuAction,
+    preTriageResult,
   );
 
   setCurrentExecutor(executor);
@@ -400,6 +406,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
   }
 
   // If follow-up is 'auto', triage first to determine agent type
+  let preTriageResult: any = undefined; // Store full triage result for tool actions
   try {
     const at = String(agentType || '').toLowerCase();
     if (at === 'auto') {
@@ -438,6 +445,10 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
           agentType = 'chat';
         } else if (action === 'search') {
           agentType = 'search';
+        } else if (action === 'tool') {
+          // Pass full triage result to executor to avoid duplicate AUTO call
+          agentType = 'tool';
+          preTriageResult = triageResult;
         } else if (action === 'agent') {
           agentType = 'agent';
         }
@@ -460,8 +471,8 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       } catch {
         // Keep original agentType on error
       } finally {
-        globalTokenTracker.setCurrentTaskId(prevTaskId);
-        globalTokenTracker.setCurrentRole(prevRole);
+        globalTokenTracker.setCurrentTaskId(prevTaskId || '');
+        globalTokenTracker.setCurrentRole(prevRole || '');
       }
     }
   } catch {}
@@ -641,7 +652,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     }
 
     try {
-      existing.addFollowUpTask(task, agentType);
+      existing.addFollowUpTask(task, agentType, preTriageResult);
     } catch {}
 
     // CRITICAL: Reset executor state from previous cancellation
@@ -650,7 +661,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       if (ctx) {
         ctx.stopped = false;
         ctx.paused = false;
-        logger.info('[handleFollowUpTask] Reset executor stopped/paused state for chat/search');
+        logger.info('[handleFollowUpTask] Reset executor stopped/paused state for chat/search/tool');
       }
     } catch (e) {
       logger.info('[handleFollowUpTask] Failed to reset executor state:', e);

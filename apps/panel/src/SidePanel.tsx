@@ -2,7 +2,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { type Message } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
-const CommandPalette = lazy(() => import('./components/header/command-palette'));
+const CommandPalette = lazy(() => import('./components/Header/command-palette'));
 import { AgentType } from './components/chat-interface/chat-input';
 import ChatHistoryList from './components/history/chat-history-list';
 import { AgentDashboard } from './components/history/agent-dashboard';
@@ -11,8 +11,8 @@ import PopulationChart from './components/fish/population-chart';
 import WorkflowGraphSection from './components/multiagent-visualization/visualization-section';
 import WorkflowGraphModal from './components/multiagent-visualization/visualization-modal';
 import './SidePanel.css';
-import Branding from './components/header/branding';
-import HeaderActions from './components/header/header-actions';
+import Branding from './components/Header/Branding';
+import HeaderActions from './components/Header/header-actions';
 import FishOverlay, { type FishOverlayHandle } from '@src/components/fish/fish-overlay';
 import DisplayMode from './components/fish/display-mode';
 import { createLogger } from './utils/index';
@@ -31,6 +31,8 @@ import { ChatScreen } from './screens/ChatScreen';
 import { usePanelHandlers } from './hooks/use-panel-handlers';
 import { usePanelEffects } from './hooks/use-panel-effects';
 import { useEventSetup } from './hooks/use-event-setup';
+import { useSpeechToText, MicrophonePermissionOverlay } from '@extension/shared';
+import { speechToTextModelStore } from '@extension/storage';
 
 const SidePanel = () => {
   // State
@@ -105,6 +107,10 @@ const SidePanel = () => {
   const [autoContextEnabled, setAutoContextEnabled] = useState<boolean>(false);
   const [autoContextTabIds, setAutoContextTabIds] = useState<number[]>([]);
   const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
+
+  // Speech-to-text state
+  const [sttConfigured, setSttConfigured] = useState(false);
+  const [sttAutoSubmit, setSttAutoSubmit] = useState(false);
 
   const isDarkMode = useDarkMode();
   const { showToast } = useToast();
@@ -243,6 +249,52 @@ const SidePanel = () => {
     };
   }, []); // Empty deps - loadAutoContextState always reads fresh from storage
 
+  // Load STT configuration state
+  useEffect(() => {
+    const loadSttConfig = async () => {
+      try {
+        const config = await speechToTextModelStore.getConfig();
+        setSttConfigured(!!config?.provider && !!config?.modelName);
+        setSttAutoSubmit(!!config?.autoSubmit);
+      } catch {}
+    };
+    loadSttConfig();
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = speechToTextModelStore.subscribe(loadSttConfig);
+    } catch {}
+    return () => {
+      try {
+        unsub?.();
+      } catch {}
+    };
+  }, []);
+
+  // Refs for STT callbacks (avoids stale closure over handleSendMessage/appendMessage defined later)
+  const sttAutoSubmitRef = useRef(sttAutoSubmit);
+  useEffect(() => {
+    sttAutoSubmitRef.current = sttAutoSubmit;
+  }, [sttAutoSubmit]);
+  const handleSendMessageRef = useRef<any>(null);
+  const appendMessageRef = useRef<any>(null);
+
+  // Speech-to-text hook
+  const stt = useSpeechToText({
+    portRef,
+    onTranscription: useCallback((text: string) => {
+      if (sttAutoSubmitRef.current && handleSendMessageRef.current) {
+        handleSendMessageRef.current(text);
+      } else if (setInputTextRef.current) {
+        setInputTextRef.current(text);
+      }
+    }, []),
+    onError: useCallback((error: string) => {
+      if (appendMessageRef.current) {
+        appendMessageRef.current({ actor: 'system', content: `Voice input error: ${error}`, timestamp: Date.now() });
+      }
+    }, []),
+  });
+
   // Chat history
   const {
     chatSessions,
@@ -337,14 +389,22 @@ const SidePanel = () => {
     messages,
     mirrorPreviewBatch,
     recalculatedEstimation,
+    setContextTabIdsRef,
   });
+
+  // Keep STT error callback ref in sync
+  appendMessageRef.current = appendMessage;
 
   const { setupConnection, stopConnection, sendMessage } = useBackgroundConnection({
     portRef,
     sessionIdRef,
     logger,
     appendMessage,
-    handlers: panelHandlers,
+    handlers: {
+      ...panelHandlers,
+      onSpeechToTextResult: (msg: any) => stt.handleSttResult(msg?.text || ''),
+      onSpeechToTextError: (msg: any) => stt.handleSttError(msg?.error || 'Transcription failed'),
+    },
     eventIdRefs: { seenEventIdsRef, lastEventIdBySessionRef },
   });
 
@@ -490,6 +550,9 @@ const SidePanel = () => {
       resetRunState,
     ],
   );
+
+  // Keep STT auto-submit ref in sync with latest handleSendMessage
+  handleSendMessageRef.current = handleSendMessage;
 
   const handleReplay = useMemo(
     () => async (historySessionId: string) => {
@@ -957,6 +1020,19 @@ const SidePanel = () => {
               setPendingContextTabs={tabs => {
                 pendingContextTabsRef.current = tabs;
               }}
+              onMicClick={stt.handleMicClick}
+              onMicStop={stt.stopRecording}
+              isRecording={stt.isRecording}
+              isProcessingSpeech={stt.isProcessing}
+              recordingDurationMs={stt.recordingDurationMs}
+              audioLevel={stt.audioLevel}
+              sttConfigured={sttConfigured}
+              onOpenVoiceSettings={() => {
+                try {
+                  chrome.storage.local.set({ 'settings.pendingTab': 'voice' });
+                  chrome.runtime.openOptionsPage();
+                } catch {}
+              }}
             />
           )}
         </div>
@@ -973,6 +1049,14 @@ const SidePanel = () => {
       {perChatModal}
       {historyPrivacyModal}
       {autoTabContextPrivacyModal}
+      {stt.showPermissionOverlay && (
+        <MicrophonePermissionOverlay
+          permissionState={stt.permissionState}
+          isDarkMode={isDarkMode}
+          onRequestPermission={stt.openPermissionPopup}
+          onDismiss={stt.dismissPermissionOverlay}
+        />
+      )}
     </>
   );
 };

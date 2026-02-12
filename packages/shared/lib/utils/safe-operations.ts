@@ -64,7 +64,7 @@ export async function safeTabRemove(tabId: number): Promise<boolean> {
   }
 }
 
-export function safeClearInterval(intervalId: number | undefined): void {
+export function safeClearInterval(intervalId: ReturnType<typeof setInterval> | undefined): void {
   if (intervalId !== undefined) {
     try {
       clearInterval(intervalId);
@@ -100,9 +100,7 @@ export async function safeTabsQuery(queryInfo: chrome.tabs.QueryInfo): Promise<c
   }
 }
 
-export async function safeTabHighlight(
-  highlightInfo: chrome.tabs.HighlightInfo,
-): Promise<boolean> {
+export async function safeTabHighlight(highlightInfo: chrome.tabs.HighlightInfo): Promise<boolean> {
   try {
     await chrome.tabs.highlight(highlightInfo);
     return true;
@@ -110,4 +108,3 @@ export async function safeTabHighlight(
     return false;
   }
 }
-

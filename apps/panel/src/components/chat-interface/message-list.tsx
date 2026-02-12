@@ -147,7 +147,7 @@ export default memo(function MessageList({
                 </div>
                 <div className="w-1/3 flex-shrink-0">
                   <PreviewPanel
-                    inlinePreview={inlinePreview}
+                    inlinePreview={inlinePreview ?? null}
                     inlinePreviewBatch={inlinePreviewBatch || []}
                     agentColorHex={agentColorHex}
                     isPaused={isPaused}

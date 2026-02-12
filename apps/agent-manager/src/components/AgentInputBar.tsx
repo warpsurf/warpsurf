@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
+import { MicrophoneButton } from '@extension/shared';
 import { TabContextSelector } from './TabContextSelector';
 
 type AgentType = 'auto' | 'chat' | 'search' | 'agent' | 'multiagent';
@@ -34,6 +35,15 @@ interface AgentInputBarProps {
   autoContextEnabled?: boolean;
   autoContextTabIds?: number[];
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
+  // Speech-to-text props
+  onMicClick?: () => void;
+  onMicStop?: () => void;
+  isRecording?: boolean;
+  isProcessingSpeech?: boolean;
+  recordingDurationMs?: number;
+  audioLevel?: number;
+  sttConfigured?: boolean;
+  onOpenVoiceSettings?: () => void;
 }
 
 export function AgentInputBar({
@@ -43,6 +53,14 @@ export function AgentInputBar({
   autoContextEnabled = false,
   autoContextTabIds = [],
   onAutoContextToggle,
+  onMicClick,
+  onMicStop,
+  isRecording = false,
+  isProcessingSpeech = false,
+  recordingDurationMs = 0,
+  audioLevel = 0,
+  sttConfigured = false,
+  onOpenVoiceSettings,
 }: AgentInputBarProps) {
   const [text, setText] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<AgentType>('auto');
@@ -166,6 +184,22 @@ export function AgentInputBar({
             ))}
           </div>
         </div>
+
+        {/* Microphone button for voice input */}
+        {onMicClick && (
+          <MicrophoneButton
+            isRecording={isRecording}
+            isProcessing={isProcessingSpeech}
+            recordingDurationMs={recordingDurationMs}
+            audioLevel={audioLevel}
+            onClick={onMicClick}
+            onStopClick={onMicStop || (() => {})}
+            isDarkMode={isDarkMode}
+            disabled={!sttConfigured || disabled}
+            disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
+            onOpenSettings={onOpenVoiceSettings}
+          />
+        )}
 
         {/* Send button */}
         <button

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Added agent manager & tab context to model responses. Fixed disclaimer display issues.';
+  const releaseNotes = 'Added voice and tool call support to the agent + bug and stability fixes.';
 
   useEffect(() => {
     try {

@@ -11,79 +11,77 @@ type BaseChatModel = any;
 
 // create a chat model based on the agent name, the model name and provider
 export function createChatModel(providerConfig: ProviderConfig, modelConfig: ModelConfig): BaseChatModel {
-  // Temperature is undefined when user wants provider's default; only pass through if explicitly set
   const temperature = modelConfig.parameters?.temperature as number | undefined;
   const maxTokens = (modelConfig.parameters?.maxOutputTokens ?? 8192) as number;
+  const apiKey = providerConfig.apiKey || '';
+  const thinkingLevel = modelConfig.thinkingLevel;
 
   switch (modelConfig.provider) {
-    case ProviderTypeEnum.OpenAI: {
-      // Use native OpenAI SDK
+    case ProviderTypeEnum.OpenAI:
       return new NativeOpenAIChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
+        thinkingLevel,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
       }) as unknown as BaseChatModel;
-    }
-    case ProviderTypeEnum.Anthropic: {
-      // Use native Anthropic SDK with optional web search
+
+    case ProviderTypeEnum.Anthropic:
       return new NativeAnthropicChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
+        thinkingLevel,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
       }) as unknown as BaseChatModel;
-    }
-    case ProviderTypeEnum.Gemini: {
-      // Use native Google GenAI SDK with Google Search grounding
+
+    case ProviderTypeEnum.Gemini:
       return new NativeGeminiChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
+        thinkingLevel,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
       }) as unknown as BaseChatModel;
-    }
-    case ProviderTypeEnum.Grok: {
-      // Use native Grok (xAI) SDK with Live Search support
+
+    case ProviderTypeEnum.Grok:
       return new NativeGrokChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         temperature,
         maxTokens,
+        thinkingLevel,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
       }) as unknown as BaseChatModel;
-    }
-    case ProviderTypeEnum.OpenRouter: {
-      // Use dedicated OpenRouter implementation with proper attribution headers
-      // See: https://openrouter.ai/docs/quickstart
+
+    case ProviderTypeEnum.OpenRouter:
       return new NativeOpenRouterChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey,
+        apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,
+        thinkingLevel,
         webSearch: !!modelConfig.webSearch,
         maxRetries: (modelConfig.parameters?.maxRetries ?? 5) as number,
       }) as unknown as BaseChatModel;
-    }
+
     case ProviderTypeEnum.CustomOpenAI:
     default: {
-      // OpenAI-compatible provider (CustomOpenAI) - for LM Studio, Ollama, vLLM, etc.
-      // Uses standard Chat Completions API without OpenAI-specific features
       if (!providerConfig.baseUrl) {
         throw new Error('Base URL is required for OpenAI-compatible providers');
       }
       return new NativeCustomOpenAIChatModel({
         model: modelConfig.modelName,
-        apiKey: providerConfig.apiKey, // May be empty for local models
+        apiKey: providerConfig.apiKey,
         baseUrl: providerConfig.baseUrl,
         temperature,
         maxTokens,

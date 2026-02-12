@@ -57,6 +57,7 @@ export function useChatHistory({
   const dedupeMessages = useCallback((messages: any[] | undefined | null) => {
     const list = Array.isArray(messages) ? messages : [];
     const WINDOW_MS = 5000;
+    const seenEventIds = new Set<string>();
     const lastByActorContent = new Map<string, number>();
     const lastNonSystemByContent = new Map<string, number>();
     const systemIndexByContent = new Map<string, number>();
@@ -71,6 +72,11 @@ export function useChatHistory({
     };
 
     for (const msg of list) {
+      const eventId = String((msg as any)?.eventId || '').trim();
+      if (eventId) {
+        if (seenEventIds.has(eventId)) continue;
+        seenEventIds.add(eventId);
+      }
       const actor = String((msg as any)?.actor || '');
       const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
       const content = String((msg as any)?.content ?? '').trim();
@@ -274,7 +280,7 @@ export function useChatHistory({
             else if (actor === 'multiagent') agentType = 'multiagent';
             else if (actor === 'agent_navigator' || actor === 'agent_planner' || actor === 'agent_validator')
               agentType = 'agent';
-            else if (actor === 'auto') agentType = 'auto';
+            else if (actor === 'auto' || actor === 'tool') agentType = 'auto';
           }
 
           await favoritesStorage.addPrompt(title, taskContent, agentType);

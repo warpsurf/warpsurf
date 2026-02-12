@@ -38,11 +38,11 @@ interface AgentDashboardProps {
   chatSessions: Array<{ id: string; title: string; createdAt: number; updatedAt: number }>;
 }
 
-export const AgentDashboard: React.FC<AgentDashboardProps> = ({ 
-  isDarkMode, 
-  onBack, 
+export const AgentDashboard: React.FC<AgentDashboardProps> = ({
+  isDarkMode,
+  onBack,
   onSelectSession,
-  chatSessions 
+  chatSessions,
 }) => {
   const [runningAgents, setRunningAgents] = useState<RunningAgent[]>([]);
   const [completedAgents, setCompletedAgents] = useState<CompletedAgent[]>([]);
@@ -54,20 +54,20 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const loadAgentData = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Get running agents from storage
       const runningKey = 'agent_dashboard_running';
       const completedKey = 'agent_dashboard_completed';
-      
+
       const storedRunning = await chrome.storage.local.get(runningKey);
       const storedCompleted = await chrome.storage.local.get(completedKey);
-      
+
       if (storedRunning[runningKey]) {
         const list: RunningAgent[] = (storedRunning[runningKey] || []) as any[];
         list.sort((a, b) => (b.lastUpdate || b.startTime || 0) - (a.lastUpdate || a.startTime || 0));
         setRunningAgents(list);
       }
-      
+
       if (storedCompleted[completedKey]) {
         // Keep only last 50 completed agents, newest first
         const completed: CompletedAgent[] = (storedCompleted[completedKey] || []) as any[];
@@ -84,7 +84,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   // Load data on mount and set up listener for updates
   useEffect(() => {
     loadAgentData();
-    
+
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.agent_dashboard_running) {
@@ -98,12 +98,12 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setCompletedAgents(completed.slice(0, 50));
       }
     };
-    
+
     chrome.storage.onChanged.addListener(handleStorageChange);
-    
+
     // Refresh every 5 seconds for running agents
     const interval = setInterval(loadAgentData, 5000);
-    
+
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
       clearInterval(interval);
@@ -116,8 +116,9 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const port = chrome.runtime.connect({ name: 'dashboard' });
       dashboardPortRef.current = port;
       const requestStatus = () => {
-        safePostMessage(port, { type: 'get-agents-status' });};
-      port.onMessage.addListener((message) => {
+        safePostMessage(port, { type: 'get-agents-status' });
+      };
+      port.onMessage.addListener(message => {
         if (message?.type === 'agents-status' && message?.data?.agents) {
           try {
             const ids = new Set<string>();
@@ -126,7 +127,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
               const isActive = a.status === 'running' || a.status === 'pending';
               if (!isActive) continue;
               // Prefer parentSessionId when present so multi-agent workers collapse to session id
-              const key = a.parentSessionId ? String(a.parentSessionId) : (a.id ? String(a.id) : null);
+              const key = a.parentSessionId ? String(a.parentSessionId) : a.id ? String(a.id) : null;
               if (key) ids.add(key);
             }
             setBgRunningIds(ids);
@@ -138,11 +139,14 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const poll = setInterval(requestStatus, 4000);
       return () => {
         clearInterval(poll);
-        try { port.disconnect(); } catch {}
+        try {
+          port.disconnect();
+        } catch {}
         dashboardPortRef.current = null;
       };
     } catch {
       // Ignore connection errors; fallback to storage-only view
+      return undefined;
     }
   }, []);
 
@@ -165,7 +169,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const formatDuration = (startTime: number, endTime?: number) => {
     const end = endTime || Date.now();
     const duration = Math.floor((end - startTime) / 1000);
-    
+
     if (duration < 60) return `${duration}s`;
     if (duration < 3600) return `${Math.floor(duration / 60)}m ${duration % 60}s`;
     return `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m`;
@@ -179,7 +183,9 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const next = list.filter(a => a.sessionId !== sessionId);
       await chrome.storage.local.set({ [runningKey]: next });
       setRunningAgents(next);
-    } catch (e) { console.error('Failed to remove running agent', e); }
+    } catch (e) {
+      console.error('Failed to remove running agent', e);
+    }
   };
 
   const removeCompleted = async (sessionId: string, startTime: number) => {
@@ -190,14 +196,16 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const next = list.filter(a => !(a.sessionId === sessionId && a.startTime === startTime));
       await chrome.storage.local.set({ [completedKey]: next });
       setCompletedAgents(next);
-    } catch (e) { console.error('Failed to remove completed agent', e); }
+    } catch (e) {
+      console.error('Failed to remove completed agent', e);
+    }
   };
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
-    
+
     if (isToday) {
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
@@ -209,39 +217,53 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
     try {
       await chrome.storage.local.set({ [completedKey]: [] });
       setCompletedAgents([]);
-    } catch (e) { console.error('Failed to delete all completed agents', e); }
-  }
+    } catch (e) {
+      console.error('Failed to delete all completed agents', e);
+    }
+  };
 
   const deleteAllRunning = async () => {
     const runningKey = 'agent_dashboard_running';
     try {
       await chrome.storage.local.set({ [runningKey]: [] });
       setRunningAgents([]);
-    } catch (e) { console.error('Failed to delete all running agents', e); }
-  }
+    } catch (e) {
+      console.error('Failed to delete all running agents', e);
+    }
+  };
 
   const deleteAll = async () => {
     await deleteAllCompleted();
     await deleteAllRunning();
-  }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running': return isDarkMode ? 'text-green-400' : 'text-green-600';
-      case 'paused': return isDarkMode ? 'text-yellow-400' : 'text-yellow-600';
-      case 'completed': return isDarkMode ? 'text-blue-400' : 'text-blue-600';
-      case 'failed': return isDarkMode ? 'text-red-400' : 'text-red-600';
-      case 'cancelled': return isDarkMode ? 'text-gray-400' : 'text-gray-600';
-      default: return isDarkMode ? 'text-gray-400' : 'text-gray-600';
+      case 'running':
+        return isDarkMode ? 'text-green-400' : 'text-green-600';
+      case 'paused':
+        return isDarkMode ? 'text-yellow-400' : 'text-yellow-600';
+      case 'completed':
+        return isDarkMode ? 'text-blue-400' : 'text-blue-600';
+      case 'failed':
+        return isDarkMode ? 'text-red-400' : 'text-red-600';
+      case 'cancelled':
+        return isDarkMode ? 'text-gray-400' : 'text-gray-600';
+      default:
+        return isDarkMode ? 'text-gray-400' : 'text-gray-600';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'running': return <FiActivity className="animate-pulse" />;
-      case 'paused': return <FiClock />;
-      case 'completed': return <FiCheckCircle />;
-      default: return <FaRobot />;
+      case 'running':
+        return <FiActivity className="animate-pulse" />;
+      case 'paused':
+        return <FiClock />;
+      case 'completed':
+        return <FiCheckCircle />;
+      default:
+        return <FaRobot />;
     }
   };
 
@@ -266,12 +288,12 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   return (
     <div className={`flex flex-col h-full ${isDarkMode ? 'bg-slate-900 text-slate-200' : 'bg-white text-gray-800'}`}>
       {/* Header */}
-      <div className={`flex items-center gap-3 px-4 py-3 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
+      <div
+        className={`flex items-center gap-3 px-4 py-3 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
         <button
           onClick={onBack}
           className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
-          aria-label="Back to chat"
-        >
+          aria-label="Back to chat">
           <FiArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -282,8 +304,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
         <button
           onClick={deleteAll}
           className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
-          aria-label="Delete all"
-        >
+          aria-label="Delete all">
           <FiTrash2 className="h-4 w-4" />
         </button>
       </div>
@@ -291,7 +312,9 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       {/* Content */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <div className={`animate-spin h-8 w-8 border-2 border-t-transparent rounded-full ${isDarkMode ? 'border-slate-400' : 'border-gray-400'}`} />
+          <div
+            className={`animate-spin h-8 w-8 border-2 border-t-transparent rounded-full ${isDarkMode ? 'border-slate-400' : 'border-gray-400'}`}
+          />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -303,18 +326,17 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 Currently Running ({displayRunningAgents.length})
               </h3>
             </div>
-            
+
             {displayRunningAgents.length === 0 ? (
               <div className={`px-4 py-8 text-center ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                 No agents currently running
               </div>
             ) : (
               <div className="divide-y divide-slate-700/50">
-                {displayRunningAgents.map((agent) => (
+                {displayRunningAgents.map(agent => (
                   <div
                     key={`${agent.sessionId}-${agent.startTime}`}
-                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}
-                  >
+                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -336,11 +358,10 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <button
                           onClick={() => onSelectSession(agent.sessionId)}
                           className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            isDarkMode 
-                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' 
+                            isDarkMode
+                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
                               : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                          }`}
-                        >
+                          }`}>
                           Go to chat
                           <FiExternalLink className="h-3 w-3" />
                         </button>
@@ -348,8 +369,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           onClick={() => removeRunning(agent.sessionId)}
                           className={`p-1.5 rounded-md ${isDarkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-gray-100 text-gray-600'}`}
                           title="Remove from running"
-                          aria-label="Remove from running"
-                        >
+                          aria-label="Remove from running">
                           <FiTrash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -368,18 +388,17 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 Recently Completed ({completedAgents.length})
               </h3>
             </div>
-            
+
             {completedAgents.length === 0 ? (
               <div className={`px-4 py-8 text-center ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                 No completed agents yet
               </div>
             ) : (
               <div className="divide-y divide-slate-700/50">
-                {completedAgents.map((agent) => (
+                {completedAgents.map(agent => (
                   <div
                     key={`${agent.sessionId}-${agent.startTime}`}
-                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}
-                  >
+                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -405,11 +424,10 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <button
                           onClick={() => onSelectSession(agent.sessionId)}
                           className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            isDarkMode 
-                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' 
+                            isDarkMode
+                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
                               : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                          }`}
-                        >
+                          }`}>
                           Go to chat
                           <FiExternalLink className="h-3 w-3" />
                         </button>
@@ -417,8 +435,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           onClick={() => removeCompleted(agent.sessionId, agent.startTime)}
                           className={`p-1.5 rounded-md ${isDarkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-gray-100 text-gray-600'}`}
                           title="Remove from completed"
-                          aria-label="Remove from completed"
-                        >
+                          aria-label="Remove from completed">
                           <FiTrash2 className="h-4 w-4" />
                         </button>
                       </div>

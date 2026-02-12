@@ -12,12 +12,18 @@ export enum Actors {
   MULTIAGENT = 'multiagent',
   // Utility actors
   ESTIMATOR = 'estimator',
+  TOOL = 'tool',
 }
 
 export interface Message {
   actor: Actors;
   content: string;
   timestamp: number; // Unix timestamp in milliseconds
+  /**
+   * Optional stable identifier for cross-system deduplication.
+   * (Used to prevent duplicate persistence when the same event is saved via multiple paths.)
+   */
+  eventId?: string;
 }
 
 export interface ChatMessage extends Message {

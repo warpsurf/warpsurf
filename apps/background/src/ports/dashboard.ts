@@ -40,7 +40,7 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
 
             const providers = await getAllProvidersDecrypted();
             const agentModels = await agentModelStore.getAllAgentModels();
-            const navigatorCfg = agentModels[AgentNameEnum.Navigator];
+            const navigatorCfg = agentModels[AgentNameEnum.AgentNavigator];
             if (!navigatorCfg) {
               return port.postMessage({
                 type: 'error',
@@ -49,8 +49,8 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
             }
             const navigatorLLM: BaseChatModel = createChatModel(providers[navigatorCfg.provider], navigatorCfg);
 
-            const plannerCfg = agentModels[AgentNameEnum.Planner] || null;
-            const validatorCfg = agentModels[AgentNameEnum.Validator] || null;
+            const plannerCfg = agentModels[AgentNameEnum.AgentPlanner] || null;
+            const validatorCfg = agentModels[AgentNameEnum.AgentValidator] || null;
             const plannerLLM: BaseChatModel | null = plannerCfg
               ? createChatModel(providers[plannerCfg.provider], plannerCfg)
               : null;

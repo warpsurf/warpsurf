@@ -41,6 +41,22 @@ ${wrappedContent}
  * Returns null if no valid context tabs.
  * All tab content is wrapped with untrusted content markers to prevent prompt injection.
  */
+/**
+ * Build a metadata-only stub for a tab whose content couldn't be extracted.
+ * Ensures the model knows the tab exists even if the page blocks content scripts.
+ */
+async function buildTabMetadataFallback(tabId: number): Promise<string | null> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab?.url) return null;
+    const safeTitle = escapeXmlAttribute(tab.title || '(untitled)');
+    const safeUrl = escapeXmlAttribute(tab.url);
+    return `<tab id="${tabId}" title="${safeTitle}" url="${safeUrl}">\n(Content could not be extracted from this page)\n</tab>`;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildContextTabsMessage(
   tabIds: number[],
   workflowType: WorkflowType,
@@ -65,28 +81,36 @@ export async function buildContextTabsMessage(
   });
 
   const results = await Promise.all(contentPromises);
-  const contents = results.filter((c): c is TabContent => c !== null);
-
-  if (!contents.length) {
-    logger.warning('No valid context tab content available');
-    return null;
-  }
 
   const parts: string[] = [];
   let totalChars = 0;
 
-  for (const content of contents) {
+  for (let i = 0; i < results.length; i++) {
     const remaining = maxTotalChars - totalChars;
     if (remaining <= 0) break;
 
-    const perTabLimit = Math.min(maxCharsPerTab, remaining);
-    const formatted = formatTabContent(content, format, perTabLimit);
+    const content = results[i];
+    let formatted: string;
+    if (content) {
+      const perTabLimit = Math.min(maxCharsPerTab, remaining);
+      formatted = formatTabContent(content, format, perTabLimit);
+    } else {
+      // Content extraction failed — include metadata so the model knows the tab exists
+      const fallback = await buildTabMetadataFallback(limitedTabIds[i]);
+      if (!fallback) continue;
+      formatted = fallback;
+    }
     parts.push(formatted);
     totalChars += formatted.length;
   }
 
+  if (!parts.length) {
+    logger.warning('No valid context tab content or metadata available');
+    return null;
+  }
+
   const fullText = parts.join('\n\n');
-  logger.info(`Built context tabs message: ${contents.length} tabs, ${fullText.length} chars`);
+  logger.info(`Built context tabs message: ${parts.length} tabs, ${fullText.length} chars`);
 
   return new HumanMessage(fullText);
 }
@@ -117,32 +141,43 @@ export async function buildContextTabsMessageDynamic(
   });
 
   const results = await Promise.all(contentPromises);
-  const contents = results.filter((c): c is TabContent => c !== null);
+  const validContents = results.filter((c): c is TabContent => c !== null);
 
-  if (!contents.length) {
-    logger.warning('No valid context tab content available');
-    return null;
-  }
-
-  // Calculate per-tab limit based on available budget
-  const perTabLimit = calculatePerTabLimit(budget.availableChars, contents.length);
+  // Calculate per-tab limit based on available budget and valid content count
+  const perTabLimit =
+    validContents.length > 0
+      ? calculatePerTabLimit(budget.availableChars, validContents.length)
+      : budget.availableChars;
 
   const parts: string[] = [];
   let totalChars = 0;
 
-  for (const content of contents) {
+  for (let i = 0; i < results.length; i++) {
     const remaining = budget.availableChars - totalChars;
     if (remaining <= 0) break;
 
-    const limit = Math.min(perTabLimit, remaining);
-    const formatted = formatTabContent(content, format, limit);
+    const content = results[i];
+    let formatted: string;
+    if (content) {
+      const limit = Math.min(perTabLimit, remaining);
+      formatted = formatTabContent(content, format, limit);
+    } else {
+      const fallback = await buildTabMetadataFallback(tabIds[i]);
+      if (!fallback) continue;
+      formatted = fallback;
+    }
     parts.push(formatted);
     totalChars += formatted.length;
   }
 
+  if (!parts.length) {
+    logger.warning('No valid context tab content or metadata available');
+    return null;
+  }
+
   const fullText = parts.join('\n\n');
   logger.info(
-    `Built dynamic context tabs: ${contents.length} tabs, ${fullText.length}/${budget.availableChars} chars` +
+    `Built dynamic context tabs: ${parts.length} tabs, ${fullText.length}/${budget.availableChars} chars` +
       (budget.isFallback ? ' (fallback budget)' : ` (${budget.contextLength} token model)`),
   );
 
@@ -189,7 +224,7 @@ export async function getContextTabsContent(
   for (const tabId of tabIds) {
     if (totalChars >= maxTotalChars) break;
 
-    let content = contextTabCache.get(tabId);
+    let content = contextTabCache.get(tabId) ?? null;
     if (!content) {
       content = await extractTabContent(tabId);
     }

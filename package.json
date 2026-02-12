@@ -1,6 +1,6 @@
 {
   "name": "warpsurf",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Browser copilot for Chrome",
   "license": "Apache-2.0",
   "repository": {
@@ -61,7 +61,7 @@
     "tsx": "^4.19.0",
     "turbo": "^2.6.3",
     "typescript": "5.5.4",
-    "vite": "6.3.5"
+    "vite": "7.3.1"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json}": [
@@ -76,7 +76,14 @@
     "overrides": {
       "cross-spawn": "^7.0.5",
       "esbuild": "^0.25.1",
-      "nanoid": "3.3.11"
+      "nanoid": "3.3.11",
+      "form-data": "^4.0.4",
+      "@langchain/core": "^0.3.80",
+      "fast-xml-parser": "^5.3.4",
+      "@isaacs/brace-expansion": "^5.0.1",
+      "mdast-util-to-hast": "^13.2.1",
+      "diff": "^4.0.4",
+      "webpack": "^5.104.1"
     }
   }
 }

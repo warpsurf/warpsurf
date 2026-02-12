@@ -177,7 +177,7 @@ export async function planSubtasksFromQuery(
   let content: string;
   try {
     if (llm && typeof llm.invoke === 'function') {
-      const msgs = [new SystemMessage(system)];
+      const msgs: Array<SystemMessage | HumanMessage> = [new SystemMessage(system)];
 
       // Inject context tabs if available (for multi-agent planner)
       if (contextTabIds && contextTabIds.length > 0) {

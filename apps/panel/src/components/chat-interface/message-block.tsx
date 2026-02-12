@@ -2,7 +2,7 @@ import type { Message } from '@extension/storage';
 import { useMemo, useState, useRef, useEffect, lazy, Suspense, CSSProperties } from 'react';
 import { Actors } from '@extension/storage';
 import { FiCopy, FiClock, FiUser } from 'react-icons/fi';
-import { FaBrain, FaSearch, FaRobot, FaRandom, FaMagic, FaCog, FaChessKing } from 'react-icons/fa';
+import { FaBrain, FaSearch, FaRobot, FaRandom, FaMagic, FaCog, FaChessKing, FaWrench } from 'react-icons/fa';
 import { FaFileAlt } from 'react-icons/fa';
 import { ACTOR_PROFILES } from '../../types/message';
 import { formatUsd, formatTimestamp, formatDuration, hexToRgba } from '../../utils';
@@ -19,6 +19,7 @@ const ACTOR_TINTS: Record<string, { dark: string; light: string }> = {
   [Actors.SEARCH]: { dark: 'text-slate-200', light: 'text-teal-900' },
   [Actors.AUTO]: { dark: 'text-slate-200', light: 'text-gray-900' },
   [Actors.ESTIMATOR]: { dark: 'text-slate-200', light: 'text-amber-900' },
+  [Actors.TOOL]: { dark: 'text-slate-200', light: 'text-blue-900' },
   [Actors.AGENT_NAVIGATOR]: { dark: 'text-slate-200', light: 'text-amber-900' },
   default: { dark: 'text-slate-200', light: 'text-gray-800' },
 };
@@ -44,6 +45,10 @@ const ACTOR_GRADIENTS: Record<string, { dark: string; light: string }> = {
   [Actors.ESTIMATOR]: {
     dark: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.02) 100%)',
     light: 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(245,158,11,0.01) 100%)',
+  },
+  [Actors.TOOL]: {
+    dark: 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.02) 100%)',
+    light: 'linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(59,130,246,0.01) 100%)',
   },
   [Actors.AGENT_NAVIGATOR]: {
     dark: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.02) 100%)',
@@ -228,6 +233,7 @@ export default function MessageBlock({
     if (message.actor === Actors.CHAT) return isDarkMode ? '#8b5cf6' : '#a78bfa';
     if (message.actor === Actors.SEARCH) return isDarkMode ? '#14b8a6' : '#5eead4';
     if (message.actor === Actors.AUTO) return '#000000';
+    if (message.actor === Actors.TOOL) return isDarkMode ? '#8B4513' : '#A0522D';
     return isDarkMode ? '#f59e0b' : '#fbbf24';
   };
 
@@ -253,6 +259,7 @@ export default function MessageBlock({
     if (message.actor === Actors.CHAT) return <FaBrain className={ic} />;
     if (message.actor === Actors.SEARCH) return <FaSearch className={ic} />;
     if (message.actor === Actors.AUTO) return <FaRandom className={ic} />;
+    if (message.actor === Actors.TOOL) return <FaWrench className={ic} />;
     if (message.actor === Actors.MULTIAGENT) return <FaChessKing className={ic} />;
     if (isProgress || (isAgentAggregate && !isEstimator)) return <FaRobot className={ic} />;
     if (actor?.icon)
@@ -364,10 +371,10 @@ export default function MessageBlock({
   const truncateTabTitle = (title: string, maxLen = 25) =>
     title.length > maxLen ? title.slice(0, maxLen) + '...' : title;
 
-  // Tab context tooltip component (inline) - shows for user messages with context tabs
+  // Tab context tooltip component (inline) - shows for user/tool messages with context tabs
   const contextTabs: ContextTabInfo[] = metadata?.contextTabs || [];
   const TabContextChip =
-    isUser && contextTabs.length > 0 ? (
+    (isUser || message.actor === Actors.TOOL) && contextTabs.length > 0 ? (
       <span
         ref={tabContextTriggerRef}
         className="relative ml-1 align-middle inline-flex"
@@ -691,7 +698,7 @@ export default function MessageBlock({
             </>
           )}
         </div>
-        {!isProgress && onRetryRequest && message.actor === 'validator' && (
+        {!isProgress && onRetryRequest && message.actor === Actors.AGENT_VALIDATOR && (
           <div
             className={`mt-2 flex flex-wrap gap-2 ${isUser ? 'justify-end' : 'justify-start'} opacity-0 group-hover:opacity-100 transition-opacity`}>
             {['chat', 'search', 'agent'].map(type => (

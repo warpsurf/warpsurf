@@ -411,6 +411,22 @@ export default class MessageManager {
   }
 
   /**
+   * Remove any existing <context_tabs> SystemMessage blocks.
+   * Used to keep context tabs injection idempotent across workflow chaining.
+   */
+  public removeContextTabsBlocks(): void {
+    try {
+      const msgs: any[] = (this as any).history?.messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i]?.message;
+        if (m instanceof SystemMessage && typeof m.content === 'string' && m.content.startsWith('<context_tabs>')) {
+          (this as any).history.removeMessage(i);
+        }
+      }
+    } catch {}
+  }
+
+  /**
    * Upsert Chat History block: remove any existing Chat History blocks and insert the provided block
    * immediately after the system prompt (or after the task history marker if present).
    */
@@ -477,7 +493,7 @@ export default class MessageManager {
       message.content = message.content.map(item => {
         // Add null check to match Python's isinstance() behavior
         if (typeof item === 'object' && item !== null && 'text' in item) {
-          return { ...item, text: replaceSensitive(item.text) };
+          return { ...item, text: replaceSensitive(item.text as string) };
         }
         return item;
       });
@@ -499,7 +515,7 @@ export default class MessageManager {
         if ('image_url' in item) {
           tokens += this.settings.imageTokens;
         } else if (typeof item === 'object' && 'text' in item) {
-          tokens += this._countTextTokens(item.text);
+          tokens += this._countTextTokens(item.text as string);
         }
       }
     } else {

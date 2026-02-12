@@ -2,7 +2,7 @@ import { useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, generalSettingsStore } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import type { AgentType } from '../components/chat-interface/chat-input';
-import type { PaletteAction } from '../components/header/command-palette';
+import type { PaletteAction } from '../components/Header/command-palette';
 
 // Timeout for cancel confirmation before escalating to kill_all
 const CANCEL_TIMEOUT_MS = 5000;
@@ -483,7 +483,7 @@ export function usePanelHandlers(params: {
   );
 
   const handleOpenSettings = useCallback(
-    async (tab?: 'api-keys' | 'workflow-settings' | 'web-settings' | 'warnings' | 'help') => {
+    async (tab?: 'api-keys' | 'workflow-settings' | 'web-settings' | 'voice' | 'warnings' | 'help') => {
       try {
         if (tab) await chrome.storage.local.set({ 'settings.pendingTab': tab });
         chrome.runtime.openOptionsPage();

@@ -5,8 +5,12 @@ import type { AgentData, PreviewData } from '@src/types';
 interface UseAgentManagerConnectionResult {
   agents: AgentData[];
   isConnected: boolean;
+  portRef: React.MutableRefObject<chrome.runtime.Port | null>;
   sendNewTask: (task: string, agentType?: string, contextTabIds?: number[]) => Promise<void>;
   openSidepanelToSession: (sessionId: string) => void;
+  /** Register a listener for custom port message types */
+  addPortListener: (listener: (message: any) => void) => void;
+  removePortListener: (listener: (message: any) => void) => void;
 }
 
 export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
@@ -14,6 +18,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   const [isConnected, setIsConnected] = useState(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const customListenersRef = useRef<Set<(message: any) => void>>(new Set());
 
   const connect = useCallback(() => {
     try {
@@ -23,6 +28,13 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
 
       port.onMessage.addListener((message: any) => {
         const type = message?.type;
+
+        // Dispatch to custom listeners (e.g., STT results)
+        for (const listener of customListenersRef.current) {
+          try {
+            listener(message);
+          } catch {}
+        }
 
         if (type === 'agents-data') {
           const data = message.data?.agents || [];
@@ -185,10 +197,21 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     }
   }, []);
 
+  const addPortListener = useCallback((listener: (message: any) => void) => {
+    customListenersRef.current.add(listener);
+  }, []);
+
+  const removePortListener = useCallback((listener: (message: any) => void) => {
+    customListenersRef.current.delete(listener);
+  }, []);
+
   return {
     agents,
     isConnected,
+    portRef,
     sendNewTask,
     openSidepanelToSession,
+    addPortListener,
+    removePortListener,
   };
 }

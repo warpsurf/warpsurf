@@ -91,7 +91,7 @@ export class MultiAgentWorkflow {
   private emit(type: string, data: any) {
     const port = this.getPort();
     if (port) {
-      safePostMessage(port, { type, data });
+      safePostMessage(port as any, { type, data });
     } else {
       logger.info(`[MultiAgent] No port available for event: ${type}`);
     }
