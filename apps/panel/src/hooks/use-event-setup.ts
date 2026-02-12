@@ -1,4 +1,4 @@
-import { useMemo, useCallback, type MutableRefObject } from 'react';
+import { useMemo, useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, type Message } from '@extension/storage';
 import { createTaskEventHandler } from '../logic/handlers/create-task-event-handler';
 import { createPanelHandlers } from '../logic/port-handlers';
@@ -123,6 +123,55 @@ export function useEventSetup(params: {
     setCurrentTaskAgentType,
   } = params;
 
+  // Tracks which message keys we've already scheduled for persistence (per session).
+  // This prevents double-writes from React render replays / handler re-entrancy.
+  const persistedMessageKeysBySessionRef = useRef<Map<string, Set<string>>>(new Map());
+
+  const getPersistKeyForMessage = useCallback((m: any): string => {
+    const eventId = m?.eventId ? String(m.eventId) : '';
+    if (eventId) return `event:${eventId}`;
+    const actor = String(m?.actor || '');
+    const ts = Number(m?.timestamp || 0);
+    const content = String(m?.content ?? '').trim();
+    return `${actor}|${ts}|${content}`;
+  }, []);
+
+  const schedulePersistMessage = useCallback(
+    (sessionId: string, m: Message) => {
+      try {
+        const sid = String(sessionId || '').trim();
+        if (!sid) return;
+        const key = getPersistKeyForMessage(m as any);
+        if (!key) return;
+        const map = persistedMessageKeysBySessionRef.current;
+        const setForSession = map.get(sid) || new Set<string>();
+        if (setForSession.has(key)) return;
+        setForSession.add(key);
+        // Basic pruning to avoid unbounded growth per session
+        if (setForSession.size > 4000) {
+          let removed = 0;
+          for (const k of setForSession) {
+            setForSession.delete(k);
+            removed += 1;
+            if (removed >= 1000) break;
+          }
+        }
+        map.set(sid, setForSession);
+
+        const persist = () => {
+          chatHistoryStore.addMessage(sid, m).catch(err => params.logger?.error?.('Failed to save message:', err));
+        };
+        try {
+          // Prefer microtask queue so we don't perform async work inside the state updater synchronously.
+          queueMicrotask(persist);
+        } catch {
+          Promise.resolve().then(persist);
+        }
+      } catch {}
+    },
+    [getPersistKeyForMessage, params.logger],
+  );
+
   const appendMessage = useCallback(
     (newMessage: Message, sessionId?: string | null) => {
       const isProgressMessage =
@@ -134,20 +183,16 @@ export function useEventSetup(params: {
       if (sessionId !== undefined && sessionId !== null && currentSession) {
         if (String(sessionId) !== String(currentSession)) {
           // Message is for a different session - only persist, don't add to UI
-          if (!isProgressMessage && !incognitoMode) {
-            chatHistoryStore
-              .addMessage(sessionId, newMessage)
-              .catch(err => logger.error('Failed to save message to other session:', err));
-          }
+          if (!isProgressMessage && !incognitoMode) schedulePersistMessage(sessionId, newMessage);
           return;
         }
       }
 
-      let didAppend = false;
       const incomingEventId = (newMessage as any)?.eventId ? String((newMessage as any).eventId) : '';
       const normalizedContent = String(newMessage.content ?? '').trim();
       const incomingActor = String((newMessage as any)?.actor || '');
       const isSystemActor = incomingActor === Actors.SYSTEM || incomingActor.toLowerCase() === 'system';
+      const effectiveSessionId = sessionId !== undefined ? sessionId : sessionIdRef.current;
       setMessages((prev: Message[]) => {
         const filtered = prev.filter((msg, idx) => !(msg.content === 'Showing progress...' && idx === prev.length - 1));
         const hasDuplicate = filtered.some(msg => {
@@ -170,21 +215,18 @@ export function useEventSetup(params: {
           });
           if (hasNonSystemDuplicate) return filtered;
         }
-        didAppend = true;
+        // Persist immediately when we actually append to UI, using idempotency keys.
+        if (effectiveSessionId && !isProgressMessage && !incognitoMode) {
+          schedulePersistMessage(String(effectiveSessionId), newMessage);
+        }
         return [...filtered, newMessage];
       });
-      const effectiveSessionId = sessionId !== undefined ? sessionId : sessionIdRef.current;
-      if (didAppend && effectiveSessionId && !isProgressMessage && !incognitoMode) {
-        chatHistoryStore
-          .addMessage(effectiveSessionId, newMessage)
-          .catch(err => logger.error('Failed to save message:', err));
-      }
     },
-    [sessionIdRef, logger, incognitoMode, setMessages],
+    [sessionIdRef, incognitoMode, setMessages, schedulePersistMessage],
   );
 
   const persistAgentMessage = useCallback(
-    (actor: Actors, content: string, timestamp: number) => {
+    (actor: Actors, content: string, timestamp: number, eventId?: string) => {
       try {
         const actorText = String(actor || '').toLowerCase();
         if (actorText === String(Actors.CHAT).toLowerCase() || actorText === String(Actors.SEARCH).toLowerCase()) {
@@ -194,13 +236,10 @@ export function useEventSetup(params: {
         if (!effectiveSessionId || incognitoMode) return;
         const trimmed = String(content || '').trim();
         if (!trimmed) return;
+        const msg: any = { actor, content: trimmed, timestamp };
+        if (eventId) msg.eventId = String(eventId);
         chatHistoryStore
-          .getSession(effectiveSessionId)
-          .then(session => {
-            const exists = session?.messages?.some(m => String(m.content || '').trim() === trimmed);
-            if (exists) return;
-            return chatHistoryStore.addMessage(effectiveSessionId, { actor, content: trimmed, timestamp });
-          })
+          .addMessage(effectiveSessionId, msg)
           .catch(err => logger.error('Failed to save agent message:', err));
       } catch (e) {
         logger.error('persistAgentMessage failed', e);
