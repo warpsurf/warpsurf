@@ -12,7 +12,7 @@ const Branding: React.FC<BrandingProps> = ({ isDarkMode, extensionVersion, relea
     <div className="flex items-center gap-3">
       {extensionVersion ? (
         <div className={`flex items-center gap-1 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-          <span>Warpsurf version {extensionVersion}</span>
+          <span>warpsurf {extensionVersion}</span>
           <div className="relative inline-flex items-center group">
             <FiHelpCircle
               size={14}

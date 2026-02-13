@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export type ActionKey = 'newChat' | 'history' | 'dashboard' | 'agentSettings' | 'feedback' | 'fish' | 'settings';
+export type ActionKey = 'newChat' | 'dashboard' | 'settings' | 'theme' | 'feedback' | 'fish';
 
 interface UseHeaderOverflowProps {
   pauseRecalculation?: boolean;
@@ -11,15 +11,7 @@ export function useHeaderOverflow({ pauseRecalculation }: UseHeaderOverflowProps
   const moreButtonMeasureRef = useRef<HTMLButtonElement>(null);
   const actionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const measureRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const internalKeys: readonly ActionKey[] = [
-    'settings',
-    'newChat',
-    'history',
-    'dashboard',
-    'agentSettings',
-    'feedback',
-    'fish',
-  ];
+  const internalKeys: readonly ActionKey[] = ['newChat', 'dashboard', 'settings', 'theme', 'fish', 'feedback'];
   const [visibleActionsCount, setVisibleActionsCount] = useState<number>(internalKeys.length);
   const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(false);
 

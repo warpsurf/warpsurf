@@ -1,5 +1,4 @@
 import React from 'react';
-import { FiHelpCircle } from 'react-icons/fi';
 import { FaChrome } from 'react-icons/fa';
 import { RxGithubLogo } from 'react-icons/rx';
 
@@ -9,7 +8,7 @@ interface FeedbackMenuProps {
   onToggleOpen: () => void;
 }
 
-const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isDarkMode, open, onToggleOpen }) => {
+const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isDarkMode, open }) => {
   return (
     <div className="relative inline-block flex-shrink-0" data-dropdown>
       <div

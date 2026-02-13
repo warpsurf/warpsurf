@@ -758,11 +758,7 @@ const SidePanel = () => {
     <>
       <div
         ref={panelRef}
-        className={`relative panel-card liquid-glass flex h-screen flex-col overflow-hidden rounded-2xl ${isDarkMode ? 'text-slate-200' : 'text-gray-900'}`}>
-        <div className="pointer-events-none absolute inset-0 z-0">
-          <div
-            className={`${isDarkMode ? 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(245,158,11,var(--wallpaper-a2)),transparent)]' : 'h-full w-full bg-[radial-gradient(80%_50%_at_20%_0%,rgba(124,58,237,var(--wallpaper-a1)),transparent),radial-gradient(70%_50%_at_80%_100%,rgba(13,148,136,var(--wallpaper-a2)),transparent)]'}`}></div>
-        </div>
+        className={`relative panel-card flex h-screen flex-col overflow-hidden rounded-xl border ${isDarkMode ? 'border-[#2f2f29] bg-[#121210] text-slate-200' : 'border-[#deded7] bg-[#f7f7f5] text-gray-900'}`}>
         {hasProviders !== null && hasConfiguredModels !== null && (!hasProviders || !hasConfiguredModels) && (
           <div className="absolute top-16 left-1/2 z-20 w-[90%] max-w-2xl -translate-x-1/2">
             <SetupChecklist
@@ -805,7 +801,7 @@ const SidePanel = () => {
               if (feedOnClick) fishRef.current?.dropFoodAtClientPosition(e.clientX, e.clientY);
             } catch {}
           }}>
-          <header className="header glass-header sticky top-0 z-10">
+          <header className={`header sticky top-0 z-10 ${isDarkMode ? 'bg-[#181816]' : 'bg-[#fbfbf9]'}`}>
             {showHistory || showPopulations || viewDisplayMode ? (
               <button
                 type="button"

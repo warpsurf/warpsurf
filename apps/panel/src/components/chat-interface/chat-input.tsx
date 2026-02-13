@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
+import { FiChevronDown } from 'react-icons/fi';
 import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, MicrophoneButton } from '@extension/shared';
 import TabContextSelector from './tab-context-selector';
 import type { ContextTabInfo } from './types';
@@ -99,6 +100,7 @@ interface ChatInputProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
+  expandedComposer?: boolean;
 }
 
 const MIN_HEIGHT = 40;
@@ -138,6 +140,7 @@ export default function ChatInput({
   audioLevel = 0,
   sttConfigured = false,
   onOpenVoiceSettings,
+  expandedComposer = false,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -146,7 +149,7 @@ export default function ChatInput({
   const [localContextTabIds, setLocalContextTabIds] = useState<number[]>([]);
   const contextTabIds = externalContextTabIds ?? localContextTabIds;
   const setContextTabIds = onContextTabsChange ?? setLocalContextTabIds;
-  const [textareaHeight, setTextareaHeight] = useState(DEFAULT_HEIGHT);
+  const [textareaHeight, setTextareaHeight] = useState(expandedComposer ? 220 : DEFAULT_HEIGHT);
   const [isResizing, setIsResizing] = useState(false);
   const isSendButtonDisabled = useMemo(() => disabled || text.trim() === '', [disabled, text]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -217,10 +220,16 @@ export default function ChatInput({
   );
 
   useEffect(() => {
+    setTextareaHeight(expandedComposer ? 220 : DEFAULT_HEIGHT);
+  }, [expandedComposer]);
+
+  useEffect(() => {
     if (!isResizing) return;
     const handleMouseMove = (e: MouseEvent) => {
       const delta = resizeStartY.current - e.clientY;
-      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeStartHeight.current + delta));
+      const maxHeight = expandedComposer ? 420 : MAX_HEIGHT;
+      const minHeight = expandedComposer ? 140 : MIN_HEIGHT;
+      const newHeight = Math.min(maxHeight, Math.max(minHeight, resizeStartHeight.current + delta));
       setTextareaHeight(newHeight);
     };
     const handleMouseUp = () => setIsResizing(false);
@@ -230,7 +239,7 @@ export default function ChatInput({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [expandedComposer, isResizing]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -395,7 +404,7 @@ export default function ChatInput({
                 ? 'bg-slate-800 text-gray-200'
                 : 'bg-white'
           }`}
-          placeholder="What can I help you with? Enter / for chat options."
+          placeholder="What can I help you with? Enter / for workflow commands."
           aria-label="Message input"
         />
         {showSlashMenu && (
@@ -520,45 +529,26 @@ export default function ChatInput({
               Replay
             </button>
           ) : (
-            <div className="flex items-center gap-1 flex-wrap">
-              {/* Agent Selector Buttons */}
-              <div className="flex items-center gap-1">
-                {AGENT_OPTIONS.map(option => (
-                  <button
-                    key={option.type}
-                    type="button"
-                    onClick={() => setSelectedAgent(option.type)}
-                    disabled={disabled}
-                    title={option.description}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors border ${
-                      selectedAgent === option.type
-                        ? option.type === WorkflowType.CHAT
-                          ? isDarkMode
-                            ? 'bg-violet-400 text-white border-violet-400'
-                            : 'bg-violet-300 text-white border-violet-300'
-                          : option.type === WorkflowType.SEARCH
-                            ? isDarkMode
-                              ? 'bg-teal-400 text-white border-teal-400'
-                              : 'bg-teal-300 text-white border-teal-300'
-                            : option.type === WorkflowType.AGENT
-                              ? isDarkMode
-                                ? 'bg-amber-400 text-white border-amber-400'
-                                : 'bg-amber-300 text-white border-amber-300'
-                              : option.type === WorkflowType.MULTIAGENT
-                                ? isDarkMode
-                                  ? 'bg-orange-400 text-white border-orange-400'
-                                  : 'bg-orange-300 text-white border-orange-300'
-                                : 'bg-black/70 text-white border-black/70'
-                        : disabled
-                          ? 'cursor-not-allowed opacity-50'
-                          : isDarkMode
-                            ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                            : 'bg-white text-black border-gray-200 hover:bg-gray-100'
-                    }`}>
-                    {option.icon}
-                    <span className="text-[11px] font-medium">{option.name}</span>
-                  </button>
-                ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative inline-flex items-center">
+                <select
+                  value={selectedAgent}
+                  onChange={e => setSelectedAgent(e.target.value as WorkflowType)}
+                  disabled={disabled}
+                  className={`appearance-none rounded-md border border-transparent px-1.5 pr-5 py-1 text-[11px] focus:outline-none ${
+                    isDarkMode
+                      ? 'bg-transparent text-slate-300 hover:bg-white/5 focus:bg-white/5'
+                      : 'bg-transparent text-gray-600 hover:bg-black/5 focus:bg-black/5'
+                  }`}>
+                  {AGENT_OPTIONS.map(option => (
+                    <option key={option.type} value={option.type}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown
+                  className={`pointer-events-none absolute right-1 h-3 w-3 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}
+                />
               </div>
 
               {/* Send Button */}

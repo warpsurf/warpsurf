@@ -244,9 +244,8 @@ export function ChatScreen(props: ChatScreenProps) {
         <>
           {/* When no messages - show input at top, then examples */}
           {messages.length === 0 && !forceChatView && (
-            <>
-              <div
-                className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-200'} mb-2 p-2 shadow-sm backdrop-blur-sm`}>
+            <div className="flex h-full min-h-0 flex-1 flex-col">
+              <div className="px-2 pt-2">
                 <ChatInput
                   isDarkMode={isDarkMode}
                   disabled={!inputEnabled || isHistoricalSession}
@@ -282,6 +281,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   audioLevel={audioLevelProp}
                   sttConfigured={sttConfiguredProp}
                   onOpenVoiceSettings={onOpenVoiceSettings}
+                  expandedComposer={true}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -301,24 +301,26 @@ export function ChatScreen(props: ChatScreenProps) {
               <div className={`${isDarkMode ? 'text-slate-400' : 'text-gray-500'} px-3 py-2 text-[11px]`}>
                 {INLINE_CHAT_DISCLAIMER}
               </div>
-              <AvailableChatSection
-                isDarkMode={isDarkMode}
-                favoritePrompts={favoritePrompts}
-                onExampleSelect={(content, agentType) => {
-                  try {
-                    if (setInputTextRef.current) setInputTextRef.current(content);
-                    if (setSelectedAgentRef.current && agentType) setSelectedAgentRef.current(agentType);
-                  } catch (e) {
-                    logger.error('Example select failed:', e);
-                  }
-                }}
-                onBookmarkSelect={handleBookmarkSelect}
-                onBookmarkAdd={handleBookmarkAdd}
-                onBookmarkUpdate={handleBookmarkUpdate}
-                onBookmarkDelete={handleBookmarkDelete}
-                onBookmarkReorder={handleBookmarkReorder}
-              />
-            </>
+              <div className="mt-auto min-h-0 max-h-[42%] overflow-hidden pb-2">
+                <AvailableChatSection
+                  isDarkMode={isDarkMode}
+                  favoritePrompts={favoritePrompts}
+                  onExampleSelect={(content, agentType) => {
+                    try {
+                      if (setInputTextRef.current) setInputTextRef.current(content);
+                      if (setSelectedAgentRef.current && agentType) setSelectedAgentRef.current(agentType);
+                    } catch (e) {
+                      logger.error('Example select failed:', e);
+                    }
+                  }}
+                  onBookmarkSelect={handleBookmarkSelect}
+                  onBookmarkAdd={handleBookmarkAdd}
+                  onBookmarkUpdate={handleBookmarkUpdate}
+                  onBookmarkDelete={handleBookmarkDelete}
+                  onBookmarkReorder={handleBookmarkReorder}
+                />
+              </div>
+            </div>
           )}
 
           {/* When messages exist or forceChatView - show messages at top, input at bottom */}

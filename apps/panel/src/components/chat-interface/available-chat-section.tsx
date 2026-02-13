@@ -10,7 +10,13 @@ type Props = {
   favoritePrompts: FavoritePrompt[];
   onBookmarkSelect: (content: string, agentType?: AgentType) => void;
   onBookmarkAdd: (title: string, content: string, agentType?: AgentType, tags?: string[]) => Promise<void> | void;
-  onBookmarkUpdate: (id: number, title: string, content: string, agentType?: AgentType, tags?: string[]) => Promise<void> | void;
+  onBookmarkUpdate: (
+    id: number,
+    title: string,
+    content: string,
+    agentType?: AgentType,
+    tags?: string[],
+  ) => Promise<void> | void;
   onBookmarkDelete: (id: number) => void;
   onBookmarkReorder: (draggedId: number, targetId: number) => void;
 };
@@ -27,12 +33,9 @@ const AvailableChatSection: React.FC<Props> = ({
 }) => {
   return (
     <>
-      <div className="flex-1 overflow-y-auto">
+      <div className="h-full overflow-y-auto">
         <div className="p-2">
-          <ExampleUses
-            isDarkMode={isDarkMode}
-            onSelect={onExampleSelect}
-          />
+          <ExampleUses isDarkMode={isDarkMode} onSelect={onExampleSelect} defaultExpanded={false} />
         </div>
         <BookmarkList
           bookmarks={favoritePrompts}
@@ -42,6 +45,7 @@ const AvailableChatSection: React.FC<Props> = ({
           onBookmarkDelete={onBookmarkDelete}
           onBookmarkReorder={onBookmarkReorder}
           isDarkMode={isDarkMode}
+          defaultExpanded={false}
         />
       </div>
     </>
@@ -49,5 +53,3 @@ const AvailableChatSection: React.FC<Props> = ({
 };
 
 export default AvailableChatSection;
-
-

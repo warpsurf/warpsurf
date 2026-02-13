@@ -376,8 +376,8 @@ export default function TabContextSelector({
   );
 
   // Button text based on mode
-  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Add tab as context';
-  const ButtonIcon = autoContextEnabled ? FaBolt : FaPlus;
+  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : '+';
+  const ButtonIcon = autoContextEnabled ? FaBolt : null;
 
   return (
     <div ref={containerRef} className="relative">
@@ -400,7 +400,7 @@ export default function TabContextSelector({
                 ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}>
-        <ButtonIcon className="w-2.5 h-2.5" />
+        {ButtonIcon ? <ButtonIcon className="w-2.5 h-2.5" /> : null}
         <span>{buttonLabel}</span>
         {!autoContextEnabled && selectedTabIds.length > 0 && (
           <span
