@@ -9,6 +9,7 @@ import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
 import { calculateCost } from '@src/utils/cost-calculator';
+import { toUIErrorPayload } from '@src/workflows/models/model-error';
 
 const logger = createLogger('ToolWorkflow');
 
@@ -169,10 +170,10 @@ export class ToolWorkflow {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
         return { id: 'Tool', error: 'cancelled' };
       }
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Tool workflow failed: ${errorMessage}`);
-      this.context.emitEvent(Actors.TOOL, ExecutionState.STEP_FAIL, errorMessage);
-      return { id: 'Tool', error: errorMessage };
+      const uiError = toUIErrorPayload(error, 'Request failed');
+      logger.error(`Tool workflow failed: ${uiError.error.rawMessage}`);
+      this.context.emitEvent(Actors.TOOL, ExecutionState.STEP_FAIL, uiError.message, { error: uiError.error } as any);
+      return { id: 'Tool', error: uiError.message };
     }
   }
 

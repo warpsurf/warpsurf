@@ -11,6 +11,7 @@ import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
 import { calculateCost } from '@src/utils/cost-calculator';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
+import { toUIErrorPayload } from '@src/workflows/models/model-error';
 
 const logger = createLogger('ChatWorkflow');
 
@@ -100,10 +101,10 @@ export class ChatWorkflow {
         this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
         return { id: 'Chat', error: 'cancelled' };
       }
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Chat failed: ${errorMessage}`);
-      this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_FAIL, errorMessage);
-      return { id: 'Chat', error: errorMessage };
+      const uiError = toUIErrorPayload(error, 'Request failed');
+      logger.error(`Chat failed: ${uiError.error.rawMessage}`);
+      this.context.emitEvent(Actors.CHAT, ExecutionState.STEP_FAIL, uiError.message, { error: uiError.error } as any);
+      return { id: 'Chat', error: uiError.message };
     }
   }
 
