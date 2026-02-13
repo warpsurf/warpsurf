@@ -24,40 +24,21 @@ const ACTOR_TINTS: Record<string, { dark: string; light: string }> = {
   default: { dark: 'text-slate-200', light: 'text-gray-800' },
 };
 
-// Gradient backgrounds that fade to transparent
+// Gradient backgrounds - only user messages have background, assistant messages have none
 const ACTOR_GRADIENTS: Record<string, { dark: string; light: string }> = {
   [Actors.USER]: {
-    dark: 'linear-gradient(135deg, rgba(34,197,94,0.15) 0%, rgba(34,197,94,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(34,197,94,0.12) 0%, rgba(34,197,94,0.02) 100%)',
+    // Subtle, less contrasting background for user messages
+    dark: 'linear-gradient(135deg, rgba(100,116,139,0.12) 0%, rgba(100,116,139,0.04) 100%)',
+    light: 'linear-gradient(135deg, rgba(100,116,139,0.08) 0%, rgba(100,116,139,0.02) 100%)',
   },
-  [Actors.CHAT]: {
-    dark: 'linear-gradient(135deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(139,92,246,0.10) 0%, rgba(139,92,246,0.01) 100%)',
-  },
-  [Actors.SEARCH]: {
-    dark: 'linear-gradient(135deg, rgba(20,184,166,0.18) 0%, rgba(20,184,166,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(20,184,166,0.10) 0%, rgba(20,184,166,0.01) 100%)',
-  },
-  [Actors.AUTO]: {
-    dark: 'linear-gradient(135deg, rgba(30,30,30,0.25) 0%, rgba(30,30,30,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(100,100,100,0.08) 0%, rgba(100,100,100,0.01) 100%)',
-  },
-  [Actors.ESTIMATOR]: {
-    dark: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(245,158,11,0.01) 100%)',
-  },
-  [Actors.TOOL]: {
-    dark: 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(59,130,246,0.01) 100%)',
-  },
-  [Actors.AGENT_NAVIGATOR]: {
-    dark: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(245,158,11,0.01) 100%)',
-  },
-  default: {
-    dark: 'linear-gradient(135deg, rgba(51,65,85,0.25) 0%, rgba(51,65,85,0.02) 100%)',
-    light: 'linear-gradient(135deg, rgba(100,116,139,0.08) 0%, rgba(100,116,139,0.01) 100%)',
-  },
+  // All assistant message types have no background
+  [Actors.CHAT]: { dark: 'none', light: 'none' },
+  [Actors.SEARCH]: { dark: 'none', light: 'none' },
+  [Actors.AUTO]: { dark: 'none', light: 'none' },
+  [Actors.ESTIMATOR]: { dark: 'none', light: 'none' },
+  [Actors.TOOL]: { dark: 'none', light: 'none' },
+  [Actors.AGENT_NAVIGATOR]: { dark: 'none', light: 'none' },
+  default: { dark: 'none', light: 'none' },
 };
 
 function ProgressBar({
@@ -214,10 +195,11 @@ export default function MessageBlock({
       ? 'text-slate-200'
       : 'text-gray-800'
     : (ACTOR_TINTS[message.actor] || ACTOR_TINTS.default)[isDarkMode ? 'dark' : 'light'];
-  const actorGradient = useDynamicColor
-    ? `linear-gradient(135deg, ${hexToRgba(agentColorHex!, isDarkMode ? 0.15 : 0.1)} 0%, ${hexToRgba(agentColorHex!, 0.02)} 100%)`
-    : (ACTOR_GRADIENTS[message.actor] || ACTOR_GRADIENTS.default)[isDarkMode ? 'dark' : 'light'];
-  const dynamicStyles: CSSProperties = { background: actorGradient };
+  // Only user messages have background - assistant messages have none (even with dynamic color)
+  const actorGradient = isUser
+    ? (ACTOR_GRADIENTS[message.actor] || ACTOR_GRADIENTS.default)[isDarkMode ? 'dark' : 'light']
+    : 'none';
+  const dynamicStyles: CSSProperties = actorGradient !== 'none' ? { background: actorGradient } : {};
   const widthClass = isUser ? 'w-3/4' : 'w-full';
   const bubbleClass = compactMode
     ? `relative ${widthClass} rounded-xl px-2.5 py-1.5`
