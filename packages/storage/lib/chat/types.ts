@@ -15,6 +15,9 @@ export enum Actors {
   TOOL = 'tool',
 }
 
+/** Workflow status hints for progress messages (transient, not persisted) */
+export type WorkflowStatusHint = 'routing' | 'configuring' | 'thinking' | 'searching' | 'navigating';
+
 export interface Message {
   actor: Actors;
   content: string;
@@ -24,6 +27,11 @@ export interface Message {
    * (Used to prevent duplicate persistence when the same event is saved via multiple paths.)
    */
   eventId?: string;
+  /**
+   * Transient UI hint for workflow-specific status messages during progress.
+   * Not persisted to storage - only used for live display in the side panel.
+   */
+  statusHint?: WorkflowStatusHint;
 }
 
 export interface ChatMessage extends Message {

@@ -26,10 +26,10 @@ export const createChatHandler: EventHandlerCreator = deps => {
           const lastMsg = prev[prev.length - 1];
           if (lastMsg?.content === 'Showing progress...') {
             const updated = [...prev];
-            updated[prev.length - 1] = { ...lastMsg, actor: Actors.CHAT };
+            updated[prev.length - 1] = { ...lastMsg, actor: Actors.CHAT, statusHint: 'thinking' };
             return updated;
           }
-          return [...prev, { actor: Actors.CHAT, content: 'Showing progress...', timestamp }];
+          return [...prev, { actor: Actors.CHAT, content: 'Showing progress...', timestamp, statusHint: 'thinking' }];
         });
         lastAgentMessageRef.current = { timestamp, actor };
         break;
@@ -80,9 +80,25 @@ export const createChatHandler: EventHandlerCreator = deps => {
         break;
 
       case ExecutionState.STEP_OK:
-      case ExecutionState.STEP_FAIL:
       case ExecutionState.STEP_CANCEL:
         break;
+
+      case ExecutionState.STEP_FAIL: {
+        const fallback = 'Request failed';
+        const errorMessage = data?.error?.userMessage || content || fallback;
+        setMessages((prev: any[]) => {
+          const progressIdx = prev.findIndex((m, i) => i === prev.length - 1 && m.content === 'Showing progress...');
+          if (progressIdx !== -1) {
+            const updated = [...prev];
+            updated[progressIdx] = { actor: Actors.CHAT, content: errorMessage, timestamp };
+            return updated;
+          }
+          return [...prev, { actor: Actors.CHAT, content: errorMessage, timestamp }];
+        });
+        persistAgentMessage(actor, errorMessage, timestamp, (event as any)?.eventId || data?.eventId);
+        lastAgentMessageRef.current = { timestamp, actor };
+        break;
+      }
     }
   };
 };

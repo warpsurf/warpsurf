@@ -40,10 +40,13 @@ export const createToolHandler: EventHandlerCreator = deps => {
           const lastMsg = prev[prev.length - 1];
           if (lastMsg?.content === 'Showing progress...') {
             const updated = [...prev];
-            updated[prev.length - 1] = { ...lastMsg, actor: Actors.TOOL };
+            updated[prev.length - 1] = { ...lastMsg, actor: Actors.TOOL, statusHint: 'configuring' };
             return updated;
           }
-          return [...prev, { actor: Actors.TOOL, content: 'Showing progress...', timestamp }];
+          return [
+            ...prev,
+            { actor: Actors.TOOL, content: 'Showing progress...', timestamp, statusHint: 'configuring' },
+          ];
         });
         lastAgentMessageRef.current = { timestamp, actor };
         break;

@@ -159,7 +159,11 @@ export function useEventSetup(params: {
         map.set(sid, setForSession);
 
         const persist = () => {
-          chatHistoryStore.addMessage(sid, m).catch(err => params.logger?.error?.('Failed to save message:', err));
+          // Strip transient UI fields (like statusHint) before persistence
+          const { statusHint, ...messageToStore } = m as any;
+          chatHistoryStore
+            .addMessage(sid, messageToStore)
+            .catch(err => params.logger?.error?.('Failed to save message:', err));
         };
         try {
           // Prefer microtask queue so we don't perform async work inside the state updater synchronously.

@@ -32,7 +32,9 @@ export const createValidatorHandler: EventHandlerCreator = deps => {
       case ExecutionState.STEP_START:
         // Always create aggregate root on first STEP_START, even without content
         if (!deps.agentTraceRootIdRef.current) {
-          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Validating...', timestamp, deps);
+          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Validating...', timestamp, deps, {
+            statusHint: 'navigating',
+          });
         }
         if (deps.agentTraceRootIdRef.current) {
           addTraceItem(Actors.AGENT_VALIDATOR, content || 'Validating output...', timestamp, deps);

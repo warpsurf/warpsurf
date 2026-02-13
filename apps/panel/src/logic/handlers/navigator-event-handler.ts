@@ -78,7 +78,9 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
         setIsAgentModeActive(true);
         // Always create aggregate root on first STEP_START, even without content
         if (!deps.agentTraceRootIdRef.current) {
-          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Initializing browser agent...', timestamp, deps);
+          createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Initializing browser agent...', timestamp, deps, {
+            statusHint: 'navigating',
+          });
         }
         if (deps.agentTraceRootIdRef.current) {
           addTraceItem(

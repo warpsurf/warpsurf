@@ -5,10 +5,10 @@ import { ExecutionState } from '../../types/event';
 import type { EventHandlerCreator } from './create-task-event-handler';
 
 /** Creates the Auto event handler */
-export const createAutoHandler: EventHandlerCreator = (deps) => {
+export const createAutoHandler: EventHandlerCreator = deps => {
   const { logger, setMessages, lastAgentMessageRef } = deps;
 
-  return (event) => {
+  return event => {
     const actor = event.actor || Actors.AUTO;
     const state = event.state;
     const timestamp = event.timestamp || Date.now();
@@ -21,30 +21,48 @@ export const createAutoHandler: EventHandlerCreator = (deps) => {
           const lastMsg = prev[prev.length - 1];
           if (lastMsg && lastMsg.content === 'Showing progress...') {
             const updated = [...prev];
-            updated[prev.length - 1] = { ...lastMsg, actor: Actors.AUTO };
+            updated[prev.length - 1] = { ...lastMsg, actor: Actors.AUTO, statusHint: 'routing' };
             return updated;
           }
-          return [...prev, { actor: Actors.AUTO, content: 'Showing progress...', timestamp }];
+          return [...prev, { actor: Actors.AUTO, content: 'Showing progress...', timestamp, statusHint: 'routing' }];
         });
         lastAgentMessageRef.current = { timestamp, actor };
         break;
 
       case ExecutionState.STEP_OK: {
-        // Infer chosen actor from auto result content
+        // Infer chosen actor and status hint from auto result content
         let chosenActor: any = null;
+        let newStatusHint: string = 'routing';
         if (content) {
           const lowerContent = content.toLowerCase();
-          if (lowerContent.includes('chat')) chosenActor = Actors.CHAT;
-          else if (lowerContent.includes('search')) chosenActor = Actors.SEARCH;
-          else if (lowerContent.includes('agent')) chosenActor = Actors.AGENT_NAVIGATOR;
+          if (lowerContent.includes('chat')) {
+            chosenActor = Actors.CHAT;
+            newStatusHint = 'thinking';
+          } else if (lowerContent.includes('search')) {
+            chosenActor = Actors.SEARCH;
+            newStatusHint = 'searching';
+          } else if (lowerContent.includes('agent')) {
+            chosenActor = Actors.AGENT_NAVIGATOR;
+            newStatusHint = 'navigating';
+          } else if (lowerContent.includes('tool')) {
+            chosenActor = Actors.TOOL;
+            newStatusHint = 'configuring';
+          }
         }
         if (chosenActor) {
           setMessages((prev: any[]) => {
-            const lastIndex = prev.findIndex((msg: any, idx: number) =>
-              idx === prev.length - 1 && msg.actor === Actors.AUTO && msg.content === 'Showing progress...');
+            const lastIndex = prev.findIndex(
+              (msg: any, idx: number) =>
+                idx === prev.length - 1 && msg.actor === Actors.AUTO && msg.content === 'Showing progress...',
+            );
             if (lastIndex !== -1) {
               const updated = [...prev];
-              updated[lastIndex] = { ...updated[lastIndex], actor: chosenActor, content: 'Showing progress...' };
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                actor: chosenActor,
+                content: 'Showing progress...',
+                statusHint: newStatusHint,
+              };
               return updated;
             }
             return prev;
@@ -63,4 +81,3 @@ export const createAutoHandler: EventHandlerCreator = (deps) => {
     }
   };
 };
-

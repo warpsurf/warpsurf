@@ -165,6 +165,7 @@ export default function MessageBlock({
   if (!message.actor) return <div />;
   const isUser = message.actor === Actors.USER;
   const isProgress = message.content === 'Showing progress...';
+  const statusHint = (message as any).statusHint as string | undefined;
   const isEstimator = message.actor === Actors.ESTIMATOR;
   const isEstimatorActive = isEstimator && metadata?.traceItems && !metadata?.estimation && !metadata?.isCompleted;
   const content = useMemo(() => String(message.content || ''), [message.content]);
@@ -484,9 +485,22 @@ export default function MessageBlock({
         <div className="float-right flex items-center gap-1 ml-2">
           {isPinned && <span className={`text-[10px] ${isDarkMode ? 'text-amber-300' : 'text-amber-600'}`}>📌</span>}
           {isAgentAggregate && isAgentWorking && (
-            <span
-              className={`inline-block h-3 w-3 rounded-full border-2 border-t-transparent animate-spin ${isDarkMode ? 'border-slate-400' : 'border-gray-500'}`}
-            />
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`inline-block h-3 w-3 rounded-full border-2 border-t-transparent animate-spin ${isDarkMode ? 'border-slate-400' : 'border-gray-500'}`}
+              />
+              {statusHint && (
+                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {{
+                    routing: 'Routing',
+                    configuring: 'Configuring',
+                    thinking: 'Thinking',
+                    searching: 'Searching',
+                    navigating: 'Navigating',
+                  }[statusHint] || ''}
+                </span>
+              )}
+            </span>
           )}
           {isAgentAggregate && (
             <button
@@ -535,7 +549,15 @@ export default function MessageBlock({
                   />
                 ))}
               </span>
-              <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>working...</span>
+              <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {{
+                  routing: 'Routing',
+                  configuring: 'Configuring',
+                  thinking: 'Thinking',
+                  searching: 'Searching',
+                  navigating: 'Navigating',
+                }[statusHint as string] || 'working...'}
+              </span>
             </span>
           ) : isEstimatorActive ? (
             <span className="inline-flex items-center gap-1">

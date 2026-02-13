@@ -418,12 +418,13 @@ export function createAggregateRoot(
   content: string,
   timestamp: number,
   deps: TaskEventHandlerDeps,
+  options?: { statusHint?: string },
 ): string {
   const rootId = `${timestamp}-${actor}`;
   deps.setAgentTraceRootId(rootId);
   deps.agentTraceRootIdRef.current = rootId;
   deps.agentTraceActiveRef.current = true;
-  deps.appendMessage({ actor, content, timestamp } as any);
+  deps.appendMessage({ actor, content, timestamp, statusHint: options?.statusHint } as any);
   deps.lastAgentMessageRef.current = { timestamp, actor };
   // CRITICAL: Store rootId as __sessionRootId so it persists across session switches
   deps.setMessageMetadata(prev => {
