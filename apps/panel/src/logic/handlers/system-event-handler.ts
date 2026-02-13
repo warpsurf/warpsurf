@@ -320,6 +320,8 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           if (deps.getCurrentTaskAgentType() !== 'multiagent' && deps.agentTraceRootIdRef.current) {
             addTraceItem(Actors.SYSTEM, failText, timestamp, deps);
             markAggregateComplete(deps);
+          } else if (deps.getCurrentTaskAgentType() !== 'multiagent') {
+            deps.appendMessage({ actor: Actors.SYSTEM, content: failText, timestamp });
           }
           try {
             const taskId = String(data?.taskId || deps.sessionIdRef.current || '');

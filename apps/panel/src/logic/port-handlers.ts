@@ -451,7 +451,13 @@ export function createPanelHandlers(deps: any): any {
     onError: (message: any) => {
       if (deps.setHistoryContextLoading) deps.setHistoryContextLoading(false);
 
-      const msgText = message.error || '';
+      const msgPayload = message.error;
+      const typedError = (message as any)?.data?.error;
+      const msgText =
+        (typeof msgPayload === 'string' ? msgPayload : msgPayload?.message) ||
+        typedError?.userMessage ||
+        typedError?.rawMessage ||
+        '';
       if (msgText && msgText !== 'Unknown message type') {
         const isAbortLike =
           String(msgText).toLowerCase().includes('abort') || String(msgText).toLowerCase().includes('cancel');
