@@ -30,14 +30,7 @@
 
 ## <img src="apps/background/public/warpsurf_logo.png" alt="warpsurf" height="50" align="center"/> What is warpsurf?
 
-**warpsurf**...
-<br>
-is a browser extension that brings AI-powered web automation directly into Chrome<br>
-runs locally in your browser ensuring your data and authentication stays in your browser<br>
-can chat, search, and autonomously navigate pages using single or multi-agent workflows<br>
-agents can operate in parallel in their own tab groups, which are streamed for real-time monitoring<br>
-<br>
-**We know a browser copilot needs to operate quickly to be useful. References to "warpspeed" and fast browser automation are aspirational. We aren't there yet but this is the goal!**
+**warpsurf** is an AI-powered browser copilot built for speed. Chat, search, and autonomously navigate the web.
 
 
 ## The warpsurf vision
@@ -151,16 +144,6 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 | 🎮 **Take Control** | Agent workflows pass control back to you at critical junctures |
 | 📜 **History** | Optionally use your browser history to improve performance |
 | ⏱️ **Task Estimation** | Preview task duration and cost before initialisation |
-
-## Possible Future Features
-
-| Feature | Description |
-|---------|-------------|
-| ♻️ **Trajectory Caching** | Cache past agent trajectories and use similarity search for in-context examples |
-| ⏰ **Background Tasks** | Run recurring or scheduled automations in the background |
-| 🧩 **Plan Editing** | Inspect and edit multi-agent task plans before and during execution |
-| 🧬 **User Memory** | Maintain a persistent user memory file to personalise behaviour across sessions |
-| ✍ **Prompts** | Improved systems prompts |
 
 ## Installation & Usage
 
