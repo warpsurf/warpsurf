@@ -132,7 +132,10 @@ export class NativeGrokChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
 
     const payload = this.toOpenAIMessages(messages);
@@ -152,12 +155,20 @@ export class NativeGrokChatModel {
 
     const retries = Math.max(0, this.maxRetries ?? 5);
     let text: string = '';
+    let usageMetadata: { input_tokens: number; output_tokens: number } | undefined;
     let lastError: any = null;
 
     for (let retryNum = 0; retryNum <= retries; retryNum++) {
       try {
         const resp = await this.client.chat.completions.create(chatBody as any, { signal });
         text = resp.choices?.[0]?.message?.content || '';
+        // Extract usage metadata from response
+        if (resp.usage) {
+          usageMetadata = {
+            input_tokens: resp.usage.prompt_tokens || 0,
+            output_tokens: resp.usage.completion_tokens || 0,
+          };
+        }
         if (!text || text.trim().length === 0) {
           throw new Error('Empty response text from Grok');
         }
@@ -181,9 +192,7 @@ export class NativeGrokChatModel {
       throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Grok', this.modelName);
     }
 
-    // SDK-level token logging disabled - handled by llm-fetch-logger.ts
-
-    return { content: text };
+    return { content: text, usage_metadata: usageMetadata };
   }
 
   private toOpenAIMessages(messages: BaseMessage[]) {
@@ -268,6 +277,8 @@ export class NativeGrokChatModel {
           max_tokens: this.maxTokens,
           // Only include temperature if explicitly set; omit to use provider default
           ...(this.temperature !== undefined && { temperature: this.temperature }),
+          // Add Live Search parameters if enabled
+          ...(this.webSearchEnabled && { search_parameters: { mode: 'auto' } }),
           stream: true,
           stream_options: { include_usage: true },
         } as any,

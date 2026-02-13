@@ -153,7 +153,10 @@ export class NativeOpenRouterChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
 
     const payload = this.toOpenAIMessages(messages);
@@ -168,12 +171,20 @@ export class NativeOpenRouterChatModel {
 
     const retries = Math.max(0, this.maxRetries ?? 5);
     let text: string = '';
+    let usageMetadata: { input_tokens: number; output_tokens: number } | undefined;
     let lastError: any = null;
 
     for (let retryNum = 0; retryNum <= retries; retryNum++) {
       try {
         const resp = await this.client.chat.completions.create(chatBody as any, { signal });
         text = resp.choices?.[0]?.message?.content || '';
+        // Extract usage metadata from response
+        if (resp.usage) {
+          usageMetadata = {
+            input_tokens: resp.usage.prompt_tokens || 0,
+            output_tokens: resp.usage.completion_tokens || 0,
+          };
+        }
         if (!text || text.trim().length === 0) {
           throw new Error('Empty response text from OpenRouter');
         }
@@ -197,9 +208,7 @@ export class NativeOpenRouterChatModel {
       throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'OpenRouter', this.modelName);
     }
 
-    // SDK-level token logging disabled - handled by llm-fetch-logger.ts
-
-    return { content: text };
+    return { content: text, usage_metadata: usageMetadata };
   }
 
   private toOpenAIMessages(messages: BaseMessage[]) {
@@ -277,18 +286,23 @@ export class NativeOpenRouterChatModel {
   ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
     let stream: any;
     try {
-      stream = await this.client.chat.completions.create(
-        {
-          model: this.modelName,
-          messages: this.toOpenAIMessages(messages),
-          max_tokens: this.maxTokens,
-          // Only include temperature if explicitly set; omit to use provider default
-          ...(this.temperature !== undefined && { temperature: this.temperature }),
-          stream: true,
-          stream_options: { include_usage: true },
-        } as any,
-        { signal },
-      );
+      // Build request body with optional web search plugin
+      const requestBody: any = {
+        model: this.modelName,
+        messages: this.toOpenAIMessages(messages),
+        max_tokens: this.maxTokens,
+        // Only include temperature if explicitly set; omit to use provider default
+        ...(this.temperature !== undefined && { temperature: this.temperature }),
+        stream: true,
+        stream_options: { include_usage: true },
+      };
+
+      // Enable web search plugin via OpenRouter's plugins system
+      if (this.webSearchEnabled) {
+        requestBody.plugins = [{ id: 'web' }];
+      }
+
+      stream = await this.client.chat.completions.create(requestBody as any, { signal });
     } catch (error: any) {
       const msg = String(error?.message || error);
       if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;

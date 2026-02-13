@@ -229,7 +229,10 @@ export class NativeOpenAIChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
     if (this.shouldUseResponsesAPI()) {
       const { system, chatMessages } = this.splitSystem(messages);
@@ -247,12 +250,14 @@ export class NativeOpenAIChatModel {
         body.instructions = system;
       }
 
-      // Models don't have access to context - removed incorrect wrapper
-
       try {
         const resp: any = await (this.client as any).responses.create(body, { signal });
         const text = this.extractResponsesText(resp);
-        return { content: text };
+        // Extract usage metadata from responses API
+        const usageMetadata = resp.usage
+          ? { input_tokens: resp.usage.input_tokens || 0, output_tokens: resp.usage.output_tokens || 0 }
+          : undefined;
+        return { content: text, usage_metadata: usageMetadata };
       } catch (error: any) {
         const msg = String(error?.message || error);
         if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
@@ -275,12 +280,14 @@ export class NativeOpenAIChatModel {
       chatBody.temperature = this.temperature;
     }
 
-    // Models don't have access to context - removed incorrect wrapper
-
     try {
       const resp = await this.client.chat.completions.create(chatBody as any, { signal });
       const text = resp.choices?.[0]?.message?.content || '';
-      return { content: text };
+      // Extract usage metadata from chat completions API
+      const usageMetadata = resp.usage
+        ? { input_tokens: resp.usage.prompt_tokens || 0, output_tokens: resp.usage.completion_tokens || 0 }
+        : undefined;
+      return { content: text, usage_metadata: usageMetadata };
     } catch (error: any) {
       const msg = String(error?.message || error);
       if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
@@ -501,6 +508,11 @@ export class NativeOpenAIChatModel {
     // Reasoning models (o1, o3, gpt-5) and search-preview models don't support temperature
     if (!this.shouldUseResponsesAPI() && !this.isSearchPreviewModel()) {
       body.temperature = this.temperature;
+    }
+
+    // Add web search options for search-preview models or when web search is enabled
+    if (this.isSearchPreviewModel() || this.webSearchEnabled) {
+      body.web_search_options = {};
     }
 
     let stream: any;

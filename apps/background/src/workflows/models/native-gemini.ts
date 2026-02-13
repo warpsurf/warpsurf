@@ -170,7 +170,10 @@ export class NativeGeminiChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { system, chatMessages } = this.splitSystem(messages);
     const contents = this.toGeminiContents(chatMessages);
     const model = this.client.getGenerativeModel({ model: this.modelName });
@@ -187,17 +190,21 @@ export class NativeGeminiChatModel {
       tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,
     };
 
-    // Models don't have access to context - removed incorrect wrapper
-
-    // Models don't have access to context
-
     const retries = Math.max(0, this.maxRetries ?? 5);
     let text: string = '';
+    let usageMetadata: { input_tokens: number; output_tokens: number } | undefined;
     let lastError: any = null;
     for (let retryNum = 0; retryNum <= retries; retryNum++) {
       try {
         const resp = await model.generateContent(requestBody as any, { signal });
         text = resp.response?.text() ?? '';
+        // Extract usage metadata from response
+        if (resp.response?.usageMetadata) {
+          usageMetadata = {
+            input_tokens: resp.response.usageMetadata.promptTokenCount || 0,
+            output_tokens: resp.response.usageMetadata.candidatesTokenCount || 0,
+          };
+        }
         if (!text || text.trim().length === 0) {
           throw new Error('Empty response text from Gemini');
         }
@@ -220,8 +227,7 @@ export class NativeGeminiChatModel {
       throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Gemini', this.modelName);
     }
 
-    // Note: Actual token logging is handled by llm-fetch-logger.ts to prevent duplicates
-    return { content: text };
+    return { content: text, usage_metadata: usageMetadata };
   }
 
   private splitSystem(messages: BaseMessage[]): { system: string | null; chatMessages: BaseMessage[] } {
@@ -352,6 +358,7 @@ export class NativeGeminiChatModel {
           maxOutputTokens: this.maxTokens,
           ...this.getThinkingConfig(),
         },
+        tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,
       });
     } catch (error: any) {
       const msg = String(error?.message || error);
@@ -360,17 +367,27 @@ export class NativeGeminiChatModel {
     }
 
     try {
-      // Iterate through the stream
+      let lastFinishReason: string | undefined;
+
       for await (const chunk of result.stream) {
-        // Check abort signal
         if (signal?.aborted) {
           throw new Error('AbortError: request was aborted');
         }
+
+        const finishReason = chunk?.candidates?.[0]?.finishReason;
+        if (finishReason) {
+          lastFinishReason = finishReason;
+        }
+
         const text = chunk.text();
         if (text) yield { text, done: false };
       }
 
-      // Get usage from the aggregated response
+      // Throw error for non-successful finish reasons
+      if (lastFinishReason && lastFinishReason !== 'STOP' && lastFinishReason !== 'MAX_TOKENS') {
+        throw new Error(lastFinishReason);
+      }
+
       const response = await result.response;
       const usage = response.usageMetadata
         ? {

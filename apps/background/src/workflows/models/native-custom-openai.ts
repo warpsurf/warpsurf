@@ -164,7 +164,10 @@ export class NativeCustomOpenAIChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
 
     const payload = this.toOpenAIMessages(messages);
@@ -190,7 +193,12 @@ export class NativeCustomOpenAIChatModel {
       );
     }
 
-    return { content: result.text };
+    // Extract usage metadata from response
+    const usageMetadata = result.usage
+      ? { input_tokens: result.usage.prompt_tokens || 0, output_tokens: result.usage.completion_tokens || 0 }
+      : undefined;
+
+    return { content: result.text, usage_metadata: usageMetadata };
   }
 
   private async attemptRequest(

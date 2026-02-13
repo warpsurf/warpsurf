@@ -159,13 +159,17 @@ export class NativeAnthropicChatModel {
     };
   }
 
-  async invoke(messages: BaseMessage[], options?: Record<string, unknown>): Promise<{ content: string }> {
+  async invoke(
+    messages: BaseMessage[],
+    options?: Record<string, unknown>,
+  ): Promise<{ content: string; usage_metadata?: { input_tokens: number; output_tokens: number } }> {
     const { system, chatMessages } = this.splitSystem(messages);
     const anthropicMessages = this.toAnthropicMessages(chatMessages);
 
     const { signal, ...rest } = (options || {}) as { signal?: AbortSignal } & Record<string, unknown>;
     const retries = Math.max(0, this.maxRetries ?? 5);
     let text: string = '';
+    let usageMetadata: { input_tokens: number; output_tokens: number } | undefined;
     let lastError: any = null;
     for (let retryNum = 0; retryNum <= retries; retryNum++) {
       try {
@@ -190,6 +194,13 @@ export class NativeAnthropicChatModel {
           { signal },
         );
         text = this.extractText(resp);
+        // Extract usage metadata from response
+        if (resp.usage) {
+          usageMetadata = {
+            input_tokens: resp.usage.input_tokens || 0,
+            output_tokens: resp.usage.output_tokens || 0,
+          };
+        }
         if (!text || text.trim().length === 0) {
           throw new Error('Empty response text from Anthropic');
         }
@@ -211,7 +222,7 @@ export class NativeAnthropicChatModel {
     if (!text || text.trim().length === 0) {
       throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Anthropic', this.modelName);
     }
-    return { content: text };
+    return { content: text, usage_metadata: usageMetadata };
   }
 
   private splitSystem(messages: BaseMessage[]): { system: string | null; chatMessages: BaseMessage[] } {
@@ -350,6 +361,15 @@ export class NativeAnthropicChatModel {
           ...this.getThinkingParams(),
           system: system || undefined,
           messages: this.toAnthropicMessages(chatMessages),
+          tools: this.webSearchEnabled
+            ? [
+                {
+                  type: 'web_search_20250305',
+                  name: 'web_search',
+                  max_uses: 5,
+                },
+              ]
+            : undefined,
         } as any,
         { signal },
       );
