@@ -6,7 +6,6 @@ import MessageList from '../components/chat-interface/message-list';
 import ChatInput from '../components/chat-interface/chat-input';
 import AvailableChatSection from '../components/chat-interface/available-chat-section';
 import SessionControls from '../components/footer/session-controls';
-import { DebugButtons } from '../components/footer/debug-buttons';
 import { formatUsd } from '../components/chat-interface/message-list';
 import type { ContextTabInfo } from '../components/chat-interface/types';
 
@@ -282,6 +281,15 @@ export function ChatScreen(props: ChatScreenProps) {
                   sttConfigured={sttConfiguredProp}
                   onOpenVoiceSettings={onOpenVoiceSettings}
                   expandedComposer={true}
+                  sessionStats={sessionStats}
+                  formatUsd={formatUsd}
+                  currentSessionId={currentSessionId}
+                  agentTraceRootIdRef={agentTraceRootIdRef}
+                  currentTaskAgentType={currentTaskAgentType}
+                  messageMetadata={messageMetadata}
+                  portRef={portRef}
+                  showEmergencyStop={showEmergencyStop}
+                  onEmergencyStop={handleKillSwitch}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -456,6 +464,15 @@ export function ChatScreen(props: ChatScreenProps) {
                   audioLevel={audioLevelProp}
                   sttConfigured={sttConfiguredProp}
                   onOpenVoiceSettings={onOpenVoiceSettings}
+                  sessionStats={sessionStats}
+                  formatUsd={formatUsd}
+                  currentSessionId={currentSessionId}
+                  agentTraceRootIdRef={agentTraceRootIdRef}
+                  currentTaskAgentType={currentTaskAgentType}
+                  messageMetadata={messageMetadata}
+                  portRef={portRef}
+                  showEmergencyStop={showEmergencyStop}
+                  onEmergencyStop={handleKillSwitch}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -475,33 +492,17 @@ export function ChatScreen(props: ChatScreenProps) {
             </>
           )}
 
-          {/* Session controls */}
-          {(messages.length > 0 || sessionStats.totalRequests > 0) && (
-            <SessionControls
-              isDarkMode={isDarkMode}
-              sessionStats={sessionStats}
-              formatUsd={formatUsd}
-              onClearChat={handleClearChat}
-              showCloseTabs={showCloseTabs}
-              workerTabGroups={workerTabGroups}
-              sessionIdForCleanup={currentSessionId || sessionIdRef.current}
-              onClosedTabs={() => {
-                setShowCloseTabs(false);
-                setWorkerTabGroups([]);
-              }}
-              showEmergencyStop={showEmergencyStop}
-              onEmergencyStop={handleKillSwitch}>
-              <DebugButtons
-                currentSessionId={currentSessionId}
-                agentTraceRootIdRef={agentTraceRootIdRef}
-                currentTaskAgentType={currentTaskAgentType}
-                messageMetadata={messageMetadata}
-                portRef={portRef}
-                isDarkMode={isDarkMode}
-                setErrorLogEntries={() => {}}
-              />
-            </SessionControls>
-          )}
+          {/* Session controls - only shows close tabs button when needed */}
+          <SessionControls
+            isDarkMode={isDarkMode}
+            showCloseTabs={showCloseTabs}
+            workerTabGroups={workerTabGroups}
+            sessionIdForCleanup={currentSessionId || sessionIdRef.current}
+            onClosedTabs={() => {
+              setShowCloseTabs(false);
+              setWorkerTabGroups([]);
+            }}
+          />
           {(messages.length > 0 || forceChatView) && (
             <div className={`${isDarkMode ? 'text-slate-400' : 'text-gray-500'} px-3 py-2 text-[11px]`}>
               {INLINE_CHAT_DISCLAIMER}
