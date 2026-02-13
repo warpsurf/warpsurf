@@ -32,7 +32,7 @@ export interface CachedPricingData {
 
 // Cache generated on 2026-02-13 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-02-13T16:18:18.279Z',
+  generatedAt: '2026-02-13T17:01:34.480Z',
   version: 1,
   helicone: {
     openai: {
@@ -1623,6 +1623,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'qwen/qwen3-30b-a3b-instruct-2507',
           'qwen/qwen3-30b-a3b-thinking-2507',
           'qwen/qwen3-32b',
+          'qwen/qwen3-4b',
           'qwen/qwen3-8b',
           'qwen/qwen3-coder',
           'qwen/qwen3-coder-30b-a3b-instruct',
@@ -2279,8 +2280,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 8.5e-7,
       },
       'qwen/qwen3-235b-a22b-thinking-2507': {
-        inputPerToken: 1.1e-7,
-        outputPerToken: 6e-7,
+        inputPerToken: 0,
+        outputPerToken: 0,
       },
       'z-ai/glm-4-32b': {
         inputPerToken: 1e-7,
@@ -2433,6 +2434,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'inception/mercury-coder': {
         inputPerToken: 2.5e-7,
         outputPerToken: 0.000001,
+      },
+      'qwen/qwen3-4b': {
+        inputPerToken: 7.15e-8,
+        outputPerToken: 2.73e-7,
       },
       'meta-llama/llama-guard-4-12b': {
         inputPerToken: 1.8e-7,
@@ -3126,7 +3131,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'qwen/qwen3-30b-a3b-instruct-2507': 262144,
       'z-ai/glm-4.5': 131072,
       'z-ai/glm-4.5-air': 131072,
-      'qwen/qwen3-235b-a22b-thinking-2507': 262144,
+      'qwen/qwen3-235b-a22b-thinking-2507': 131072,
       'z-ai/glm-4-32b': 128000,
       'qwen/qwen3-coder': 262144,
       'qwen/qwen3-coder:exacto': 262144,
@@ -3165,6 +3170,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'arcee-ai/virtuoso-large': 131072,
       'arcee-ai/coder-large': 32768,
       'inception/mercury-coder': 128000,
+      'qwen/qwen3-4b': 131072,
       'meta-llama/llama-guard-4-12b': 163840,
       'qwen/qwen3-30b-a3b': 40960,
       'qwen/qwen3-8b': 32000,
