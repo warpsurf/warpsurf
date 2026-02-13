@@ -299,7 +299,7 @@ export default function AgentManager() {
         className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-[#2f2f29] bg-[#181816]' : 'border-[#deded7] bg-[#fbfbf9]'}`}>
         <div className="flex items-center gap-3">
           <img src={logoImage} alt="Warpsurf" className="h-8 w-8" />
-          <h1 className="text-lg font-semibold tracking-tight">warpsurf agent manager</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Agent manager</h1>
           {!isConnected && <span className="text-xs text-amber-500 ml-2">Connecting...</span>}
         </div>
         <div className="flex items-center gap-2">
