@@ -115,7 +115,7 @@ ${lines.join('\n')}
 Consider these tabs when determining the appropriate action. If the request relates to content from these tabs (e.g., "summarise these tabs"), the chat action is appropriate.`;
   }
 
-  async triageRequest(request: string, sessionId?: string, contextTabIds?: number[]): Promise<AutoResult> {
+  async triageRequest(request: string, sessionId?: string, contextTabIds?: number[]): Promise<AutoResult | null> {
     logger.info(`Auto request: "${request}"`);
 
     // If LLM is not initialized, try to initialize it now
@@ -124,10 +124,10 @@ Consider these tabs when determining the appropriate action. If the request rela
       await this.initialize();
     }
 
-    // If still no LLM available, use fallback logic
+    // If still no LLM available, return null to signal workflow should stop
     if (!this.autoLLM) {
-      logger.warning('Auto LLM not available, using fallback logic');
-      return this.fallbackTriage(request);
+      logger.warning('Auto LLM not available, workflow cannot proceed');
+      return null;
     }
 
     // Get context tabs metadata if provided
@@ -211,17 +211,8 @@ ${request}`;
       return this.fallbackTriage(request);
     } catch (error: any) {
       clearTimeout(timeoutId);
-      if (timedOut) {
-        logger.warning('Auto request timed out, using fallback');
-      } else {
-        const msg = String(error?.message || error);
-        if (msg.includes('abort')) {
-          logger.info('Auto request cancelled');
-        } else {
-          logger.error('Auto request failed:', error);
-        }
-      }
-      return this.fallbackTriage(request);
+      // Let errors propagate - don't fallback since agent will likely fail too
+      throw error;
     }
   }
 

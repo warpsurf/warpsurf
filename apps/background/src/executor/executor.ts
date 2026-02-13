@@ -568,32 +568,21 @@ export class Executor {
   private async triageRequest(request: string): Promise<AutoResult> {
     this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_START, 'Analyzing request...');
 
-    try {
-      const result = await this.autoService.triageRequest(request, this.context.taskId, this.context.contextTabIds);
-      if (result.action === 'request_more_info') {
-        result.action = 'chat';
-      }
+    const result = await this.autoService.triageRequest(request, this.context.taskId, this.context.contextTabIds);
 
-      this.llmResponses.auto.push({ request, response: result, timestamp: Date.now() });
-      this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_OK, `Request categorized as: ${result.action}`);
-      return result;
-    } catch (error) {
-      const errorResponse: AutoResult = {
-        action: 'agent',
-        confidence: 0.3,
-        reasoning: 'Fallback due to auto failure',
-      };
-
-      this.llmResponses.auto.push({ request, response: errorResponse, timestamp: Date.now() });
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_FAIL, `Auto failed: ${errorMessage}`);
-
-      return {
-        action: 'agent',
-        confidence: 0.3,
-        reasoning: 'Fallback due to auto failure',
-      };
+    // If auto service couldn't initialize (no providers), stop the workflow
+    if (!result) {
+      this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_FAIL, 'Auto service not available');
+      throw new Error('Auto service not available - no LLM providers configured');
     }
+
+    if (result.action === 'request_more_info') {
+      result.action = 'chat';
+    }
+
+    this.llmResponses.auto.push({ request, response: result, timestamp: Date.now() });
+    this.context.emitEvent(Actors.AUTO, ExecutionState.STEP_OK, `Request categorized as: ${result.action}`);
+    return result;
   }
 
   private async executeChatWorkflow(): Promise<void> {
