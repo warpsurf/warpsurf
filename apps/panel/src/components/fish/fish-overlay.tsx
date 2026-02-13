@@ -134,97 +134,153 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
   };
 
   // Public API
-  useImperativeHandle(ref, () => ({
-    addFish: () => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      // Count only marine fish against MAX_FISH so sharks can coexist
-      const marineCount = fishRef.current.filter(f => f.species === 'marine').length;
-      if (marineCount >= MAX_FISH) return;
-      const rect = panel.getBoundingClientRect();
-      const x = Math.random() * rect.width;
-      const y = Math.random() * rect.height;
-      // Marine fish (tropical) - smaller
-      const size = 9 + Math.random() * 5;
-      const speed = 0.48 + Math.random() * 0.32; // slower, relaxing
-      const angle = Math.random() * Math.PI * 2;
-      const hues = [200, 205, 210, 215, 220, 40, 45, 50, 180, 185, 190]; // blues, teals, yellows
-      const hue = hues[Math.floor(Math.random() * hues.length)];
-      const hue2 = Math.random() < 0.5 ? hues[Math.floor(Math.random() * hues.length)] : undefined;
-      const stripeCount = Math.random() < 0.6 ? (2 + Math.floor(Math.random() * 3)) : 0;
-      const id = Date.now() + Math.floor(Math.random() * 1000);
-      const hungryTimeoutMs = 180000 + Math.random() * 120000; // 3-5 minutes
-      fishRef.current.push({ id, x, y, angle, speed, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size, species: 'marine', hue, hue2, stripeCount, wanderT: Math.random() * 1000, targetFoodId: null, targetFishId: null, noFoodMs: 0, createdAt: Date.now(), hungryTimeoutMs });
-    },
-    addShark: () => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      const sharkCount = fishRef.current.filter(f => f.species === 'shark').length;
-      if (sharkCount >= MAX_SHARKS) return;
-      const rect = panel.getBoundingClientRect();
-      const x = Math.random() * rect.width;
-      const y = Math.random() * rect.height;
-      const size = 18 + Math.random() * 8; // still larger than fish
-      const speed = 0.6 + Math.random() * 0.4; // a bit quicker than fish but relaxed
-      const angle = Math.random() * Math.PI * 2;
-      const id = Date.now() + Math.floor(Math.random() * 1000);
-      const now = Date.now();
-      const sharkShadeL = 48 + Math.floor(Math.random() * 10);
-      const sharkTopShadeL = 28 + Math.floor(Math.random() * 10);
-      const patterns: Array<'none' | 'spots' | 'stripe'> = ['none', 'spots', 'stripe'];
-      const sharkPattern = patterns[Math.floor(Math.random() * patterns.length)];
-      const sharkPatternSeed = Math.floor(Math.random() * 1000);
-      fishRef.current.push({ id, x, y, angle, speed, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size, species: 'shark', wanderT: Math.random() * 1000, targetFoodId: null, targetFishId: null, noFoodMs: 0, createdAt: now, hungryTimeoutMs: 99999999, lastMealAtMs: now, hungerCooldownMs: HUNGRY_INTERVAL_MS, sharkShadeL, sharkTopShadeL, sharkPattern, sharkPatternSeed });
-    },
-    dropFoodAtClientPosition: (clientX: number, clientY: number) => {
-      const { x, y } = clientToLocal(clientX, clientY);
-      if (foodRef.current.length >= MAX_FOOD) foodRef.current.shift();
-      const id = Date.now() + Math.floor(Math.random() * 1000);
-      // Place directly at clicked position
-      foodRef.current.push({ id, x, y, targetY: y, vy: 0, settled: true });
-    },
-    scatterFood: (count: number = 24) => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      const rect = panel.getBoundingClientRect();
-      const width = rect.width; const height = rect.height;
-      const minY = 80; // avoid header
-      const maxY = Math.max(minY + 20, height - 40);
-      for (let i = 0; i < count; i++) {
-        if (foodRef.current.length >= MAX_FOOD) break;
-        const id = Date.now() + Math.floor(Math.random() * 1000) + i;
-        const x = Math.random() * width;
-        const y = minY + Math.random() * (maxY - minY);
+  useImperativeHandle(
+    ref,
+    () => ({
+      addFish: () => {
+        const panel = panelRef.current;
+        if (!panel) return;
+        // Count only marine fish against MAX_FISH so sharks can coexist
+        const marineCount = fishRef.current.filter(f => f.species === 'marine').length;
+        if (marineCount >= MAX_FISH) return;
+        const rect = panel.getBoundingClientRect();
+        const x = Math.random() * rect.width;
+        const y = Math.random() * rect.height;
+        // Marine fish (tropical) - smaller
+        const size = 9 + Math.random() * 5;
+        const speed = 0.48 + Math.random() * 0.32; // slower, relaxing
+        const angle = Math.random() * Math.PI * 2;
+        const hues = [200, 205, 210, 215, 220, 40, 45, 50, 180, 185, 190]; // blues, teals, yellows
+        const hue = hues[Math.floor(Math.random() * hues.length)];
+        const hue2 = Math.random() < 0.5 ? hues[Math.floor(Math.random() * hues.length)] : undefined;
+        const stripeCount = Math.random() < 0.6 ? 2 + Math.floor(Math.random() * 3) : 0;
+        const id = Date.now() + Math.floor(Math.random() * 1000);
+        const hungryTimeoutMs = 180000 + Math.random() * 120000; // 3-5 minutes
+        fishRef.current.push({
+          id,
+          x,
+          y,
+          angle,
+          speed,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size,
+          species: 'marine',
+          hue,
+          hue2,
+          stripeCount,
+          wanderT: Math.random() * 1000,
+          targetFoodId: null,
+          targetFishId: null,
+          noFoodMs: 0,
+          createdAt: Date.now(),
+          hungryTimeoutMs,
+        });
+      },
+      addShark: () => {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const sharkCount = fishRef.current.filter(f => f.species === 'shark').length;
+        if (sharkCount >= MAX_SHARKS) return;
+        const rect = panel.getBoundingClientRect();
+        const x = Math.random() * rect.width;
+        const y = Math.random() * rect.height;
+        const size = 18 + Math.random() * 8; // still larger than fish
+        const speed = 0.6 + Math.random() * 0.4; // a bit quicker than fish but relaxed
+        const angle = Math.random() * Math.PI * 2;
+        const id = Date.now() + Math.floor(Math.random() * 1000);
+        const now = Date.now();
+        const sharkShadeL = 48 + Math.floor(Math.random() * 10);
+        const sharkTopShadeL = 28 + Math.floor(Math.random() * 10);
+        const patterns: Array<'none' | 'spots' | 'stripe'> = ['none', 'spots', 'stripe'];
+        const sharkPattern = patterns[Math.floor(Math.random() * patterns.length)];
+        const sharkPatternSeed = Math.floor(Math.random() * 1000);
+        fishRef.current.push({
+          id,
+          x,
+          y,
+          angle,
+          speed,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size,
+          species: 'shark',
+          wanderT: Math.random() * 1000,
+          targetFoodId: null,
+          targetFishId: null,
+          noFoodMs: 0,
+          createdAt: now,
+          hungryTimeoutMs: 99999999,
+          lastMealAtMs: now,
+          hungerCooldownMs: HUNGRY_INTERVAL_MS,
+          sharkShadeL,
+          sharkTopShadeL,
+          sharkPattern,
+          sharkPatternSeed,
+        });
+      },
+      dropFoodAtClientPosition: (clientX: number, clientY: number) => {
+        const { x, y } = clientToLocal(clientX, clientY);
+        if (foodRef.current.length >= MAX_FOOD) foodRef.current.shift();
+        const id = Date.now() + Math.floor(Math.random() * 1000);
+        // Place directly at clicked position
         foodRef.current.push({ id, x, y, targetY: y, vy: 0, settled: true });
-      }
-    },
-    clearAll: () => {
-      fishRef.current = [];
-      foodRef.current = [];
-      wavesRef.current = [];
-    },
-    togglePopulationChart: () => {
-      // Toggle in-canvas populations panel
-      showPopChartRef.current = !showPopChartRef.current;
-      try { if (popWinRef.current && !popWinRef.current.closed) popWinRef.current.close(); } catch {}
-      popWinRef.current = null;
-    }
-    ,
-    getPopulationSamples: () => popSamplesRef.current.slice(-600)
-    ,
-    triggerWave: () => {
-      const panel = panelRef.current;
-      const rect = panel?.getBoundingClientRect();
-      const width = rect?.width || 0;
-      const height = rect?.height || 0;
-      const angle = Math.random() * Math.PI * 2;
-      const margin = 60;
-      const dirX = Math.cos(angle);
-      const x0 = dirX < 0 ? width + margin : -margin;
-      const y0 = Math.random() * height;
-      wavesRef.current.push({ id: Date.now(), startAt: Date.now(), durationMs: 5000, x0, y0, angle, speed: 140, spacing: 16, crestCount: 12 });
-    }
-  }), []);
+      },
+      scatterFood: (count: number = 24) => {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const rect = panel.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        const minY = 80; // avoid header
+        const maxY = Math.max(minY + 20, height - 40);
+        for (let i = 0; i < count; i++) {
+          if (foodRef.current.length >= MAX_FOOD) break;
+          const id = Date.now() + Math.floor(Math.random() * 1000) + i;
+          const x = Math.random() * width;
+          const y = minY + Math.random() * (maxY - minY);
+          foodRef.current.push({ id, x, y, targetY: y, vy: 0, settled: true });
+        }
+      },
+      clearAll: () => {
+        fishRef.current = [];
+        foodRef.current = [];
+        wavesRef.current = [];
+      },
+      togglePopulationChart: () => {
+        // Toggle in-canvas populations panel
+        showPopChartRef.current = !showPopChartRef.current;
+        try {
+          if (popWinRef.current && !popWinRef.current.closed) popWinRef.current.close();
+        } catch {}
+        popWinRef.current = null;
+      },
+      getPopulationSamples: () => popSamplesRef.current.slice(-600),
+      triggerWave: () => {
+        const panel = panelRef.current;
+        const rect = panel?.getBoundingClientRect();
+        const width = rect?.width || 0;
+        const height = rect?.height || 0;
+        const angle = Math.random() * Math.PI * 2;
+        const margin = 60;
+        const dirX = Math.cos(angle);
+        const x0 = dirX < 0 ? width + margin : -margin;
+        const y0 = Math.random() * height;
+        wavesRef.current.push({
+          id: Date.now(),
+          startAt: Date.now(),
+          durationMs: 6200,
+          x0,
+          y0,
+          angle,
+          speed: 105,
+          spacing: 20,
+          crestCount: 9,
+        });
+      },
+    }),
+    [],
+  );
 
   // Simulation
   const update = (dt: number) => {
@@ -235,19 +291,19 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       const rect = panel?.getBoundingClientRect();
       const width = rect?.width || 0;
       const height = rect?.height || 0;
-      const angle = (Math.random() * 1.4 - 0.7) + (Math.random() < 0.5 ? 0 : Math.PI); // wider range of slants
+      const angle = Math.random() * 0.9 - 0.45 + (Math.random() < 0.5 ? 0 : Math.PI);
       // Start slightly off-screen on one side
       const margin = 80;
       const dirX = Math.cos(angle);
       const dirY = Math.sin(angle);
       const x0 = dirX < 0 ? width + margin : -margin;
       const y0 = Math.random() * height;
-      const durationMs = 5000 + Math.random() * 3000;
-      const speed = 120 + Math.random() * 80; // faster waves
-      const spacing = 16 + Math.random() * 8;
-      const crestCount = 10 + Math.floor(Math.random() * 6);
+      const durationMs = 6000 + Math.random() * 2800;
+      const speed = 95 + Math.random() * 55;
+      const spacing = 18 + Math.random() * 8;
+      const crestCount = 8 + Math.floor(Math.random() * 4);
       wavesRef.current.push({ id: now, startAt: now, durationMs, x0, y0, angle, speed, spacing, crestCount });
-      nextWaveAtRef.current = now + 1600 + Math.random() * 1600;
+      nextWaveAtRef.current = now + 2100 + Math.random() * 1600;
     }
     // Clean up finished waves
     wavesRef.current = wavesRef.current.filter(w => now - w.startAt < w.durationMs);
@@ -279,14 +335,22 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       const fishCount = fishRef.current.filter(f => f.species === 'marine').length;
       const sharkCount = fishRef.current.filter(f => f.species === 'shark').length;
       const foodCount = foodRef.current.length;
-      popSamplesRef.current.push({ tMs: now - popStartAtRef.current, fish: fishCount, sharks: sharkCount, food: foodCount });
+      popSamplesRef.current.push({
+        tMs: now - popStartAtRef.current,
+        fish: fishCount,
+        sharks: sharkCount,
+        food: foodCount,
+      });
       lastPopSampleAtRef.current = now;
       if (popSamplesRef.current.length > 600) popSamplesRef.current.shift(); // keep last 10 minutes
       // Send to popup if open
       if (popWinRef.current && !popWinRef.current.closed) {
-        try { popWinRef.current.postMessage({ type: 'popSamples', samples: popSamplesRef.current.slice(-600) }, '*'); } catch {}
+        try {
+          popWinRef.current.postMessage({ type: 'popSamples', samples: popSamplesRef.current.slice(-600) }, '*');
+        } catch {}
       } else if (showPopChartRef.current) {
-        showPopChartRef.current = false; popWinRef.current = null;
+        showPopChartRef.current = false;
+        popWinRef.current = null;
       }
     }
 
@@ -298,16 +362,21 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
     const allSharks = fishRef.current.filter(f => f.species === 'shark');
     const hungrySharks = allSharks; // sharks always dangerous; fish avoid them
     for (const fish of fishRef.current) {
-      fish.noFoodMs = anyFood ? 0 : (fish.noFoodMs + dt);
+      fish.noFoodMs = anyFood ? 0 : fish.noFoodMs + dt;
       if (fish.species === 'marine') {
         // Choose nearest food
         if (settledFood.length > 0) {
           if (fish.targetFoodId == null || !foodRef.current.find(ff => ff.id === fish.targetFoodId)) {
-            let minD = Infinity; let target: Food | null = null;
+            let minD = Infinity;
+            let target: Food | null = null;
             for (const ff of settledFood) {
-              const dx = ff.x - fish.x; const dy = ff.y - fish.y;
+              const dx = ff.x - fish.x;
+              const dy = ff.y - fish.y;
               const d2 = dx * dx + dy * dy;
-              if (d2 < minD) { minD = d2; target = ff; }
+              if (d2 < minD) {
+                minD = d2;
+                target = ff;
+              }
             }
             fish.targetFoodId = target ? target.id : null;
           }
@@ -320,7 +389,7 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
         fish.targetFoodId = null; // sharks ignore pellets
         const visionRadius = 150; // Sharks can only see fish within 150 pixels
         const visionRadiusSq = visionRadius * visionRadius;
-        
+
         // If currently tracking a target, check if it's still in range
         if (fish.targetFishId) {
           const currentTarget = fishRef.current.find(f => f.id === fish.targetFishId && f.species === 'marine');
@@ -336,20 +405,20 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
             fish.targetFishId = null;
           }
         }
-        
+
         // Look for new prey only within vision radius
         if (!fish.targetFishId) {
-          let minD = Infinity; 
+          let minD = Infinity;
           let target: Fish | null = null;
           for (const prey of fishRef.current) {
             if (prey.species !== 'marine') continue;
-            const dx = prey.x - fish.x; 
+            const dx = prey.x - fish.x;
             const dy = prey.y - fish.y;
             const d2 = dx * dx + dy * dy;
             // Only consider prey within vision radius
-            if (d2 < visionRadiusSq && d2 < minD) { 
-              minD = d2; 
-              target = prey; 
+            if (d2 < visionRadiusSq && d2 < minD) {
+              minD = d2;
+              target = prey;
             }
           }
           fish.targetFishId = target ? target.id : null;
@@ -370,9 +439,12 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
 
       if (fish.species === 'marine') {
         // Avoid sharks that are nearby (fish can sense danger)
-        let avoidDx = 0; let avoidDy = 0; let avoidWeight = 0;
+        let avoidDx = 0;
+        let avoidDy = 0;
+        let avoidWeight = 0;
         for (const sh of allSharks) {
-          const dx = fish.x - sh.x; const dy = fish.y - sh.y;
+          const dx = fish.x - sh.x;
+          const dy = fish.y - sh.y;
           const d = Math.hypot(dx, dy);
           // Fish have similar detection range as shark vision (they can sense predators)
           const detectionRadius = 130; // Slightly larger than shark vision for safety
@@ -390,7 +462,8 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
         } else if (fish.targetFoodId) {
           const target = foodRef.current.find(ff => ff.id === fish.targetFoodId);
           if (target) {
-            const dx = target.x - fish.x; const dy = target.y - fish.y;
+            const dx = target.x - fish.x;
+            const dy = target.y - fish.y;
             desiredAngle = Math.atan2(dy, dx);
           } else {
             fish.targetFoodId = null;
@@ -402,8 +475,10 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
           const target = fishRef.current.find(ff => ff.id === fish.targetFishId);
           if (target && target.species === 'marine') {
             // Predict target future position based on current velocity
-            const relX = target.x - fish.x; const relY = target.y - fish.y;
-            const relVx = target.vx - fish.vx; const relVy = target.vy - fish.vy;
+            const relX = target.x - fish.x;
+            const relY = target.y - fish.y;
+            const relVx = target.vx - fish.vx;
+            const relVy = target.vy - fish.vy;
             const relV2 = relVx * relVx + relVy * relVy;
             let tLead = 0;
             if (relV2 > 0.0001) {
@@ -412,7 +487,8 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
             }
             const futureX = target.x + target.vx * (tLead * 0.016);
             const futureY = target.y + target.vy * (tLead * 0.016);
-            const dx = futureX - fish.x; const dy = futureY - fish.y;
+            const dx = futureX - fish.x;
+            const dy = futureY - fish.y;
             desiredAngle = Math.atan2(dy, dx);
           } else {
             fish.targetFishId = null;
@@ -463,7 +539,8 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       const idx = foodRef.current.findIndex(ff => ff.id === fish.targetFoodId && ff.settled);
       if (idx >= 0) {
         const ff = foodRef.current[idx];
-        const dx = ff.x - fish.x; const dy = ff.y - fish.y;
+        const dx = ff.x - fish.x;
+        const dy = ff.y - fish.y;
         const dist = Math.hypot(dx, dy);
         if (dist < fish.size * 0.9) {
           foodRef.current.splice(idx, 1);
@@ -480,7 +557,8 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       const preyIdx = fishRef.current.findIndex(f => f.id === shark.targetFishId && f.species === 'marine');
       if (preyIdx >= 0) {
         const prey = fishRef.current[preyIdx];
-        const dx = prey.x - shark.x; const dy = prey.y - shark.y;
+        const dx = prey.x - shark.x;
+        const dy = prey.y - shark.y;
         const dist = Math.hypot(dx, dy);
         const catchRadius = Math.max(shark.size * 1.2, prey.size * 0.9);
         if (dist < catchRadius) {
@@ -511,18 +589,30 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
     const scheduleBreed = (a: Fish, b: Fish, species: Species) => {
       const nowMs = now;
       const cooldown = 180000; // 3 minute cooldown between breeding
-      if ((a.lastBreedAtMs && nowMs - a.lastBreedAtMs < cooldown) || (b.lastBreedAtMs && nowMs - b.lastBreedAtMs < cooldown)) return;
-      const exists = breedQueueRef.current.some(q => (q.aId === a.id && q.bId === b.id && q.species === species) || (q.aId === b.id && q.bId === a.id && q.species === species));
+      if (
+        (a.lastBreedAtMs && nowMs - a.lastBreedAtMs < cooldown) ||
+        (b.lastBreedAtMs && nowMs - b.lastBreedAtMs < cooldown)
+      )
+        return;
+      const exists = breedQueueRef.current.some(
+        q =>
+          (q.aId === a.id && q.bId === b.id && q.species === species) ||
+          (q.aId === b.id && q.bId === a.id && q.species === species),
+      );
       if (exists) return;
       breedQueueRef.current.push({ species, aId: a.id, bId: b.id, dueAt: nowMs + 60000 });
-      a.lastBreedAtMs = nowMs; b.lastBreedAtMs = nowMs;
+      a.lastBreedAtMs = nowMs;
+      b.lastBreedAtMs = nowMs;
     };
     // Breed marine fish
     const marines = fishRef.current.filter(f => f.species === 'marine');
     for (let i = 0; i < marines.length; i++) {
       for (let j = i + 1; j < marines.length; j++) {
-        const a = marines[i], b = marines[j];
-        const dx = a.x - b.x, dy = a.y - b.y; const dist = Math.hypot(dx, dy);
+        const a = marines[i],
+          b = marines[j];
+        const dx = a.x - b.x,
+          dy = a.y - b.y;
+        const dist = Math.hypot(dx, dy);
         const thresh = Math.max(20, (a.size + b.size) * 0.6);
         if (dist < thresh) scheduleBreed(a, b, 'marine');
       }
@@ -531,8 +621,11 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
     const sharks = fishRef.current.filter(f => f.species === 'shark');
     for (let i = 0; i < sharks.length; i++) {
       for (let j = i + 1; j < sharks.length; j++) {
-        const a = sharks[i], b = sharks[j];
-        const dx = a.x - b.x, dy = a.y - b.y; const dist = Math.hypot(dx, dy);
+        const a = sharks[i],
+          b = sharks[j];
+        const dx = a.x - b.x,
+          dy = a.y - b.y;
+        const dist = Math.hypot(dx, dy);
         const thresh = Math.max(26, (a.size + b.size) * 0.55);
         if (dist < thresh) scheduleBreed(a, b, 'shark');
       }
@@ -540,7 +633,8 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
     // Process due births
     if (breedQueueRef.current.length > 0) {
       const rectBirth = panelRef.current?.getBoundingClientRect();
-      const wBirth = rectBirth?.width || 0; const hBirth = rectBirth?.height || 0;
+      const wBirth = rectBirth?.width || 0;
+      const hBirth = rectBirth?.height || 0;
       const remain: typeof breedQueueRef.current = [];
       for (const q of breedQueueRef.current) {
         if (now >= q.dueAt) {
@@ -551,42 +645,80 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
             const y = (pa.y + pb.y) / 2 + (Math.random() * 10 - 5);
             const angle = Math.random() * Math.PI * 2;
             if (q.species === 'marine') {
-              const size0 = 6 + Math.random() * 2; const maxSize = 12 + Math.random() * 3;
+              const size0 = 6 + Math.random() * 2;
+              const maxSize = 12 + Math.random() * 3;
               const growthMs = 90000 + Math.random() * 60000; // 1.5-2.5 min
               const speed0 = 0.5 + Math.random() * 0.25;
-              const hues = [200,205,210,215,220,40,45,50,180,185,190];
+              const hues = [200, 205, 210, 215, 220, 40, 45, 50, 180, 185, 190];
               const hue = hues[Math.floor(Math.random() * hues.length)];
               const hue2 = Math.random() < 0.5 ? hues[Math.floor(Math.random() * hues.length)] : undefined;
-              const stripeCount = Math.random() < 0.6 ? (2 + Math.floor(Math.random() * 3)) : 0;
+              const stripeCount = Math.random() < 0.6 ? 2 + Math.floor(Math.random() * 3) : 0;
               const idNew = Date.now() + Math.floor(Math.random() * 1000);
               fishRef.current.push({
-                id: idNew, x: Math.max(0, Math.min(wBirth, x)), y: Math.max(0, Math.min(hBirth, y)),
-                angle, speed: speed0, vx: Math.cos(angle) * speed0, vy: Math.sin(angle) * speed0,
-                size: size0, species: 'marine', hue, hue2, stripeCount, wanderT: Math.random() * 1000,
-                targetFoodId: null, targetFishId: null, noFoodMs: 0, createdAt: now,
-                hungryTimeoutMs: 180000 + Math.random() * 120000, lastMealAtMs: undefined,
-                hungerCooldownMs: undefined, sharkShadeL: undefined, sharkTopShadeL: undefined,
-                sharkPattern: undefined, sharkPatternSeed: undefined, lastBreedAtMs: undefined,
-                growthTargetSize: maxSize, growthRatePerMs: (maxSize - size0) / growthMs
+                id: idNew,
+                x: Math.max(0, Math.min(wBirth, x)),
+                y: Math.max(0, Math.min(hBirth, y)),
+                angle,
+                speed: speed0,
+                vx: Math.cos(angle) * speed0,
+                vy: Math.sin(angle) * speed0,
+                size: size0,
+                species: 'marine',
+                hue,
+                hue2,
+                stripeCount,
+                wanderT: Math.random() * 1000,
+                targetFoodId: null,
+                targetFishId: null,
+                noFoodMs: 0,
+                createdAt: now,
+                hungryTimeoutMs: 180000 + Math.random() * 120000,
+                lastMealAtMs: undefined,
+                hungerCooldownMs: undefined,
+                sharkShadeL: undefined,
+                sharkTopShadeL: undefined,
+                sharkPattern: undefined,
+                sharkPatternSeed: undefined,
+                lastBreedAtMs: undefined,
+                growthTargetSize: maxSize,
+                growthRatePerMs: (maxSize - size0) / growthMs,
               });
             } else {
-              const size0 = 12 + Math.random() * 3; const maxSize = 24 + Math.random() * 6;
+              const size0 = 12 + Math.random() * 3;
+              const maxSize = 24 + Math.random() * 6;
               const growthMs = 120000 + Math.random() * 60000; // 2-3 min
               const speed0 = 0.7 + Math.random() * 0.3;
               const idNew = Date.now() + Math.floor(Math.random() * 1000);
               const shade = 48 + Math.floor(Math.random() * 10);
               const topShade = 28 + Math.floor(Math.random() * 10);
-              const patterns: Array<'none'|'spots'|'stripe'> = ['none','spots','stripe'];
+              const patterns: Array<'none' | 'spots' | 'stripe'> = ['none', 'spots', 'stripe'];
               const pat = patterns[Math.floor(Math.random() * patterns.length)];
               const patSeed = Math.floor(Math.random() * 1000);
               fishRef.current.push({
-                id: idNew, x: Math.max(0, Math.min(wBirth, x)), y: Math.max(0, Math.min(hBirth, y)),
-                angle, speed: speed0, vx: Math.cos(angle) * speed0, vy: Math.sin(angle) * speed0,
-                size: size0, species: 'shark', wanderT: Math.random() * 1000,
-                targetFoodId: null, targetFishId: null, noFoodMs: 0, createdAt: now,
-                hungryTimeoutMs: 99999999, lastMealAtMs: now, hungerCooldownMs: HUNGRY_INTERVAL_MS,
-                sharkShadeL: shade, sharkTopShadeL: topShade, sharkPattern: pat, sharkPatternSeed: patSeed,
-                lastBreedAtMs: undefined, growthTargetSize: maxSize, growthRatePerMs: (maxSize - size0) / growthMs
+                id: idNew,
+                x: Math.max(0, Math.min(wBirth, x)),
+                y: Math.max(0, Math.min(hBirth, y)),
+                angle,
+                speed: speed0,
+                vx: Math.cos(angle) * speed0,
+                vy: Math.sin(angle) * speed0,
+                size: size0,
+                species: 'shark',
+                wanderT: Math.random() * 1000,
+                targetFoodId: null,
+                targetFishId: null,
+                noFoodMs: 0,
+                createdAt: now,
+                hungryTimeoutMs: 99999999,
+                lastMealAtMs: now,
+                hungerCooldownMs: HUNGRY_INTERVAL_MS,
+                sharkShadeL: shade,
+                sharkTopShadeL: topShade,
+                sharkPattern: pat,
+                sharkPatternSeed: patSeed,
+                lastBreedAtMs: undefined,
+                growthTargetSize: maxSize,
+                growthRatePerMs: (maxSize - size0) / growthMs,
               });
             }
           }
@@ -621,56 +753,56 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       const nx = -Math.sin(w.angle); // normal vector for crest spacing
       const ny = Math.cos(w.angle);
       _ctx.save();
-      
+
       // Draw multiple wave layers for depth
       for (let layer = 0; layer < 3; layer++) {
         const layerOffset = layer * 8;
-        const layerAlpha = 0.25 - layer * 0.08;
-        
+        const layerAlpha = 0.2 - layer * 0.06;
+
         for (let i = -Math.floor(w.crestCount / 2); i <= Math.floor(w.crestCount / 2); i++) {
           const offset = i * w.spacing + layerOffset;
           const x = baseX + nx * offset;
           const y = baseY + ny * offset;
-          
+
           // Main wave crest with curve
-          const crestAlpha = layerAlpha * (1 - Math.abs(i) / (w.crestCount / 2 + 1)) * (1 - prog * 0.7);
-          const seg = 150 + Math.sin(Date.now() * 0.001 + i) * 20; // Varying segment length
-          
+          const crestAlpha = layerAlpha * (1 - Math.abs(i) / (w.crestCount / 2 + 1)) * (1 - prog * 0.72);
+          const seg = 140 + Math.sin(Date.now() * 0.001 + i) * 16;
+
           // Wave gradient
           const gradient = _ctx.createLinearGradient(
-            x - Math.cos(w.angle) * seg * 0.5, 
+            x - Math.cos(w.angle) * seg * 0.5,
             y - Math.sin(w.angle) * seg * 0.5,
-            x + Math.cos(w.angle) * seg * 0.5, 
-            y + Math.sin(w.angle) * seg * 0.5
+            x + Math.cos(w.angle) * seg * 0.5,
+            y + Math.sin(w.angle) * seg * 0.5,
           );
           gradient.addColorStop(0, `rgba(96,165,250,0)`);
           gradient.addColorStop(0.3, `rgba(96,165,250,${crestAlpha})`);
           gradient.addColorStop(0.5, `rgba(147,197,253,${crestAlpha * 1.2})`);
           gradient.addColorStop(0.7, `rgba(96,165,250,${crestAlpha})`);
           gradient.addColorStop(1, `rgba(96,165,250,0)`);
-          
+
           _ctx.strokeStyle = gradient;
-          _ctx.lineWidth = 2.5 - layer * 0.5;
+          _ctx.lineWidth = 1.9 - layer * 0.3;
           _ctx.beginPath();
-          
+
           // Draw curved wave crest
           const points = 20;
           for (let p = 0; p <= points; p++) {
-            const t = (p / points) - 0.5;
+            const t = p / points - 0.5;
             const px = x + Math.cos(w.angle) * seg * t;
             const py = y + Math.sin(w.angle) * seg * t;
             // Add sine wave perturbation for realistic wave shape
-            const waveHeight = Math.sin(t * Math.PI * 2 + Date.now() * 0.002) * 3;
+            const waveHeight = Math.sin(t * Math.PI * 2 + Date.now() * 0.002) * 2.2;
             const wpx = px + nx * waveHeight;
             const wpy = py + ny * waveHeight;
-            
+
             if (p === 0) _ctx.moveTo(wpx, wpy);
             else _ctx.lineTo(wpx, wpy);
           }
           _ctx.stroke();
-          
+
           // Add foam dots at crest peaks
-          if (layer === 0 && Math.random() < 0.3) {
+          if (layer === 0 && Math.random() < 0.2) {
             _ctx.fillStyle = `rgba(255,255,255,${crestAlpha * 0.8})`;
             const foamCount = 3 + Math.floor(Math.random() * 4);
             for (let f = 0; f < foamCount; f++) {
@@ -712,7 +844,7 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
         // Stripes
         if ((fish.stripeCount ?? 0) > 0) {
           _ctx.globalAlpha = 0.2; // Reduced from 0.3 (33% more transparent)
-          _ctx.fillStyle = `hsl(${fish.hue2 ?? (fish.hue ?? 200)} 90% 50%)`;
+          _ctx.fillStyle = `hsl(${fish.hue2 ?? fish.hue ?? 200} 90% 50%)`;
           const n = fish.stripeCount || 0;
           for (let i = 0; i < n; i++) {
             const t = (i + 1) / (n + 1);
@@ -785,7 +917,7 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
             for (let i = 0; i < n; i++) {
               const t = ((i * 97 + (fish.sharkPatternSeed || 0)) % 1000) / 1000;
               const px = -bodyL * 0.2 + t * bodyL * 0.8;
-              const py = ((Math.sin(t * 12.3) * 0.4)) * bodyW * 0.6;
+              const py = Math.sin(t * 12.3) * 0.4 * bodyW * 0.6;
               _ctx.beginPath();
               _ctx.ellipse(px, py, bodyW * 0.12, bodyW * 0.07, 0, 0, Math.PI * 2);
               _ctx.fill();
@@ -827,12 +959,18 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       _ctx.fillStyle = 'rgba(0,0,0,0.35)';
       _ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       _ctx.lineWidth = 1;
-      _ctx.beginPath(); _ctx.rect(x - 6, y - 6, chartW + 12, chartH + 12); _ctx.fill(); _ctx.stroke();
+      _ctx.beginPath();
+      _ctx.rect(x - 6, y - 6, chartW + 12, chartH + 12);
+      _ctx.fill();
+      _ctx.stroke();
       // Grid
       _ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       for (let i = 1; i < 5; i++) {
         const gy = y + (i * chartH) / 5;
-        _ctx.beginPath(); _ctx.moveTo(x, gy); _ctx.lineTo(x + chartW, gy); _ctx.stroke();
+        _ctx.beginPath();
+        _ctx.moveTo(x, gy);
+        _ctx.lineTo(x + chartW, gy);
+        _ctx.stroke();
       }
       // Fish line (teal)
       _ctx.strokeStyle = 'hsl(190 80% 60%)';
@@ -840,24 +978,44 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       _ctx.beginPath();
       let started = false;
       for (const s of windowed) {
-        const px = toX(s.tMs); const py = toY(s.fish);
-        if (!started) { _ctx.moveTo(px, py); started = true; } else { _ctx.lineTo(px, py); }
+        const px = toX(s.tMs);
+        const py = toY(s.fish);
+        if (!started) {
+          _ctx.moveTo(px, py);
+          started = true;
+        } else {
+          _ctx.lineTo(px, py);
+        }
       }
       _ctx.stroke();
       // Sharks line (gray-blue)
       _ctx.strokeStyle = 'hsl(210 10% 70%)';
-      _ctx.beginPath(); started = false;
+      _ctx.beginPath();
+      started = false;
       for (const s of windowed) {
-        const px = toX(s.tMs); const py = toY(s.sharks);
-        if (!started) { _ctx.moveTo(px, py); started = true; } else { _ctx.lineTo(px, py); }
+        const px = toX(s.tMs);
+        const py = toY(s.sharks);
+        if (!started) {
+          _ctx.moveTo(px, py);
+          started = true;
+        } else {
+          _ctx.lineTo(px, py);
+        }
       }
       _ctx.stroke();
       // Food line (amber)
       _ctx.strokeStyle = '#eab308';
-      _ctx.beginPath(); started = false;
+      _ctx.beginPath();
+      started = false;
       for (const s of windowed) {
-        const px = toX(s.tMs); const py = toY(s.food);
-        if (!started) { _ctx.moveTo(px, py); started = true; } else { _ctx.lineTo(px, py); }
+        const px = toX(s.tMs);
+        const py = toY(s.food);
+        if (!started) {
+          _ctx.moveTo(px, py);
+          started = true;
+        } else {
+          _ctx.lineTo(px, py);
+        }
       }
       _ctx.stroke();
       // Legend
@@ -865,14 +1023,20 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       _ctx.font = '10px sans-serif';
       _ctx.fillText('Populations (5 min)', x, y - 10);
       // fish legend
-      _ctx.fillStyle = 'hsl(190 80% 60%)'; _ctx.fillRect(x, y + chartH + 2, 10, 3);
-      _ctx.fillStyle = 'rgba(255,255,255,0.85)'; _ctx.fillText('Fish', x + 14, y + chartH + 5);
+      _ctx.fillStyle = 'hsl(190 80% 60%)';
+      _ctx.fillRect(x, y + chartH + 2, 10, 3);
+      _ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      _ctx.fillText('Fish', x + 14, y + chartH + 5);
       // shark legend
-      _ctx.fillStyle = 'hsl(210 10% 70%)'; _ctx.fillRect(x + 54, y + chartH + 2, 10, 3);
-      _ctx.fillStyle = 'rgba(255,255,255,0.85)'; _ctx.fillText('Sharks', x + 68, y + chartH + 5);
+      _ctx.fillStyle = 'hsl(210 10% 70%)';
+      _ctx.fillRect(x + 54, y + chartH + 2, 10, 3);
+      _ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      _ctx.fillText('Sharks', x + 68, y + chartH + 5);
       // food legend
-      _ctx.fillStyle = '#eab308'; _ctx.fillRect(x + 120, y + chartH + 2, 10, 3);
-      _ctx.fillStyle = 'rgba(255,255,255,0.85)'; _ctx.fillText('Food', x + 134, y + chartH + 5);
+      _ctx.fillStyle = '#eab308';
+      _ctx.fillRect(x + 120, y + chartH + 2, 10, 3);
+      _ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      _ctx.fillText('Food', x + 134, y + chartH + 5);
       _ctx.restore();
     }
   };
@@ -896,19 +1060,22 @@ export default forwardRef<FishOverlayHandle, FishOverlayProps>(function FishOver
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       resizeObsRef.current?.disconnect();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-0" />
-  );
+  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-0" />;
 });
 
 // Helpers
-function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }
-function normalizeAngle(a: number): number { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+function normalizeAngle(a: number): number {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
 function drawEllipse(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   ctx.beginPath();
   ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
 }
-
