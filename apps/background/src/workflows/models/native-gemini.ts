@@ -350,7 +350,7 @@ export class NativeGeminiChatModel {
 
     let result: any;
     try {
-      result = await model.generateContentStream({
+      const requestBody: any = {
         contents: this.toGeminiContents(chatMessages),
         systemInstruction: system || undefined,
         generationConfig: {
@@ -359,7 +359,8 @@ export class NativeGeminiChatModel {
           ...this.getThinkingConfig(),
         },
         tools: this.webSearchEnabled ? [{ googleSearch: {} }] : undefined,
-      });
+      };
+      result = await model.generateContentStream(requestBody);
     } catch (error: any) {
       const msg = String(error?.message || error);
       if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
