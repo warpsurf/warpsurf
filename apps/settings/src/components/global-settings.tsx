@@ -79,8 +79,8 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           className={cn(
             'text-sm',
             isDarkMode
-              ? 'border-blue-600 bg-blue-700 text-blue-100 hover:bg-blue-600'
-              : 'border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200',
+              ? 'border-[#3a3a34] bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
+              : 'border-[#d9d7ce] bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
           )}>
           Apply to all
         </Button>
