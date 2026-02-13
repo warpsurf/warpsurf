@@ -57,118 +57,132 @@ attachRuntimeListeners({
 });
 
 // Setup context menus for quick actions
-function setupContextMenus() {
-  // Remove existing menus first to avoid duplicates
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: 'explain-selection',
-      title: 'Explain this',
-      contexts: ['selection'],
-    });
-
-    // Show on all contexts except selection (which has its own menu item)
-    chrome.contextMenus.create({
-      id: 'summarize-page',
-      title: 'Summarize this page',
-      contexts: ['page', 'frame', 'link', 'image', 'video', 'audio'],
-    });
-
-    logger.info('Context menus created');
-  });
-}
-
-// Create menus on install/update
+// Only create on install/update - this is the recommended pattern for context menus
 chrome.runtime.onInstalled.addListener(() => {
-  setupContextMenus();
+  // First remove all existing menus to ensure clean state
+  chrome.contextMenus.removeAll(() => {
+    // Create explain-selection menu
+    chrome.contextMenus.create(
+      {
+        id: 'explain-selection',
+        title: 'Explain this',
+        contexts: ['selection'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Failed to create explain-selection menu:', chrome.runtime.lastError.message);
+        }
+      },
+    );
+
+    // Create summarize-page menu
+    chrome.contextMenus.create(
+      {
+        id: 'summarize-page',
+        title: 'Summarize this page',
+        contexts: ['page', 'frame', 'link', 'image', 'video', 'audio'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Failed to create summarize-page menu:', chrome.runtime.lastError.message);
+        } else {
+          logger.info('Context menus created successfully');
+        }
+      },
+    );
+  });
 });
 
-// Also create on startup (for when extension is reloaded)
-chrome.runtime.onStartup.addListener(() => {
-  setupContextMenus();
-});
-
-// Create immediately for dev reloads
-setupContextMenus();
-
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.windowId) return;
 
-  let pendingAction: {
-    prompt: string;
-    autoStart: boolean;
-    workflowType: string;
-    contextTabId?: number;
-    errorMessage?: string;
-    contextMenuAction?: string;
-    infoMessage?: string;
-  } | null = null;
+  // Open the side panel immediately to preserve user gesture context.
+  // Chrome requires sidePanel.open() to be called synchronously in the
+  // user gesture handler — any await before it invalidates the gesture.
+  const openPromise = chrome.sidePanel.open({ windowId: tab.windowId }).catch(error => {
+    logger.error('Failed to open side panel', error);
+  });
 
-  const tabUrl = tab.url || '';
-  const RESTRICTED_PREFIXES = [
-    'chrome://',
-    'chrome-extension://',
-    'about:',
-    'data:',
-    'javascript:',
-    'edge://',
-    'brave://',
-  ];
-  const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
+  // Now do async work to build the pending action
+  (async () => {
+    let pendingAction: {
+      prompt: string;
+      autoStart: boolean;
+      workflowType: string;
+      contextTabId?: number;
+      errorMessage?: string;
+      contextMenuAction?: string;
+      infoMessage?: string;
+    } | null = null;
 
-  if (info.menuItemId === 'explain-selection' && info.selectionText) {
-    // Determine if we can include page context (not restricted and allowed by firewall)
-    let contextTabId: number | undefined;
-    let infoMessage: string | undefined;
-    if (isRestricted) {
-      infoMessage = 'Page context unavailable (restricted page).';
-    } else if (tab.id) {
-      const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
-      if (allowedByFirewall) {
-        contextTabId = tab.id;
-      } else {
-        infoMessage = 'Page context unavailable (blocked by firewall).';
+    const tabUrl = tab.url || '';
+    const RESTRICTED_PREFIXES = [
+      'chrome://',
+      'chrome-extension://',
+      'about:',
+      'data:',
+      'javascript:',
+      'edge://',
+      'brave://',
+    ];
+    const isRestricted = RESTRICTED_PREFIXES.some(prefix => tabUrl.startsWith(prefix));
+
+    if (info.menuItemId === 'explain-selection' && info.selectionText) {
+      // Determine if we can include page context (not restricted and allowed by firewall)
+      let contextTabId: number | undefined;
+      let infoMessage: string | undefined;
+      if (isRestricted) {
+        infoMessage = 'Page context unavailable (restricted page).';
+      } else if (tab.id) {
+        const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+        if (allowedByFirewall) {
+          contextTabId = tab.id;
+        } else {
+          infoMessage = 'Page context unavailable (blocked by firewall).';
+        }
       }
-    }
-    pendingAction = {
-      prompt: `Explain this:\n\n${info.selectionText}`,
-      autoStart: true,
-      workflowType: 'chat',
-      contextTabId,
-      contextMenuAction: 'explain-selection',
-      infoMessage,
-    };
-  } else if (info.menuItemId === 'summarize-page') {
-    if (isRestricted) {
       pendingAction = {
-        prompt: '',
-        autoStart: false,
+        prompt: `Explain this:\n\n${info.selectionText}`,
+        autoStart: true,
         workflowType: 'chat',
-        errorMessage: `Cannot summarize this page. Browser system pages (like ${tabUrl.split('/')[0]}//...) are restricted and cannot be accessed by extensions for security reasons. Please try summarizing a regular web page instead.`,
+        contextTabId,
+        contextMenuAction: 'explain-selection',
+        infoMessage,
       };
-    } else {
-      const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
-      if (!allowedByFirewall) {
+    } else if (info.menuItemId === 'summarize-page') {
+      if (isRestricted) {
         pendingAction = {
           prompt: '',
           autoStart: false,
           workflowType: 'chat',
-          errorMessage: `Cannot summarize this page. The URL "${tabUrl}" is blocked by your firewall settings. You can adjust allowed/denied URLs in Settings > Web.`,
+          errorMessage: `Cannot summarize this page. Browser system pages (like ${tabUrl.split('/')[0]}//...) are restricted and cannot be accessed by extensions for security reasons. Please try summarizing a regular web page instead.`,
         };
       } else {
-        pendingAction = {
-          prompt: 'Summarize this page',
-          autoStart: true,
-          workflowType: 'chat',
-          contextTabId: tab.id,
-        };
+        const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+        if (!allowedByFirewall) {
+          pendingAction = {
+            prompt: '',
+            autoStart: false,
+            workflowType: 'chat',
+            errorMessage: `Cannot summarize this page. The URL "${tabUrl}" is blocked by your firewall settings. You can adjust allowed/denied URLs in Settings > Web.`,
+          };
+        } else {
+          pendingAction = {
+            prompt: 'Summarize this page',
+            autoStart: true,
+            workflowType: 'chat',
+            contextTabId: tab.id,
+          };
+        }
       }
     }
-  }
 
-  if (pendingAction) {
-    await chrome.storage.session.set({ pendingAction });
-    await chrome.sidePanel.open({ windowId: tab.windowId });
-  }
+    if (pendingAction) {
+      // Wait for panel to be open before setting the action, so the panel can pick it up
+      await openPromise;
+      await chrome.storage.session.set({ pendingAction });
+    }
+  })();
 });
 
 logger.info('background loaded');
