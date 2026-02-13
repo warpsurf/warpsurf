@@ -376,7 +376,7 @@ export default function TabContextSelector({
   );
 
   // Button text based on mode
-  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : '+';
+  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : '+ Tabs';
   const ButtonIcon = autoContextEnabled ? FaBolt : null;
 
   return (
