@@ -19,6 +19,8 @@ export interface ToolParameter {
 
 /** Settings that can be modified via update_general_setting. */
 export const ALLOWED_GENERAL_SETTINGS = [
+  // Theme & display
+  'themeMode',
   // Vision & display
   'useVision',
   'useVisionForPlanner',

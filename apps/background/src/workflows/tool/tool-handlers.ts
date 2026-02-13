@@ -40,6 +40,11 @@ const ROLE_MAP: Record<string, AgentNameEnum> = {
 
 const allowedSettingsSet = new Set<string>(ALLOWED_GENERAL_SETTINGS);
 
+/** String settings with specific allowed values. */
+const STRING_ENUM_SETTINGS: Record<string, readonly string[]> = {
+  themeMode: ['auto', 'light', 'dark'],
+};
+
 type Handler = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolCallResult>;
 
 const handlers: Record<string, Handler> = {
@@ -117,7 +122,15 @@ const handlers: Record<string, Handler> = {
     const currentVal = (current as any)[setting];
     let coerced = value;
 
-    if (typeof currentVal === 'boolean') {
+    // Validate string enum settings
+    const allowedValues = STRING_ENUM_SETTINGS[setting];
+    if (allowedValues) {
+      const strValue = String(value).toLowerCase();
+      if (!allowedValues.includes(strValue)) {
+        return { success: false, message: `Invalid value for '${setting}'. Allowed: ${allowedValues.join(', ')}.` };
+      }
+      coerced = strValue;
+    } else if (typeof currentVal === 'boolean') {
       coerced = value === true || value === 'true';
     } else if (typeof currentVal === 'number') {
       coerced = Number(value);
