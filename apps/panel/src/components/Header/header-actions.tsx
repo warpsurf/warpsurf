@@ -35,6 +35,7 @@ interface HeaderActionsProps {
   feedOnClick: boolean;
   setFeedOnClick: (v: boolean) => void;
   onViewDisplay: () => void;
+  onClearDisplay: () => void;
   onRefreshHistoryContext?: () => Promise<void>;
   onEmergencyStopToggle?: (enabled: boolean) => void;
   hasAcceptedHistoryPrivacy?: boolean | null;
@@ -261,6 +262,12 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
               onClick={props.onViewDisplay}
               className={`mt-1 flex w-full rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
               View Display
+            </button>
+            <button
+              type="button"
+              onClick={props.onClearDisplay}
+              className={`mt-1 flex w-full rounded px-3 py-2 ${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'}`}>
+              Clear Display
             </button>
           </div>
         )}

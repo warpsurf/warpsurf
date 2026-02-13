@@ -867,6 +867,7 @@ const SidePanel = () => {
                     setFeedOnClick(true);
                     setViewDisplayMode(true);
                   }}
+                  onClearDisplay={() => fishRef.current?.clearAll()}
                   onRefreshHistoryContext={handleRefreshHistoryContext}
                   onEmergencyStopToggle={setShowEmergencyStop}
                   hasAcceptedHistoryPrivacy={hasAcceptedHistoryPrivacy}
