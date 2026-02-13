@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiX } from 'react-icons/fi';
 
 type WorkerGroup = { taskId: string; groupId?: number };
 
@@ -32,16 +33,24 @@ const CloseTabsButton: React.FC<CloseTabsButtonProps> = ({
       }
 
       for (const gid of uniqueGroupIds) {
-        try { chrome.runtime.sendMessage({ type: 'close_task_group', groupId: gid }); } catch {}
+        try {
+          chrome.runtime.sendMessage({ type: 'close_task_group', groupId: gid });
+        } catch {}
       }
       for (const tid of taskIdsWithoutGroup) {
-        try { chrome.runtime.sendMessage({ type: 'close_task_tabs', taskId: tid }); } catch {}
+        try {
+          chrome.runtime.sendMessage({ type: 'close_task_tabs', taskId: tid });
+        } catch {}
       }
       if (sessionIdForCleanup) {
-        try { chrome.runtime.sendMessage({ type: 'close_all_tabs_for_session', sessionId: sessionIdForCleanup }); } catch {}
+        try {
+          chrome.runtime.sendMessage({ type: 'close_all_tabs_for_session', sessionId: sessionIdForCleanup });
+        } catch {}
       }
     } finally {
-      try { onCompleted?.(); } catch {}
+      try {
+        onCompleted?.();
+      } catch {}
     }
   };
 
@@ -49,15 +58,17 @@ const CloseTabsButton: React.FC<CloseTabsButtonProps> = ({
     <button
       type="button"
       onClick={handleClose}
-      className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] ${isDarkMode ? 'border-slate-600 hover:bg-slate-800 text-slate-300' : 'border-gray-300 hover:bg-gray-100 text-gray-700'}`}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium transition-colors ${
+        isDarkMode
+          ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+      }`}
       aria-label="Close all agent tabs"
-      title="Close all tabs opened by the agents in this workflow"
-    >
-      Close Tabs
+      title="Close all tabs opened by the agents">
+      <FiX className="h-3.5 w-3.5" />
+      <span>Close Tabs</span>
     </button>
   );
 };
 
 export default CloseTabsButton;
-
-
