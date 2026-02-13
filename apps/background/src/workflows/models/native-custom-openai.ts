@@ -11,6 +11,7 @@
 
 import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
+import { normalizeModelError, isNonRetryableError } from './model-error';
 
 export interface NativeCustomOpenAIArgs {
   model: string;
@@ -134,7 +135,11 @@ export class NativeCustomOpenAIChatModel {
         }
 
         if (!text || text.trim().length === 0) {
-          throw lastError || new Error('Failed to obtain response from OpenAI-compatible API');
+          throw normalizeModelError(
+            lastError || new Error('Failed to obtain response from OpenAI-compatible API'),
+            'OpenAI Compatible',
+            this.modelName,
+          );
         }
 
         // Parse response
@@ -178,7 +183,11 @@ export class NativeCustomOpenAIChatModel {
     const result = await this.attemptRequest(chatBody, signal);
 
     if (!result.text || result.text.trim().length === 0) {
-      throw result.error || new Error('Empty response from OpenAI-compatible API');
+      throw normalizeModelError(
+        result.error || new Error('Empty response from OpenAI-compatible API'),
+        'OpenAI Compatible',
+        this.modelName,
+      );
     }
 
     return { content: result.text };
@@ -204,7 +213,7 @@ export class NativeCustomOpenAIChatModel {
 
         // Respect abort signals immediately
         if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
-          throw error;
+          throw normalizeModelError(error, 'OpenAI Compatible', this.modelName);
         }
 
         // Don't retry on format-related errors - let caller try different format
@@ -215,10 +224,14 @@ export class NativeCustomOpenAIChatModel {
           msg.includes('not supported') ||
           msg.includes('400')
         ) {
-          throw error;
+          throw normalizeModelError(error, 'OpenAI Compatible', this.modelName);
         }
 
-        lastError = error;
+        lastError = normalizeModelError(error, 'OpenAI Compatible', this.modelName);
+        // Don't retry auth errors - fail immediately
+        if (isNonRetryableError(lastError)) {
+          return { text: '', error: lastError };
+        }
         if (retryNum < this.maxRetries) {
           // Exponential backoff with jitter
           const delay = Math.min(1000 * Math.pow(2, retryNum) + Math.random() * 1000, 10000);
@@ -307,24 +320,37 @@ export class NativeCustomOpenAIChatModel {
     messages: BaseMessage[],
     signal?: AbortSignal,
   ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
-    const stream = await this.client.chat.completions.create(
-      {
-        model: this.modelName,
-        messages: this.toOpenAIMessages(messages),
-        max_tokens: this.maxTokens,
-        // Only include temperature if explicitly set; omit to use provider default
-        ...(this.temperature !== undefined && { temperature: this.temperature }),
-        stream: true,
-        stream_options: { include_usage: true },
-      } as any,
-      { signal },
-    );
+    let stream: any;
+    try {
+      stream = await this.client.chat.completions.create(
+        {
+          model: this.modelName,
+          messages: this.toOpenAIMessages(messages),
+          max_tokens: this.maxTokens,
+          // Only include temperature if explicitly set; omit to use provider default
+          ...(this.temperature !== undefined && { temperature: this.temperature }),
+          stream: true,
+          stream_options: { include_usage: true },
+        } as any,
+        { signal },
+      );
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'OpenAI Compatible', this.modelName);
+    }
 
     let usage: any = null;
-    for await (const chunk of stream as unknown as AsyncIterable<any>) {
-      if (chunk.usage) usage = chunk.usage;
-      const text = chunk.choices?.[0]?.delta?.content;
-      if (text) yield { text, done: false };
+    try {
+      for await (const chunk of stream as unknown as AsyncIterable<any>) {
+        if (chunk.usage) usage = chunk.usage;
+        const text = chunk.choices?.[0]?.delta?.content;
+        if (text) yield { text, done: false };
+      }
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'OpenAI Compatible', this.modelName);
     }
     yield { text: '', done: true, usage };
   }

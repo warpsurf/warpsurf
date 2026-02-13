@@ -6,6 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { ThinkingLevel } from '@extension/storage';
+import { normalizeModelError, isNonRetryableError } from './model-error';
 
 export interface NativeGeminiArgs {
   model: string;
@@ -112,7 +113,9 @@ export class NativeGeminiChatModel {
             if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
               throw error;
             }
-            lastError = error;
+            lastError = normalizeModelError(error, 'Gemini', this.modelName);
+            // Don't retry auth errors - fail immediately
+            if (isNonRetryableError(lastError)) throw lastError;
             if (retryNum === retries) {
               break;
             }
@@ -120,7 +123,7 @@ export class NativeGeminiChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw lastError || new Error('Failed to obtain response text from Gemini');
+          throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Gemini', this.modelName);
         }
 
         // Note: Actual token logging is handled by llm-fetch-logger.ts to prevent duplicates
@@ -204,7 +207,9 @@ export class NativeGeminiChatModel {
         if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
           throw error;
         }
-        lastError = error;
+        lastError = normalizeModelError(error, 'Gemini', this.modelName);
+        // Don't retry auth errors - fail immediately
+        if (isNonRetryableError(lastError)) throw lastError;
         if (retryNum === retries) {
           break;
         }
@@ -212,7 +217,7 @@ export class NativeGeminiChatModel {
       }
     }
     if (!text || text.trim().length === 0) {
-      throw lastError || new Error('Failed to obtain response text from Gemini');
+      throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Gemini', this.modelName);
     }
 
     // Note: Actual token logging is handled by llm-fetch-logger.ts to prevent duplicates
@@ -337,34 +342,47 @@ export class NativeGeminiChatModel {
     const { system, chatMessages } = this.splitSystem(messages);
     const model = this.client.getGenerativeModel({ model: this.modelName });
 
-    const result = await model.generateContentStream({
-      contents: this.toGeminiContents(chatMessages),
-      systemInstruction: system || undefined,
-      generationConfig: {
-        temperature: this.temperature,
-        maxOutputTokens: this.maxTokens,
-        ...this.getThinkingConfig(),
-      },
-    });
-
-    // Iterate through the stream
-    for await (const chunk of result.stream) {
-      // Check abort signal
-      if (signal?.aborted) {
-        throw new Error('AbortError: request was aborted');
-      }
-      const text = chunk.text();
-      if (text) yield { text, done: false };
+    let result: any;
+    try {
+      result = await model.generateContentStream({
+        contents: this.toGeminiContents(chatMessages),
+        systemInstruction: system || undefined,
+        generationConfig: {
+          temperature: this.temperature,
+          maxOutputTokens: this.maxTokens,
+          ...this.getThinkingConfig(),
+        },
+      });
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Gemini', this.modelName);
     }
 
-    // Get usage from the aggregated response
-    const response = await result.response;
-    const usage = response.usageMetadata
-      ? {
-          input_tokens: response.usageMetadata.promptTokenCount,
-          output_tokens: response.usageMetadata.candidatesTokenCount,
+    try {
+      // Iterate through the stream
+      for await (const chunk of result.stream) {
+        // Check abort signal
+        if (signal?.aborted) {
+          throw new Error('AbortError: request was aborted');
         }
-      : null;
-    yield { text: '', done: true, usage };
+        const text = chunk.text();
+        if (text) yield { text, done: false };
+      }
+
+      // Get usage from the aggregated response
+      const response = await result.response;
+      const usage = response.usageMetadata
+        ? {
+            input_tokens: response.usageMetadata.promptTokenCount,
+            output_tokens: response.usageMetadata.candidatesTokenCount,
+          }
+        : null;
+      yield { text: '', done: true, usage };
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Gemini', this.modelName);
+    }
   }
 }

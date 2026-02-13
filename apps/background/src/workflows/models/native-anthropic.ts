@@ -4,6 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { ThinkingLevel } from '@extension/storage';
+import { normalizeModelError, isNonRetryableError } from './model-error';
 // Relax message types to avoid strict dependency on LangChain at build time
 type BaseMessage = any;
 
@@ -114,7 +115,9 @@ export class NativeAnthropicChatModel {
             if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
               throw error;
             }
-            lastError = error;
+            lastError = normalizeModelError(error, 'Anthropic', this.modelName);
+            // Don't retry auth errors - fail immediately
+            if (isNonRetryableError(lastError)) throw lastError;
             if (retryNum === retries) {
               break;
             }
@@ -122,7 +125,9 @@ export class NativeAnthropicChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw lastError || new Error('Failed to obtain response text from Anthropic');
+          throw (
+            lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Anthropic', this.modelName)
+          );
         }
         let parsed: any = undefined;
         try {
@@ -194,7 +199,9 @@ export class NativeAnthropicChatModel {
         if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
           throw error;
         }
-        lastError = error;
+        lastError = normalizeModelError(error, 'Anthropic', this.modelName);
+        // Don't retry auth errors - fail immediately
+        if (isNonRetryableError(lastError)) throw lastError;
         if (retryNum === retries) {
           break;
         }
@@ -202,7 +209,7 @@ export class NativeAnthropicChatModel {
       }
     }
     if (!text || text.trim().length === 0) {
-      throw lastError || new Error('Failed to obtain response text from Anthropic');
+      throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Anthropic', this.modelName);
     }
     return { content: text };
   }
@@ -334,33 +341,46 @@ export class NativeAnthropicChatModel {
     const { system, chatMessages } = this.splitSystem(messages);
 
     // Use the stream() method for more reliable streaming
-    const stream = this.client.messages.stream(
-      {
-        model: this.modelName,
-        max_tokens: this.maxTokens,
-        ...this.getThinkingParams(),
-        system: system || undefined,
-        messages: this.toAnthropicMessages(chatMessages),
-      } as any,
-      { signal },
-    );
-
-    // Process text events as they arrive
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        yield { text: event.delta.text, done: false };
-      }
+    let stream: any;
+    try {
+      stream = this.client.messages.stream(
+        {
+          model: this.modelName,
+          max_tokens: this.maxTokens,
+          ...this.getThinkingParams(),
+          system: system || undefined,
+          messages: this.toAnthropicMessages(chatMessages),
+        } as any,
+        { signal },
+      );
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Anthropic', this.modelName);
     }
 
-    // Get final message with usage after stream completes
-    const finalMessage = await stream.finalMessage();
-    const usage = finalMessage.usage
-      ? {
-          input_tokens: finalMessage.usage.input_tokens,
-          output_tokens: finalMessage.usage.output_tokens,
+    try {
+      // Process text events as they arrive
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          yield { text: event.delta.text, done: false };
         }
-      : null;
+      }
 
-    yield { text: '', done: true, usage };
+      // Get final message with usage after stream completes
+      const finalMessage = await stream.finalMessage();
+      const usage = finalMessage.usage
+        ? {
+            input_tokens: finalMessage.usage.input_tokens,
+            output_tokens: finalMessage.usage.output_tokens,
+          }
+        : null;
+
+      yield { text: '', done: true, usage };
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Anthropic', this.modelName);
+    }
   }
 }

@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
 
 import type { ThinkingLevel } from '@extension/storage';
+import { normalizeModelError, isNonRetryableError } from './model-error';
 
 export interface NativeOpenAIArgs {
   model: string;
@@ -111,11 +112,13 @@ export class NativeOpenAIChatModel {
                     delete body.response_format;
                     resp = await (this.client as any).responses.create(body, { signal });
                   } catch (_err3: any) {
-                    lastError = _err3;
+                    lastError = normalizeModelError(_err3, 'OpenAI', this.modelName);
                   }
                 }
               } else {
-                lastError = _err1;
+                lastError = normalizeModelError(_err1, 'OpenAI', this.modelName);
+                // Don't retry auth errors - fail immediately
+                if (isNonRetryableError(lastError)) throw lastError;
               }
             }
             if (resp) {
@@ -128,12 +131,14 @@ export class NativeOpenAIChatModel {
                 break;
               }
             }
+            // Don't retry auth errors
+            if (lastError && isNonRetryableError(lastError)) throw lastError;
             if (retryNum < retries) {
               await new Promise(resolve => setTimeout(resolve, 5000));
             }
           }
           if (!resp) {
-            throw lastError || new Error('OpenAI Responses API failed');
+            throw lastError || normalizeModelError(new Error('OpenAI Responses API failed'), 'OpenAI', this.modelName);
           }
           const text = this.extractResponsesText(resp);
           // Get usage for Responses API
@@ -193,7 +198,11 @@ export class NativeOpenAIChatModel {
             if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
               throw error;
             }
-            lastError = error;
+            lastError = normalizeModelError(error, 'OpenAI', this.modelName);
+            // Don't retry auth errors - fail immediately
+            if (isNonRetryableError(lastError)) {
+              throw lastError;
+            }
             if (retryNum === retries) {
               break;
             }
@@ -201,7 +210,7 @@ export class NativeOpenAIChatModel {
           }
         }
         if (!text || text.trim().length === 0) {
-          throw lastError || new Error('Failed to obtain response text from OpenAI Chat Completions');
+          throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'OpenAI', this.modelName);
         }
         let parsed: any = undefined;
         try {
@@ -240,9 +249,15 @@ export class NativeOpenAIChatModel {
 
       // Models don't have access to context - removed incorrect wrapper
 
-      const resp: any = await (this.client as any).responses.create(body, { signal });
-      const text = this.extractResponsesText(resp);
-      return { content: text };
+      try {
+        const resp: any = await (this.client as any).responses.create(body, { signal });
+        const text = this.extractResponsesText(resp);
+        return { content: text };
+      } catch (error: any) {
+        const msg = String(error?.message || error);
+        if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+        throw normalizeModelError(error, 'OpenAI', this.modelName);
+      }
     }
 
     const payload = this.toOpenAIMessages(messages);
@@ -262,9 +277,15 @@ export class NativeOpenAIChatModel {
 
     // Models don't have access to context - removed incorrect wrapper
 
-    const resp = await this.client.chat.completions.create(chatBody as any, { signal });
-    const text = resp.choices?.[0]?.message?.content || '';
-    return { content: text };
+    try {
+      const resp = await this.client.chat.completions.create(chatBody as any, { signal });
+      const text = resp.choices?.[0]?.message?.content || '';
+      return { content: text };
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'OpenAI', this.modelName);
+    }
   }
 
   private toOpenAIMessages(messages: BaseMessage[]) {
@@ -482,14 +503,27 @@ export class NativeOpenAIChatModel {
       body.temperature = this.temperature;
     }
 
-    const stream = (await this.client.chat.completions.create(body as any, { signal })) as any;
+    let stream: any;
+    try {
+      stream = (await this.client.chat.completions.create(body as any, { signal })) as any;
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'OpenAI', this.modelName);
+    }
 
     let usage: any = null;
-    for await (const chunk of stream as AsyncIterable<any>) {
-      // Capture usage from final chunk
-      if (chunk.usage) usage = chunk.usage;
-      const text = chunk.choices?.[0]?.delta?.content;
-      if (text) yield { text, done: false };
+    try {
+      for await (const chunk of stream as AsyncIterable<any>) {
+        // Capture usage from final chunk
+        if (chunk.usage) usage = chunk.usage;
+        const text = chunk.choices?.[0]?.delta?.content;
+        if (text) yield { text, done: false };
+      }
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'OpenAI', this.modelName);
     }
     yield { text: '', done: true, usage };
   }

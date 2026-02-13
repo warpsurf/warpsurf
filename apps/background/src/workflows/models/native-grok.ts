@@ -7,6 +7,7 @@
 import OpenAI from 'openai';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { ThinkingLevel } from '@extension/storage';
+import { normalizeModelError, isNonRetryableError } from './model-error';
 
 export interface NativeGrokArgs {
   model: string;
@@ -94,7 +95,9 @@ export class NativeGrokChatModel {
             if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
               throw error;
             }
-            lastError = error;
+            lastError = normalizeModelError(error, 'Grok', this.modelName);
+            // Don't retry auth errors - fail immediately
+            if (isNonRetryableError(lastError)) throw lastError;
             if (retryNum === retries) {
               break;
             }
@@ -103,7 +106,7 @@ export class NativeGrokChatModel {
         }
 
         if (!text || text.trim().length === 0) {
-          throw lastError || new Error('Failed to obtain response text from Grok');
+          throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Grok', this.modelName);
         }
 
         // SDK-level token logging disabled - handled by llm-fetch-logger.ts
@@ -164,7 +167,9 @@ export class NativeGrokChatModel {
         if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) {
           throw error;
         }
-        lastError = error;
+        lastError = normalizeModelError(error, 'Grok', this.modelName);
+        // Don't retry auth errors - fail immediately
+        if (isNonRetryableError(lastError)) throw lastError;
         if (retryNum === retries) {
           break;
         }
@@ -173,7 +178,7 @@ export class NativeGrokChatModel {
     }
 
     if (!text || text.trim().length === 0) {
-      throw lastError || new Error('Failed to obtain response text from Grok');
+      throw lastError || normalizeModelError(new Error('Failed to obtain response text'), 'Grok', this.modelName);
     }
 
     // SDK-level token logging disabled - handled by llm-fetch-logger.ts
@@ -254,24 +259,37 @@ export class NativeGrokChatModel {
     messages: BaseMessage[],
     signal?: AbortSignal,
   ): AsyncGenerator<{ text: string; done: boolean; usage?: any }> {
-    const stream = await this.client.chat.completions.create(
-      {
-        model: this.modelName,
-        messages: this.toOpenAIMessages(messages),
-        max_tokens: this.maxTokens,
-        // Only include temperature if explicitly set; omit to use provider default
-        ...(this.temperature !== undefined && { temperature: this.temperature }),
-        stream: true,
-        stream_options: { include_usage: true },
-      } as any,
-      { signal },
-    );
+    let stream: any;
+    try {
+      stream = await this.client.chat.completions.create(
+        {
+          model: this.modelName,
+          messages: this.toOpenAIMessages(messages),
+          max_tokens: this.maxTokens,
+          // Only include temperature if explicitly set; omit to use provider default
+          ...(this.temperature !== undefined && { temperature: this.temperature }),
+          stream: true,
+          stream_options: { include_usage: true },
+        } as any,
+        { signal },
+      );
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Grok', this.modelName);
+    }
 
     let usage: any = null;
-    for await (const chunk of stream as unknown as AsyncIterable<any>) {
-      if (chunk.usage) usage = chunk.usage;
-      const text = chunk.choices?.[0]?.delta?.content;
-      if (text) yield { text, done: false };
+    try {
+      for await (const chunk of stream as unknown as AsyncIterable<any>) {
+        if (chunk.usage) usage = chunk.usage;
+        const text = chunk.choices?.[0]?.delta?.content;
+        if (text) yield { text, done: false };
+      }
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (signal?.aborted || msg.includes('AbortError') || msg.includes('aborted')) throw error;
+      throw normalizeModelError(error, 'Grok', this.modelName);
     }
     yield { text: '', done: true, usage };
   }
