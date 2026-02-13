@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FaBrain,
   FaSearch,
@@ -15,6 +16,7 @@ import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, Microphone
 import TabContextSelector from './tab-context-selector';
 import SessionStatsBar from '../footer/session-stats-bar';
 import { DebugButtons } from '../footer/debug-buttons';
+import CloseTabsButton from '../footer/close-tabs-button';
 import type { ContextTabInfo } from './types';
 
 // Re-export for backward compatibility within this file
@@ -133,6 +135,11 @@ interface ChatInputProps {
   // Emergency stop props
   showEmergencyStop?: boolean;
   onEmergencyStop?: () => void;
+  // Close tabs props
+  showCloseTabs?: boolean;
+  workerTabGroups?: { taskId: string; groupId?: number }[];
+  sessionIdForCleanup?: string | null;
+  onClosedTabs?: () => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -185,6 +192,11 @@ export default function ChatInput({
   // Emergency stop
   showEmergencyStop,
   onEmergencyStop,
+  // Close tabs
+  showCloseTabs,
+  workerTabGroups = [],
+  sessionIdForCleanup,
+  onClosedTabs,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -202,12 +214,19 @@ export default function ChatInput({
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
+  const [workflowDropdownPosition, setWorkflowDropdownPosition] = useState({ top: 0, right: 0 });
   const workflowDropdownRef = useRef<HTMLDivElement>(null);
+  const workflowButtonRef = useRef<HTMLButtonElement>(null);
 
   // Close workflow dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
+      if (
+        workflowDropdownRef.current &&
+        !workflowDropdownRef.current.contains(e.target as Node) &&
+        workflowButtonRef.current &&
+        !workflowButtonRef.current.contains(e.target as Node)
+      ) {
         setWorkflowDropdownOpen(false);
       }
     };
@@ -215,6 +234,17 @@ export default function ChatInput({
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [workflowDropdownOpen]);
+
+  // Update dropdown position when opened
+  useEffect(() => {
+    if (workflowDropdownOpen && workflowButtonRef.current) {
+      const rect = workflowButtonRef.current.getBoundingClientRect();
+      setWorkflowDropdownPosition({
+        top: rect.top - 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
   }, [workflowDropdownOpen]);
 
   const selectedOption = AGENT_OPTIONS.find(o => o.type === selectedAgent) || AGENT_OPTIONS[0];
@@ -536,6 +566,15 @@ export default function ChatInput({
                 setErrorLogEntries={() => {}}
               />
             )}
+            {/* Close Tabs button */}
+            {(showCloseTabs || workerTabGroups.length > 0) && (
+              <CloseTabsButton
+                isDarkMode={isDarkMode}
+                workerTabGroups={workerTabGroups}
+                sessionIdForCleanup={sessionIdForCleanup}
+                onCompleted={onClosedTabs}
+              />
+            )}
             {/* Emergency Stop button */}
             {showEmergencyStop && onEmergencyStop && (
               <button
@@ -625,8 +664,9 @@ export default function ChatInput({
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               {/* Workflow dropdown selector */}
-              <div ref={workflowDropdownRef} className="relative">
+              <div className="relative">
                 <button
+                  ref={workflowButtonRef}
                   type="button"
                   onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
                   disabled={disabled}
@@ -641,34 +681,43 @@ export default function ChatInput({
                     className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`}
                   />
                 </button>
-                {workflowDropdownOpen && (
-                  <div
-                    className={`absolute right-0 bottom-full z-50 mb-1 w-40 rounded-lg border shadow-lg ${
-                      isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
-                    }`}>
-                    {AGENT_OPTIONS.map(option => (
-                      <button
-                        key={option.type}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAgent(option.type);
-                          setWorkflowDropdownOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
-                          selectedAgent === option.type
-                            ? isDarkMode
-                              ? 'bg-violet-600/30 text-violet-300'
-                              : 'bg-violet-50 text-violet-700'
-                            : isDarkMode
-                              ? 'text-slate-200 hover:bg-slate-700'
-                              : 'text-gray-700 hover:bg-gray-50'
-                        }`}>
-                        {option.icon}
-                        <span>{option.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {workflowDropdownOpen &&
+                  createPortal(
+                    <div
+                      ref={workflowDropdownRef}
+                      style={{
+                        position: 'fixed',
+                        top: workflowDropdownPosition.top,
+                        right: workflowDropdownPosition.right,
+                        transform: 'translateY(-100%)',
+                      }}
+                      className={`w-40 rounded-lg border shadow-lg z-[9999] ${
+                        isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
+                      }`}>
+                      {AGENT_OPTIONS.map(option => (
+                        <button
+                          key={option.type}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAgent(option.type);
+                            setWorkflowDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                            selectedAgent === option.type
+                              ? isDarkMode
+                                ? 'bg-violet-600/30 text-violet-300'
+                                : 'bg-violet-50 text-violet-700'
+                              : isDarkMode
+                                ? 'text-slate-200 hover:bg-slate-700'
+                                : 'text-gray-700 hover:bg-gray-50'
+                          }`}>
+                          {option.icon}
+                          <span>{option.name}</span>
+                        </button>
+                      ))}
+                    </div>,
+                    document.body,
+                  )}
               </div>
 
               {/* Send Button */}

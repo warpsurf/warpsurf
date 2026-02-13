@@ -5,7 +5,6 @@ import { INLINE_CHAT_DISCLAIMER } from '@extension/shared/lib/utils/disclaimers'
 import MessageList from '../components/chat-interface/message-list';
 import ChatInput from '../components/chat-interface/chat-input';
 import AvailableChatSection from '../components/chat-interface/available-chat-section';
-import SessionControls from '../components/footer/session-controls';
 import { formatUsd } from '../components/chat-interface/message-list';
 import type { ContextTabInfo } from '../components/chat-interface/types';
 
@@ -290,6 +289,13 @@ export function ChatScreen(props: ChatScreenProps) {
                   portRef={portRef}
                   showEmergencyStop={showEmergencyStop}
                   onEmergencyStop={handleKillSwitch}
+                  showCloseTabs={showCloseTabs}
+                  workerTabGroups={workerTabGroups}
+                  sessionIdForCleanup={currentSessionId || sessionIdRef.current}
+                  onClosedTabs={() => {
+                    setShowCloseTabs(false);
+                    setWorkerTabGroups([]);
+                  }}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -473,6 +479,13 @@ export function ChatScreen(props: ChatScreenProps) {
                   portRef={portRef}
                   showEmergencyStop={showEmergencyStop}
                   onEmergencyStop={handleKillSwitch}
+                  showCloseTabs={showCloseTabs}
+                  workerTabGroups={workerTabGroups}
+                  sessionIdForCleanup={currentSessionId || sessionIdRef.current}
+                  onClosedTabs={() => {
+                    setShowCloseTabs(false);
+                    setWorkerTabGroups([]);
+                  }}
                   onHandBackControl={instructions => {
                     const tabId = mirrorPreview?.tabId;
                     try {
@@ -491,18 +504,6 @@ export function ChatScreen(props: ChatScreenProps) {
               </div>
             </>
           )}
-
-          {/* Session controls - only shows close tabs button when needed */}
-          <SessionControls
-            isDarkMode={isDarkMode}
-            showCloseTabs={showCloseTabs}
-            workerTabGroups={workerTabGroups}
-            sessionIdForCleanup={currentSessionId || sessionIdRef.current}
-            onClosedTabs={() => {
-              setShowCloseTabs(false);
-              setWorkerTabGroups([]);
-            }}
-          />
           {(messages.length > 0 || forceChatView) && (
             <div className={`${isDarkMode ? 'text-slate-400' : 'text-gray-500'} px-3 py-2 text-[11px]`}>
               {INLINE_CHAT_DISCLAIMER}
