@@ -542,16 +542,11 @@ export function usePanelEffects(params: {
     };
   }, [stopConnection, portRef, sessionIdRef]);
 
-  // Scroll to bottom
-  useEffect(() => {
-    const container = panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null;
-    if (!container) return;
-    if (container.scrollHeight - container.scrollTop - container.clientHeight < 80) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, panelRef, messagesEndRef]);
-
-  // Jump-to-latest
+  // Jump-to-latest visibility tracking only
+  // NOTE: We intentionally do NOT auto-scroll here. The previous auto-scroll logic
+  // conflicted with Virtuoso's internal scroll management when using customScrollParent,
+  // causing the scroll position to jump unexpectedly during workflow execution.
+  // Users can use the "Jump to latest" button to manually scroll to the bottom.
   useEffect(() => {
     const container = panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null;
     if (!container) return;
