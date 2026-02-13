@@ -65,6 +65,15 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
   // Global model selection (apply same model to all visible agent roles)
   const [globalModelValue, setGlobalModelValue] = useState<string>('');
+  const [globalModelParameters, setGlobalModelParameters] = useState<{
+    temperature: number | undefined;
+    maxOutputTokens: number;
+    thinkingLevel: ThinkingLevel;
+  }>({
+    temperature: undefined,
+    maxOutputTokens: 8192,
+    thinkingLevel: 'default',
+  });
 
   // Load general settings and subscribe to changes
   useEffect(() => {
@@ -482,6 +491,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     }
   };
 
+  // Handle global model parameter changes
+  const handleGlobalParameterChange = (
+    param: 'temperature' | 'maxOutputTokens' | 'thinkingLevel',
+    value: number | undefined | ThinkingLevel,
+  ) => {
+    setGlobalModelParameters(prev => ({
+      ...prev,
+      [param]: value,
+    }));
+  };
+
   // Apply a selected global model to all agents
   const applyGlobalModelToAll = async () => {
     try {
@@ -503,8 +523,39 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         AgentNameEnum.Estimator,
       ];
 
+      const isThinkingModel = isThinkingCapableModel(globalModelValue);
+
+      // Build parameters object
+      const parametersToSave: Record<string, unknown> = {
+        maxOutputTokens: globalModelParameters.maxOutputTokens,
+      };
+      if (globalModelParameters.temperature !== undefined) {
+        parametersToSave.temperature = globalModelParameters.temperature;
+      }
+
       for (const agent of agentList) {
-        await handleModelChange(agent, globalModelValue);
+        // Update local state
+        setSelectedModels(prev => ({ ...prev, [agent]: globalModelValue }));
+        setModelParameters(prev => ({
+          ...prev,
+          [agent]: {
+            temperature: globalModelParameters.temperature,
+            maxOutputTokens: globalModelParameters.maxOutputTokens,
+          },
+        }));
+        if (isThinkingModel) {
+          setThinkingLevel(prev => ({ ...prev, [agent]: globalModelParameters.thinkingLevel }));
+        }
+
+        // Save to storage
+        const shouldEnableWebSearch = agent === AgentNameEnum.Search ? true : webSearchEnabled[agent] || false;
+        await agentModelStore.setAgentModel(agent, {
+          provider,
+          modelName: model,
+          parameters: parametersToSave,
+          thinkingLevel: isThinkingModel ? globalModelParameters.thinkingLevel : undefined,
+          webSearch: shouldEnableWebSearch,
+        });
       }
     } catch (error) {
       console.error('Error applying global model to all agents:', error);
@@ -550,6 +601,8 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         applyToAll={applyGlobalModelToAll}
         showAllModels={showAllModels}
         hasModelPricing={hasModelPricing}
+        globalModelParameters={globalModelParameters}
+        onChangeGlobalParameter={handleGlobalParameterChange}
         responseTimeoutSeconds={settings.responseTimeoutSeconds ?? 120}
         onChangeTimeout={seconds => updateSetting('responseTimeoutSeconds', seconds)}
       />

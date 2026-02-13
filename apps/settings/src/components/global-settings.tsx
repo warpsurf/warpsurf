@@ -1,11 +1,18 @@
 import { Button } from '@extension/ui';
-import { LabelWithTooltip, cn, ModelComboBox } from './primitives';
+import { LabelWithTooltip, cn, ModelComboBox, TemperatureControl, isThinkingCapableModel } from './primitives';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
+import type { ThinkingLevel } from '@extension/storage';
 
 export interface GlobalModelOption {
   provider: string;
   providerName: string;
   model: string;
+}
+
+export interface GlobalModelParameters {
+  temperature: number | undefined;
+  maxOutputTokens: number;
+  thinkingLevel: ThinkingLevel;
 }
 
 interface GlobalSettingsProps {
@@ -17,6 +24,9 @@ interface GlobalSettingsProps {
   applyToAll: () => void;
   showAllModels: boolean;
   hasModelPricing: (modelName: string) => boolean;
+  // Global model parameters
+  globalModelParameters: GlobalModelParameters;
+  onChangeGlobalParameter: (param: keyof GlobalModelParameters, value: number | undefined | ThinkingLevel) => void;
   // Response timeout
   responseTimeoutSeconds: number;
   onChangeTimeout: (seconds: number) => void;
@@ -31,9 +41,13 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     applyToAll,
     showAllModels,
     hasModelPricing,
+    globalModelParameters,
+    onChangeGlobalParameter,
     responseTimeoutSeconds,
     onChangeTimeout,
   } = props;
+
+  const showThinkingLevel = globalModelValue && isThinkingCapableModel(globalModelValue);
 
   const options = availableModels.map(({ provider, providerName, model }) => {
     const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
@@ -92,6 +106,82 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           {WEB_SEARCH_COMPATIBILITY_WARNING}
         </div>
       )}
+
+      {/* Thinking Level - only shown for thinking-capable models */}
+      {showThinkingLevel && (
+        <div className="mt-4 flex items-center gap-3">
+          <LabelWithTooltip
+            isDarkMode={isDarkMode}
+            htmlFor="global-thinking-level"
+            label="Thinking Level"
+            tooltip="Controls how much reasoning the model performs before responding"
+            width="w-28"
+          />
+          <select
+            id="global-thinking-level"
+            value={globalModelParameters.thinkingLevel}
+            onChange={e => onChangeGlobalParameter('thinkingLevel', e.target.value as ThinkingLevel)}
+            className={cn(
+              'flex-1 rounded-md border px-3 py-2 text-sm',
+              isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
+            )}>
+            <option value="default">Default</option>
+            <option value="high">High (Thorough)</option>
+            <option value="medium">Medium (Balanced)</option>
+            <option value="low">Low (Faster)</option>
+            <option value="off">Off (Suppress)</option>
+          </select>
+        </div>
+      )}
+
+      {/* Temperature */}
+      <div className="mt-4 flex items-center gap-3">
+        <LabelWithTooltip
+          isDarkMode={isDarkMode}
+          htmlFor="global-temperature"
+          label="Temperature"
+          tooltip="Controls randomness of outputs. Leave as default to use the provider's recommended temperature."
+          width="w-28"
+        />
+        <TemperatureControl
+          isDarkMode={isDarkMode}
+          id="global-temperature"
+          value={globalModelParameters.temperature}
+          onChange={v => onChangeGlobalParameter('temperature', v)}
+          ariaLabel="Global temperature input"
+        />
+      </div>
+
+      {/* Max Output Tokens */}
+      <div className="mt-4 flex items-center gap-3">
+        <LabelWithTooltip
+          isDarkMode={isDarkMode}
+          htmlFor="global-max-output"
+          label="Max Output"
+          tooltip="Maximum tokens in model response"
+          width="w-28"
+        />
+        <div className="flex flex-1 items-center space-x-2">
+          <input
+            id="global-max-output"
+            type="number"
+            min={256}
+            max={65536}
+            step={256}
+            value={globalModelParameters.maxOutputTokens}
+            onChange={e => {
+              const val = Math.max(256, Math.min(65536, Number.parseInt(e.target.value, 10) || 8192));
+              onChangeGlobalParameter('maxOutputTokens', val);
+            }}
+            className={cn(
+              'w-24 rounded-md border px-3 py-2 text-sm',
+              isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
+            )}
+            aria-label="Global max output tokens"
+          />
+          <span className={cn('text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>tokens</span>
+        </div>
+      </div>
 
       {/* Divider */}
       <div className={cn('my-4 border-t', isDarkMode ? 'border-slate-600' : 'border-gray-200')} />

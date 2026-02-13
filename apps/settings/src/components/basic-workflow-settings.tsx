@@ -5,7 +5,24 @@ import {
   llmProviderModelNames,
   secureProviderClient,
   type ProviderConfig,
+  type ThinkingLevel,
 } from '@extension/storage';
+
+/**
+ * Determine whether a model supports configurable thinking/reasoning.
+ */
+function isThinkingCapableModel(modelName: string): boolean {
+  const raw = modelName.includes('>') ? modelName.split('>')[1] : modelName;
+  const name = raw.includes('/') ? raw.split('/').pop()! : raw;
+  const l = name.toLowerCase();
+
+  if (/^(o1|o3|o4|gpt-5)/.test(l)) return true;
+  if (/^claude-(opus-4|sonnet-4|sonnet-3-7|3-7-sonnet|haiku-4-5)/.test(l)) return true;
+  if (/^gemini-(2\.5|3-)/.test(l)) return true;
+  if (/^grok-(4|3-mini)/.test(l)) return true;
+
+  return false;
+}
 
 interface BasicWorkflowSettingsProps {
   isDarkMode?: boolean;
@@ -28,6 +45,7 @@ const ALL_AGENTS: AgentNameEnum[] = [
 export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSettingsProps) {
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
   const [globalModel, setGlobalModel] = useState('');
+  const [globalThinkingLevel, setGlobalThinkingLevel] = useState<ThinkingLevel>('default');
   const [isApplying, setIsApplying] = useState(false);
 
   useEffect(() => {
@@ -72,11 +90,13 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     if (!provider || !modelName) return;
     setIsApplying(true);
     try {
+      const isThinkingModel = isThinkingCapableModel(globalModel);
       await Promise.all(
         ALL_AGENTS.map(agent =>
           agentModelStore.setAgentModel(agent, {
             provider,
             modelName,
+            thinkingLevel: isThinkingModel ? globalThinkingLevel : undefined,
           }),
         ),
       );
@@ -84,6 +104,9 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
       setIsApplying(false);
     }
   };
+
+  // Check if current model supports thinking
+  const showThinkingLevel = globalModel && isThinkingCapableModel(globalModel);
 
   return (
     <section
@@ -115,6 +138,35 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           {isApplying ? 'Applying...' : 'Apply'}
         </button>
       </div>
+
+      {/* Thinking Level Selector - only shown for thinking-capable models */}
+      {showThinkingLevel && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            <span className="group relative inline-flex items-center gap-1">
+              Thinking Level
+              <span
+                className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                ?
+              </span>
+              <span
+                className={`pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded px-2 py-1 text-[10px] shadow-lg group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'}`}>
+                Controls how much reasoning the model performs before responding
+              </span>
+            </span>
+          </label>
+          <select
+            value={globalThinkingLevel}
+            onChange={e => setGlobalThinkingLevel(e.target.value as ThinkingLevel)}
+            className={`min-w-[200px] rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-gray-300 bg-white text-gray-800'}`}>
+            <option value="default">Default</option>
+            <option value="high">High (Thorough)</option>
+            <option value="medium">Medium (Balanced)</option>
+            <option value="low">Low (Faster)</option>
+            <option value="off">Off (Suppress)</option>
+          </select>
+        </div>
+      )}
     </section>
   );
 }
