@@ -1,7 +1,20 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown } from 'react-icons/fa';
+import {
+  FaBrain,
+  FaSearch,
+  FaRobot,
+  FaRandom,
+  FaChevronDown,
+  FaArrowUp,
+  FaStop,
+  FaPause,
+  FaPlay,
+} from 'react-icons/fa';
+import { FiAlertOctagon } from 'react-icons/fi';
 import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, MicrophoneButton } from '@extension/shared';
 import TabContextSelector from './tab-context-selector';
+import SessionStatsBar from '../footer/session-stats-bar';
+import { DebugButtons } from '../footer/debug-buttons';
 import type { ContextTabInfo } from './types';
 
 // Re-export for backward compatibility within this file
@@ -101,6 +114,25 @@ interface ChatInputProps {
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
   expandedComposer?: boolean;
+  // Session stats props (for stats tooltip)
+  sessionStats?: {
+    totalRequests: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalLatency: number;
+    totalCost: number;
+    avgLatencyPerRequest: number;
+  };
+  formatUsd?: (cost: number) => string;
+  // Debug buttons props
+  currentSessionId?: string | null;
+  agentTraceRootIdRef?: React.RefObject<string | null>;
+  currentTaskAgentType?: string | null;
+  messageMetadata?: any;
+  portRef?: React.RefObject<chrome.runtime.Port | null>;
+  // Emergency stop props
+  showEmergencyStop?: boolean;
+  onEmergencyStop?: () => void;
 }
 
 const MIN_HEIGHT = 40;
@@ -141,6 +173,18 @@ export default function ChatInput({
   sttConfigured = false,
   onOpenVoiceSettings,
   expandedComposer = false,
+  // Session stats
+  sessionStats,
+  formatUsd,
+  // Debug buttons
+  currentSessionId,
+  agentTraceRootIdRef,
+  currentTaskAgentType,
+  messageMetadata,
+  portRef,
+  // Emergency stop
+  showEmergencyStop,
+  onEmergencyStop,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
@@ -445,8 +489,8 @@ export default function ChatInput({
           </div>
         )}
 
-        <div className={`flex items-center justify-between px-3 py-2`}>
-          <div className="flex gap-2 text-gray-500 items-center">
+        <div className={`flex items-center justify-between px-3 py-1.5`}>
+          <div className="flex gap-1.5 text-gray-500 items-center">
             {/* Tab Context Selector - available for all workflows */}
             {!showStopButton && !historicalSessionId && (
               <TabContextSelector
@@ -476,50 +520,82 @@ export default function ChatInput({
                 onOpenSettings={onOpenVoiceSettings}
               />
             )}
+            {/* Session stats tooltip */}
+            {sessionStats && formatUsd && sessionStats.totalRequests > 0 && (
+              <SessionStatsBar isDarkMode={isDarkMode} sessionStats={sessionStats} formatUsd={formatUsd} />
+            )}
+            {/* Debug dropdown */}
+            {currentSessionId && portRef && agentTraceRootIdRef && (
+              <DebugButtons
+                currentSessionId={currentSessionId}
+                agentTraceRootIdRef={agentTraceRootIdRef}
+                currentTaskAgentType={currentTaskAgentType || null}
+                messageMetadata={messageMetadata}
+                portRef={portRef}
+                isDarkMode={isDarkMode}
+                setErrorLogEntries={() => {}}
+              />
+            )}
+            {/* Emergency Stop button */}
+            {showEmergencyStop && onEmergencyStop && (
+              <button
+                type="button"
+                onClick={onEmergencyStop}
+                title="Emergency Stop - Immediately terminate ALL extension activity"
+                aria-label="Emergency stop"
+                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium transition-colors ${
+                  isDarkMode
+                    ? 'text-red-400 hover:text-red-300 hover:bg-red-950/50'
+                    : 'text-red-500 hover:text-red-600 hover:bg-red-50'
+                }`}>
+                <FiAlertOctagon className="h-3.5 w-3.5" />
+                <span>Stop</span>
+              </button>
+            )}
           </div>
 
           {showStopButton ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={onStopTask}
                 disabled={isStopping}
-                className={`rounded-md px-3 py-1 text-white transition-colors flex items-center gap-1 ${
+                title="Stop"
+                aria-label="Stop"
+                className={`rounded-md p-1.5 text-white transition-colors flex items-center justify-center ${
                   isStopping ? 'bg-red-400 cursor-wait' : 'bg-red-500 hover:bg-red-600'
                 }`}>
                 {isStopping ? (
-                  <>
-                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <span>Stopping...</span>
-                  </>
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
                 ) : (
-                  'Stop'
+                  <FaStop className="h-3 w-3" />
                 )}
               </button>
-              {/* Emergency Stop button moved to session controls footer */}
               {onPauseTask && !isPaused && (
                 <button
                   type="button"
                   onClick={onPauseTask}
-                  className={`rounded-md px-3 py-1 text-white transition-colors ${isDarkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'}`}>
-                  Pause
+                  title="Pause"
+                  aria-label="Pause"
+                  className={`rounded-md p-1.5 text-white transition-colors ${isDarkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'}`}>
+                  <FaPause className="h-3 w-3" />
                 </button>
               )}
               {isPaused && onHandBackControl && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
                     value={handbackText}
                     onChange={e => setHandbackText(e.target.value)}
-                    placeholder="Optional instructions to the agent"
-                    className={`rounded border px-2 py-1 text-xs ${isDarkMode ? 'bg-slate-800 text-slate-200 border-slate-600' : 'bg-white text-gray-800 border-gray-300'}`}
+                    placeholder="Optional instructions"
+                    className={`rounded border px-2 py-1 text-xs w-32 ${isDarkMode ? 'bg-slate-800 text-slate-200 border-slate-600' : 'bg-white text-gray-800 border-gray-300'}`}
                   />
                   <button
                     type="button"
@@ -529,12 +605,13 @@ export default function ChatInput({
                         setHandbackText('');
                       } catch {}
                     }}
-                    className={`rounded-md px-3 py-1 text-white transition-colors ${isDarkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'}`}>
-                    Hand back control
+                    title="Resume"
+                    aria-label="Resume"
+                    className={`rounded-md p-1.5 text-white transition-colors ${isDarkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'}`}>
+                    <FaPlay className="h-3 w-3" />
                   </button>
                 </div>
               )}
-              {/* Close tabs controls removed - now handled in status bar */}
             </div>
           ) : historicalSessionId ? (
             <button
@@ -553,13 +630,13 @@ export default function ChatInput({
                   type="button"
                   onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
                   disabled={disabled}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+                  title={selectedOption.name}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
                     isDarkMode
                       ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
                   {selectedOption.icon}
-                  <span>{selectedOption.name}</span>
                   <FaChevronDown
                     className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`}
                   />
@@ -599,8 +676,10 @@ export default function ChatInput({
                 type="submit"
                 disabled={isSendButtonDisabled}
                 aria-disabled={isSendButtonDisabled}
-                className={`rounded-md bg-violet-500 px-3 py-1.5 text-white transition-colors hover:enabled:bg-violet-600 shadow ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-                Send
+                title="Send"
+                aria-label="Send message"
+                className={`rounded-md bg-violet-500 p-1.5 text-white transition-colors hover:enabled:bg-violet-600 shadow ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                <FaArrowUp className="h-4 w-4" />
               </button>
             </div>
           )}
