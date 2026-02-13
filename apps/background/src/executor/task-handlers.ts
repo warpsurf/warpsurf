@@ -6,6 +6,7 @@ import { Actors, ExecutionState } from '../workflows/shared/event/types';
 import { generalSettingsStore, agentModelStore, AgentNameEnum } from '@extension/storage';
 import { mergeContextTabIds } from '@src/workflows/shared/context/auto-tab-context-service';
 import { globalTokenTracker } from '../utils/token-tracker';
+import { toUIErrorPayload } from '@src/workflows/models/model-error';
 // Triage resolution happens via Auto; no direct provider/model imports needed here
 
 type Deps = {
@@ -217,6 +218,19 @@ export async function handleNewTask(message: any, deps: Deps) {
         globalTokenTracker.setCurrentRole('auto');
 
         const triageResult = await (svc as any).triageRequest?.(task, sessionId, contextTabIds);
+
+        // If auto service couldn't initialize, stop the workflow
+        if (!triageResult) {
+          try {
+            currentPort?.postMessage({
+              type: 'error',
+              error: 'Auto service not available - no LLM providers configured',
+              data: { taskId: sessionId },
+            });
+          } catch {}
+          return;
+        }
+
         const action = String(triageResult?.action || '').toLowerCase();
         if (action === 'chat') effectiveAgentType = 'chat';
         else if (action === 'search') effectiveAgentType = 'search';
@@ -241,8 +255,17 @@ export async function handleNewTask(message: any, deps: Deps) {
             timestamp: Date.now(),
           });
         } catch {}
-      } catch {
-        effectiveAgentType = 'agent';
+      } catch (error) {
+        const uiError = toUIErrorPayload(error, 'Failed to analyze request');
+        try {
+          currentPort?.postMessage({
+            type: 'error',
+            error: uiError.message,
+            data: { error: uiError.error, taskId: sessionId },
+          });
+        } catch {}
+        // Don't fallback to agent - if AUTO fails, the workflow should stop
+        return;
       } finally {
         globalTokenTracker.setCurrentTaskId(prevTaskId || '');
         globalTokenTracker.setCurrentRole(prevRole || '');
@@ -366,7 +389,12 @@ export async function handleNewTask(message: any, deps: Deps) {
     await executor.execute();
   } catch (e: any) {
     try {
-      getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Task failed' });
+      const uiError = toUIErrorPayload(e, 'Task failed');
+      getCurrentPort()?.postMessage({
+        type: 'error',
+        error: uiError.message,
+        data: { error: uiError.error, taskId: sessionId },
+      });
     } catch {}
   }
 }
@@ -440,6 +468,19 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         globalTokenTracker.setCurrentRole('auto');
 
         const triageResult = await (svc as any).triageRequest?.(task, sessionId, contextTabIds);
+
+        // If auto service couldn't initialize, stop the workflow
+        if (!triageResult) {
+          try {
+            currentPort?.postMessage({
+              type: 'error',
+              error: 'Auto service not available - no LLM providers configured',
+              data: { taskId: sessionId },
+            });
+          } catch {}
+          return;
+        }
+
         const action = String(triageResult?.action || '').toLowerCase();
         if (action === 'chat') {
           agentType = 'chat';
@@ -468,8 +509,17 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
             timestamp: Date.now(),
           });
         } catch {}
-      } catch {
-        // Keep original agentType on error
+      } catch (error) {
+        const uiError = toUIErrorPayload(error, 'Failed to analyze request');
+        try {
+          currentPort?.postMessage({
+            type: 'error',
+            error: uiError.message,
+            data: { error: uiError.error, taskId: sessionId },
+          });
+        } catch {}
+        // Don't fallback to agent - if AUTO fails, the workflow should stop
+        return;
       } finally {
         globalTokenTracker.setCurrentTaskId(prevTaskId || '');
         globalTokenTracker.setCurrentRole(prevRole || '');
@@ -623,7 +673,12 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       await existing.execute();
     } catch (e: any) {
       try {
-        getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
+        const uiError = toUIErrorPayload(e, 'Follow-up failed');
+        getCurrentPort()?.postMessage({
+          type: 'error',
+          error: uiError.message,
+          data: { error: uiError.error, taskId: sessionId },
+        });
       } catch {}
     }
     return;
@@ -679,7 +734,12 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       await existing.execute();
     } catch (e: any) {
       try {
-        getCurrentPort()?.postMessage({ type: 'error', error: e?.message || 'Follow-up failed' });
+        const uiError = toUIErrorPayload(e, 'Follow-up failed');
+        getCurrentPort()?.postMessage({
+          type: 'error',
+          error: uiError.message,
+          data: { error: uiError.error, taskId: sessionId },
+        });
       } catch {}
     }
     return;
