@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
-import { FiChevronDown } from 'react-icons/fi';
+import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown } from 'react-icons/fa';
 import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, MicrophoneButton } from '@extension/shared';
 import TabContextSelector from './tab-context-selector';
 import type { ContextTabInfo } from './types';
@@ -19,34 +18,35 @@ export const AGENT_OPTIONS: AgentSelection[] = [
   {
     type: WorkflowType.AUTO,
     name: WORKFLOW_DISPLAY_NAMES[WorkflowType.AUTO],
-    icon: <FaRandom className="w-4 h-4" />,
+    icon: <FaRandom className="w-3.5 h-3.5" />,
     description: WORKFLOW_DESCRIPTIONS[WorkflowType.AUTO],
   },
   {
     type: WorkflowType.CHAT,
     name: WORKFLOW_DISPLAY_NAMES[WorkflowType.CHAT],
-    icon: <FaBrain className="w-4 h-4" />,
+    icon: <FaBrain className="w-3.5 h-3.5" />,
     description: WORKFLOW_DESCRIPTIONS[WorkflowType.CHAT],
   },
   {
     type: WorkflowType.SEARCH,
     name: WORKFLOW_DISPLAY_NAMES[WorkflowType.SEARCH],
-    icon: <FaSearch className="w-4 h-4" />,
+    icon: <FaSearch className="w-3.5 h-3.5" />,
     description: WORKFLOW_DESCRIPTIONS[WorkflowType.SEARCH],
   },
   {
     type: WorkflowType.AGENT,
     name: WORKFLOW_DISPLAY_NAMES[WorkflowType.AGENT],
-    icon: <FaRobot className="w-4 h-4" />,
+    icon: <FaRobot className="w-3.5 h-3.5" />,
     description: WORKFLOW_DESCRIPTIONS[WorkflowType.AGENT],
   },
   {
     type: WorkflowType.MULTIAGENT,
     name: WORKFLOW_DISPLAY_NAMES[WorkflowType.MULTIAGENT],
     icon: (
-      <>
-        <FaRobot className="w-4 h-4" /> <FaRobot className="w-4 h-4" />
-      </>
+      <span className="inline-flex">
+        <FaRobot className="w-3.5 h-3.5" />
+        <FaRobot className="w-3.5 h-3.5 -ml-1.5" />
+      </span>
     ),
     description: WORKFLOW_DESCRIPTIONS[WorkflowType.MULTIAGENT],
   },
@@ -157,6 +157,23 @@ export default function ChatInput({
   const resizeStartHeight = useRef(0);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
+  const workflowDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close workflow dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
+        setWorkflowDropdownOpen(false);
+      }
+    };
+    if (workflowDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [workflowDropdownOpen]);
+
+  const selectedOption = AGENT_OPTIONS.find(o => o.type === selectedAgent) || AGENT_OPTIONS[0];
   const slashItems = useMemo(
     () => [
       { label: '/chat – Switch to Chat', value: '/chat ' },
@@ -530,25 +547,51 @@ export default function ChatInput({
             </button>
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative inline-flex items-center">
-                <select
-                  value={selectedAgent}
-                  onChange={e => setSelectedAgent(e.target.value as WorkflowType)}
+              {/* Workflow dropdown selector */}
+              <div ref={workflowDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
                   disabled={disabled}
-                  className={`appearance-none rounded-md border border-transparent px-1.5 pr-5 py-1 text-[11px] focus:outline-none ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
                     isDarkMode
-                      ? 'bg-transparent text-slate-300 hover:bg-white/5 focus:bg-white/5'
-                      : 'bg-transparent text-gray-600 hover:bg-black/5 focus:bg-black/5'
-                  }`}>
-                  {AGENT_OPTIONS.map(option => (
-                    <option key={option.type} value={option.type}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-                <FiChevronDown
-                  className={`pointer-events-none absolute right-1 h-3 w-3 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}
-                />
+                      ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                  {selectedOption.icon}
+                  <span>{selectedOption.name}</span>
+                  <FaChevronDown
+                    className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {workflowDropdownOpen && (
+                  <div
+                    className={`absolute right-0 bottom-full z-50 mb-1 w-40 rounded-lg border shadow-lg ${
+                      isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
+                    }`}>
+                    {AGENT_OPTIONS.map(option => (
+                      <button
+                        key={option.type}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAgent(option.type);
+                          setWorkflowDropdownOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                          selectedAgent === option.type
+                            ? isDarkMode
+                              ? 'bg-violet-600/30 text-violet-300'
+                              : 'bg-violet-50 text-violet-700'
+                            : isDarkMode
+                              ? 'text-slate-200 hover:bg-slate-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                        }`}>
+                        {option.icon}
+                        <span>{option.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Send Button */}
