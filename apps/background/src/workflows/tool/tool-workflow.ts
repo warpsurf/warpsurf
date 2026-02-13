@@ -225,11 +225,15 @@ export class ToolWorkflow {
       const { HumanMessage, SystemMessage } = await import('@langchain/core/messages');
       const formatMessages = [
         new SystemMessage(
-          'You are a helpful assistant. The user asked about their extension settings. ' +
-            'Format the following data into a clear, concise, human-readable response. ' +
-            'Use bullet points or a list. Do not include raw JSON. Be brief.',
+          'Format the data into a compact response. Rules:\n' +
+            '- Use simple bullet points (- item)\n' +
+            '- NO blank lines between items\n' +
+            '- NO code blocks or backticks around model names\n' +
+            '- NO headers or sections\n' +
+            '- For model lists: "- modelName" on each line\n' +
+            '- Keep it minimal and dense',
         ),
-        new HumanMessage(`User request: ${this.currentTask}\n\nData:\n${dataStr}`),
+        new HumanMessage(`Request: ${this.currentTask}\n\nData:\n${dataStr}`),
       ];
       const resp = await this.toolLLM.invoke(formatMessages, { signal: this.context.controller.signal });
       const text = typeof resp.content === 'string' ? resp.content : '';
@@ -241,19 +245,26 @@ export class ToolWorkflow {
       return dataResults
         .map(r => {
           if (typeof r.data !== 'object') return String(r.data);
+          // Handle arrays (e.g., model lists)
+          if (Array.isArray(r.data)) {
+            return (r.data as string[]).map(item => `- ${item}`).join('\n');
+          }
           return Object.entries(r.data as Record<string, any>)
             .map(([section, val]) => {
               if (typeof val !== 'object') return `**${section}**: ${val}`;
+              if (Array.isArray(val)) {
+                return `**${section}**:\n` + val.map((item: string) => `- ${item}`).join('\n');
+              }
               return (
                 `**${section}**:\n` +
                 Object.entries(val as Record<string, any>)
-                  .map(([k, v]: [string, any]) => `  - ${k}: ${v?.modelName || v} (${v?.provider || ''})`)
+                  .map(([k, v]: [string, any]) => `- ${k}: ${v?.modelName || v} (${v?.provider || ''})`)
                   .join('\n')
               );
             })
-            .join('\n\n');
+            .join('\n');
         })
-        .join('\n\n');
+        .join('\n');
     }
   }
 
@@ -362,6 +373,15 @@ export class ToolWorkflow {
       // Calculate cost only if we have token counts, otherwise set to -1 (unavailable)
       const cost = inputTokens + outputTokens > 0 ? calculateCost(modelName, inputTokens, outputTokens) : -1;
 
+      // Derive provider from model name pattern or LLM class name
+      let provider = 'Chat';
+      const llmClassName = this.toolLLM?.constructor?.name || '';
+      if (llmClassName.includes('Gemini')) provider = 'Gemini';
+      else if (llmClassName.includes('Anthropic')) provider = 'Anthropic';
+      else if (llmClassName.includes('OpenRouter')) provider = 'OpenRouter';
+      else if (llmClassName.includes('Grok')) provider = 'Grok';
+      else if (llmClassName.includes('OpenAI')) provider = 'OpenAI';
+
       const tokenUsage: TokenUsage = {
         inputTokens,
         outputTokens,
@@ -370,7 +390,7 @@ export class ToolWorkflow {
         webSearchCount: 0,
         timestamp: Date.now(),
         requestStartTime,
-        provider: 'Tool',
+        provider,
         modelName,
         cost,
         taskId,
