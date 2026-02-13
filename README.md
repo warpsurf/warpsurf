@@ -144,6 +144,8 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 | 🎮 **Take Control** | Agent workflows pass control back to you at critical junctures |
 | 📜 **History** | Optionally use your browser history to improve performance |
 | ⏱️ **Task Estimation** | Preview task duration and cost before initialisation |
+| 🎤 **Voice Input** | Make requests via voice using speech-to-text transcription |
+| 🛠️ **Conversational Settings** | Configure models, parameters, and tab context through natural language |
 
 ## Installation & Usage
 
