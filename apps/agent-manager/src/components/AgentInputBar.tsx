@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown } from 'react-icons/fa';
+import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown, FaArrowUp } from 'react-icons/fa';
 import { MicrophoneButton } from '@extension/shared';
 import { TabContextSelector } from './TabContextSelector';
 
@@ -177,13 +177,13 @@ export function AgentInputBar({
               type="button"
               onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
               disabled={disabled}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+              title={selectedOption.name}
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
                 isDarkMode
                   ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               } ${disabled ? 'cursor-not-allowed' : ''}`}>
               {selectedOption.icon}
-              <span>{selectedOption.name}</span>
               <FaChevronDown className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {workflowDropdownOpen && (
@@ -238,10 +238,23 @@ export function AgentInputBar({
           <button
             type="submit"
             disabled={isDisabled}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium text-white transition-colors ${
+            title="Send"
+            aria-label="Send message"
+            className={`rounded-lg p-1.5 text-white transition-colors ${
               isDisabled ? 'bg-violet-400 opacity-50 cursor-not-allowed' : 'bg-violet-500 hover:bg-violet-600'
             }`}>
-            {isSubmitting ? 'Sending...' : 'Send'}
+            {isSubmitting ? (
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            ) : (
+              <FaArrowUp className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
