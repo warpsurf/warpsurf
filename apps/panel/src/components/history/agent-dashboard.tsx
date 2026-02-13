@@ -286,24 +286,25 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   };
 
   return (
-    <div className={`flex flex-col h-full ${isDarkMode ? 'bg-slate-900 text-slate-200' : 'bg-white text-gray-800'}`}>
+    <div
+      className={`flex h-full flex-col ${isDarkMode ? 'bg-[#131311] text-slate-200' : 'bg-[#f7f7f5] text-gray-800'}`}>
       {/* Header */}
       <div
-        className={`flex items-center gap-3 px-4 py-3 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
+        className={`flex items-center gap-3 border-b px-4 py-3 ${isDarkMode ? 'border-[#2d2d28] bg-[#191917]' : 'border-[#ddddd6] bg-[#fbfbf8]'}`}>
         <button
           onClick={onBack}
           className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
           aria-label="Back to chat">
           <FiArrowLeft className="h-4 w-4" />
         </button>
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+        <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
           <FaRobot className="h-5 w-5" />
-          Agent Dashboard
+          Agent Manager
         </h2>
         {/* Delete all button on right side */}
         <button
           onClick={deleteAll}
-          className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
+          className={`rounded-md p-1.5 transition-colors ${isDarkMode ? 'hover:bg-[#242420]' : 'hover:bg-[#efeee8]'}`}
           aria-label="Delete all">
           <FiTrash2 className="h-4 w-4" />
         </button>
@@ -319,8 +320,8 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
       ) : (
         <div className="flex-1 overflow-y-auto">
           {/* Running Agents Section */}
-          <div className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
-            <div className={`px-4 py-3 ${isDarkMode ? 'bg-slate-800/30' : 'bg-gray-50/50'}`}>
+          <div className={`border-b ${isDarkMode ? 'border-[#2d2d28]' : 'border-[#ddddd6]'}`}>
+            <div className={`px-4 py-3 ${isDarkMode ? 'bg-[#1b1b18]' : 'bg-[#f2f1eb]'}`}>
               <h3 className="font-medium flex items-center gap-2">
                 <FiActivity className="h-4 w-4" />
                 Currently Running ({displayRunningAgents.length})
@@ -332,11 +333,11 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 No agents currently running
               </div>
             ) : (
-              <div className="divide-y divide-slate-700/50">
+              <div className={`divide-y ${isDarkMode ? 'divide-[#2b2b27]' : 'divide-[#deddd6]'}`}>
                 {displayRunningAgents.map(agent => (
                   <div
                     key={`${agent.sessionId}-${agent.startTime}`}
-                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}>
+                    className={`px-4 py-3 transition-colors ${isDarkMode ? 'hover:bg-[#1d1d1a]' : 'hover:bg-[#f3f2ec]'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -357,17 +358,17 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => onSelectSession(agent.sessionId)}
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                             isDarkMode
-                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                              ? 'bg-[#2a2f38] text-[#d7dfea] hover:bg-[#333a46]'
+                              : 'bg-[#eaedf1] text-[#3f4a57] hover:bg-[#dfe4ea]'
                           }`}>
                           Go to chat
                           <FiExternalLink className="h-3 w-3" />
                         </button>
                         <button
                           onClick={() => removeRunning(agent.sessionId)}
-                          className={`p-1.5 rounded-md ${isDarkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-gray-100 text-gray-600'}`}
+                          className={`rounded-md p-1.5 ${isDarkMode ? 'text-slate-300 hover:bg-[#252521]' : 'text-gray-600 hover:bg-[#efeee8]'}`}
                           title="Remove from running"
                           aria-label="Remove from running">
                           <FiTrash2 className="h-4 w-4" />
@@ -382,7 +383,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
           {/* Completed Agents Section */}
           <div>
-            <div className={`px-4 py-3 ${isDarkMode ? 'bg-slate-800/30' : 'bg-gray-50/50'}`}>
+            <div className={`px-4 py-3 ${isDarkMode ? 'bg-[#1b1b18]' : 'bg-[#f2f1eb]'}`}>
               <h3 className="font-medium flex items-center gap-2">
                 <FiCheckCircle className="h-4 w-4" />
                 Recently Completed ({completedAgents.length})
@@ -394,11 +395,11 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 No completed agents yet
               </div>
             ) : (
-              <div className="divide-y divide-slate-700/50">
+              <div className={`divide-y ${isDarkMode ? 'divide-[#2b2b27]' : 'divide-[#deddd6]'}`}>
                 {completedAgents.map(agent => (
                   <div
                     key={`${agent.sessionId}-${agent.startTime}`}
-                    className={`px-4 py-3 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'} transition-colors`}>
+                    className={`px-4 py-3 transition-colors ${isDarkMode ? 'hover:bg-[#1d1d1a]' : 'hover:bg-[#f3f2ec]'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -423,17 +424,17 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => onSelectSession(agent.sessionId)}
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                             isDarkMode
-                              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                              ? 'bg-[#2a2f38] text-[#d7dfea] hover:bg-[#333a46]'
+                              : 'bg-[#eaedf1] text-[#3f4a57] hover:bg-[#dfe4ea]'
                           }`}>
                           Go to chat
                           <FiExternalLink className="h-3 w-3" />
                         </button>
                         <button
                           onClick={() => removeCompleted(agent.sessionId, agent.startTime)}
-                          className={`p-1.5 rounded-md ${isDarkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-gray-100 text-gray-600'}`}
+                          className={`rounded-md p-1.5 ${isDarkMode ? 'text-slate-300 hover:bg-[#252521]' : 'text-gray-600 hover:bg-[#efeee8]'}`}
                           title="Remove from completed"
                           aria-label="Remove from completed">
                           <FiTrash2 className="h-4 w-4" />

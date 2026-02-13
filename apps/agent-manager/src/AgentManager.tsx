@@ -293,25 +293,25 @@ export default function AgentManager() {
 
   return (
     <div
-      className={`min-h-screen flex flex-col ${isDarkMode ? 'bg-slate-900 text-slate-200' : 'bg-gray-50 text-gray-900'}`}>
+      className={`min-h-screen flex flex-col ${isDarkMode ? 'bg-[#121210] text-slate-200' : 'bg-[#f7f7f5] text-gray-900'}`}>
       {/* Header */}
       <header
-        className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-white/80'}`}>
+        className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-[#2f2f29] bg-[#181816]' : 'border-[#deded7] bg-[#fbfbf9]'}`}>
         <div className="flex items-center gap-3">
           <img src={logoImage} alt="Warpsurf" className="h-8 w-8" />
-          <h1 className="text-xl font-semibold">Agent Manager</h1>
+          <h1 className="text-lg font-semibold tracking-tight">warpsurf agent manager</h1>
           {!isConnected && <span className="text-xs text-amber-500 ml-2">Connecting...</span>}
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-red-400' : 'hover:bg-gray-100 text-gray-500 hover:text-red-500'}`}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-[#262622] text-slate-400 hover:text-red-400' : 'hover:bg-[#efeee8] text-gray-500 hover:text-red-500'}`}
             title="Delete all workflows">
             <FiTrash2 className="h-5 w-5" />
           </button>
           <button
             onClick={openSettings}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-[#262622]' : 'hover:bg-[#efeee8]'}`}
             title="Settings">
             <FiSettings className="h-5 w-5" />
           </button>
@@ -345,7 +345,7 @@ export default function AgentManager() {
       )}
 
       {/* Input bar */}
-      <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+      <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#deded7]'}`}>
         <AgentInputBar
           isDarkMode={isDarkMode}
           onSendMessage={handleSendMessage}
@@ -370,9 +370,9 @@ export default function AgentManager() {
       </div>
 
       {/* Search bar */}
-      <div className={`px-6 py-3 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+      <div className={`px-6 py-3 border-b ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#deded7]'}`}>
         <div
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'}`}>
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#191917] border border-[#2f2f29]' : 'bg-[#fbfbf9] border border-[#deded7]'}`}>
           <FiSearch className={`h-4 w-4 flex-shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`} />
           <input
             type="text"
