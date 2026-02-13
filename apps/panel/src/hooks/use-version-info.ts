@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Added voice and tool call support to the agent + bug and stability fixes.';
+  const releaseNotes =
+    'Added voice and tool call support to the agent. Updated UI, error handling + bug and stability fixes.';
 
   useEffect(() => {
     try {
