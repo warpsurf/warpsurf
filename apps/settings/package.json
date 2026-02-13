@@ -1,6 +1,6 @@
 {
   "name": "@warpsurf/settings",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Warpsurf settings page",
   "private": true,
   "sideEffects": true,
