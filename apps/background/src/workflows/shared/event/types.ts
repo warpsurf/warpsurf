@@ -41,6 +41,16 @@ export interface EventData {
   pageUrl?: string;
   /** Current page title when action was performed */
   pageTitle?: string;
+  /** Structured model/provider error payload for UI-safe rendering */
+  error?: {
+    kind: string;
+    provider?: string;
+    model?: string;
+    statusCode?: number;
+    retryable?: boolean;
+    userMessage?: string;
+    rawMessage?: string;
+  };
 }
 
 export class AgentEvent {

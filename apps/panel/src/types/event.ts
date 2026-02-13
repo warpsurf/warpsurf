@@ -45,6 +45,16 @@ export interface EventData {
   streamId?: string;
   /** Streaming: true on final chunk */
   isFinal?: boolean;
+  /** Structured model/provider error payload for UI-safe rendering */
+  error?: {
+    kind: string;
+    provider?: string;
+    model?: string;
+    statusCode?: number;
+    retryable?: boolean;
+    userMessage?: string;
+    rawMessage?: string;
+  };
 }
 
 export class AgentEvent {
