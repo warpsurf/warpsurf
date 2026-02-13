@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { FaBrain, FaSearch, FaRobot, FaRandom } from 'react-icons/fa';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown } from 'react-icons/fa';
 import { MicrophoneButton } from '@extension/shared';
 import { TabContextSelector } from './TabContextSelector';
 
@@ -12,18 +12,18 @@ interface AgentOption {
 }
 
 const AGENT_OPTIONS: AgentOption[] = [
-  { type: 'auto', name: 'Auto', icon: <FaRandom className="w-4 h-4" /> },
-  { type: 'chat', name: 'Chat', icon: <FaBrain className="w-4 h-4" /> },
-  { type: 'search', name: 'Search', icon: <FaSearch className="w-4 h-4" /> },
-  { type: 'agent', name: 'Agent', icon: <FaRobot className="w-4 h-4" /> },
+  { type: 'auto', name: 'Auto', icon: <FaRandom className="w-3.5 h-3.5" /> },
+  { type: 'chat', name: 'Chat', icon: <FaBrain className="w-3.5 h-3.5" /> },
+  { type: 'search', name: 'Search', icon: <FaSearch className="w-3.5 h-3.5" /> },
+  { type: 'agent', name: 'Agent', icon: <FaRobot className="w-3.5 h-3.5" /> },
   {
     type: 'multiagent',
-    name: 'Multi',
+    name: 'Multi-Agent',
     icon: (
-      <>
-        <FaRobot className="w-4 h-4" />
-        <FaRobot className="w-4 h-4 -ml-2" />
-      </>
+      <span className="inline-flex">
+        <FaRobot className="w-3.5 h-3.5" />
+        <FaRobot className="w-3.5 h-3.5 -ml-1.5" />
+      </span>
     ),
   },
 ];
@@ -67,6 +67,23 @@ export function AgentInputBar({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualContextTabIds, setManualContextTabIds] = useState<number[]>([]);
   const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
+  const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
+  const workflowDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close workflow dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
+        setWorkflowDropdownOpen(false);
+      }
+    };
+    if (workflowDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [workflowDropdownOpen]);
+
+  const selectedOption = AGENT_OPTIONS.find(o => o.type === selectedAgent) || AGENT_OPTIONS[0];
 
   const isDisabled = useMemo(() => disabled || text.trim() === '' || isSubmitting, [disabled, text, isSubmitting]);
 
@@ -117,27 +134,12 @@ export function AgentInputBar({
     [handleSubmit],
   );
 
-  const getButtonStyle = (type: AgentType) => {
-    const isSelected = selectedAgent === type;
-    if (!isSelected) {
-      return isDarkMode
-        ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
-        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100';
-    }
-    const colors: Record<AgentType, string> = {
-      auto: 'bg-slate-600 text-white border-slate-600',
-      chat: isDarkMode ? 'bg-violet-500 text-white border-violet-500' : 'bg-violet-400 text-white border-violet-400',
-      search: isDarkMode ? 'bg-teal-500 text-white border-teal-500' : 'bg-teal-400 text-white border-teal-400',
-      agent: isDarkMode ? 'bg-amber-500 text-white border-amber-500' : 'bg-amber-400 text-white border-amber-400',
-      multiagent: isDarkMode
-        ? 'bg-orange-500 text-white border-orange-500'
-        : 'bg-orange-400 text-white border-orange-400',
-    };
-    return colors[type];
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form
+      onSubmit={handleSubmit}
+      className={`overflow-visible rounded-xl border transition-colors ${
+        isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-white'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'}`}>
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
@@ -145,16 +147,17 @@ export function AgentInputBar({
         disabled={disabled}
         placeholder="What can I help you with?"
         rows={2}
-        className={`w-full resize-none rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+        className={`w-full resize-none border-none p-3 focus:outline-none ${
           isDarkMode
-            ? 'bg-slate-800 border-slate-600 text-slate-200 placeholder-slate-400'
-            : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            ? 'bg-transparent text-slate-200 placeholder-slate-400'
+            : 'bg-transparent text-gray-800 placeholder-gray-400'
+        } ${disabled ? 'cursor-not-allowed' : ''}`}
       />
 
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Tab context selector */}
+      <div
+        className={`flex items-center justify-between gap-2 px-3 pb-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+        <div className="flex items-center gap-2">
+          {/* Tab context selector - simplified */}
           <TabContextSelector
             selectedTabIds={manualContextTabIds}
             onSelectionChange={setManualContextTabIds}
@@ -165,51 +168,82 @@ export function AgentInputBar({
             excludedAutoTabIds={excludedAutoTabIds}
             onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
             onAutoContextToggle={onAutoContextToggle}
+            compact
           />
 
-          {/* Agent type selector */}
-          <div className="flex items-center gap-1">
-            {AGENT_OPTIONS.map(option => (
-              <button
-                key={option.type}
-                type="button"
-                onClick={() => setSelectedAgent(option.type)}
-                disabled={disabled}
-                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium border transition-colors ${getButtonStyle(option.type)} ${
-                  disabled ? 'opacity-50 cursor-not-allowed' : ''
+          {/* Workflow dropdown selector */}
+          <div ref={workflowDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
+              disabled={disabled}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+                isDarkMode
+                  ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              } ${disabled ? 'cursor-not-allowed' : ''}`}>
+              {selectedOption.icon}
+              <span>{selectedOption.name}</span>
+              <FaChevronDown className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {workflowDropdownOpen && (
+              <div
+                className={`absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border shadow-lg ${
+                  isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
                 }`}>
-                {option.icon}
-                <span>{option.name}</span>
-              </button>
-            ))}
+                {AGENT_OPTIONS.map(option => (
+                  <button
+                    key={option.type}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAgent(option.type);
+                      setWorkflowDropdownOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                      selectedAgent === option.type
+                        ? isDarkMode
+                          ? 'bg-violet-600/30 text-violet-300'
+                          : 'bg-violet-50 text-violet-700'
+                        : isDarkMode
+                          ? 'text-slate-200 hover:bg-slate-700'
+                          : 'text-gray-700 hover:bg-gray-50'
+                    }`}>
+                    {option.icon}
+                    <span>{option.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Microphone button for voice input */}
-        {onMicClick && (
-          <MicrophoneButton
-            isRecording={isRecording}
-            isProcessing={isProcessingSpeech}
-            recordingDurationMs={recordingDurationMs}
-            audioLevel={audioLevel}
-            onClick={onMicClick}
-            onStopClick={onMicStop || (() => {})}
-            isDarkMode={isDarkMode}
-            disabled={!sttConfigured || disabled}
-            disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
-            onOpenSettings={onOpenVoiceSettings}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {/* Microphone button for voice input */}
+          {onMicClick && (
+            <MicrophoneButton
+              isRecording={isRecording}
+              isProcessing={isProcessingSpeech}
+              recordingDurationMs={recordingDurationMs}
+              audioLevel={audioLevel}
+              onClick={onMicClick}
+              onStopClick={onMicStop || (() => {})}
+              isDarkMode={isDarkMode}
+              disabled={!sttConfigured || disabled}
+              disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
+              onOpenSettings={onOpenVoiceSettings}
+            />
+          )}
 
-        {/* Send button */}
-        <button
-          type="submit"
-          disabled={isDisabled}
-          className={`rounded-lg px-4 py-2 font-medium text-white transition-colors ${
-            isDisabled ? 'bg-violet-400 opacity-50 cursor-not-allowed' : 'bg-violet-500 hover:bg-violet-600'
-          }`}>
-          {isSubmitting ? 'Sending...' : 'Send'}
-        </button>
+          {/* Send button */}
+          <button
+            type="submit"
+            disabled={isDisabled}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium text-white transition-colors ${
+              isDisabled ? 'bg-violet-400 opacity-50 cursor-not-allowed' : 'bg-violet-500 hover:bg-violet-600'
+            }`}>
+            {isSubmitting ? 'Sending...' : 'Send'}
+          </button>
+        </div>
       </div>
     </form>
   );

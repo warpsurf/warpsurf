@@ -21,6 +21,8 @@ interface TabContextSelectorProps {
   onExcludedAutoTabIdsChange?: (tabIds: number[]) => void;
   // Auto-context toggle
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
+  // Compact mode - just plus icon with dropdown indicator
+  compact?: boolean;
 }
 
 export function TabContextSelector({
@@ -33,6 +35,7 @@ export function TabContextSelector({
   excludedAutoTabIds = [],
   onExcludedAutoTabIdsChange,
   onAutoContextToggle,
+  compact = false,
 }: TabContextSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -303,45 +306,85 @@ export function TabContextSelector({
   const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Add tab context';
   const ButtonIcon = autoContextEnabled ? FaBolt : FaPlus;
 
+  // Total count for badge
+  const totalSelectedCount = autoContextEnabled
+    ? effectiveAutoTabIds.length + manualTabsForPills.length
+    : selectedTabIds.length;
+
   return (
     <div ref={containerRef} className="relative">
       {isOpen && createPortal(dropdownContent, document.body)}
 
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleToggle}
-        disabled={disabled}
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-          disabled
-            ? 'cursor-not-allowed opacity-50'
-            : autoContextEnabled
-              ? isDarkMode
-                ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-800/60'
-                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-              : isDarkMode
-                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}>
-        <ButtonIcon className="w-2.5 h-2.5" />
-        <span>{buttonLabel}</span>
-        {!autoContextEnabled && selectedTabIds.length > 0 && (
-          <span
-            className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
-            {selectedTabIds.length}
-          </span>
-        )}
-        {autoContextEnabled && manualTabsForPills.length > 0 && (
-          <span
-            className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
-            +{manualTabsForPills.length}
-          </span>
-        )}
-        <FaChevronDown className={`w-2 h-2 ml-0.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+      {compact ? (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled}
+          title={autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Add tab context'}
+          className={`relative inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+            disabled
+              ? 'cursor-not-allowed opacity-50'
+              : autoContextEnabled
+                ? isDarkMode
+                  ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-800/60'
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : isDarkMode
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}>
+          <ButtonIcon className="w-3 h-3" />
+          {totalSelectedCount > 0 && (
+            <span
+              className={`ml-0.5 rounded-full px-1 text-[9px] font-bold ${
+                autoContextEnabled
+                  ? 'bg-purple-500 text-white'
+                  : isDarkMode
+                    ? 'bg-violet-500 text-white'
+                    : 'bg-violet-400 text-white'
+              }`}>
+              {totalSelectedCount}
+            </span>
+          )}
+          <FaChevronDown className={`w-2 h-2 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled}
+          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+            disabled
+              ? 'cursor-not-allowed opacity-50'
+              : autoContextEnabled
+                ? isDarkMode
+                  ? 'bg-purple-900/50 text-purple-200 hover:bg-purple-800/60'
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : isDarkMode
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}>
+          <ButtonIcon className="w-2.5 h-2.5" />
+          <span>{buttonLabel}</span>
+          {!autoContextEnabled && selectedTabIds.length > 0 && (
+            <span
+              className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
+              {selectedTabIds.length}
+            </span>
+          )}
+          {autoContextEnabled && manualTabsForPills.length > 0 && (
+            <span
+              className={`ml-1 rounded-full px-1.5 text-[10px] ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
+              +{manualTabsForPills.length}
+            </span>
+          )}
+          <FaChevronDown className={`w-2 h-2 ml-0.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
-      {/* Selected Tab Pills */}
-      {(autoTabsForPills.length > 0 || manualTabsForPills.length > 0) && (
+      {/* Selected Tab Pills - hidden in compact mode */}
+      {!compact && (autoTabsForPills.length > 0 || manualTabsForPills.length > 0) && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {/* Auto tabs pills */}
           {autoTabsForPills.map(tab => (
