@@ -384,18 +384,11 @@ export async function handleNewTask(message: any, deps: Deps) {
     }
   } catch {}
 
-  // Execute
+  // Execute - executor.execute() handles its own error events via TASK_FAIL
   try {
     await executor.execute();
-  } catch (e: any) {
-    try {
-      const uiError = toUIErrorPayload(e, 'Task failed');
-      getCurrentPort()?.postMessage({
-        type: 'error',
-        error: uiError.message,
-        data: { error: uiError.error, taskId: sessionId },
-      });
-    } catch {}
+  } catch {
+    // Error already handled by executor's TASK_FAIL event
   }
 }
 
@@ -671,15 +664,8 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     try {
       await existing.execute();
-    } catch (e: any) {
-      try {
-        const uiError = toUIErrorPayload(e, 'Follow-up failed');
-        getCurrentPort()?.postMessage({
-          type: 'error',
-          error: uiError.message,
-          data: { error: uiError.error, taskId: sessionId },
-        });
-      } catch {}
+    } catch {
+      // Error already handled by executor's TASK_FAIL event
     }
     return;
   }
@@ -732,15 +718,8 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     } catch {}
     try {
       await existing.execute();
-    } catch (e: any) {
-      try {
-        const uiError = toUIErrorPayload(e, 'Follow-up failed');
-        getCurrentPort()?.postMessage({
-          type: 'error',
-          error: uiError.message,
-          data: { error: uiError.error, taskId: sessionId },
-        });
-      } catch {}
+    } catch {
+      // Error already handled by executor's TASK_FAIL event
     }
     return;
   }

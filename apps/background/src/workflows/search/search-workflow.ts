@@ -10,7 +10,6 @@ import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
 import { calculateCost } from '@src/utils/cost-calculator';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
-import { toUIErrorPayload } from '@src/workflows/models/model-error';
 
 const logger = createLogger('SearchWorkflow');
 
@@ -97,17 +96,15 @@ export class SearchWorkflow {
     } catch (error) {
       if (isTimeoutError(error)) {
         const msg = error instanceof Error ? error.message : 'Response timed out';
-        this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_FAIL, msg);
         return { id: 'Search', error: msg };
       }
       if (isAbortedError(error)) {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
         return { id: 'Search', error: 'cancelled' };
       }
-      const uiError = toUIErrorPayload(error, 'Request failed');
-      logger.error(`Search failed: ${uiError.error.rawMessage}`);
-      this.context.emitEvent(Actors.SEARCH, ExecutionState.STEP_FAIL, uiError.message, { error: uiError.error } as any);
-      return { id: 'Search', error: uiError.message };
+      // Just return the error message - executor will handle the TASK_FAIL event
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error(`Search failed: ${msg}`);
+      return { id: 'Search', error: msg };
     }
   }
 
