@@ -262,6 +262,55 @@ export function TemperatureControl({
   );
 }
 
+/**
+ * Animated save indicator that shows briefly after settings are saved.
+ */
+export function SaveIndicator({
+  show,
+  isDarkMode,
+  message = 'Saved',
+}: {
+  show: boolean;
+  isDarkMode: boolean;
+  message?: string;
+}) {
+  if (!show) return null;
+  return (
+    <span
+      className={cn(
+        'ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium animate-in fade-in slide-in-from-left-2 duration-200 shrink-0',
+        isDarkMode ? 'bg-green-900/60 text-green-300' : 'bg-green-100 text-green-700',
+      )}>
+      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      {message}
+    </span>
+  );
+}
+
+/**
+ * Hook to manage save indicator visibility with auto-hide.
+ */
+export function useSaveIndicator(duration = 2000) {
+  const [show, setShow] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const trigger = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setShow(true);
+    timeoutRef.current = setTimeout(() => setShow(false), duration);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  return { show, trigger };
+}
+
 export function ModelComboBox({
   isDarkMode,
   id,

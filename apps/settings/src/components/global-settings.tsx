@@ -1,5 +1,12 @@
 import { Button } from '@extension/ui';
-import { LabelWithTooltip, cn, ModelComboBox, TemperatureControl, isThinkingCapableModel } from './primitives';
+import {
+  LabelWithTooltip,
+  cn,
+  ModelComboBox,
+  TemperatureControl,
+  isThinkingCapableModel,
+  SaveIndicator,
+} from './primitives';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 import type { ThinkingLevel } from '@extension/storage';
 
@@ -30,6 +37,8 @@ interface GlobalSettingsProps {
   // Response timeout
   responseTimeoutSeconds: number;
   onChangeTimeout: (seconds: number) => void;
+  // Save indicator
+  showSaveIndicator?: boolean;
 }
 
 export function GlobalSettings(props: GlobalSettingsProps) {
@@ -45,6 +54,7 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeGlobalParameter,
     responseTimeoutSeconds,
     onChangeTimeout,
+    showSaveIndicator = false,
   } = props;
 
   const showThinkingLevel = globalModelValue && isThinkingCapableModel(globalModelValue);
@@ -91,13 +101,14 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           onClick={applyToAll}
           disabled={!globalModelValue}
           className={cn(
-            'text-sm',
+            'text-sm shrink-0',
             isDarkMode
               ? 'border-[#3a3a34] bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
               : 'border-[#d9d7ce] bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
           )}>
           Apply to all
         </Button>
+        <SaveIndicator show={showSaveIndicator} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
 
       {/* Search compatibility warning */}
