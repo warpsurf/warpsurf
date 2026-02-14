@@ -22,7 +22,7 @@ import { ModelSelect } from './model-select';
 import { GlobalSettings } from './global-settings';
 import { AgentModelsSection } from './agent-models-section';
 import { SingleModelSection } from './single-model-section';
-import { isThinkingCapableModel } from './primitives';
+import { isThinkingCapableModel, useSaveIndicator } from './primitives';
 import {
   getAgentDisplayName,
   getAgentDescription,
@@ -74,6 +74,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     maxOutputTokens: 8192,
     thinkingLevel: 'default',
   });
+  const globalSaveIndicator = useSaveIndicator();
 
   // Load general settings and subscribe to changes
   useEffect(() => {
@@ -127,7 +128,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     };
   }, []);
 
-  // Load existing agent models and parameters
+  // Load existing agent models and parameters, and listen for storage changes
   useEffect(() => {
     const loadAgentModels = async () => {
       try {
@@ -148,36 +149,52 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           const config = await agentModelStore.getAgentModel(agent);
           if (config) {
             models[agent] = `${config.provider}>${config.modelName}`;
-            // Load temperature (may be undefined for provider default) and maxOutputTokens
             setModelParameters(prev => ({
               ...prev,
               [agent]: {
-                // Temperature can be undefined (provider default) or a number
                 temperature: config.parameters?.temperature as number | undefined,
                 maxOutputTokens: (config.parameters?.maxOutputTokens as number) ?? prev[agent].maxOutputTokens,
               },
             }));
             if (config.thinkingLevel) {
-              setThinkingLevel(prev => ({
-                ...prev,
-                [agent]: config.thinkingLevel,
-              }));
+              setThinkingLevel(prev => ({ ...prev, [agent]: config.thinkingLevel }));
             }
             if (config.webSearch !== undefined) {
-              setWebSearchEnabled(prev => ({
-                ...prev,
-                [agent]: config.webSearch || false,
-              }));
+              setWebSearchEnabled(prev => ({ ...prev, [agent]: config.webSearch || false }));
             }
           }
         }
         setSelectedModels(models);
+
+        // Sync global model selector with Auto agent (used as reference)
+        const autoConfig = await agentModelStore.getAgentModel(AgentNameEnum.Auto);
+        if (autoConfig?.provider && autoConfig?.modelName) {
+          setGlobalModelValue(`${autoConfig.provider}>${autoConfig.modelName}`);
+          setGlobalModelParameters(prev => ({
+            ...prev,
+            thinkingLevel: autoConfig.thinkingLevel || 'default',
+            temperature: autoConfig.parameters?.temperature as number | undefined,
+            maxOutputTokens: (autoConfig.parameters?.maxOutputTokens as number) || 8192,
+          }));
+        }
       } catch (error) {
         console.error('Error loading agent models:', error);
       }
     };
 
     loadAgentModels();
+
+    // Listen for storage changes to sync when Standard view updates
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes['agent-models']) {
+        loadAgentModels();
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
 
   // Clean up orphaned agent models (referencing deleted providers)
@@ -557,6 +574,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           webSearch: shouldEnableWebSearch,
         });
       }
+      globalSaveIndicator.trigger();
     } catch (error) {
       console.error('Error applying global model to all agents:', error);
     }
@@ -605,6 +623,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         onChangeGlobalParameter={handleGlobalParameterChange}
         responseTimeoutSeconds={settings.responseTimeoutSeconds ?? 120}
         onChangeTimeout={seconds => updateSetting('responseTimeoutSeconds', seconds)}
+        showSaveIndicator={globalSaveIndicator.show}
       />
 
       {/* Auto Tab Context Toggle */}

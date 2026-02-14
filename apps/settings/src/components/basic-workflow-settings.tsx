@@ -7,22 +7,7 @@ import {
   type ProviderConfig,
   type ThinkingLevel,
 } from '@extension/storage';
-
-/**
- * Determine whether a model supports configurable thinking/reasoning.
- */
-function isThinkingCapableModel(modelName: string): boolean {
-  const raw = modelName.includes('>') ? modelName.split('>')[1] : modelName;
-  const name = raw.includes('/') ? raw.split('/').pop()! : raw;
-  const l = name.toLowerCase();
-
-  if (/^(o1|o3|o4|gpt-5)/.test(l)) return true;
-  if (/^claude-(opus-4|sonnet-4|sonnet-3-7|3-7-sonnet|haiku-4-5)/.test(l)) return true;
-  if (/^gemini-(2\.5|3-)/.test(l)) return true;
-  if (/^grok-(4|3-mini)/.test(l)) return true;
-
-  return false;
-}
+import { isThinkingCapableModel, SaveIndicator, useSaveIndicator } from './primitives';
 
 interface BasicWorkflowSettingsProps {
   isDarkMode?: boolean;
@@ -47,6 +32,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
   const [globalModel, setGlobalModel] = useState('');
   const [globalThinkingLevel, setGlobalThinkingLevel] = useState<ThinkingLevel>('default');
   const [isApplying, setIsApplying] = useState(false);
+  const saveIndicator = useSaveIndicator();
 
   useEffect(() => {
     (async () => {
@@ -77,6 +63,9 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
         const autoConfig = await agentModelStore.getAgentModel(AgentNameEnum.Auto);
         if (autoConfig?.provider && autoConfig?.modelName) {
           setGlobalModel(`${autoConfig.provider}>${autoConfig.modelName}`);
+          if (autoConfig.thinkingLevel) {
+            setGlobalThinkingLevel(autoConfig.thinkingLevel);
+          }
           return;
         }
       } catch {}
@@ -92,14 +81,24 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     try {
       const isThinkingModel = isThinkingCapableModel(globalModel);
       await Promise.all(
-        ALL_AGENTS.map(agent =>
-          agentModelStore.setAgentModel(agent, {
+        ALL_AGENTS.map(async agent => {
+          // Preserve existing parameters from storage
+          const existing = await agentModelStore.getAgentModel(agent);
+          const maxOutputTokens = (existing?.parameters?.maxOutputTokens as number) || 8192;
+          const temperature = existing?.parameters?.temperature as number | undefined;
+          // Preserve webSearch for Search agent, default false for others
+          const webSearch = agent === AgentNameEnum.Search ? true : (existing?.webSearch ?? false);
+
+          await agentModelStore.setAgentModel(agent, {
             provider,
             modelName,
+            parameters: { maxOutputTokens, ...(temperature !== undefined && { temperature }) },
             thinkingLevel: isThinkingModel ? globalThinkingLevel : undefined,
-          }),
-        ),
+            webSearch,
+          });
+        }),
       );
+      saveIndicator.trigger();
     } finally {
       setIsApplying(false);
     }
@@ -137,6 +136,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           className={`rounded-md px-3 py-2 text-sm font-medium ${isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-900 hover:bg-[#dfddd4]'} ${!globalModel || isApplying ? 'opacity-50 cursor-not-allowed' : ''}`}>
           {isApplying ? 'Applying...' : 'Apply'}
         </button>
+        <SaveIndicator show={saveIndicator.show} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
 
       {/* Thinking Level Selector - only shown for thinking-capable models */}
