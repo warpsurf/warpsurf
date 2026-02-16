@@ -1,11 +1,40 @@
 /*
  * Web Settings Component
- * This component handles web-related settings, including firewall configuration
+ * This component handles web-related settings, including region preference and firewall configuration
  * Extracted from the original FirewallSettings component
  */
 import { useState, useEffect, useCallback } from 'react';
-import { firewallStore } from '@extension/storage';
+import { firewallStore, generalSettingsStore } from '@extension/storage';
 import { Button } from '@extension/ui';
+
+// Available region options for the user to select
+const REGION_OPTIONS = [
+  { value: '', label: 'Select a region...' },
+  { value: 'com', label: 'United States (.com)' },
+  { value: 'co.uk', label: 'United Kingdom (.co.uk)' },
+  { value: 'ca', label: 'Canada (.ca)' },
+  { value: 'com.au', label: 'Australia (.com.au)' },
+  { value: 'de', label: 'Germany (.de)' },
+  { value: 'fr', label: 'France (.fr)' },
+  { value: 'es', label: 'Spain (.es)' },
+  { value: 'it', label: 'Italy (.it)' },
+  { value: 'nl', label: 'Netherlands (.nl)' },
+  { value: 'be', label: 'Belgium (.be)' },
+  { value: 'at', label: 'Austria (.at)' },
+  { value: 'ch', label: 'Switzerland (.ch)' },
+  { value: 'ie', label: 'Ireland (.ie)' },
+  { value: 'co.jp', label: 'Japan (.co.jp)' },
+  { value: 'in', label: 'India (.in)' },
+  { value: 'com.br', label: 'Brazil (.com.br)' },
+  { value: 'com.mx', label: 'Mexico (.com.mx)' },
+  { value: 'co.nz', label: 'New Zealand (.co.nz)' },
+  { value: 'se', label: 'Sweden (.se)' },
+  { value: 'no', label: 'Norway (.no)' },
+  { value: 'dk', label: 'Denmark (.dk)' },
+  { value: 'fi', label: 'Finland (.fi)' },
+  { value: 'pl', label: 'Poland (.pl)' },
+  { value: 'pt', label: 'Portugal (.pt)' },
+];
 
 interface WebSettingsProps {
   isDarkMode: boolean;
@@ -17,6 +46,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
   const [denyList, setDenyList] = useState<string[]>([]);
   const [newAllowUrl, setNewAllowUrl] = useState('');
   const [newDenyUrl, setNewDenyUrl] = useState('');
+  const [preferredRegion, setPreferredRegion] = useState<string>('');
 
   const loadFirewallSettings = useCallback(async () => {
     const settings = await firewallStore.getFirewall();
@@ -25,9 +55,20 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
     setDenyList(settings.denyList);
   }, []);
 
+  const loadRegionSettings = useCallback(async () => {
+    const settings = await generalSettingsStore.getSettings();
+    setPreferredRegion(settings.preferredRegion || '');
+  }, []);
+
   useEffect(() => {
     loadFirewallSettings();
-  }, [loadFirewallSettings]);
+    loadRegionSettings();
+  }, [loadFirewallSettings, loadRegionSettings]);
+
+  const handleRegionChange = async (region: string) => {
+    setPreferredRegion(region);
+    await generalSettingsStore.updateSettings({ preferredRegion: region || undefined });
+  };
 
   const handleToggleFirewall = async () => {
     await firewallStore.updateFirewall({ enabled: !isEnabled });
@@ -61,6 +102,48 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
 
   return (
     <section className="space-y-6">
+      {/* Region Preference Settings */}
+      <div
+        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
+        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+          🌍 Region Preference
+        </h2>
+
+        <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Set your preferred region for websites. The agent will prefer regional versions of sites (e.g., amazon.de
+          instead of amazon.com) when available.
+        </p>
+
+        <div
+          className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-700' : 'border-gray-200 bg-gray-100'}`}>
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="region-select"
+              className={`text-base font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+              Preferred Region
+            </label>
+            <select
+              id="region-select"
+              value={preferredRegion}
+              onChange={e => handleRegionChange(e.target.value)}
+              className={`w-64 rounded-md border px-3 py-2 text-sm ${
+                isDarkMode ? 'border-gray-600 bg-slate-600 text-white' : 'border-gray-300 bg-white text-gray-700'
+              }`}>
+              {REGION_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {!preferredRegion && (
+            <p className={`mt-2 text-xs ${isDarkMode ? 'text-yellow-400' : 'text-yellow-600'}`}>
+              No region selected. The agent will use default (.com) versions of websites.
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Firewall Settings */}
       <div
         className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
@@ -70,7 +153,8 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
 
         {/* Concise explanation note */}
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-          Control which sites the warpsurf agents can access. Deny list blocks sites; allow list restricts to listed sites <strong>only</strong> when populated.
+          Control which sites the warpsurf agents can access. Deny list blocks sites; allow list restricts to listed
+          sites <strong>only</strong> when populated.
         </p>
 
         <div className="space-y-6">
@@ -134,7 +218,9 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
               <Button
                 onClick={handleAddToAllowList}
                 className={`px-3 py-2 text-sm ${
-                  isDarkMode ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-green-500 text-white hover:bg-green-600'
+                  isDarkMode
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-green-500 text-white hover:bg-green-600'
                 }`}>
                 ➕ Add
               </Button>
@@ -215,7 +301,9 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
                       <Button
                         onClick={() => handleRemoveUrl(url, 'deny')}
                         className={`rounded-l-none px-2 py-1 text-xs ${
-                          isDarkMode ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-500 text-white hover:bg-red-600'
+                          isDarkMode
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-red-500 text-white hover:bg-red-600'
                         }`}>
                         🗑️
                       </Button>
@@ -245,11 +333,14 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
           <li>✅ When allow list is empty, all non-denied URLs are allowed</li>
           <li className="font-bold">⚠️ When allow list is not empty, only matching URLs are allowed</li>
           <li>
-            🔗 <strong>Domain matching:</strong> entries match the exact domain <em>and</em> all subdomains.
-            For example, <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>wikipedia.org</code> blocks{' '}
+            🔗 <strong>Domain matching:</strong> entries match the exact domain <em>and</em> all subdomains. For
+            example,{' '}
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>wikipedia.org</code> blocks{' '}
             <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>en.wikipedia.org</code>,{' '}
-            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>www.wikipedia.org</code>, etc.
-            But <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>en.wikipedia.org</code> only blocks that specific subdomain.
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>www.wikipedia.org</code>,
+            etc. But{' '}
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>en.wikipedia.org</code> only
+            blocks that specific subdomain.
           </li>
           <li>🔍 Wildcards are NOT supported yet</li>
         </ul>

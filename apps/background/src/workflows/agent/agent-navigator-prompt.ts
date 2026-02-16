@@ -2,6 +2,17 @@ import { commonSecurityRules, noPageContextGuidance } from '@src/workflows/share
 
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
 
+// Region preference guidance - only included when user has set a preferred region
+// The {{preferred_region}} placeholder is replaced at runtime by NavigatorPrompt
+export const regionPreferenceGuidance = `
+19. REGION PREFERENCE:
+
+- The user's preferred region is: {{preferred_region}}
+- When navigating to websites that have regional variants (e.g., Amazon, Google, eBay, news sites), prefer the regional version matching this preference.
+- Examples: If preference is "de", use amazon.de instead of amazon.com, google.de instead of google.com.
+- If the regional variant doesn't exist or isn't relevant to the task, use the default (.com) version.
+`;
+
 // Site search guidance (only included when search patterns are enabled)
 const siteSearchGuidance = isLegacyNavigation
   ? ''
@@ -204,5 +215,6 @@ ${noPageContextGuidance}
 - Plan is a json string wrapped by the <plan> tag
 - If a plan is provided, follow the instructions in the next_steps exactly first
 - If no plan is provided, just continue with the task
+{{region_preference_section}}
 </system_instructions>
 `;

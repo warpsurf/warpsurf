@@ -120,7 +120,10 @@ export class Executor {
     this.manualAgentType = extraArgs?.agentType;
     this.preTriageResult = extraArgs?.preTriageResult;
     this.tasks.push(task);
-    this.navigatorPrompt = new NavigatorPrompt(context.options.maxActionsPerStep);
+    this.navigatorPrompt = new NavigatorPrompt(
+      context.options.maxActionsPerStep,
+      extraArgs?.generalSettings?.preferredRegion,
+    );
     this.plannerPrompt = new PlannerPrompt();
     this.validatorPrompt = new ValidatorPrompt(task);
 

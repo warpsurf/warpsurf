@@ -43,6 +43,9 @@ export interface GeneralSettingsConfig {
   enableAutoTabContext?: boolean;
   // Theme mode: 'auto' follows system, 'light' or 'dark' overrides system preference
   themeMode?: 'auto' | 'light' | 'dark';
+  // User's preferred region/locale for websites (e.g., 'com', 'co.uk', 'de', 'fr')
+  // When set, the agent will prefer regional versions of websites matching this preference
+  preferredRegion?: string;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -84,6 +87,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   enableAutoTabContext: false,
   // Theme mode defaults to auto (follows system preference)
   themeMode: 'auto',
+  // No default region - user should select their preference
+  preferredRegion: undefined,
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {
