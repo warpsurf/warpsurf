@@ -26,7 +26,6 @@ const manifest = deepmerge(
     options_page: 'settings/index.html',
     background: {
       service_worker: 'background.iife.js',
-      type: 'module',
     },
     action: {
       default_icon: 'warpsurf_logo.png',
