@@ -1,0 +1,183 @@
+#!/usr/bin/env npx tsx
+/**
+ * Generate search URL patterns for direct navigation optimization
+ *
+ * Usage: pnpm generate-search-patterns
+ *
+ * Reads patterns from search-patterns-source.json (hybrid format with templates)
+ * and outputs a normalized, expanded TypeScript file for bundling.
+ *
+ * Output: apps/background/src/utils/search-patterns.ts
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface TemplateEntry {
+  pattern: string;
+  type?: 'subdomain' | 'prefix';
+  // Reference to shared sets
+  tldSet?: string;
+  langSet?: string;
+  prefixSet?: string;
+  // Inline lists (for one-off cases)
+  tlds?: string[];
+  langs?: string[];
+  prefixes?: string[];
+  // Extra values to add to a set
+  extraTlds?: string[];
+}
+
+interface SourceData {
+  tldSets: Record<string, string[]>;
+  langSets: Record<string, string[]>;
+  prefixSets: Record<string, string[]>;
+  templates: Record<string, TemplateEntry>;
+  static: Record<string, string>;
+}
+
+/**
+ * Normalize a URL to a canonical domain for database lookup.
+ * Strips protocol and 'www.' prefix, preserves meaningful subdomains.
+ */
+function normalizeDomain(url: string): string {
+  let normalized = url;
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = 'https://' + normalized;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    let hostname = parsed.hostname.toLowerCase();
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.slice(4);
+    }
+    return hostname;
+  } catch {
+    return url.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
+  }
+}
+
+/**
+ * Resolve TLDs for a template entry, combining set reference + inline + extras.
+ */
+function resolveTlds(entry: TemplateEntry, tldSets: Record<string, string[]>): string[] {
+  const tlds: string[] = [];
+
+  if (entry.tldSet && tldSets[entry.tldSet]) {
+    tlds.push(...tldSets[entry.tldSet]);
+  }
+  if (entry.tlds) {
+    tlds.push(...entry.tlds);
+  }
+  if (entry.extraTlds) {
+    tlds.push(...entry.extraTlds);
+  }
+
+  // Deduplicate
+  return [...new Set(tlds)];
+}
+
+/**
+ * Expand a template entry into multiple domain-pattern pairs.
+ */
+function expandTemplate(name: string, entry: TemplateEntry, sourceData: SourceData): Record<string, string> {
+  const expanded: Record<string, string> = {};
+
+  if (entry.type === 'subdomain') {
+    // Subdomain pattern: {lang}.domain.org
+    const langs =
+      entry.langSet && sourceData.langSets[entry.langSet] ? sourceData.langSets[entry.langSet] : entry.langs || [];
+
+    for (const lang of langs) {
+      const domain = `${lang}.${name}.org`;
+      const pattern = entry.pattern.replace('{lang}', lang);
+      expanded[domain] = pattern;
+    }
+  } else if (entry.type === 'prefix') {
+    // Prefix pattern: {prefix}.domain.com
+    const prefixes =
+      entry.prefixSet && sourceData.prefixSets[entry.prefixSet]
+        ? sourceData.prefixSets[entry.prefixSet]
+        : entry.prefixes || [];
+
+    for (const prefix of prefixes) {
+      const domain = prefix === 'www' ? `${name}.com` : `${prefix}.${name}.com`;
+      const pattern = entry.pattern.replace('{prefix}', prefix);
+      expanded[domain] = pattern;
+    }
+  } else {
+    // Standard TLD pattern: domain.{tld}
+    const tlds = resolveTlds(entry, sourceData.tldSets);
+
+    for (const tld of tlds) {
+      const domain = `${name}.${tld}`;
+      const pattern = entry.pattern.replace('{tld}', tld);
+      expanded[domain] = pattern;
+    }
+  }
+
+  return expanded;
+}
+
+async function main() {
+  console.log('Generating search patterns...');
+
+  // Load source data (hybrid format)
+  const sourcePath = path.join(import.meta.dirname, 'search-patterns-source.json');
+  const sourceData: SourceData = JSON.parse(fs.readFileSync(sourcePath, 'utf-8'));
+
+  const allPatterns: Record<string, string> = {};
+
+  // Expand templates
+  let templateCount = 0;
+  for (const [name, entry] of Object.entries(sourceData.templates)) {
+    const expanded = expandTemplate(name, entry, sourceData);
+    for (const [domain, pattern] of Object.entries(expanded)) {
+      allPatterns[domain] = pattern;
+      templateCount++;
+    }
+  }
+  console.log(`Expanded ${Object.keys(sourceData.templates).length} templates into ${templateCount} patterns`);
+
+  // Add static entries (normalize domains)
+  let staticCount = 0;
+  for (const [url, pattern] of Object.entries(sourceData.static)) {
+    const domain = normalizeDomain(url);
+    allPatterns[domain] = pattern;
+    staticCount++;
+  }
+  console.log(`Added ${staticCount} static patterns`);
+
+  // Sort by domain for consistent output
+  const sortedPatterns: Record<string, string> = {};
+  for (const key of Object.keys(allPatterns).sort()) {
+    sortedPatterns[key] = allPatterns[key];
+  }
+
+  // Generate TypeScript content
+  const tsContent = `/**
+ * Search URL patterns - bundled with extension
+ *
+ * Auto-generated by live_data/generate-search-patterns.ts
+ * Run: pnpm generate-search-patterns
+ *
+ * Maps normalized domains to search URL templates.
+ * Use {q} as placeholder for the search query.
+ *
+ * Generated: ${new Date().toISOString()}
+ * Total patterns: ${Object.keys(sortedPatterns).length}
+ */
+
+export const SEARCH_PATTERNS: Record<string, string> = ${JSON.stringify(sortedPatterns, null, 2)};
+`;
+
+  // Write output file
+  const outputPath = path.join(import.meta.dirname, '../apps/background/src/utils/search-patterns.ts');
+  fs.writeFileSync(outputPath, tsContent, 'utf-8');
+
+  console.log(`\nGenerated ${Object.keys(sortedPatterns).length} total search patterns`);
+  console.log(`Output: ${outputPath}`);
+}
+
+main().catch(console.error);
