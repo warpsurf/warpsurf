@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Feature flag for legacy navigation (without search_query support)
+const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
+
 export interface ActionSchema {
   name: string;
   description: string;
@@ -18,8 +21,7 @@ export const doneActionSchema: ActionSchema = {
 // Basic Navigation Actions
 export const searchGoogleActionSchema: ActionSchema = {
   name: 'search_google',
-  description:
-    'Search Google with a query. Query should be concrete and specific, like a human would search.',
+  description: 'Search Google with a query. Query should be concrete and specific, like a human would search.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     query: z.string(),
@@ -32,24 +34,32 @@ export const extractGoogleResultsActionSchema: ActionSchema = {
     'Extract Google search results from current SERP as list of {title, url} objects. Use after search or on Google results page.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
-    max_results: z
-      .number()
-      .int()
-      .min(1)
-      .max(20)
-      .default(10)
-      .describe('maximum number of results to return (1-20)'),
+    max_results: z.number().int().min(1).max(20).default(10).describe('maximum number of results to return (1-20)'),
   }),
 };
 
-export const goToUrlActionSchema: ActionSchema = {
-  name: 'go_to_url',
-  description: 'Navigate to URL in the current tab',
-  schema: z.object({
-    intent: z.string().default('').describe('purpose of this action'),
-    url: z.string(),
-  }),
-};
+export const goToUrlActionSchema: ActionSchema = isLegacyNavigation
+  ? {
+      name: 'go_to_url',
+      description: 'Navigate to URL in the current tab',
+      schema: z.object({
+        intent: z.string().default('').describe('purpose of this action'),
+        url: z.string(),
+      }),
+    }
+  : {
+      name: 'go_to_url',
+      description:
+        'Navigate to URL in the current tab. If you plan to search on the destination site, include search_query to skip directly to results (faster than navigating then searching manually). Example: url="amazon.com", search_query="wireless headphones"',
+      schema: z.object({
+        intent: z.string().default('').describe('purpose of this action'),
+        url: z.string().describe('the website URL to navigate to'),
+        search_query: z
+          .string()
+          .optional()
+          .describe('search term to look up on this site - only include if you intend to search'),
+      }),
+    };
 
 export const goBackActionSchema: ActionSchema = {
   name: 'go_back',
@@ -71,7 +81,8 @@ export const clickElementActionSchema: ActionSchema = {
 
 export const inputTextActionSchema: ActionSchema = {
   name: 'input_text',
-  description: 'Type text into input fields. Works for all text inputs including Google Docs, form fields, and rich text editors.',
+  description:
+    'Type text into input fields. Works for all text inputs including Google Docs, form fields, and rich text editors.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     index: z.number().int().describe('index of the element'),

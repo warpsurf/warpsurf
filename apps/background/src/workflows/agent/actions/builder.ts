@@ -29,6 +29,9 @@ import {
   scrollToBottomActionSchema,
   requestUserControlActionSchema,
 } from './schemas';
+import { resolveSearchUrl } from '@src/utils/search-pattern-resolver';
+
+const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
 import { z } from 'zod';
 import { createLogger } from '@src/log';
 import { ExecutionState, Actors } from '@src/workflows/shared/event/types';
@@ -262,28 +265,63 @@ export class ActionBuilder {
 
     const goToUrl = new Action(async (input: z.infer<typeof goToUrlActionSchema.schema>) => {
       this.checkCancelled();
-      const intent = input.intent || `Navigating to ${input.url}`;
-      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-      await this.context.browserContext.navigateTo(input.url);
+      let finalUrl: string;
+      let msg: string;
+
+      if (isLegacyNavigation) {
+        // Legacy mode: simple navigation without search pattern resolution
+        const intent = input.intent || `Navigating to ${input.url}`;
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+
+        await this.context.browserContext.navigateTo(input.url);
+        finalUrl = input.url;
+        msg = `Navigated to ${input.url}`;
+      } else {
+        // New mode: resolve URL with search pattern if search_query provided
+        const resolved = resolveSearchUrl(input.url, input.search_query);
+
+        const intent =
+          input.intent ||
+          (resolved.patternApplied
+            ? `Searching "${input.search_query}" on ${resolved.domain}`
+            : `Navigating to ${input.url}`);
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+
+        finalUrl = resolved.url;
+        try {
+          await this.context.browserContext.navigateTo(finalUrl);
+        } catch (err) {
+          // If search URL failed, fall back to base URL
+          if (resolved.patternApplied) {
+            finalUrl = input.url.startsWith('http') ? input.url : `https://${input.url}`;
+            await this.context.browserContext.navigateTo(finalUrl);
+          } else {
+            throw err;
+          }
+        }
+
+        msg = resolved.patternApplied
+          ? `Navigated to ${resolved.domain} search results for "${input.search_query}"`
+          : `Navigated to ${finalUrl}`;
+      }
+
       this.checkCancelled();
       // If this created a new tab (first navigation in worker mode), emit TAB_CREATED so grouping/mirroring starts
-      let createdId: number | null = null;
       try {
         const created = this.context.browserContext.getAndClearNewTabCreated();
         if (typeof created === 'number' && created > 0) {
-          createdId = created;
           this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.TAB_CREATED, `Created tab ${created}`, {
             tabId: created,
             taskId: this.context.taskId,
           });
         }
       } catch {}
-      const msg2 = `Navigated to ${input.url}`;
-      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg2);
+
+      this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
 
       return new ActionResult({
-        extractedContent: msg2,
+        extractedContent: msg,
         includeInMemory: true,
       });
     }, goToUrlActionSchema);

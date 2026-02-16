@@ -1,5 +1,18 @@
 import { commonSecurityRules, noPageContextGuidance } from '@src/workflows/shared/prompts/common';
 
+const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
+
+// Site search guidance (only included when search patterns are enabled)
+const siteSearchGuidance = isLegacyNavigation
+  ? ''
+  : `
+- CRITICAL: If navigating to URL to perform a search, use Site search (direct): [{"go_to_url": {"intent": "Search Amazon for headphones", "url": "amazon.com", "search_query": "wireless headphones"}}]`;
+
+const siteSearchOptimization = isLegacyNavigation
+  ? ''
+  : `
+- **SITE SEARCH OPTIMIZATION**: When navigating to URLs that have a search feature, use the \`search_query\` parameter in \`go_to_url\` to navigate directly to search results. Example: \`{"go_to_url": {"url": "amazon.com", "search_query": "laptop stand"}}\` goes directly to Amazon search results. This is faster than navigating to the site and then finding/using the search box.`;
+
 export const navigatorSystemPromptTemplate = `
 <system_instructions>
 You are an AI agent designed to automate browser tasks. Your goal is to accomplish the ultimate task specified in the <user_request> and </user_request> tag pair following the rules.
@@ -40,7 +53,7 @@ Interactive Elements
 Common action sequences:
 
 - Form filling: [{"input_text": {"intent": "Fill title", "index": 1, "text": "username"}}, {"input_text": {"intent": "Fill title", "index": 2, "text": "password"}}, {"click_element": {"intent": "Click submit button", "index": 3}}]
-- Navigation: [{"go_to_url": {"intent": "Go to url", "url": "https://example.com"}}]
+- Navigation: [{"go_to_url": {"intent": "Go to url", "url": "https://example.com"}}]${siteSearchGuidance}
 - Actions are executed in the given order
 - If the page changes after an action, the sequence will be interrupted
 - Only provide the action sequence until an action which changes the page state significantly
@@ -111,7 +124,7 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
 - Handle popups/cookies by accepting or closing them
 - Use scroll to find elements you are looking for
 - Default behavior for workers: do not open any tab until an action requires a page. When a navigation action is required and no tab is bound or provided by dependencies, prefer opening a new tab at that point; otherwise reuse the current bound tab.
-- When performing a Google search, do NOT open a neutral/blank tab first. Instead, navigate directly to the Google search results URL using the query encoded with plus for spaces. Example: go_to_url with url="https://www.google.com/search?q=search+text+query+uses+plus+as+whitespace". Do not create redundant extra tabs for this.
+- When performing a Google search, do NOT open a neutral/blank tab first. Instead, navigate directly to the Google search results URL using the query encoded with plus for spaces. Example: go_to_url with url="https://www.google.com/search?q=search+text+query+uses+plus+as+whitespace". Do not create redundant extra tabs for this.${siteSearchOptimization}
 - If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach
 - If the page is not fully loaded, use wait action
 
