@@ -220,6 +220,22 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
           storedCompletedCount: storedCompleted.length,
         });
 
+        // Build a map of stored titles by sessionId for quick lookup
+        const storedTitles = new Map<string, string>();
+        for (const stored of [...storedRunning, ...storedCompleted]) {
+          if (stored.sessionTitle && stored.sessionTitle !== stored.taskDescription?.substring(0, 60)) {
+            storedTitles.set(stored.sessionId, stored.sessionTitle);
+          }
+        }
+
+        // Update live agents with stored titles (from title generator)
+        for (const agent of agents) {
+          const storedTitle = storedTitles.get(agent.sessionId);
+          if (storedTitle) {
+            agent.sessionTitle = storedTitle;
+          }
+        }
+
         // Merge stored data with live data
         const liveSessionIds = new Set(agents.map(a => a.sessionId));
 

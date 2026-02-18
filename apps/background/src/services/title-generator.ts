@@ -93,6 +93,7 @@ class TitleGeneratorService {
       if (title && title.length > 0 && title.length < 100) {
         this.generatedSessions.add(sessionId);
         await chatHistoryStore.updateTitle(sessionId, title);
+        await this.updateDashboardStorage(sessionId, title);
         logger.info(`Generated title for ${sessionId}: "${title}"`);
         return title;
       }
@@ -109,6 +110,36 @@ class TitleGeneratorService {
 
   clearSession(sessionId: string): void {
     this.generatedSessions.delete(sessionId);
+  }
+
+  private async updateDashboardStorage(sessionId: string, title: string): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get(['agent_dashboard_running', 'agent_dashboard_completed']);
+      const running = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
+      const completed = Array.isArray(result.agent_dashboard_completed) ? result.agent_dashboard_completed : [];
+
+      let updated = false;
+      const updateTitle = (arr: any[]) =>
+        arr.map((a: any) => {
+          if (a.sessionId === sessionId) {
+            updated = true;
+            return { ...a, sessionTitle: title };
+          }
+          return a;
+        });
+
+      const newRunning = updateTitle(running);
+      const newCompleted = updateTitle(completed);
+
+      if (updated) {
+        await chrome.storage.local.set({
+          agent_dashboard_running: newRunning,
+          agent_dashboard_completed: newCompleted,
+        });
+      }
+    } catch (e) {
+      logger.error('Failed to update dashboard storage:', e);
+    }
   }
 }
 
