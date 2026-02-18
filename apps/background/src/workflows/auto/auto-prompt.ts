@@ -1,4 +1,6 @@
-export const SystemPrompt = `You are a helpful assistant that triages requests from users.
+import { isSkillsAvailable } from '@src/skills';
+
+const BASE_PROMPT = `You are a helpful assistant that triages requests from users.
 You will be given a request from a user.
 The request will be a string and you will need to determine the appropriate action to take.
 
@@ -27,8 +29,9 @@ Here are some examples of requests and the appropriate action to take:
 - "Enable vision and then go to amazon.com" -> tool (after_tool: "agent")
 - "Set temp to 0.3 and search for latest AI news" -> tool (after_tool: "search")
 
-The only valid actions are: ['chat', 'search', 'agent', 'tool'].
+The only valid actions are: ['chat', 'search', 'agent', 'tool'].`;
 
+const RESPONSE_FORMAT_BASE = `
 Respond with a JSON object in this exact format:
 {
   "action": "one_of_the_valid_actions",
@@ -43,3 +46,36 @@ The "after_tool" field is ONLY required when action is "tool". It indicates what
 - "search": After tools, handle the remaining query via web search.
 - "agent": After tools, handle the remaining task via browser agent.
 When action is NOT "tool", omit "after_tool".`;
+
+const SKILLS_EXTENSION = `
+
+When action is "agent", also include "expected_sites" - a list of website domains the agent will likely visit.
+Examples:
+- "Find AirPods price on Amazon" -> expected_sites: ["amazon.com"]
+- "Compare iPhone prices on Amazon and Best Buy" -> expected_sites: ["amazon.com", "bestbuy.com"]
+- "Book a flight from London to Paris" -> expected_sites: ["google.com", "skyscanner.com"]
+
+Include likely sites even if uncertain - this pre-loads navigation knowledge.`;
+
+const RESPONSE_FORMAT_WITH_SKILLS = `
+Respond with a JSON object in this exact format:
+{
+  "action": "one_of_the_valid_actions",
+  "confidence": 0.95,
+  "reasoning": "Brief explanation of why this action was chosen",
+  "after_tool": "none",
+  "expected_sites": ["example.com"]
+}
+
+The "after_tool" field is ONLY required when action is "tool". It indicates what should happen after tool calls:
+- "none": Request is fully handled by tool calls alone. If the request is just a tool call, set this to "none".
+- "chat": After tools, answer the remaining question via chat.
+- "search": After tools, handle the remaining query via web search.
+- "agent": After tools, handle the remaining task via browser agent.
+When action is NOT "tool", omit "after_tool".
+
+The "expected_sites" field is ONLY required when action is "agent". Omit for other actions.`;
+
+export const SystemPrompt = isSkillsAvailable()
+  ? `${BASE_PROMPT}${SKILLS_EXTENSION}${RESPONSE_FORMAT_WITH_SKILLS}`
+  : `${BASE_PROMPT}${RESPONSE_FORMAT_BASE}`;

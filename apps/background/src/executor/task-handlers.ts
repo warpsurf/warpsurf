@@ -235,9 +235,11 @@ export async function handleNewTask(message: any, deps: Deps) {
         if (action === 'chat') effectiveAgentType = 'chat';
         else if (action === 'search') effectiveAgentType = 'search';
         else if (action === 'tool') {
-          // Pass full triage result to executor to avoid duplicate AUTO call
           effectiveAgentType = 'tool';
           preTriageResult = triageResult;
+        } else if (action === 'agent') {
+          effectiveAgentType = 'agent';
+          preTriageResult = triageResult; // Pass triage result for expectedSites
         } else effectiveAgentType = 'agent';
 
         // Emit triage completion event to UI
@@ -480,11 +482,11 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         } else if (action === 'search') {
           agentType = 'search';
         } else if (action === 'tool') {
-          // Pass full triage result to executor to avoid duplicate AUTO call
           agentType = 'tool';
           preTriageResult = triageResult;
         } else if (action === 'agent') {
           agentType = 'agent';
+          preTriageResult = triageResult; // Pass triage result for expectedSites
         }
 
         // Emit triage completion event to UI

@@ -25,6 +25,8 @@ export interface AutoResult {
   reasoning?: string;
   /** When action is 'tool', indicates what to do after tool calls complete. */
   afterTool?: 'chat' | 'search' | 'agent' | 'none';
+  /** When action is 'agent', predicted websites to visit (for pre-loading site skills). */
+  expectedSites?: string[];
 }
 
 /**
@@ -200,6 +202,12 @@ ${request}`;
               result.afterTool = ['chat', 'search', 'agent', 'none'].includes(parsed.after_tool)
                 ? parsed.after_tool
                 : 'none';
+            }
+            if (normalizedAction === 'agent' && Array.isArray(parsed.expected_sites)) {
+              result.expectedSites = parsed.expected_sites.filter(
+                (s: unknown) => typeof s === 'string' && s.length > 0,
+              );
+              console.log(`[Skills] Parsed expectedSites: ${result.expectedSites?.join(', ')}`);
             }
             return result;
           }
