@@ -204,6 +204,9 @@ export class ActionBuilder {
         }
       } catch {}
 
+      // Track URL for site skill injection
+      context.addSkillUrl(searchUrl);
+
       const msg2 = `Searched for "${input.query}" in Google`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_OK, msg2);
       return new ActionResult({ extractedContent: msg2, includeInMemory: true });
@@ -317,6 +320,9 @@ export class ActionBuilder {
           });
         }
       } catch {}
+
+      // Track URL for site skill injection
+      this.context.addSkillUrl(finalUrl);
 
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
 
@@ -563,6 +569,10 @@ export class ActionBuilder {
       // Use go_to_url if you want to navigate within the current tab.
       const page = await this.context.browserContext.openTab(input.url);
       this.checkCancelled();
+
+      // Track URL for site skill injection
+      this.context.addSkillUrl(input.url);
+
       const msg = `Opened ${input.url} in new tab`;
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.TAB_CREATED, `Created tab ${page.tabId}`, {
