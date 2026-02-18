@@ -73,6 +73,8 @@ export class AgentContext {
   chatHistoryMessages: any[];
   // Context tab IDs provided by user for reference
   contextTabIds: number[];
+  // URLs collected for site skill injection
+  private _skillUrls: Set<string>;
 
   constructor(
     taskId: string,
@@ -99,6 +101,31 @@ export class AgentContext {
     this.history = new AgentStepHistory();
     this.chatHistoryMessages = [];
     this.contextTabIds = [];
+    this._skillUrls = new Set();
+  }
+
+  /** Add a URL for site skill resolution. */
+  addSkillUrl(url: string): void {
+    if (url && /^https?:/i.test(url)) {
+      this._skillUrls.add(url);
+    }
+  }
+
+  /** Add multiple URLs for site skill resolution. */
+  addSkillUrls(urls: string[]): void {
+    for (const url of urls) {
+      this.addSkillUrl(url);
+    }
+  }
+
+  /** Get all collected skill URLs. */
+  getSkillUrls(): string[] {
+    return Array.from(this._skillUrls);
+  }
+
+  /** Clear skill URLs. */
+  clearSkillUrls(): void {
+    this._skillUrls.clear();
   }
 
   async emitEvent(actor: Actors, state: ExecutionState, eventDetails: string, additionalData?: Partial<EventData>) {
