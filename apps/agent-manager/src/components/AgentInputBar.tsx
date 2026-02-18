@@ -18,7 +18,7 @@ const AGENT_OPTIONS: AgentOption[] = [
   { type: 'agent', name: 'Agent', icon: <FaRobot className="w-3.5 h-3.5" /> },
   {
     type: 'multiagent',
-    name: 'Multi-Agent',
+    name: 'Multi-Agent (exp.)',
     icon: (
       <span className="inline-flex">
         <FaRobot className="w-3.5 h-3.5" />
@@ -157,7 +157,7 @@ export function AgentInputBar({
       <div
         className={`flex items-center justify-between gap-2 px-3 pb-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
         <div className="flex items-center gap-2">
-          {/* Tab context selector - simplified */}
+          {/* Tab context selector */}
           <TabContextSelector
             selectedTabIds={manualContextTabIds}
             onSelectionChange={setManualContextTabIds}
@@ -168,9 +168,26 @@ export function AgentInputBar({
             excludedAutoTabIds={excludedAutoTabIds}
             onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
             onAutoContextToggle={onAutoContextToggle}
-            compact
           />
 
+          {/* Microphone button for voice input */}
+          {onMicClick && (
+            <MicrophoneButton
+              isRecording={isRecording}
+              isProcessing={isProcessingSpeech}
+              recordingDurationMs={recordingDurationMs}
+              audioLevel={audioLevel}
+              onClick={onMicClick}
+              onStopClick={onMicStop || (() => {})}
+              isDarkMode={isDarkMode}
+              disabled={!sttConfigured || disabled}
+              disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
+              onOpenSettings={onOpenVoiceSettings}
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
           {/* Workflow dropdown selector */}
           <div ref={workflowDropdownRef} className="relative">
             <button
@@ -188,7 +205,7 @@ export function AgentInputBar({
             </button>
             {workflowDropdownOpen && (
               <div
-                className={`absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border shadow-lg ${
+                className={`absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border shadow-lg ${
                   isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
                 }`}>
                 {AGENT_OPTIONS.map(option => (
@@ -215,24 +232,6 @@ export function AgentInputBar({
               </div>
             )}
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Microphone button for voice input */}
-          {onMicClick && (
-            <MicrophoneButton
-              isRecording={isRecording}
-              isProcessing={isProcessingSpeech}
-              recordingDurationMs={recordingDurationMs}
-              audioLevel={audioLevel}
-              onClick={onMicClick}
-              onStopClick={onMicStop || (() => {})}
-              isDarkMode={isDarkMode}
-              disabled={!sttConfigured || disabled}
-              disabledTooltip={!sttConfigured ? 'Configure a voice model to enable voice input' : undefined}
-              onOpenSettings={onOpenVoiceSettings}
-            />
-          )}
 
           {/* Send button */}
           <button
@@ -241,7 +240,7 @@ export function AgentInputBar({
             title="Send"
             aria-label="Send message"
             className={`rounded-lg p-1.5 text-white transition-colors ${
-              isDisabled ? 'bg-violet-400 opacity-50 cursor-not-allowed' : 'bg-violet-500 hover:bg-violet-600'
+              isDisabled ? 'bg-rose-300 opacity-50 cursor-not-allowed' : 'bg-rose-400 hover:bg-rose-500'
             }`}>
             {isSubmitting ? (
               <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">

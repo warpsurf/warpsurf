@@ -27,7 +27,7 @@ export const WORKFLOW_DISPLAY_NAMES: Record<WorkflowType, string> = {
   [WorkflowType.CHAT]: 'Chat',
   [WorkflowType.SEARCH]: 'Search',
   [WorkflowType.AGENT]: 'Agent',
-  [WorkflowType.MULTIAGENT]: 'Multi-Agent',
+  [WorkflowType.MULTIAGENT]: 'Multi-Agent (exp.)',
 };
 
 /**
