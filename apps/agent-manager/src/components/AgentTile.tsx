@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import { LivePreview } from './LivePreview';
+import { TypewriterText } from './TypewriterText';
 import type { AgentData } from '@src/types';
 
 interface AgentTileProps {
@@ -26,12 +27,20 @@ function formatCost(cost?: number): string {
 
 export function AgentTile({ agent, isDarkMode, onClick, onDelete }: AgentTileProps) {
   const needsAttention = agent.status === 'needs_input';
+  const [animationComplete, setAnimationComplete] = useState(false);
 
   const title = useMemo(() => {
-    if (agent.taskDescription?.trim()) return agent.taskDescription.trim();
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
-    return 'Agent Task';
-  }, [agent.taskDescription, agent.sessionTitle]);
+    if (agent.taskDescription?.trim()) {
+      const desc = agent.taskDescription.trim();
+      return desc.length > 60 ? desc.substring(0, 60) + '...' : desc;
+    }
+    return 'New Task';
+  }, [agent.sessionTitle, agent.taskDescription]);
+
+  const handleAnimationComplete = useCallback(() => {
+    setAnimationComplete(true);
+  }, []);
 
   // Time since last update: prefer preview.lastUpdated, then endTime, then startTime
   const lastUpdateTime = agent.preview?.lastUpdated || agent.endTime || agent.startTime;
@@ -62,7 +71,11 @@ export function AgentTile({ agent, isDarkMode, onClick, onDelete }: AgentTilePro
             </span>
           </div>
           <div className={`text-sm font-medium truncate mb-1 ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
-            {title}
+            <TypewriterText
+              text={title}
+              animate={agent.titleAnimating && !animationComplete}
+              onComplete={handleAnimationComplete}
+            />
           </div>
           {agent.metrics?.totalCost !== undefined && (
             <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>

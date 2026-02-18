@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
+import { TypewriterText } from './TypewriterText';
 import type { AgentData } from '@src/types';
 
 interface CompactAgentRowProps {
@@ -24,11 +25,20 @@ function formatCost(cost?: number): string {
 }
 
 export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: CompactAgentRowProps) {
+  const [animationComplete, setAnimationComplete] = useState(false);
+
   const title = useMemo(() => {
-    if (agent.taskDescription?.trim()) return agent.taskDescription.trim();
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
-    return 'Agent Task';
-  }, [agent.taskDescription, agent.sessionTitle]);
+    if (agent.taskDescription?.trim()) {
+      const desc = agent.taskDescription.trim();
+      return desc.length > 60 ? desc.substring(0, 60) + '...' : desc;
+    }
+    return 'New Task';
+  }, [agent.sessionTitle, agent.taskDescription]);
+
+  const handleAnimationComplete = useCallback(() => {
+    setAnimationComplete(true);
+  }, []);
 
   // Get the last message snippet (or task description as fallback)
   const snippet = useMemo(() => {
@@ -54,7 +64,11 @@ export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: Compac
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className={`text-sm font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
-                {title}
+                <TypewriterText
+                  text={title}
+                  animate={agent.titleAnimating && !animationComplete}
+                  onComplete={handleAnimationComplete}
+                />
               </span>
               <StatusBadge status={agent.status} isDarkMode={isDarkMode} compact />
             </div>
