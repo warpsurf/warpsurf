@@ -34,6 +34,7 @@ type BackgroundHandlers = {
   onDisconnect?: (error?: any) => void;
   onSpeechToTextResult?: (message: any) => void;
   onSpeechToTextError?: (message: any) => void;
+  onTitleUpdate?: (message: { sessionId: string; title: string }) => void;
 };
 
 interface UseBackgroundConnectionParams {
@@ -427,6 +428,8 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           handlersRef.current.onSpeechToTextResult?.(message);
         } else if (message && message.type === 'speech_to_text_error') {
           handlersRef.current.onSpeechToTextError?.(message);
+        } else if (message && message.type === 'title-update') {
+          handlersRef.current.onTitleUpdate?.(message);
         } else if (message && message.type === 'heartbeat_ack') {
           // ignore
         }
