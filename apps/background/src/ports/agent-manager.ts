@@ -67,9 +67,11 @@ function taskToAgentData(task: Task, mirrors: any[]): AgentData {
     status = task.status;
   }
 
+  const promptTitle = task.prompt ? task.prompt.substring(0, 60) + (task.prompt.length > 60 ? '...' : '') : 'New Task';
+
   return {
     sessionId: taskSessionId,
-    sessionTitle: task.name,
+    sessionTitle: promptTitle,
     taskDescription: task.prompt,
     startTime: task.startedAt || task.createdAt,
     endTime: task.completedAt,
@@ -155,9 +157,13 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
           };
         });
 
+      const multiPromptTitle = primary.prompt
+        ? primary.prompt.substring(0, 60) + (primary.prompt.length > 60 ? '...' : '')
+        : 'New Task';
+
       result.push({
         sessionId,
-        sessionTitle: primary.name,
+        sessionTitle: multiPromptTitle,
         taskDescription: primary.prompt,
         startTime: primary.startedAt || primary.createdAt,
         endTime: primary.completedAt,
