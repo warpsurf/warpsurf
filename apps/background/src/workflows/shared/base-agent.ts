@@ -346,9 +346,9 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
         : -1;
       const roleStamp = String(this.id || 'agent').replace(/-/g, '_');
 
-      // Build request summary for logging
+      // Build request summary for logging - include all messages for complete context
       const requestSummary = {
-        messages: inputMessages.slice(-5).map((m: any) => ({
+        messages: inputMessages.map((m: any) => ({
           role: m?._getType?.() || m?.role || 'unknown',
           content: String(m?.content || ''),
         })),

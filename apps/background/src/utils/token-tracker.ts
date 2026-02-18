@@ -423,7 +423,11 @@ export function logLLMUsage(
       role,
       request: inputMessages
         ? {
-            messages: inputMessages.map((m: any) => ({ role: m?.role, content: String(m?.content || '') })),
+            messages: inputMessages.map((m: any) => ({
+              // LangChain messages use _getType() for role, fallback to role property
+              role: typeof m?._getType === 'function' ? m._getType() : m?.role,
+              content: String(m?.content || ''),
+            })),
           }
         : undefined,
       response: response?.content || response?.parsed || response,
