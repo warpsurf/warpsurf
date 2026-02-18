@@ -41,6 +41,8 @@ export interface GeneralSettingsConfig {
   responseTimeoutSeconds?: number;
   // Auto tab context (power user feature)
   enableAutoTabContext?: boolean;
+  // Site-specific knowledge injection for faster navigation
+  enableSiteSkills?: boolean;
   // Theme mode: 'auto' follows system, 'light' or 'dark' overrides system preference
   themeMode?: 'auto' | 'light' | 'dark';
   // User's preferred region/locale for websites (e.g., 'com', 'co.uk', 'de', 'fr')
@@ -85,6 +87,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   responseTimeoutSeconds: 60, // 2 minutes default for LLM response timeout
   // Auto tab context (disabled by default, privacy-first)
   enableAutoTabContext: false,
+  // Site skills enabled by default
+  enableSiteSkills: true,
   // Theme mode defaults to auto (follows system preference)
   themeMode: 'auto',
   // No default region - user should select their preference

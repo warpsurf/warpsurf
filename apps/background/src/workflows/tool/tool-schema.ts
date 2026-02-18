@@ -45,6 +45,7 @@ export const ALLOWED_GENERAL_SETTINGS = [
   'enableMultiagentValidator',
   // Context & history
   'enableAutoTabContext',
+  'enableSiteSkills',
   'enableHistoryContext',
   'historySummaryWindowHours',
   'historySummaryMaxRawItems',
