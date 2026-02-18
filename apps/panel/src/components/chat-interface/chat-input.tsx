@@ -727,7 +727,7 @@ export default function ChatInput({
                 aria-disabled={isSendButtonDisabled}
                 title="Send"
                 aria-label="Send message"
-                className={`rounded-md bg-violet-500 p-1.5 text-white transition-colors hover:enabled:bg-violet-600 shadow ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                className={`rounded-md bg-rose-400 p-1.5 text-white transition-colors hover:enabled:bg-rose-500 shadow ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
                 <FaArrowUp className="h-4 w-4" />
               </button>
             </div>
