@@ -38,7 +38,14 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
 
         if (type === 'agents-data') {
           const data = message.data?.agents || [];
-          setAgents(data);
+          // Preserve titleAnimating state from previous agents
+          setAgents(prev => {
+            const animatingMap = new Map(prev.filter(a => a.titleAnimating).map(a => [a.sessionId, true]));
+            return data.map((agent: any) => ({
+              ...agent,
+              titleAnimating: animatingMap.get(agent.sessionId) || false,
+            }));
+          });
         }
 
         // Handle title update from background (via dashboard notification)

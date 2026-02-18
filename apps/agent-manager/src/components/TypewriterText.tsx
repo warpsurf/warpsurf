@@ -9,18 +9,26 @@ interface TypewriterTextProps {
 }
 
 export function TypewriterText({ text, animate = false, speed = 30, className = '', onComplete }: TypewriterTextProps) {
-  const [displayText, setDisplayText] = useState(animate ? '' : text);
-  const [isAnimating, setIsAnimating] = useState(animate);
-  const prevTextRef = useRef(text);
+  const [displayText, setDisplayText] = useState('');
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animatedTextRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!animate || text === prevTextRef.current) {
+    // If not animating, just show the text
+    if (!animate) {
       setDisplayText(text);
-      prevTextRef.current = text;
+      setIsAnimating(false);
+      animatedTextRef.current = null;
       return;
     }
 
-    prevTextRef.current = text;
+    // If we already animated this exact text, don't re-animate
+    if (animatedTextRef.current === text) {
+      return;
+    }
+
+    // Start typewriter animation
+    animatedTextRef.current = text;
     setIsAnimating(true);
     setDisplayText('');
 
