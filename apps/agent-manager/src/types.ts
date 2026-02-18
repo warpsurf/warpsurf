@@ -31,4 +31,5 @@ export interface AgentData {
     totalOutputTokens?: number;
   };
   lastMessage?: string;
+  titleAnimating?: boolean;
 }

@@ -41,6 +41,19 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
           setAgents(data);
         }
 
+        // Handle title update from background (via dashboard notification)
+        if (type === 'agent-title-update') {
+          const sessionId = message.data?.sessionId || message.sessionId;
+          const title = message.data?.title || message.title;
+          if (sessionId && title) {
+            setAgents(prev =>
+              prev.map(agent =>
+                agent.sessionId === sessionId ? { ...agent, sessionTitle: title, titleAnimating: true } : agent,
+              ),
+            );
+          }
+        }
+
         // Handle refresh request (e.g., after killswitch)
         if (type === 'refresh-required') {
           port.postMessage({ type: 'get-agents' });
