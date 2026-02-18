@@ -201,6 +201,13 @@ export class TabMirrorService {
     }
   }
 
+  notifyAgentManager(type: string, data: any): void {
+    if (!this.agentManagerPort) return;
+    try {
+      safePostMessage(this.agentManagerPort, { type, data });
+    } catch {}
+  }
+
   private sendPreviewsToAgentManager() {
     if (!this.agentManagerPort) return;
     try {

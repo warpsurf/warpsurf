@@ -25,6 +25,7 @@ import { tabExists } from '../utils';
 import { trajectoryPersistence } from './trajectory-persistence';
 import { globalTokenTracker } from '../utils/token-tracker';
 import { sessionLogArchive } from '../utils/session-log-archive';
+import { titleGenerator } from '../services/title-generator';
 
 const DASHBOARD_RUNNING_KEY = 'agent_dashboard_running';
 const DASHBOARD_COMPLETED_KEY = 'agent_dashboard_completed';
@@ -109,6 +110,20 @@ export class TaskManager extends EventEmitter {
     } catch {}
     const trimmed = String(prompt || '').trim();
     return trimmed ? trimmed.substring(0, 50) + (trimmed.length > 50 ? '...' : '') : 'New Chat';
+  }
+
+  private generateSmartTitle(sessionId: string, task: Task): void {
+    titleGenerator
+      .generateTitle(sessionId, task.prompt)
+      .then(title => {
+        if (title) {
+          task.name = title;
+          this.notifyDashboard('agent-title-update', { sessionId, title });
+          this.sidePanelPort?.postMessage({ type: 'title-update', sessionId, title });
+          this.tabMirrorService.notifyAgentManager('agent-title-update', { sessionId, title });
+        }
+      })
+      .catch(() => {});
   }
 
   private persistDashboardRunning(task: Task, detail?: string): void {
@@ -1054,6 +1069,11 @@ export class TaskManager extends EventEmitter {
         sessionMirrors.length > 1 ? sessionMirrors : undefined,
       );
     } catch {}
+
+    // Generate smart title after task completes
+    if (event.state === ExecutionState.TASK_OK && this.isPrimarySession(task)) {
+      this.generateSmartTitle(sessionId, task);
+    }
 
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: task.status });
     this.updateBadge();
