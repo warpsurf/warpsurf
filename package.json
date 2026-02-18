@@ -17,6 +17,8 @@
     "build:store": "(pnpm generate-pricing-cache || true) && (pnpm generate-latency-cache || true) && pnpm clean:bundle && turbo ready && cross-env __STORE__=true LOG_LEVEL=error turbo build",
     "build:api": "pnpm clean:bundle && turbo ready && cross-env __API__=true turbo build",
     "build:legacy-nav": "pnpm clean:bundle && turbo ready && cross-env __LEGACY_NAVIGATION__=true turbo build",
+    "build:no-skills": "pnpm clean:bundle && turbo ready && cross-env __ENABLE_SITE_SKILLS__=false turbo build",
+    "build:legacy-no-skills": "pnpm clean:bundle && turbo ready && cross-env __LEGACY_NAVIGATION__=true __ENABLE_SITE_SKILLS__=false turbo build",
     "zip": "pnpm build && pnpm -F zipper zip",
     "zip:store": "pnpm build:store && cross-env __STORE__=true pnpm -F zipper zip",
     "dev": "turbo ready && cross-env __DEV__=true turbo watch dev --concurrency 20",
@@ -27,7 +29,8 @@
     "update-version": "bash update_version.sh",
     "generate-pricing-cache": "npx tsx live_data/generate-pricing-cache.ts",
     "generate-latency-cache": "npx tsx live_data/generate-latency-cache.ts",
-    "generate-search-patterns": "npx tsx live_data/generate-search-patterns.ts"
+    "generate-search-patterns": "npx tsx live_data/generate-search-patterns.ts",
+    "generate-skills": "npx tsx live_data/generate-skills.ts"
   },
   "dependencies": {
     "eslint-plugin-tailwindcss": "^3.18.2",
