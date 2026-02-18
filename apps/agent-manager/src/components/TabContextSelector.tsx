@@ -303,7 +303,7 @@ export function TabContextSelector({
   );
 
   // Button text based on mode
-  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Add tab context';
+  const buttonLabel = autoContextEnabled ? `Auto context: ${effectiveAutoTabIds.length} tabs` : 'Tabs';
   const ButtonIcon = autoContextEnabled ? FaBolt : FaPlus;
 
   // Total count for badge
