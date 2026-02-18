@@ -31,6 +31,7 @@ import { buildChatHistoryBlock } from '@src/workflows/shared/utils';
 import { tabExists } from '@src/utils';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
+import { shouldInjectSkills, buildSkillsSystemMessage } from '@src/skills';
 
 const logger = createLogger('Executor');
 
@@ -196,7 +197,25 @@ export class Executor {
    */
   setContextTabIds(tabIds: number[]): void {
     this.context.contextTabIds = tabIds;
+    // Collect URLs from context tabs for skill injection
+    this.collectSkillUrlsFromTabs(tabIds);
     logger.info(`Set ${tabIds.length} context tabs for executor`);
+  }
+
+  /**
+   * Collect URLs from tabs for site skill injection.
+   */
+  private async collectSkillUrlsFromTabs(tabIds: number[]): Promise<void> {
+    for (const tabId of tabIds) {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.url) {
+          this.context.addSkillUrl(tab.url);
+        }
+      } catch {
+        // Tab may not exist
+      }
+    }
   }
 
   /**
@@ -227,6 +246,48 @@ export class Executor {
     } catch (e) {
       logger.warning('Failed to inject context tabs for agent:', e);
     }
+
+    // Inject site skills alongside context tabs
+    await this.injectSiteSkills();
+  }
+
+  /**
+   * Inject site-specific skills into agent context.
+   */
+  private async injectSiteSkills(): Promise<void> {
+    try {
+      this.context.messageManager.removeSiteSkillsBlocks();
+    } catch {}
+
+    const urls = this.context.getSkillUrls();
+    if (urls.length === 0) return;
+
+    try {
+      if (!(await shouldInjectSkills())) return;
+
+      const skillsMsg = buildSkillsSystemMessage(urls);
+      if (skillsMsg) {
+        // Insert at position 1 (after system message)
+        this.context.messageManager.addMessageWithTokens(skillsMsg, 'skills', 1);
+        logger.info(`Injected site skills for ${urls.length} URLs`);
+      }
+    } catch (e) {
+      logger.warning('Failed to inject site skills:', e);
+    }
+  }
+
+  /**
+   * Pre-load skills for sites predicted by the auto-workflow.
+   * Converts domain names to URLs and adds them to the skill URL set.
+   */
+  private preloadSkillsForExpectedSites(sites: string[]): void {
+    for (const site of sites) {
+      // Normalize domain to URL format for skill lookup
+      const url = site.startsWith('http') ? site : `https://${site}`;
+      this.context.addSkillUrl(url);
+    }
+    console.log(`[Skills] Pre-loaded ${sites.length} expected sites: ${sites.join(', ')}`);
+    console.log(`[Skills] Skill URLs after preload: ${this.context.getSkillUrls().join(', ')}`);
   }
 
   /**
@@ -253,6 +314,9 @@ export class Executor {
     } catch (e) {
       logger.warning('Failed to inject context tabs for agent:', e);
     }
+
+    // Inject site skills alongside context tabs
+    await this.injectSiteSkills();
   }
 
   subscribeExecutionEvents(callback: EventCallback): void {
@@ -518,6 +582,11 @@ export class Executor {
             ExecutionState.TASK_START,
             'Processing as complex task - using browser automation',
           );
+          // Pre-load skills for expected sites from auto-workflow prediction
+          console.log(`[Skills] autoResult.expectedSites = ${JSON.stringify(autoResult.expectedSites)}`);
+          if (autoResult.expectedSites?.length) {
+            this.preloadSkillsForExpectedSites(autoResult.expectedSites);
+          }
           await this.executeAgentWorkflow();
           break;
       }

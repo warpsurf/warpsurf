@@ -215,6 +215,25 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         return agentOutput;
       }
 
+      // Inject site skills before getting messages (upsert on each step)
+      const skillUrls = this.context.getSkillUrls();
+      console.log(`[Skills] Navigator execute: skillUrls = [${skillUrls.join(', ')}]`);
+      if (skillUrls.length > 0) {
+        try {
+          const { shouldInjectSkills, buildSkillsSystemMessage } = await import('@src/skills');
+          if (await shouldInjectSkills()) {
+            messageManager.removeSiteSkillsBlocks();
+            const skillsMsg = buildSkillsSystemMessage(skillUrls);
+            if (skillsMsg) {
+              messageManager.addMessageWithTokens(skillsMsg, 'skills', 1);
+              console.log(`[Skills] Site skills injected for ${skillUrls.length} URLs`);
+            }
+          }
+        } catch (err) {
+          console.log('[Skills] Failed to inject site skills:', err);
+        }
+      }
+
       // call the model to get the actions to take
       let inputMessages = messageManager.getMessages();
 
