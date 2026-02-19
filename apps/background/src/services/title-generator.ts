@@ -8,10 +8,12 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 
 const logger = createLogger('TitleGenerator');
 
+const MESSAGE_PAIRS_THRESHOLD = 5;
+
 class TitleGeneratorService {
   private llm: BaseChatModel | null = null;
   private initPromise: Promise<void> | null = null;
-  private generatedSessions = new Set<string>();
+  private sessionMessageCounts = new Map<string, number>();
 
   async initialize(): Promise<void> {
     if (this.llm) return;
@@ -54,20 +56,37 @@ class TitleGeneratorService {
   }
 
   async generateTitle(sessionId: string, fallbackPrompt?: string): Promise<string | null> {
-    if (this.generatedSessions.has(sessionId)) {
-      return null;
-    }
-
     await this.initialize();
     if (!this.llm) return null;
 
     try {
       const session = await chatHistoryStore.getSession(sessionId);
       const messages = session?.messages || [];
+      const userMessageCount = messages.filter(m => m.actor === 'user').length;
+
+      const hasGeneratedBefore = this.sessionMessageCounts.has(sessionId);
+      const currentTitle = session?.title || '';
+      const isFallbackTitle = this.isFallbackTitle(currentTitle, fallbackPrompt);
+
+      if (hasGeneratedBefore && !isFallbackTitle) {
+        // Regenerate at every 5 message threshold (5, 10, 15, etc.)
+        const currentThreshold = Math.floor(userMessageCount / MESSAGE_PAIRS_THRESHOLD);
+        const lastThreshold = this.sessionMessageCounts.get(sessionId) || 0;
+
+        if (currentThreshold <= lastThreshold) {
+          return null;
+        }
+
+        logger.info(
+          `Regenerating title for ${sessionId}: reached ${userMessageCount} messages (threshold ${currentThreshold})`,
+        );
+      } else if (isFallbackTitle) {
+        logger.info(`Regenerating title for ${sessionId}: current title is fallback`);
+      }
 
       // Build conversation text from messages, or use fallback prompt
       let conversationText = messages
-        .slice(0, 6)
+        .slice(0, 10)
         .map(m => `${m.actor}: ${m.content}`)
         .join('\n')
         .trim();
@@ -91,7 +110,8 @@ class TitleGeneratorService {
         .replace(/^["']|["']$/g, '');
 
       if (title && title.length > 0 && title.length < 100) {
-        this.generatedSessions.add(sessionId);
+        const currentThreshold = Math.floor(userMessageCount / MESSAGE_PAIRS_THRESHOLD);
+        this.sessionMessageCounts.set(sessionId, currentThreshold);
         await chatHistoryStore.updateTitle(sessionId, title);
         await this.updateDashboardStorage(sessionId, title);
         logger.info(`Generated title for ${sessionId}: "${title}"`);
@@ -104,12 +124,18 @@ class TitleGeneratorService {
     return null;
   }
 
+  private isFallbackTitle(currentTitle: string, fallbackPrompt?: string): boolean {
+    if (!currentTitle || !fallbackPrompt) return false;
+    const truncatedPrompt = fallbackPrompt.substring(0, 50);
+    return currentTitle.startsWith(truncatedPrompt) || currentTitle === fallbackPrompt;
+  }
+
   hasGeneratedTitle(sessionId: string): boolean {
-    return this.generatedSessions.has(sessionId);
+    return this.sessionMessageCounts.has(sessionId);
   }
 
   clearSession(sessionId: string): void {
-    this.generatedSessions.delete(sessionId);
+    this.sessionMessageCounts.delete(sessionId);
   }
 
   private async updateDashboardStorage(sessionId: string, title: string): Promise<void> {

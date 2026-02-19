@@ -133,15 +133,19 @@ export class TaskManager extends EventEmitter {
     const taskDescription = `${agentType}: ${String(task.prompt || '').substring(0, 120)}`;
     (async () => {
       try {
-        const sessionTitle = await this.getSessionTitle(sessionId, task.prompt);
         const result = await chrome.storage.local.get(DASHBOARD_RUNNING_KEY);
         const arr = Array.isArray(result[DASHBOARD_RUNNING_KEY]) ? result[DASHBOARD_RUNNING_KEY] : [];
+        const existing = arr.find((a: any) => String(a.sessionId) === sessionId);
         const filtered = arr.filter((a: any) => String(a.sessionId) !== sessionId);
+
+        // Preserve existing sessionTitle if it was already set (e.g., by title generator)
+        const sessionTitle = existing?.sessionTitle || (await this.getSessionTitle(sessionId, task.prompt));
+
         filtered.push({
           sessionId,
           sessionTitle,
           taskDescription,
-          startTime: task.startedAt || Date.now(),
+          startTime: existing?.startTime || task.startedAt || Date.now(),
           agentType,
           status: 'running',
           lastUpdate: Date.now(),
@@ -160,12 +164,15 @@ export class TaskManager extends EventEmitter {
     const taskDescription = `${agentType}: ${String(task.prompt || '').substring(0, 120)}`;
     (async () => {
       try {
-        const sessionTitle = await this.getSessionTitle(sessionId, task.prompt);
         const result = await chrome.storage.local.get([DASHBOARD_RUNNING_KEY, DASHBOARD_COMPLETED_KEY]);
         const running = Array.isArray(result[DASHBOARD_RUNNING_KEY]) ? result[DASHBOARD_RUNNING_KEY] : [];
         const completed = Array.isArray(result[DASHBOARD_COMPLETED_KEY]) ? result[DASHBOARD_COMPLETED_KEY] : [];
         const existing = running.find((a: any) => String(a.sessionId) === sessionId);
         const startTime = existing?.startTime || task.startedAt || Date.now();
+
+        // Preserve existing sessionTitle if it was already set (e.g., by title generator)
+        const sessionTitle = existing?.sessionTitle || (await this.getSessionTitle(sessionId, task.prompt));
+
         const newRunning = running.filter((a: any) => String(a.sessionId) !== sessionId);
         const completedEntry = {
           sessionId,
