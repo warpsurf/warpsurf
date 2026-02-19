@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-// Feature flag for legacy navigation (without search_query support)
+// Feature flags
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
+const isApiMode = process.env.__API__ === 'true';
 
 export interface ActionSchema {
   name: string;
@@ -21,7 +22,8 @@ export const doneActionSchema: ActionSchema = {
 // Basic Navigation Actions
 export const searchGoogleActionSchema: ActionSchema = {
   name: 'search_google',
-  description: 'Search Google with a query. Query should be concrete and specific, like a human would search.',
+  description:
+    'Search Google with a query. Query should be concrete and specific. If blocked by captcha, try alternatives: DuckDuckGo (/?q=, use search NOT DuckAI), then Bing (/search?q=).',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     query: z.string(),
@@ -50,14 +52,16 @@ export const goToUrlActionSchema: ActionSchema = isLegacyNavigation
   : {
       name: 'go_to_url',
       description:
-        'Navigate to URL in the current tab. If you plan to search on the destination site, include search_query to skip directly to results (faster than navigating then searching manually). Example: url="amazon.com", search_query="wireless headphones"',
+        'Navigate to URL in the current tab. IMPORTANT: When navigating to a site to search, you MUST always include search_query to go directly to results. Do NOT navigate without search_query then manually use the search box. Example: url="amazon.com", search_query="wireless headphones"',
       schema: z.object({
         intent: z.string().default('').describe('purpose of this action'),
         url: z.string().describe('the website URL to navigate to'),
         search_query: z
           .string()
           .optional()
-          .describe('search term to look up on this site - only include if you intend to search'),
+          .describe(
+            'REQUIRED when searching on a site. The search term to look up - goes directly to search results page.',
+          ),
       }),
     };
 
@@ -241,17 +245,19 @@ export const waitActionSchema: ActionSchema = {
   }),
 };
 
-// Human-in-the-loop control
-export const requestUserControlActionSchema: ActionSchema = {
-  name: 'request_user_control',
-  description:
-    'Pause execution and request human intervention. Use when the user asked to review/confirm/oversee a step. Include a clear reason.',
-  schema: z.object({
-    intent: z.string().default('').describe('purpose of this action'),
-    reason: z.string().default('').describe('why user control is needed'),
-    tab_id: z.number().int().nullable().optional().describe('target tab id to take control of (optional)'),
-  }),
-};
+// Human-in-the-loop control (disabled in API mode)
+export const requestUserControlActionSchema: ActionSchema | null = isApiMode
+  ? null
+  : {
+      name: 'request_user_control',
+      description:
+        'Pause execution and request human intervention. Use when the user asked to review/confirm/oversee a step. Include a clear reason.',
+      schema: z.object({
+        intent: z.string().default('').describe('purpose of this action'),
+        reason: z.string().default('').describe('why user control is needed'),
+        tab_id: z.number().int().nullable().optional().describe('target tab id to take control of (optional)'),
+      }),
+    };
 
 // Content extraction: URL/page to Markdown/Text (fast, non-interactive)
 export const extractPageMarkdownActionSchema: ActionSchema = {

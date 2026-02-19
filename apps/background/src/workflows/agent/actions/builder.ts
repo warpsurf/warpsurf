@@ -1022,31 +1022,34 @@ export class ActionBuilder {
     );
     actions.push(selectDropdownOption);
 
-    // Request user control (Human-in-the-loop)
-    const requestUserControl = new Action(async (input: z.infer<typeof requestUserControlActionSchema.schema>) => {
-      const intent = input.intent || 'Requesting human intervention';
-      const reason = input.reason || 'User oversight requested';
-      let tabId = input.tab_id ?? null;
-      try {
-        if (tabId === null) {
-          const page = await this.context.browserContext.getCurrentPage();
-          tabId = page?.tabId ?? null;
-        }
-      } catch {}
+    // Request user control (Human-in-the-loop) - disabled in API mode
+    if (requestUserControlActionSchema) {
+      const schema = requestUserControlActionSchema;
+      const requestUserControl = new Action(async (input: z.infer<typeof schema.schema>) => {
+        const intent = input.intent || 'Requesting human intervention';
+        const reason = input.reason || 'User oversight requested';
+        let tabId = input.tab_id ?? null;
+        try {
+          if (tabId === null) {
+            const page = await this.context.browserContext.getCurrentPage();
+            tabId = page?.tabId ?? null;
+          }
+        } catch {}
 
-      // Emit pause event with message and optional tabId
-      this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, intent, {
-        message: JSON.stringify({ type: 'request_user_control', reason, tabId }),
-        tabId: tabId ?? undefined,
-      });
+        // Emit pause event with message and optional tabId
+        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, intent, {
+          message: JSON.stringify({ type: 'request_user_control', reason, tabId }),
+          tabId: tabId ?? undefined,
+        });
 
-      // Actually pause the executor loop
-      await this.context.pause();
+        // Actually pause the executor loop
+        await this.context.pause();
 
-      const msg = `Paused for human intervention${tabId ? ` on tab ${tabId}` : ''}: ${reason}`;
-      return new ActionResult({ extractedContent: msg, includeInMemory: true });
-    }, requestUserControlActionSchema);
-    actions.push(requestUserControl);
+        const msg = `Paused for human intervention${tabId ? ` on tab ${tabId}` : ''}: ${reason}`;
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      }, requestUserControlActionSchema);
+      actions.push(requestUserControl);
+    }
 
     return actions;
   }
