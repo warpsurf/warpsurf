@@ -88,6 +88,9 @@ temp/
 dev/
 security-tests/
 
+## Skills (not yet production-ready)
+live_data/skills/
+
 ## API
 apps/background/src/api/
 sdk/
