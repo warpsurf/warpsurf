@@ -325,9 +325,12 @@ export class ToolWorkflow {
     }
   }
 
-  /** Persist tool actions to chat history so follow-up workflows and future sessions see them. */
+  /** Persist tool text responses to chat history so follow-up workflows and future sessions see them.
+   *  Note: Tool action summaries (success/fail messages) are NOT persisted here - they are
+   *  already persisted via emitEvent -> panel's schedulePersistMessage to avoid duplicates.
+   */
   private async persistToHistory(
-    results: ToolCallResult[],
+    _results: ToolCallResult[],
     textResponse?: string,
     responseStreamId?: string,
     responseStreamTimestamp?: number,
@@ -336,17 +339,8 @@ export class ToolWorkflow {
       const sessionId = this.context.taskId;
       if (!sessionId) return;
 
-      // Persist tool action summaries
-      const actionSummaries = results.filter(r => !r.data).map(r => r.message);
-      if (actionSummaries.length > 0) {
-        await chatHistoryStore.addMessage(sessionId, {
-          actor: StorageActors.TOOL,
-          content: actionSummaries.join('\n'),
-          timestamp: Date.now(),
-        });
-      }
-
-      // Persist formatted text response (from read-only queries)
+      // Only persist formatted text response (from read-only queries like get_current_settings)
+      // Action summaries are already persisted via emitEvent path
       if (textResponse) {
         await chatHistoryStore.addMessage(sessionId, {
           actor: StorageActors.TOOL,
