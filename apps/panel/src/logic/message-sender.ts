@@ -269,11 +269,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
         logger.log('follow_up_task sent', text, tabId, sessionIdRef.current, finalAgentType, skipAutoContext);
         setCurrentTaskAgentType(finalAgentType || null);
         try {
-          if (sessionIdRef.current) {
-            const current = chatSessions.find(s => s.id === sessionIdRef.current);
-            await chatHistoryStore.updateTitle(sessionIdRef.current, current?.title || '');
-            await loadChatSessions();
-          }
+          await loadChatSessions();
         } catch {}
       } else {
         let maxWorkersOverride = 3;
