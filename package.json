@@ -11,7 +11,7 @@
   "scripts": {
     "clean:bundle": "rimraf dist && turbo clean:bundle",
     "clean": "pnpm clean:bundle && rimraf .turbo",
-    "prebuild": "(pnpm generate-pricing-cache || echo 'Warning: Failed to update pricing cache') && (pnpm generate-latency-cache || echo 'Warning: Failed to update latency cache')",
+    "prebuild": "(pnpm generate-pricing-cache || echo 'Warning: Failed to update pricing cache') && (pnpm generate-latency-cache || echo 'Warning: Failed to update latency cache') && ([ \"$SKIP_SEARCH_PATTERNS\" = \"true\" ] || pnpm generate-search-patterns || echo 'Warning: Failed to update search patterns')",
     "build": "pnpm clean:bundle && turbo ready && turbo build",
     "build:dev": "cross-env LOG_LEVEL=debug pnpm -w run build",
     "build:store": "(pnpm generate-pricing-cache || true) && (pnpm generate-latency-cache || true) && pnpm clean:bundle && turbo ready && cross-env __STORE__=true LOG_LEVEL=error turbo build",
@@ -19,6 +19,7 @@
     "build:legacy-nav": "pnpm clean:bundle && turbo ready && cross-env __LEGACY_NAVIGATION__=true turbo build",
     "build:no-skills": "pnpm clean:bundle && turbo ready && cross-env __ENABLE_SITE_SKILLS__=false turbo build",
     "build:legacy-no-skills": "pnpm clean:bundle && turbo ready && cross-env __LEGACY_NAVIGATION__=true __ENABLE_SITE_SKILLS__=false turbo build",
+    "build:no-search-patterns": "cross-env SKIP_SEARCH_PATTERNS=true pnpm build",
     "zip": "pnpm build && pnpm -F zipper zip",
     "zip:store": "pnpm build:store && cross-env __STORE__=true pnpm -F zipper zip",
     "dev": "turbo ready && cross-env __DEV__=true turbo watch dev --concurrency 20",
