@@ -38,13 +38,18 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
 
         if (type === 'agents-data') {
           const data = message.data?.agents || [];
-          // Preserve titleAnimating state from previous agents
+          // Preserve titleAnimating only if animation is still in progress (title matches)
           setAgents(prev => {
-            const animatingMap = new Map(prev.filter(a => a.titleAnimating).map(a => [a.sessionId, true]));
-            return data.map((agent: any) => ({
-              ...agent,
-              titleAnimating: animatingMap.get(agent.sessionId) || false,
-            }));
+            const animatingTitles = new Map(prev.filter(a => a.titleAnimating).map(a => [a.sessionId, a.sessionTitle]));
+            return data.map((agent: any) => {
+              const wasAnimating = animatingTitles.get(agent.sessionId);
+              // Only preserve animation if the title hasn't changed (animation still relevant)
+              const stillAnimating = wasAnimating && wasAnimating === agent.sessionTitle;
+              return {
+                ...agent,
+                titleAnimating: stillAnimating || false,
+              };
+            });
           });
         }
 
@@ -54,9 +59,16 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
           const title = message.data?.title || message.title;
           if (sessionId && title) {
             setAgents(prev =>
-              prev.map(agent =>
-                agent.sessionId === sessionId ? { ...agent, sessionTitle: title, titleAnimating: true } : agent,
-              ),
+              prev.map(agent => {
+                if (agent.sessionId !== sessionId) return agent;
+                // Only trigger animation if the title actually changed
+                const titleChanged = agent.sessionTitle !== title;
+                return {
+                  ...agent,
+                  sessionTitle: title,
+                  titleAnimating: titleChanged,
+                };
+              }),
             );
           }
         }

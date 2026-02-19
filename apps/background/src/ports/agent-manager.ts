@@ -223,12 +223,12 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
         // Build a map of stored titles by sessionId for quick lookup
         const storedTitles = new Map<string, string>();
         for (const stored of [...storedRunning, ...storedCompleted]) {
-          if (stored.sessionTitle && stored.sessionTitle !== stored.taskDescription?.substring(0, 60)) {
+          if (stored.sessionTitle) {
             storedTitles.set(stored.sessionId, stored.sessionTitle);
           }
         }
 
-        // Update live agents with stored titles (from title generator)
+        // Update live agents with stored titles (preserves generated titles)
         for (const agent of agents) {
           const storedTitle = storedTitles.get(agent.sessionId);
           if (storedTitle) {
@@ -237,11 +237,12 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
         }
 
         // Merge stored data with live data
-        const liveSessionIds = new Set(agents.map(a => a.sessionId));
+        const seenSessionIds = new Set(agents.map(a => a.sessionId));
 
         let addedFromStorage = 0;
         for (const stored of [...storedRunning, ...storedCompleted]) {
-          if (!liveSessionIds.has(stored.sessionId)) {
+          if (!seenSessionIds.has(stored.sessionId)) {
+            seenSessionIds.add(stored.sessionId); // Prevent duplicates from running+completed
             // Check for cached screenshot for this stored agent
             const cached = taskManager.tabMirrorService.getCachedScreenshot(stored.sessionId);
             agents.push({
