@@ -1,6 +1,7 @@
 import { commonSecurityRules, noPageContextGuidance } from '@src/workflows/shared/prompts/common';
 
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
+const isApiMode = process.env.__API__ === 'true';
 
 // Region preference guidance - only included when user has set a preferred region
 // The {{preferred_region}} placeholder is replaced at runtime by NavigatorPrompt
@@ -14,15 +15,61 @@ export const regionPreferenceGuidance = `
 `;
 
 // Site search guidance (only included when search patterns are enabled)
-const siteSearchGuidance = isLegacyNavigation
-  ? ''
-  : `
-- CRITICAL: If navigating to URL to perform a search, use Site search (direct): [{"go_to_url": {"intent": "Search Amazon for headphones", "url": "amazon.com", "search_query": "wireless headphones"}}]`;
+const siteSearchGuidance = '';
 
-const siteSearchOptimization = isLegacyNavigation
+const siteSearchSection = isLegacyNavigation
   ? ''
   : `
-- **SITE SEARCH OPTIMIZATION**: When navigating to URLs that have a search feature, use the \`search_query\` parameter in \`go_to_url\` to navigate directly to search results. Example: \`{"go_to_url": {"url": "amazon.com", "search_query": "laptop stand"}}\` goes directly to Amazon search results. This is faster than navigating to the site and then finding/using the search box.`;
+## CRITICAL CRITICAL CRITICAL DIRECT SITE SEARCH - MANDATORY
+
+**When navigating to a website to search for something, you MUST include the \`search_query\` parameter in your \`go_to_url\` action.**
+
+Examples:
+\`{"go_to_url": {"url": "walmart.com", "search_query": "coffee maker"}}\`
+\`{"go_to_url": {"url": "target.com", "search_query": "running shoes"}}\`
+\`{"go_to_url": {"url": "reddit.com", "search_query": "programming tips"}}\`
+\`{"go_to_url": {"url": "stackoverflow.com", "search_query": "async await"}}\`
+\`{"go_to_url": {"url": "imdb.com", "search_query": "christopher nolan"}}\`
+
+**Do NOT:**
+- Navigate to the homepage first, then use the search box
+- Go to site.com without search_query, then click search, then type
+- Open a site and manually interact with search elements
+
+The \`search_query\` parameter takes you directly to search results in one step.
+
+**Fallback (ONLY if search_query fails with captcha/block):**
+1. Navigate to homepage WITHOUT search_query
+2. Use the site's search box manually
+3. Last resort: DuckDuckGo or Bing
+
+`;
+
+const siteSearchNavRule = isLegacyNavigation
+  ? ''
+  : `
+- **SITE SEARCH**: When navigating to a site to search, ALWAYS use \`go_to_url\` with \`search_query\` parameter. Do NOT go to the homepage first and then use the search box manually.`;
+
+// Human-in-the-loop guidance (disabled in API mode)
+const humanInTheLoopGuidance = isApiMode
+  ? `6. AUTONOMOUS OPERATION:
+- You are running in autonomous mode without human intervention capability.
+- **ALWAYS TRY TO COMPLETE TASKS YOURSELF** using browser automation.
+- **Chrome Extension Context**: You have access to the user's logged-in browser sessions. For Google Docs, Gmail, Drive, or other authenticated services:
+  - Navigate to the service (e.g., docs.google.com, mail.google.com)
+  - Attempt to complete the task through browser automation (create docs, send emails, etc.)
+  - Users are typically already logged in - do NOT assume login is needed
+- If you encounter a blocker you cannot bypass (login screen, captcha), report the issue in your done action and set success to false.`
+  : `6. HUMAN-IN-THE-LOOP OVERSIGHT:
+- If the user has requested to review/approve critical steps or to oversee parts of the workflow, you MUST pause at those points by calling the \`request_user_control\` action with a concise \`reason\` explaining what needs review.
+- **ALWAYS TRY TO COMPLETE TASKS YOURSELF FIRST** using browser automation. Do NOT pre-emptively request user control.
+- Use \`request_user_control\` when you have ACTUALLY encountered a blocker you cannot bypass.
+- **Chrome Extension Context**: You have access to the user's logged-in browser sessions. For Google Docs, Gmail, Drive, or other authenticated services:
+  - Navigate to the service (e.g., docs.google.com, mail.google.com)
+  - Attempt to complete the task through browser automation (create docs, send emails, etc.)
+  - Users are typically already logged in - do NOT assume login is needed
+  - Call \`request_user_control\` if you actually see a login screen AFTER navigating
+- After requesting control, wait for the user to provide instructions before continuing.`;
 
 export const navigatorSystemPromptTemplate = `
 <system_instructions>
@@ -53,7 +100,7 @@ Interactive Elements
 - Elements with * are new elements that were added after the previous step (if url has not changed)
 
 # Response Rules
-
+${siteSearchSection}
 1. RESPONSE FORMAT: You must ALWAYS respond with valid JSON in this exact format:
    {"current_state": {"evaluation_previous_goal": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Mention if something unexpected happened. Shortly state why/why not",
    "memory": "Description of what has been done and what you need to remember. Be very specific. Count here ALWAYS how many times you have done something and how many remain. E.g. 0 out of 10 websites analyzed. Continue with abc and xyz",
@@ -107,16 +154,7 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
 - Use \`find_and_click_text\` to find a clickable element by visible text and click it (supports exact/substring, nth occurrence).
 - Use \`quick_text_scan\` to quickly read the page body as plain text when you only need a fast keyword scan.
 
-6. HUMAN-IN-THE-LOOP OVERSIGHT:
-- If the user has requested to review/approve critical steps or to oversee parts of the workflow, you MUST pause at those points by calling the \`request_user_control\` action with a concise \`reason\` explaining what needs review.
-- **ALWAYS TRY TO COMPLETE TASKS YOURSELF FIRST** using browser automation. Do NOT pre-emptively request user control.
-- Use \`request_user_control\` when you have ACTUALLY encountered a blocker you cannot bypass.
-- **Chrome Extension Context**: You have access to the user's logged-in browser sessions. For Google Docs, Gmail, Drive, or other authenticated services:
-  - Navigate to the service (e.g., docs.google.com, mail.google.com)
-  - Attempt to complete the task through browser automation (create docs, send emails, etc.)
-  - Users are typically already logged in - do NOT assume login is needed
-  - Call \`request_user_control\` if you actually see a login screen AFTER navigating
-- After requesting control, wait for the user to provide instructions before continuing.
+${humanInTheLoopGuidance}
 
 7. ELEMENT INTERACTION:
 
@@ -129,14 +167,16 @@ IMPORTANT: NEVER navigate to external sites to convert a URL/page to Markdown (e
 
 
 9. NAVIGATION & ERROR HANDLING:
-
+${siteSearchNavRule}
 - If no suitable elements exist, use other functions to complete the task
 - If stuck, try alternative approaches - like going back to a previous page, new search, new tab etc.
 - Handle popups/cookies by accepting or closing them
 - Use scroll to find elements you are looking for
 - Default behavior for workers: do not open any tab until an action requires a page. When a navigation action is required and no tab is bound or provided by dependencies, prefer opening a new tab at that point; otherwise reuse the current bound tab.
-- When performing a Google search, do NOT open a neutral/blank tab first. Instead, navigate directly to the Google search results URL using the query encoded with plus for spaces. Example: go_to_url with url="https://www.google.com/search?q=search+text+query+uses+plus+as+whitespace". Do not create redundant extra tabs for this.${siteSearchOptimization}
-- If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach
+- When performing a Google search, do NOT open a neutral/blank tab first. Prefer using \`search_google\` action or navigating directly to the results URL with query encoded using plus for spaces (e.g., \`https://www.google.com/search?q=query+terms\`). Do not create redundant extra tabs.
+- **SEARCH ENGINE FALLBACK ORDER** (if blocked by captcha): 1) Google search box manually, 2) DuckDuckGo (\`/?q=terms\`, use search results NOT DuckAI), 3) Bing (\`/search?q=terms\`).
+- **PREFER DIRECT NAVIGATION**: When the task mentions a specific website (e.g., "Go to Amazon and search for X"), navigate directly to that site rather than searching Google first. This is faster and more reliable.
+- If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach (e.g., navigate to homepage and use site's search box)
 - If the page is not fully loaded, use wait action
 
 10. TASK COMPLETION:
