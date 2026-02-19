@@ -141,6 +141,20 @@ export function useEventSetup(params: {
       try {
         const sid = String(sessionId || '').trim();
         if (!sid) return;
+
+        // Don't persist transient system status messages
+        const content = String((m as any)?.content ?? '').trim();
+        const actor = String((m as any)?.actor || '').toLowerCase();
+        if (actor === 'system' || actor === Actors.SYSTEM.toLowerCase()) {
+          if (
+            content.startsWith('Processing as ') ||
+            content === 'Estimating workflow...' ||
+            content === 'Showing progress...'
+          ) {
+            return;
+          }
+        }
+
         const key = getPersistKeyForMessage(m as any);
         if (!key) return;
         const map = persistedMessageKeysBySessionRef.current;

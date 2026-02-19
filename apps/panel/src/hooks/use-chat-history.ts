@@ -71,20 +71,64 @@ export function useChatHistory({
       }
     };
 
+    // Filter out transient system status messages that shouldn't appear in history
+    const isTransientSystemMessage = (actor: string, content: string): boolean => {
+      const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
+      if (!isSystem) return false;
+      return (
+        content.startsWith('Processing as ') ||
+        content === 'Estimating workflow...' ||
+        content === 'Showing progress...'
+      );
+    };
+
+    // Normalize content for deduplication (strip leading status icons)
+    const normalizeForDedupe = (content: string): string => {
+      return content.replace(/^[✓✗]\s*/, '').trim();
+    };
+
+    // Extract setting name from "settingName set to value" pattern
+    const extractSettingName = (content: string): string | null => {
+      const normalized = normalizeForDedupe(content);
+      const match = normalized.match(/^(\w+)\s+set\s+to\s+/i);
+      return match ? match[1].toLowerCase() : null;
+    };
+
+    // Track seen content to detect duplicates regardless of timestamp
+    const seenContent = new Set<string>();
+
+    // Track setting changes to keep only the last value for each setting
+    const settingChanges = new Map<string, { index: number; ts: number }>();
+
     for (const msg of list) {
+      const actor = String((msg as any)?.actor || '');
+      const content = String((msg as any)?.content ?? '').trim();
+
+      // Skip transient system messages
+      if (isTransientSystemMessage(actor, content)) {
+        continue;
+      }
+
       const eventId = String((msg as any)?.eventId || '').trim();
       if (eventId) {
         if (seenEventIds.has(eventId)) continue;
         seenEventIds.add(eventId);
       }
-      const actor = String((msg as any)?.actor || '');
       const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
-      const content = String((msg as any)?.content ?? '').trim();
       const ts = Number((msg as any)?.timestamp || 0);
       if (!content) {
         out.push(msg);
         continue;
       }
+
+      // Skip duplicate content from the same actor (normalize to handle ✓/✗ prefix variations)
+      const normalizedContent = normalizeForDedupe(content);
+      const contentKey = `${actor}|${normalizedContent}`;
+      if (seenContent.has(contentKey)) {
+        continue;
+      }
+      seenContent.add(contentKey);
+
       const key = `${actor}|${content}`;
       const last = lastByActorContent.get(key);
       if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
@@ -111,6 +155,24 @@ export function useChatHistory({
           }
         }
         lastNonSystemByContent.set(content, ts);
+      }
+
+      // For setting changes, remove previous value if a new value is set within the window
+      const settingName = extractSettingName(content);
+      if (settingName && actor.toLowerCase() === 'tool') {
+        const prev = settingChanges.get(settingName);
+        if (prev && Math.abs(ts - prev.ts) <= WINDOW_MS) {
+          // Remove the previous setting change message
+          out.splice(prev.index, 1);
+          // Update indices in settingChanges for messages after the removed one
+          for (const [key, val] of settingChanges.entries()) {
+            if (val.index > prev.index) {
+              settingChanges.set(key, { index: val.index - 1, ts: val.ts });
+            }
+          }
+        }
+        // Record index where this message will be pushed (current length of out)
+        settingChanges.set(settingName, { index: out.length, ts });
       }
 
       lastByActorContent.set(key, ts);
