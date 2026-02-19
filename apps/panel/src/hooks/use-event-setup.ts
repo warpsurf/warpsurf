@@ -2,6 +2,7 @@ import { useMemo, useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, type Message } from '@extension/storage';
 import { createTaskEventHandler } from '../logic/handlers/create-task-event-handler';
 import { createPanelHandlers } from '../logic/port-handlers';
+import { isTransientSystemMessage } from '../utils';
 
 export function useEventSetup(params: {
   portRef: MutableRefObject<chrome.runtime.Port | null>;
@@ -142,18 +143,9 @@ export function useEventSetup(params: {
         const sid = String(sessionId || '').trim();
         if (!sid) return;
 
-        // Don't persist transient system status messages
         const content = String((m as any)?.content ?? '').trim();
-        const actor = String((m as any)?.actor || '').toLowerCase();
-        if (actor === 'system' || actor === Actors.SYSTEM.toLowerCase()) {
-          if (
-            content.startsWith('Processing as ') ||
-            content === 'Estimating workflow...' ||
-            content === 'Showing progress...'
-          ) {
-            return;
-          }
-        }
+        const actor = String((m as any)?.actor || '');
+        if (isTransientSystemMessage(actor, content)) return;
 
         const key = getPersistKeyForMessage(m as any);
         if (!key) return;

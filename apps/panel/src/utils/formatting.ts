@@ -28,7 +28,10 @@ export const pluralize = (count: number, singular: string, plural?: string): str
 };
 
 export function formatNumber(num: number): string {
-  return num.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',').replace(',', '');
+  return num
+    .toFixed(0)
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    .replace(',', '');
 }
 
 export function formatUsd(cost: number): string {
@@ -76,7 +79,11 @@ export function formatDay(ts: number): string {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+  return d.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  });
 }
 
 export function hexToRgba(hex: string, alpha: number): string {
@@ -85,3 +92,8 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(bigint >> 16) & 255}, ${(bigint >> 8) & 255}, ${bigint & 255}, ${alpha})`;
 }
 
+export function isTransientSystemMessage(actor: string, content: string): boolean {
+  if (actor.toLowerCase() !== 'system') return false;
+  const c = content.toLowerCase();
+  return c.startsWith('processing as ') || c === 'estimating workflow...' || c === 'showing progress...';
+}

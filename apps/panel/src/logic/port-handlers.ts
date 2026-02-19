@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actors, chatHistoryStore } from '@extension/storage';
 import { ExecutionState } from '@extension/shared/lib/utils';
-import { computeRequestSummaryFromSessionLogs } from '../utils/index';
+import { computeRequestSummaryFromSessionLogs, isTransientSystemMessage } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
 import { createAggregateRoot, addTraceItem, updateAggregateRootContent } from './handlers/utils';
 import { createSystemHandler } from './handlers/system-event-handler';
@@ -952,6 +952,7 @@ export function createPanelHandlers(deps: any): any {
             const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
             const content = String((msg as any)?.content ?? '').trim();
             const ts = Number((msg as any)?.timestamp || 0);
+            if (isTransientSystemMessage(actor, content)) continue;
             if (!content) {
               deduped.push(msg);
               continue;
@@ -1184,6 +1185,7 @@ export function createPanelHandlers(deps: any): any {
               const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
               const content = String((msg as any)?.content ?? '').trim();
               const ts = Number((msg as any)?.timestamp || 0);
+              if (isTransientSystemMessage(actor, content)) continue;
               if (!content) {
                 deduped.push(msg);
                 continue;

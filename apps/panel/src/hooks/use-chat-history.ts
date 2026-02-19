@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
+import { isTransientSystemMessage } from '../utils';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
 
@@ -69,17 +70,6 @@ export function useChatHistory({
         if (val === idx) systemIndexByContent.delete(key);
         else if (val > idx) systemIndexByContent.set(key, val - 1);
       }
-    };
-
-    // Filter out transient system status messages that shouldn't appear in history
-    const isTransientSystemMessage = (actor: string, content: string): boolean => {
-      const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
-      if (!isSystem) return false;
-      return (
-        content.startsWith('Processing as ') ||
-        content === 'Estimating workflow...' ||
-        content === 'Showing progress...'
-      );
     };
 
     // Normalize content for deduplication (strip leading status icons)
