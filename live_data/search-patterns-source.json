@@ -216,7 +216,7 @@
       "fi",
       "pt",
       "ru",
-      "co.jp",
+      "jp",
       "com.au",
       "co.nz",
       "com.br",
@@ -237,8 +237,98 @@
       "com.hk",
       "co.za",
       "com.my"
-    ]
+    ],
+
+    "nikePath": [
+      "com",
+      "com/gb",
+      "com/de",
+      "com/fr",
+      "com/es",
+      "com/it",
+      "com/nl",
+      "com/be",
+      "com/at",
+      "com/ch",
+      "com/pl",
+      "com/se",
+      "com/no",
+      "com/dk",
+      "com/fi",
+      "com/pt",
+      "com/ie",
+      "com/ca",
+      "com/jp",
+      "com/au",
+      "com/nz"
+    ],
+    "zaraPath": [
+      "com/uk/en",
+      "com/de/en",
+      "com/fr/en",
+      "com/es/en",
+      "com/it/en",
+      "com/nl/en",
+      "com/ie/en",
+      "com/pl/en",
+      "com/pt/en",
+      "com/ca/en",
+      "com/us/en"
+    ],
+    "hmPath": [
+      "com/en_gb",
+      "com/de_de",
+      "com/fr_fr",
+      "com/es_es",
+      "com/it_it",
+      "com/nl_nl",
+      "com/pl_pl",
+      "com/sv_se",
+      "com/da_dk",
+      "com/fi_fi",
+      "com/pt_pt",
+      "com/en_ca",
+      "com/en_us",
+      "com/en_au"
+    ],
+    "ikeaPath": [
+      "com/gb/en",
+      "com/de/de",
+      "com/fr/fr",
+      "com/es/es",
+      "com/it/it",
+      "com/nl/nl",
+      "com/be/nl",
+      "com/at/de",
+      "com/ch/de",
+      "com/pl/pl",
+      "com/se/sv",
+      "com/no/no",
+      "com/dk/da",
+      "com/fi/fi",
+      "com/pt/pt",
+      "com/us/en",
+      "com/ca/en"
+    ],
+    "asosPath": [
+      "com",
+      "com/us",
+      "com/au",
+      "com/de",
+      "com/fr",
+      "com/es",
+      "com/it",
+      "com/nl",
+      "com/dk",
+      "com/se",
+      "com/pl"
+    ],
+    "bolPath": ["com/nl/nl", "com/be/nl", "com/be/fr"],
+    "noonPath": ["com/uae-en", "com/saudi-en", "com/egypt-en"],
+    "falabellaPath": ["com/falabella-cl", "com.co/falabella-co", "com.pe/falabella-pe"],
+    "hepsiburadaHosts": ["com", "com.tr"]
   },
+
   "langSets": {
     "wikipedia": [
       "en",
@@ -286,6 +376,7 @@
     ],
     "wikiCore": ["en", "de", "fr", "es", "it", "pt", "ru", "ja", "zh", "ko", "nl", "pl", "sv"]
   },
+
   "prefixSets": {
     "regional": [
       "www",
@@ -328,52 +419,191 @@
       "my",
       "ph",
       "vn"
+    ],
+    "hotelsRegional": [
+      "www",
+      "uk",
+      "de",
+      "fr",
+      "es",
+      "it",
+      "nl",
+      "be",
+      "at",
+      "ch",
+      "pl",
+      "se",
+      "no",
+      "dk",
+      "fi",
+      "pt",
+      "jp",
+      "au",
+      "nz",
+      "br",
+      "ar",
+      "kr",
+      "tw",
+      "sg",
+      "id",
+      "tr",
+      "cz",
+      "hu",
+      "ie",
+      "ae",
+      "in",
+      "ca",
+      "hk",
+      "za",
+      "ph"
     ]
   },
+
   "templates": {
     "google": {
       "pattern": "https://www.google.{tld}/search?q={q}",
       "tldSet": "global"
     },
+
     "amazon": {
       "pattern": "https://www.amazon.{tld}/s?k={q}",
       "tldSet": "amazon"
     },
+
     "ebay": {
       "pattern": "https://www.ebay.{tld}/sch/i.html?_nkw={q}",
       "tldSet": "ebay"
     },
+
     "wikipedia": {
       "type": "subdomain",
       "pattern": "https://{lang}.wikipedia.org/w/index.php?search={q}",
       "langSet": "wikipedia"
     },
+
     "wiktionary": {
       "type": "subdomain",
       "pattern": "https://{lang}.wiktionary.org/w/index.php?search={q}",
       "langSet": "wikiCore"
     },
-    "booking": {
-      "pattern": "https://www.booking.{tld}/searchresults.html?ss={q}",
-      "tldSet": "travel"
-    },
+
     "airbnb": {
       "pattern": "https://www.airbnb.{tld}/s/{q}/homes",
-      "tldSet": "travel"
+      "tlds": [
+        "com",
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "be",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "pt",
+        "ru",
+        "co.jp",
+        "com.au",
+        "co.nz",
+        "com.br",
+        "com.ar",
+        "co.kr",
+        "com.tw",
+        "com.sg",
+        "co.id",
+        "com.tr",
+        "gr",
+        "cz",
+        "hu",
+        "ie",
+        "ae",
+        "co.in",
+        "ca",
+        "com.hk",
+        "co.za",
+        "com.my",
+        "com.ph",
+        "co.th",
+        "com.vn"
+      ]
     },
+
     "tripadvisor": {
       "pattern": "https://www.tripadvisor.{tld}/Search?q={q}",
-      "tldSet": "travel"
+      "tlds": [
+        "com",
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "be",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "pt",
+        "ru",
+        "com.au",
+        "co.nz",
+        "com.br",
+        "com.ar",
+        "com.mx",
+        "co.kr",
+        "com.tw",
+        "com.sg",
+        "co.id",
+        "com.tr",
+        "cz",
+        "ie",
+        "co.in",
+        "ca",
+        "com.hk",
+        "co.za",
+        "com.my",
+        "com.ph",
+        "com.vn"
+      ]
     },
+
     "indeed": {
       "pattern": "https://{prefix}.indeed.com/jobs?q={q}",
       "type": "prefix",
       "prefixSet": "regional"
     },
+
     "yelp": {
       "pattern": "https://www.yelp.{tld}/search?find_desc={q}",
-      "tldSet": "europe",
-      "extraTlds": [
+      "tlds": [
+        "com",
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "pt",
+        "ie",
+        "cz",
+        "hu",
+        "bg",
+        "si",
         "ca",
         "com.au",
         "co.nz",
@@ -383,56 +613,117 @@
         "com.tr",
         "com.sg",
         "com.hk",
-        "com.my",
-        "com.ph",
-        "co.jp"
+        "com.ph"
       ]
     },
+
     "zalando": {
       "pattern": "https://www.zalando.{tld}/catalog/?q={q}",
-      "tldSet": "europeRetail"
+      "tlds": [
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "be",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "ie",
+        "cz",
+        "sk",
+        "hu",
+        "ro"
+      ]
     },
+
     "asos": {
       "pattern": "https://www.asos.{tld}/search/?q={q}",
-      "tlds": ["com", "fr", "de", "es", "it", "nl", "dk", "se", "pl", "ru", "com.au"]
+      "tldSet": "asosPath"
     },
+
     "nike": {
       "pattern": "https://www.nike.{tld}/w?q={q}",
-      "tldSet": "fashion"
+      "tldSet": "nikePath"
     },
+
     "adidas": {
       "pattern": "https://www.adidas.{tld}/search?q={q}",
-      "tldSet": "fashion"
+      "tlds": [
+        "com",
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "be",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "pt",
+        "ru",
+        "jp",
+        "com.au",
+        "co.nz",
+        "com.br",
+        "com.ar",
+        "co.kr",
+        "com.tw",
+        "com.sg",
+        "co.id",
+        "com.tr",
+        "gr",
+        "cz",
+        "hu",
+        "ie",
+        "ae",
+        "co.in",
+        "ca",
+        "com.hk",
+        "co.za",
+        "com.my"
+      ]
     },
+
     "zara": {
       "pattern": "https://www.zara.{tld}/search?searchTerm={q}",
-      "tldSet": "fashion",
-      "extraTlds": ["cn"]
+      "tldSet": "zaraPath",
+      "extraTlds": ["com/cn/en", "com/in/en"]
     },
+
     "hm": {
       "pattern": "https://www2.hm.{tld}/search-results.html?q={q}",
-      "tldSet": "fashion",
-      "extraTlds": ["cn"]
+      "tldSet": "hmPath",
+      "extraTlds": ["com/cn_en"]
     },
+
     "ikea": {
       "pattern": "https://www.ikea.{tld}/search/?q={q}",
-      "tldSet": "fashion",
-      "extraTlds": ["cn", "sa"]
+      "tldSet": "ikeaPath",
+      "extraTlds": ["com/sa/en"]
     },
+
     "expedia": {
       "pattern": "https://www.expedia.{tld}/Hotel-Search?destination={q}",
       "tldSet": "travel"
     },
+
     "hotels": {
       "pattern": "https://{prefix}.hotels.com/Hotel-Search?destination={q}",
       "type": "prefix",
-      "prefixSet": "regional"
+      "prefixSet": "hotelsRegional"
     },
-    "linkedin": {
-      "pattern": "https://{prefix}.linkedin.com/search/results/all/?keywords={q}",
-      "type": "prefix",
-      "prefixSet": "regional"
-    },
+
     "glassdoor": {
       "pattern": "https://www.glassdoor.{tld}/Job/jobs.htm?sc.keyword={q}",
       "tlds": [
@@ -457,153 +748,215 @@
         "co.nz"
       ]
     },
+
     "etsy": {
       "pattern": "https://www.etsy.{tld}/search?q={q}",
-      "tldSet": "europe",
-      "extraTlds": ["co.jp", "com.au", "co.nz", "ca"]
+      "tlds": [
+        "com",
+        "co.uk",
+        "de",
+        "fr",
+        "es",
+        "it",
+        "nl",
+        "at",
+        "ch",
+        "pl",
+        "se",
+        "no",
+        "dk",
+        "fi",
+        "pt",
+        "ie",
+        "cz",
+        "hu",
+        "ro",
+        "bg",
+        "sk",
+        "si",
+        "gr",
+        "ca",
+        "com.au",
+        "co.nz"
+      ]
     },
+
     "otto": {
       "pattern": "https://www.otto.{tld}/suche/{q}/",
-      "tlds": ["de", "nl", "at"]
+      "tlds": ["de", "nl"]
     },
+
     "cdiscount": {
       "pattern": "https://www.cdiscount.{tld}/search/10/{q}.html",
       "tlds": ["com", "fr"]
     },
+
     "fnac": {
       "pattern": "https://www.fnac.{tld}/SearchResult/ResultList.aspx?Search={q}",
-      "tlds": ["com", "es", "pt", "be", "ch"]
+      "tlds": ["com", "es", "pt", "ch"]
     },
+
     "mediamarkt": {
       "pattern": "https://www.mediamarkt.{tld}/search.html?query={q}",
-      "tlds": ["de", "es", "nl", "be", "at", "ch", "pl", "pt", "hu", "tr"]
+      "tlds": ["de", "es", "nl", "be", "at", "ch", "pl", "pt", "hu"]
     },
+
     "saturn": {
       "pattern": "https://www.saturn.{tld}/search.html?query={q}",
       "tlds": ["de", "at"]
     },
+
     "bol": {
-      "pattern": "https://www.bol.{tld}/nl/s/?searchtext={q}",
-      "tlds": ["com", "be"]
+      "pattern": "https://www.bol.{tld}/s/?searchtext={q}",
+      "tldSet": "bolPath"
     },
+
     "coolblue": {
       "pattern": "https://www.coolblue.{tld}/zoeken?query={q}",
-      "tlds": ["nl", "be", "de"]
+      "tlds": ["nl", "be"]
     },
+
+    "coolblue_de": {
+      "pattern": "https://www.coolblue.de/suche?query={q}",
+      "tlds": ["de"]
+    },
+
     "allegro": {
       "pattern": "https://allegro.{tld}/listing?string={q}",
       "tlds": ["pl", "cz", "sk"]
     },
+
     "emag": {
       "pattern": "https://www.emag.{tld}/search/{q}",
       "tlds": ["ro", "bg", "hu", "pl"]
     },
+
     "hepsiburada": {
       "pattern": "https://www.hepsiburada.{tld}/ara?q={q}",
-      "tlds": ["com", "com.tr"]
+      "tldSet": "hepsiburadaHosts"
     },
-    "trendyol": {
-      "pattern": "https://www.trendyol.{tld}/sr?q={q}",
-      "tlds": ["com", "com.tr"]
-    },
+
     "lazada": {
       "pattern": "https://www.lazada.{tld}/catalog/?q={q}",
       "tlds": ["com.my", "com.ph", "co.th", "sg", "co.id", "vn"]
     },
+
     "shopee": {
       "pattern": "https://shopee.{tld}/search?keyword={q}",
-      "tlds": ["sg", "com.my", "co.th", "vn", "ph", "co.id", "tw", "com.br", "com.mx", "cl", "com.co", "pl"]
+      "tlds": ["sg", "com.my", "co.th", "vn", "ph", "co.id", "tw", "com.br", "com.mx", "cl", "com.co"]
     },
+
     "tokopedia": {
-      "pattern": "https://www.tokopedia.{tld}/search?q={q}",
+      "pattern": "https://www.tokopedia.com/search?q={q}",
       "tlds": ["com"]
     },
+
     "bukalapak": {
-      "pattern": "https://www.bukalapak.{tld}/products?search%5Bkeywords%5D={q}",
+      "pattern": "https://www.bukalapak.com/products?search%5Bkeywords%5D={q}",
       "tlds": ["com"]
     },
+
     "coupang": {
-      "pattern": "https://www.coupang.{tld}/np/search?q={q}",
+      "pattern": "https://www.coupang.com/np/search?q={q}",
       "tlds": ["com"]
     },
+
     "gmarket": {
-      "pattern": "https://www.gmarket.{tld}/search?keyword={q}",
+      "pattern": "https://www.gmarket.co.kr/search?keyword={q}",
       "tlds": ["co.kr"]
     },
+
     "rakuten": {
       "pattern": "https://search.rakuten.{tld}/search/mall/{q}/",
-      "tlds": ["co.jp", "de", "fr", "com.tw"]
+      "tlds": ["co.jp"]
     },
+
     "yahoo": {
       "pattern": "https://search.yahoo.{tld}/search?p={q}",
       "tlds": ["com", "co.jp"]
     },
+
     "mercadolibre": {
       "pattern": "https://listado.mercadolibre.{tld}/{q}",
       "tlds": ["com.ar", "com.mx", "com.co", "cl", "com.pe", "com.ve", "com.ec", "com.uy"]
     },
+
     "falabella": {
-      "pattern": "https://www.falabella.{tld}/falabella-{country}/search?Ntt={q}",
-      "tlds": ["com", "cl", "com.pe", "com.co"]
+      "pattern": "https://www.falabella.{tld}/search?Ntt={q}",
+      "tldSet": "falabellaPath"
     },
-    "linio": {
-      "pattern": "https://www.linio.{tld}/search?scroll=&q={q}",
-      "tlds": ["com.mx", "com.co", "cl", "com.pe"]
-    },
+
     "submarino": {
-      "pattern": "https://www.submarino.{tld}/busca/{q}",
+      "pattern": "https://www.submarino.com.br/busca/{q}",
       "tlds": ["com.br"]
     },
+
     "magazineluiza": {
-      "pattern": "https://www.magazineluiza.{tld}/busca/{q}/",
+      "pattern": "https://www.magazineluiza.com.br/busca/{q}/",
       "tlds": ["com.br"]
     },
+
     "americanas": {
-      "pattern": "https://www.americanas.{tld}/busca/{q}",
+      "pattern": "https://www.americanas.com.br/busca/{q}",
       "tlds": ["com.br"]
     },
+
     "casasbahia": {
-      "pattern": "https://www.casasbahia.{tld}/busca/{q}",
+      "pattern": "https://www.casasbahia.com.br/busca/{q}",
       "tlds": ["com.br"]
     },
-    "souq": {
-      "pattern": "https://www.souq.{tld}/search/{q}",
-      "tlds": ["com"]
-    },
+
     "noon": {
       "pattern": "https://www.noon.{tld}/search/?q={q}",
-      "tlds": ["com"]
+      "tldSet": "noonPath"
     },
+
     "jumia": {
       "pattern": "https://www.jumia.{tld}/catalog/?q={q}",
-      "tlds": ["com.ng", "co.ke", "com.eg", "ma", "com.gh", "co.tz", "ug", "ci", "sn", "dz", "tn"]
+      "tlds": ["com.ng", "co.ke", "com.eg", "ma", "com.gh", "ug", "ci", "sn", "dz", "tn"]
     },
+
     "takealot": {
-      "pattern": "https://www.takealot.{tld}/all?qsearch={q}",
+      "pattern": "https://www.takealot.com/all?qsearch={q}",
       "tlds": ["com"]
     },
+
     "konga": {
-      "pattern": "https://www.konga.{tld}/search?search={q}",
+      "pattern": "https://www.konga.com/search?search={q}",
       "tlds": ["com"]
     },
+
     "daraz": {
       "pattern": "https://www.daraz.{tld}/catalog/?q={q}",
       "tlds": ["pk", "lk", "com.bd", "com.np"]
     },
+
     "snapdeal": {
-      "pattern": "https://www.snapdeal.{tld}/search?keyword={q}",
+      "pattern": "https://www.snapdeal.com/search?keyword={q}",
       "tlds": ["com"]
     },
+
     "myntra": {
-      "pattern": "https://www.myntra.{tld}/{q}",
-      "tlds": ["com"]
+      "pattern": "https://www.myntra.com/{q}",
+      "tlds": ["com"],
+      "note": "Myntra’s full-text search URLs often include additional query parameters; this path form generally lands on a search/category page but may not be a pure keyword search in all cases."
     },
+
     "ajio": {
-      "pattern": "https://www.ajio.{tld}/search/?text={q}",
+      "pattern": "https://www.ajio.com/search/?text={q}",
       "tlds": ["com"]
     }
   },
+
   "static": {
+    "https://www.zalando.ee": "https://www.zalando.ee/kataloog/?q={q}",
+    "https://www.zalando.lv": "https://www.zalando.lv/katalogs/?q={q}",
+    "https://www.zalando.lt": "https://www.zalando.lt/katalogas/?q={q}",
+    "https://www.zalando.hr": "https://www.zalando.hr/katalog/?q={q}",
+    "https://www.zalando.si": "https://www.zalando.si/katalog/?q={q}",
+    "https://www.fr.fnac.be": "https://www.fr.fnac.be/SearchResult/ResultList.aspx?Search={q}",
+    "https://fr.shopping.rakuten.com": "https://fr.shopping.rakuten.com/search/{q}",
+    "https://www.rakuten.com.tw": "https://www.rakuten.com.tw/search/{q}/",
     "https://duckduckgo.com": "https://duckduckgo.com/?q={q}",
     "https://search.yahoo.com": "https://search.yahoo.com/search?p={q}",
     "https://yandex.com": "https://yandex.com/search/?text={q}",
@@ -614,7 +967,6 @@
     "https://www.qwant.com": "https://www.qwant.com/?q={q}",
     "https://search.brave.com": "https://search.brave.com/search?q={q}",
     "https://swisscows.com": "https://swisscows.com/web?query={q}",
-    "https://kagi.com": "https://kagi.com/search?q={q}",
     "https://www.perplexity.ai": "https://www.perplexity.ai/search?q={q}",
     "https://commons.wikimedia.org": "https://commons.wikimedia.org/w/index.php?search={q}",
     "https://www.wikidata.org": "https://www.wikidata.org/w/index.php?search={q}",
@@ -660,6 +1012,10 @@
     "https://arxiv.org": "https://arxiv.org/search/?query={q}&searchtype=all&source=header",
     "https://pubmed.ncbi.nlm.nih.gov": "https://pubmed.ncbi.nlm.nih.gov/?term={q}",
     "https://www.semanticscholar.org": "https://www.semanticscholar.org/search?q={q}",
+    "https://www.booking.com": "https://www.booking.com/searchresults.html?ss={q}",
+    "https://www.linkedin.com": "https://www.linkedin.com/search/results/all/?keywords={q}",
+    "https://www.ottoversand.at": "https://www.ottoversand.at/s/{q}/",
+    "https://www.trendyol.com": "https://www.trendyol.com/sr?q={q}",
     "https://www.walmart.com": "https://www.walmart.com/search?q={q}",
     "https://www.aliexpress.com": "https://www.aliexpress.com/wholesale?SearchText={q}",
     "https://www.alibaba.com": "https://www.alibaba.com/trade/search?SearchText={q}",
@@ -673,7 +1029,6 @@
     "https://maps.google.com": "https://www.google.com/maps/search/?api=1&query={q}",
     "https://www.openstreetmap.org": "https://www.openstreetmap.org/search?query={q}",
     "https://play.google.com": "https://play.google.com/store/search?q={q}&c=apps",
-    "https://apps.apple.com": "https://apps.apple.com/search?term={q}",
     "https://apps.microsoft.com": "https://apps.microsoft.com/search?query={q}",
     "https://www.imdb.com": "https://www.imdb.com/find/?q={q}",
     "https://www.rottentomatoes.com": "https://www.rottentomatoes.com/search?search={q}",
@@ -731,9 +1086,7 @@
     "https://www.ocado.com": "https://www.ocado.com/search?entry={q}",
     "https://www.opentable.com": "https://www.opentable.com/s?term={q}",
     "https://www.producthunt.com": "https://www.producthunt.com/search?q={q}",
-    "https://www.reed.co.uk": "https://www.reed.co.uk/jobs?q={q}",
     "https://www.reuters.com": "https://www.reuters.com/site-search/?query={q}",
-    "https://www.rome2rio.com": "https://www.rome2rio.com/map/{q}",
     "https://www.science.org": "https://www.science.org/action/doSearch?AllField={q}",
     "https://www.screwfix.com": "https://www.screwfix.com/search?search={q}",
     "https://www.theatlantic.com": "https://www.theatlantic.com/search/?q={q}",
@@ -809,7 +1162,6 @@
     "https://www.mercari.com": "https://www.mercari.com/search/?keyword={q}",
     "https://poshmark.com": "https://poshmark.com/search?query={q}",
     "https://www.flipkart.com": "https://www.flipkart.com/search?q={q}",
-    "https://www.mercadolibre.com": "https://listado.mercadolibre.com/{q}",
     "https://www.jd.com": "https://search.jd.com/Search?keyword={q}",
     "https://www.ozon.ru": "https://www.ozon.ru/search/?text={q}",
     "https://www.wildberries.ru": "https://www.wildberries.ru/catalog/0/search.aspx?search={q}",
@@ -818,7 +1170,6 @@
     "https://search.bilibili.com": "https://search.bilibili.com/all?keyword={q}",
     "https://s.weibo.com": "https://s.weibo.com/weibo?q={q}",
     "https://www.tiktok.com": "https://www.tiktok.com/search?q={q}",
-    "https://www.instagram.com": "https://www.instagram.com/explore/search/keyword/?q={q}",
     "https://www.facebook.com": "https://www.facebook.com/search/top?q={q}",
     "https://www.sciencedirect.com": "https://www.sciencedirect.com/search?qs={q}",
     "https://onlinelibrary.wiley.com": "https://onlinelibrary.wiley.com/action/doSearch?AllField={q}",
@@ -855,7 +1206,6 @@
     "https://www.olx.co.id": "https://www.olx.co.id/items/q-{q}",
     "https://www.olx.in": "https://www.olx.in/items/q-{q}",
     "https://www.sahibinden.com": "https://www.sahibinden.com/arama?query={q}",
-    "https://www.letgo.com": "https://www.letgo.com/search?searchTerm={q}",
     "https://www.carousell.sg": "https://www.carousell.sg/search/{q}",
     "https://www.carousell.ph": "https://www.carousell.ph/search/{q}",
     "https://www.carousell.com.my": "https://www.carousell.com.my/search/{q}",
@@ -895,7 +1245,6 @@
     "https://www.hvg.hu": "https://hvg.hu/kereses?search={q}",
     "https://www.index.hu": "https://index.hu/24ora/?cimpirositas=1&s={q}",
     "https://www.digi24.ro": "https://www.digi24.ro/cautare?q={q}",
-    "https://www.protv.ro": "https://stirileprotv.ro/cauta/?q={q}",
 
     "https://www.asahi.com": "https://sitesearch.asahi.com/sitesearch/?Keywords={q}",
     "https://www.yomiuri.co.jp": "https://www.yomiuri.co.jp/search/?word={q}",
@@ -909,7 +1258,6 @@
     "https://www.sina.com.cn": "https://search.sina.com.cn/?q={q}",
     "https://www.163.com": "https://so.news.163.com/news/search/s?keyword={q}",
     "https://www.sohu.com": "https://search.sohu.com/?keyword={q}",
-    "https://www.qq.com": "https://www.sogou.com/web?query={q}",
     "https://www.ifeng.com": "https://search.ifeng.com/sofeng/search.action?q={q}",
     "https://www.thehindu.com": "https://www.thehindu.com/search/?q={q}",
     "https://www.hindustantimes.com": "https://www.hindustantimes.com/search?q={q}",
@@ -963,14 +1311,12 @@
     "https://www.dailymaverick.co.za": "https://www.dailymaverick.co.za/?s={q}",
     "https://www.nation.africa": "https://nation.africa/kenya/search?query={q}",
     "https://www.standardmedia.co.ke": "https://www.standardmedia.co.ke/search/{q}",
-    "https://www.punch.ng": "https://punchng.com/?s={q}",
     "https://www.vanguardngr.com": "https://www.vanguardngr.com/?s={q}",
     "https://www.premiumtimesng.com": "https://www.premiumtimesng.com/?s={q}",
 
     "https://www.xing.com": "https://www.xing.com/search/members?keywords={q}",
     "https://www.stepstone.de": "https://www.stepstone.de/jobs/{q}",
     "https://www.stepstone.fr": "https://www.stepstone.fr/emploi/{q}",
-    "https://www.pole-emploi.fr": "https://candidat.pole-emploi.fr/offres/recherche?motsCles={q}",
     "https://www.infojobs.net": "https://www.infojobs.net/ofertas-trabajo/{q}",
     "https://www.infojobs.com.br": "https://www.infojobs.com.br/empregos.aspx?palabra={q}",
     "https://www.catho.com.br": "https://www.catho.com.br/vagas/{q}/",
@@ -979,7 +1325,6 @@
     "https://www.bumeran.com.ar": "https://www.bumeran.com.ar/empleos-busqueda-{q}.html",
     "https://www.zonajobs.com.ar": "https://www.zonajobs.com.ar/ofertas-de-trabajo/{q}",
     "https://www.trabajando.cl": "https://www.trabajando.cl/trabajo-empleo/{q}",
-    "https://www.konzertajobs.com": "https://www.konzertajobs.com/jobs/{q}",
     "https://www.naukri.com": "https://www.naukri.com/{q}-jobs",
     "https://www.shine.com": "https://www.shine.com/job-search/{q}-jobs",
     "https://www.timesjobs.com": "https://www.timesjobs.com/candidate/job-search.html?searchType=personal498&txtKeywords={q}",
@@ -1004,6 +1349,16 @@
     "https://www.pracuj.pl": "https://www.pracuj.pl/praca/{q}",
     "https://www.jobs.cz": "https://www.jobs.cz/prace/?q%5B%5D={q}",
     "https://www.profesia.sk": "https://www.profesia.sk/praca/{q}/",
-    "https://www.kariyer.net": "https://www.kariyer.net/is-ilanlari?kw={q}"
+    "https://www.kariyer.net": "https://www.kariyer.net/is-ilanlari?kw={q}",
+
+    "https://www.bing.com": "https://www.bing.com/search?q={q}",
+    "https://news.google.com": "https://news.google.com/search?q={q}",
+    "https://www.instagram.com": "https://www.instagram.com/explore/search/keyword/?q={q}",
+    "https://apps.apple.com": "https://apps.apple.com/us/iphone/search?term={q}",
+    "https://news.ycombinator.com": "https://hn.algolia.com/?query={q}",
+    "https://huggingface.co": "https://huggingface.co/search/full-text?q={q}",
+    "https://www.kaggle.com": "https://www.kaggle.com/search?q={q}",
+    "https://giphy.com": "https://giphy.com/search/{q}",
+    "https://imgur.com": "https://imgur.com/search?q={q}"
   }
 }
