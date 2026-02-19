@@ -9,9 +9,13 @@ interface TypewriterTextProps {
 }
 
 export function TypewriterText({ text, animate = false, speed = 30, className = '', onComplete }: TypewriterTextProps) {
-  const [displayText, setDisplayText] = useState('');
+  const [displayText, setDisplayText] = useState(text);
   const [isAnimating, setIsAnimating] = useState(false);
   const animatedTextRef = useRef<string | null>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep onComplete ref updated
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     // If not animating, just show the text immediately
@@ -24,6 +28,7 @@ export function TypewriterText({ text, animate = false, speed = 30, className = 
     // If we already animated this exact text, just show it (don't re-animate)
     if (animatedTextRef.current === text) {
       setDisplayText(text);
+      setIsAnimating(false);
       return;
     }
 
@@ -40,12 +45,12 @@ export function TypewriterText({ text, animate = false, speed = 30, className = 
       } else {
         clearInterval(timer);
         setIsAnimating(false);
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     }, speed);
 
     return () => clearInterval(timer);
-  }, [text, animate, speed, onComplete]);
+  }, [text, animate, speed]);
 
   return (
     <span className={className}>
