@@ -1,159 +1,153 @@
 import React from 'react';
+import { FiPlus, FiCommand, FiSettings, FiSun, FiMessageSquare } from 'react-icons/fi';
+import { FaFish, FaRandom, FaBrain, FaSearch, FaRobot } from 'react-icons/fa';
 
 interface HelpProps {
   isDarkMode?: boolean;
 }
 
 export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
-  const textMuted = isDarkMode ? 'text-gray-300' : 'text-gray-700';
   const textSubtle = isDarkMode ? 'text-gray-400' : 'text-gray-600';
   const card = isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50';
-  const chip = isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700';
+  const iconInline = 'inline-block align-text-bottom mx-0.5';
+
+  const modeBadge = (bg: string) => `mr-2 inline-flex h-5 items-center gap-1 rounded px-2 text-xs text-white ${bg}`;
 
   return (
     <section className="space-y-6">
-      {/* Overview */}
+      {/* Overview & Getting started */}
       <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          warpsurf: an AI-powered copilot for your browser
-        </h2>
+        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>warpsurf</h2>
         <p className={textSubtle}>
-          warpsurf adds a side panel that you can chat with and perform tasks in your browser for you. First add an API key for a model provider, 
-          then start a conversation, choose a mode, and the copilot will answer or browse for you.
+          An AI-powered browser copilot. Add an API key in the <strong>API Keys</strong> tab, pick a model in{' '}
+          <strong>Workflow</strong>, and start chatting. Agent workflows run in dedicated tab groups to stay separate
+          from your personal tabs.
         </p>
       </div>
 
-      {/* Chat modes */}
+      {/* Side panel UI */}
       <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Chat options</h3>
-        <ul className={`space-y-2 ${textMuted}`}>
+        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Side panel</h3>
+        <p className={`mb-3 text-sm ${textSubtle}`}>
+          The side panel is the main interface. The version number is shown at the top left — hover over it to view
+          release notes. The header bar contains the following controls:
+        </p>
+        <ul className={`list-disc space-y-1 pl-5 text-sm ${textSubtle}`}>
           <li>
-            <span className={`mr-2 inline-flex h-5 items-center justify-center rounded px-2 text-xs ${chip}`}>Auto</span>
-            Let warpsurf choose the best mode (simple chat, search-grounded chat, agent or multi-agent) based on your prompt.
+            <FiPlus className={iconInline} /> <strong>New chat:</strong> Start a fresh conversation.
           </li>
           <li>
-            <span className={`mr-2 inline-flex h-5 items-center justify-center rounded px-2 text-xs ${chip}`}>Chat</span>
-            Fast Q&A with your selected model. No search, browsing, or page actions.
+            <FiCommand className={iconInline} /> <strong>Agent manager:</strong> Open the agent dashboard in a new tab.
+            A green badge shows running agent count.
           </li>
           <li>
-            <span className={`mr-2 inline-flex h-5 items-center justify-center rounded px-2 text-xs ${chip}`}>Search</span>
-            Quick search-grounded answers that require current information or easily retrievable web content. Uses model-native 
-            /integrated web search.
+            <FiSettings className={iconInline} /> <strong>Settings:</strong> Open the full settings page (this page).
           </li>
           <li>
-            <span className={`mr-2 inline-flex h-5 items-center justify-center rounded px-2 text-xs ${chip}`}>Agent</span>
-            Performs browser automation. The agent plans, navigates, clicks, and extracts content, operating in its own labelled
-            tab group.
+            <FiSun className={iconInline} /> <strong>Theme:</strong> Cycle between auto, light, and dark themes.
           </li>
           <li>
-            <span className={`mr-2 inline-flex h-5 items-center justify-center rounded px-2 text-xs ${chip}`}>Multi-Agent</span>
-            Performs browser automation using multiple agents. Initially, a planner makes a rough plan which is then refined.
-            Subtasks are then allocated to worker agents, which perform the browser interactions. Each worker operates in its own
-            tab group.
+            <FaFish className={iconInline} /> <strong>Fish:</strong> Toggle the aquarium overlay.
           </li>
-          
+          <li>
+            <FiMessageSquare className={iconInline} /> <strong>Feedback:</strong> Links to the Chrome Web Store and
+            GitHub.
+          </li>
         </ul>
       </div>
 
-      {/* Agent settings */}
+      {/* Modes */}
       <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Agent workflow settings at a glance
-        </h3>
+        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Modes</h3>
+        <ul className={`space-y-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          <li>
+            <span className={modeBadge(isDarkMode ? 'bg-black/70' : 'bg-black/80')}>
+              <FaRandom className="h-3 w-3" /> Auto
+            </span>
+            Automatically selects the best mode for your prompt.
+          </li>
+          <li>
+            <span className={modeBadge(isDarkMode ? 'bg-violet-400' : 'bg-violet-300')}>
+              <FaBrain className="h-3 w-3" /> Chat
+            </span>
+            Direct Q&A with your model. No browsing.
+          </li>
+          <li>
+            <span className={modeBadge(isDarkMode ? 'bg-teal-400' : 'bg-teal-300')}>
+              <FaSearch className="h-3 w-3" /> Search
+            </span>
+            Search-grounded answers using model-native web search.
+          </li>
+          <li>
+            <span className={modeBadge(isDarkMode ? 'bg-amber-400' : 'bg-amber-300')}>
+              <FaRobot className="h-3 w-3" /> Agent
+            </span>
+            Single-agent browser automation: plans, navigates, and extracts content.
+          </li>
+          <li>
+            <span className={modeBadge(isDarkMode ? 'bg-orange-400' : 'bg-orange-300')}>
+              <FaRobot className="h-3 w-3" />
+              <FaRobot className="h-3 w-3 -ml-1.5" /> Multi-Agent
+            </span>
+            <span className={`mr-1 text-xs italic ${textSubtle}`}>(experimental)</span>
+            Parallel browser automation with a planner, refiner, and multiple workers.
+          </li>
+        </ul>
+        <p className={`mt-3 text-xs ${textSubtle}`}>
+          Type <strong>/</strong> in the chat input to quickly switch modes.
+        </p>
+      </div>
 
-        <h4 className={`mt-5 mb-2 text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          🤖 Agent Workflow
-        </h4>
-
+      {/* Key features */}
+      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
+        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Key features</h3>
         <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
           <li>
-            <strong>Models:</strong> Pick provider and model per role (Planner, Navigator, Validator). Use Global
-            Model to set all at once.
+            <strong>Natural language configuration:</strong> Change models, adjust temperature, toggle vision, add tab
+            context, and more — just ask in the chat. Auto mode detects configuration requests automatically.
           </li>
-          <li><strong>Parameters:</strong> Adjust temperature for each role.</li>
-          <li><strong>Vision:</strong> Enable screenshot-based context - can improve performance at the cost of latency.</li>
-          <li><strong>Limits:</strong> Maximum steps, actions per step, failures, planning interval, min page-load wait.</li>
-          <li><strong>Planner toggle:</strong> Enable a dedicated planning step before navigation begins.</li>
-          <li><strong>Validator toggle:</strong> Enable a validation step to verify task completion.</li>
-        </ul>
-
-        <h4 className={`mt-5 mb-2 text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          🤖🤖 Multi-Agent Workflow
-        </h4>
-
-        <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
           <li>
-            <strong>Models:</strong> Pick provider and model per role (Multi-Agent Planner, Refiner, Worker). 
-            Workers share the same model configuration.
+            <strong>Chat history:</strong> Reopen, rename, delete, export, and bookmark prompts.
           </li>
-          <li><strong>Max Workers:</strong> Set the maximum number of parallel worker agents. A large number of workers can cause performance issues. Each worker operates in its own tab group.</li>
-          <li><strong>Planner:</strong> Creates an initial high-level plan and decomposes the user task into subtasks with dependencies.</li>
-          <li><strong>Refiner:</strong> Improves and optimizes the initial plan before execution begins.</li>
-          <li><strong>Workers:</strong> Execute individual subtasks in parallel, each with their own browser context.</li>
-          <li><strong>Planner toggle:</strong> Enable per-worker planning before each subtask.</li>
-          <li><strong>Validator toggle:</strong> Enable per-worker validation after each subtask completes.</li>
-          <li><strong>Visualization:</strong> View the task graph showing subtask dependencies and worker assignments.</li>
-        </ul>
-      </div>
-
-      {/* Other functionality */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Other features
-        </h3>
-        <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
-          <li><strong>Chat history:</strong> Reopen, rename, delete, export, and bookmark prompts for reuse.</li>
-          <li><strong>Costs:</strong> Where cost data is available, per-message and per-session token, latency, and USD totals are shown in the UI.</li>
-          <li><strong>Firewall:</strong> Control which domains agents can access with allow/deny lists. Deny list takes priority; empty allow list permits all non-denied domains.</li>
-          <li><strong>Inline preview:</strong> See the agent's page context inside the side panel when available. Can be collapsed or expanded.</li>
-          <li><strong>Keyboard shortcuts:</strong> Type "/" in the input to quickly select workflow modes (/chat, /search, /agent).</li>
-          <li><strong>History summarization:</strong> Analyzes your recent browser history to provide context-aware assistance. Summarizes key topics, notable URLs, and browsing patterns from the last 24 hours.</li>
-          <li><strong>Task estimation:</strong> Before running agent tasks, view estimated completion time (agent vs human), token usage, and cost breakdown. You can also switch models to compare estimates.</li>
-          <li><strong>Agent dashboard:</strong> View all currently running and recently completed agent tasks. Monitor status, duration, and costs. Jump directly to any session or remove completed entries.</li>
-          <li><strong>Fish:</strong> A relaxing aquarium overlay for the side panel. Add fish, sharks, and food pellets. Fish eat pellets, sharks hunt fish (and die if unfed for 60 seconds), and both species can breed. Toggle the population chart to visualize ecosystem dynamics.</li>
-        </ul>
-      </div>
-
-      {/* Getting started */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Getting started
-        </h3>
-        <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
-          <li><strong>API Keys:</strong> Add at least one LLM provider API key in the API Keys tab. Supported providers: OpenAI, Anthropic (Claude), Google Gemini, Grok (xAI), OpenRouter, and any OpenAI-compatible API.</li>
-          <li><strong>Model selection:</strong> After adding a provider, configure which model to use for each workflow role. Use the "Global Model" button to quickly set the same model for all roles.</li>
-          <li><strong>Tab groups:</strong> Agent and Multi-Agent workflows operate in dedicated, color-coded Chrome tab groups to keep automated browsing organized and separate from your personal tabs.</li>
-        </ul>
-      </div>
-
-      {/* Advanced settings */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Advanced settings
-        </h3>
-        <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
-          <li><strong>Model parameters:</strong> Temperature controls creativity (lower = more focused). Adjust per role in Agent Settings.</li>
-          <li><strong>History context:</strong> Enable to give agents awareness of your recent browsing history. Configure the time window (default: 24 hours) in settings.</li>
-          <li><strong>Tab previews:</strong> Toggle low-FPS tab mirroring in the chat UI to see what agents are doing without switching tabs.</li>
-          <li><strong>Emergency stop:</strong> Click the stop button or use the killswitch to immediately halt all agent activity across all sessions.</li>
+          <li>
+            <strong>Cost tracking:</strong> Per-message and per-session token/cost totals in the stats bar.
+          </li>
+          <li>
+            <strong>Regional preferences:</strong> Set a preferred region so agents favour local versions of websites
+            (e.g. amazon.de). Configure in <strong>Web</strong> settings.
+          </li>
+          <li>
+            <strong>Web access control:</strong> Allow/deny lists to control which domains agents can visit. Configure
+            in <strong>Web</strong> settings.
+          </li>
+          <li>
+            <strong>Inline preview:</strong> See the agent's current page inside the side panel.
+          </li>
+          <li>
+            <strong>Task estimation:</strong> Preview estimated time, tokens, and cost before running agent tasks.
+          </li>
+          <li>
+            <strong>Voice input:</strong> Dictate prompts via speech-to-text (configure in <strong>Voice</strong>{' '}
+            settings).
+          </li>
+          <li>
+            <strong>Emergency stop:</strong> Immediately halt all agent activity via the stop button.
+          </li>
         </ul>
       </div>
 
       {/* Tips */}
       <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Tips for best results
-        </h3>
+        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tips</h3>
         <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
-          <li><strong>Multi-agent for complex tasks:</strong> Use Multi-Agent for tasks requiring parallel research, comparison shopping, or gathering information from multiple sources.</li>
-          <li><strong>Set spending limits:</strong> Configure API spending limits with your provider to avoid unexpected costs. Uncapped keys are risky.</li>
-          <li><strong>Review costs:</strong> Check the session stats bar to monitor token usage and costs in real-time.</li>
-          <li><strong>Bookmark useful prompts:</strong> Save frequently-used prompts for quick reuse from the chat history panel.</li>
-          <li><strong>Monitoring:</strong>Carefully and closely monitor the agent's activity. They may make mistakes and you should keep track of what they are doing.</li>
+          <li>Use Multi-Agent for tasks that benefit from parallel research or multi-site comparison.</li>
+          <li>Set API spending limits with your provider — uncapped keys are risky.</li>
+          <li>Monitor agents closely; they can make mistakes or take unexpected actions.</li>
+          <li>
+            Configure per-role models and parameters under <strong>Advanced &gt; Workflow (Advanced)</strong>.
+          </li>
         </ul>
       </div>
     </section>
   );
 };
-
-
