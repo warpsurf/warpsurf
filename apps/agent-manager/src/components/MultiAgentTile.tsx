@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { FaRobot } from 'react-icons/fa';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
@@ -47,6 +47,7 @@ export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAg
   const workers = agent.workers || [];
   const isInactive = agent.status === 'completed' || agent.status === 'failed' || agent.status === 'cancelled';
   const [animationComplete, setAnimationComplete] = useState(false);
+  const lastAnimatedTitleRef = useRef<string | null>(null);
 
   const title = useMemo(() => {
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
@@ -57,9 +58,17 @@ export function MultiAgentTile({ agent, isDarkMode, onClick, onDelete }: MultiAg
     return 'New Task';
   }, [agent.sessionTitle, agent.taskDescription]);
 
+  // Reset animation state when title changes
+  useEffect(() => {
+    if (lastAnimatedTitleRef.current !== null && lastAnimatedTitleRef.current !== title) {
+      setAnimationComplete(false);
+    }
+  }, [title]);
+
   const handleAnimationComplete = useCallback(() => {
     setAnimationComplete(true);
-  }, []);
+    lastAnimatedTitleRef.current = title;
+  }, [title]);
 
   // Determine grid layout based on worker count
   const gridCols = workers.length <= 2 ? 2 : workers.length <= 4 ? 2 : 3;

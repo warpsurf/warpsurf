@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import { LivePreview } from './LivePreview';
@@ -28,6 +28,7 @@ function formatCost(cost?: number): string {
 export function AgentTile({ agent, isDarkMode, onClick, onDelete }: AgentTileProps) {
   const needsAttention = agent.status === 'needs_input';
   const [animationComplete, setAnimationComplete] = useState(false);
+  const lastAnimatedTitleRef = useRef<string | null>(null);
 
   const title = useMemo(() => {
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
@@ -38,9 +39,17 @@ export function AgentTile({ agent, isDarkMode, onClick, onDelete }: AgentTilePro
     return 'New Task';
   }, [agent.sessionTitle, agent.taskDescription]);
 
+  // Reset animation state when title changes
+  useEffect(() => {
+    if (lastAnimatedTitleRef.current !== null && lastAnimatedTitleRef.current !== title) {
+      setAnimationComplete(false);
+    }
+  }, [title]);
+
   const handleAnimationComplete = useCallback(() => {
     setAnimationComplete(true);
-  }, []);
+    lastAnimatedTitleRef.current = title;
+  }, [title]);
 
   // Time since last update: prefer preview.lastUpdated, then endTime, then startTime
   const lastUpdateTime = agent.preview?.lastUpdated || agent.endTime || agent.startTime;

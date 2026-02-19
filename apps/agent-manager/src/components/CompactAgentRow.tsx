@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { FiTrash2 } from 'react-icons/fi';
 import { StatusBadge } from './StatusBadge';
 import { TypewriterText } from './TypewriterText';
@@ -26,6 +26,7 @@ function formatCost(cost?: number): string {
 
 export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: CompactAgentRowProps) {
   const [animationComplete, setAnimationComplete] = useState(false);
+  const lastAnimatedTitleRef = useRef<string | null>(null);
 
   const title = useMemo(() => {
     if (agent.sessionTitle?.trim()) return agent.sessionTitle.trim();
@@ -36,9 +37,17 @@ export function CompactAgentRow({ agent, isDarkMode, onClick, onDelete }: Compac
     return 'New Task';
   }, [agent.sessionTitle, agent.taskDescription]);
 
+  // Reset animation state when title changes
+  useEffect(() => {
+    if (lastAnimatedTitleRef.current !== null && lastAnimatedTitleRef.current !== title) {
+      setAnimationComplete(false);
+    }
+  }, [title]);
+
   const handleAnimationComplete = useCallback(() => {
     setAnimationComplete(true);
-  }, []);
+    lastAnimatedTitleRef.current = title;
+  }, [title]);
 
   // Get the last message snippet (or task description as fallback)
   const snippet = useMemo(() => {

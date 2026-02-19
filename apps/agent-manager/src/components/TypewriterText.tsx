@@ -14,16 +14,16 @@ export function TypewriterText({ text, animate = false, speed = 30, className = 
   const animatedTextRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // If not animating, just show the text
+    // If not animating, just show the text immediately
     if (!animate) {
       setDisplayText(text);
       setIsAnimating(false);
-      animatedTextRef.current = null;
       return;
     }
 
-    // If we already animated this exact text, don't re-animate
+    // If we already animated this exact text, just show it (don't re-animate)
     if (animatedTextRef.current === text) {
+      setDisplayText(text);
       return;
     }
 
