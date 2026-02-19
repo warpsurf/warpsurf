@@ -73,6 +73,7 @@ export default defineConfig({
     'import.meta.env.DEV': isDev,
     'import.meta.env.STORE': isStore,
     'import.meta.env.API': isAPI,
+    'process.env.__API__': JSON.stringify(isAPI ? 'true' : 'false'),
     'process.env.__LEGACY_NAVIGATION__': JSON.stringify(isLegacyNavigation ? 'true' : 'false'),
     'process.env.__ENABLE_SITE_SKILLS__': JSON.stringify(enableSiteSkills ? 'true' : 'false'),
   },
