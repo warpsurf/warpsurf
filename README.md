@@ -32,7 +32,6 @@
 
 **warpsurf** is an AI-powered browser copilot built for speed. Chat, search, and autonomously navigate the web.
 
-
 ## The warpsurf vision
 
 <img src="images/warpsurf_vision.png" alt="warpsurf vision" width="240" align="right" style="margin-left:20px;margin-bottom:10px;"/>
@@ -146,6 +145,10 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 | ⏱️ **Task Estimation** | Preview task duration and cost before initialisation |
 | 🎤 **Voice Input** | Make requests via voice using speech-to-text transcription |
 | 🛠️ **Conversational Settings** | Configure models, parameters, and tab context through natural language |
+
+### Search URLs
+
+Warpsurf agents are encouraged to use a [pattern database](https://github.com/warpsurf/search-urls) to resolve direct search URLs for popular sites, skipping search box interactions and landing on results in a single navigation. This reduces the number of agent actions and improves speed.
 
 ## Installation & Usage
 
