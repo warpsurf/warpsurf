@@ -47,77 +47,41 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 ## Demos
 
+All demos are shown in real time.
+
 <table>
 <tr>
-<td width="50%" align="center">🔵 <b>Summarize this</b> (realtime)<br><br><img src="images/summary.gif" width="100%"/></td>
-<td width="50%" align="center">🟢 <b>Agent workflow</b> (2x speed)<br><br><img src="images/agent_2x.gif" width="100%"/></td>
+<td width="50%" align="center" valign="top">🟢 <b>Agent</b><br><br><img src="images/ui2_agent.gif" width="100%"/><br><em>Using search-urls, warpsurf agents can navigate quickly and efficiently.</em></td>
+<td width="50%" align="center" valign="top">🔵 <b>Summarize</b><br><br><img src="images/ui2_summarize.gif" width="100%"/><br><em>Instantly summarize any page or selected text via a right-click context menu, delivering concise overviews in seconds.</em></td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top">🟠 <b>Tools</b><br><br><img src="images/ui2_tools.gif" width="100%"/><br><em>Access built-in tools and settings directly using natural language.</em></td>
+<td width="50%" align="center" valign="top">🟣 <b>Voice</b><br><br><img src="images/ui2_voice.gif" width="100%"/><br><em>Issue commands and make requests hands-free using voice input with real-time speech-to-text transcription.</em></td>
 </tr>
 </table>
 
 <details>
-<summary>🔵 <code>EXPAND Summarize this</code></summary>
+<summary>🟢 <code>EXPAND Agent</code></summary>
 
-<img src="images/summary.gif" alt="Summary workflow" width="100%"/>
-
-*Right-click "Summarize this" workflow using Gemini 2.5 Flash. Warpsurf rapidly summarizes the current page. [REAL TIME]*
+<img src="images/ui2_agent.gif" alt="Agent workflow" width="100%"/>
 </details>
 
 <details>
-<summary>🟢 <code>EXPAND Agent workflow</code></summary>
+<summary>🔵 <code>EXPAND Summarize</code></summary>
 
-<img src="images/agent_2x.gif" alt="Agent workflow" width="100%"/>
-
-*Agent workflow using Gemini 2.5 Flash as the navigator (without vision/planner/validator/estimator/history summarization). The user selects the 'agent' workflow by typing '/agent' and initiates the task. The agent performs the task in its own tab group, with the active tab streamed to the chat interface, providing real-time monitoring. [2x SPEED]*
-</details>
-
----
-
-<table>
-<tr>
-<td width="50%" align="center">🟠 <b>Multi-agent Workers</b> (realtime)<br><br><img src="images/magent_workers_1x.gif" width="100%"/></td>
-<td width="50%" align="center">🟣 <b>Multi-agent End-to-End</b> (2x speed)<br><br><img src="images/magent_2x.gif" width="100%"/></td>
-</tr>
-</table>
-
-<details>
-<summary>🟠 <code>EXPAND Multi-agent Workers</code></summary>
-
-<img src="images/magent_workers_1x.gif" alt="Multiagent workflow workers" width="100%"/>
-
-*Multiagent workflow parallel workers phase, using 5x Gemini 2.5 Flash worker agents (without vision/planner/validator/estimator/history summarization). The workers perform the subtasks allocated to them in their own tab groups. The workflow visualization displays the plan and status of each subtask. [REAL TIME]*
+<img src="images/ui2_summarize.gif" alt="Summarize workflow" width="100%"/>
 </details>
 
 <details>
-<summary>🟣 <code>EXPAND Multi-agent End-to-End</code></summary>
+<summary>🟠 <code>EXPAND Tools</code></summary>
 
-<img src="images/magent_2x.gif" alt="Multiagent workflow entire" width="100%"/>
-
-*Multiagent end-to-end workflow, using Gemini 2.5 Flash as the planner, refiner and worker agents. The longer output sequences for the planner and refiner stages currently pose a substantial bottleneck on speed. [2x SPEED]*
-</details>
-
----
-
-<table>
-<tr>
-<td width="50%" align="center">🔴 <b>Chat and Search</b> (2x speed)<br><br><img src="images/chat+searchx2.gif" width="100%"/></td>
-<td width="50%" align="center">🟡 <b>Panel and Options</b> (2x speed)<br><br><img src="images/menu_2x.gif" width="100%"/></td>
-</tr>
-</table>
-
-<details>
-<summary>🔴 <code>EXPAND Chat and Search</code></summary>
-
-<img src="images/chat+searchx2.gif" alt="warpsurf chat" width="100%"/>
-
-*Chat and Search workflows using Gemini 2.5 Flash. Through a single chat session, users can interact with LLMs for simple chat workflows, search-grounded requests and the agentic workflows. Chat history is carried across different workflows in a session. [2x SPEED]*
+<img src="images/ui2_tools.gif" alt="Tools" width="100%"/>
 </details>
 
 <details>
-<summary>🟡 <code>EXPAND Panel and Options</code></summary>
+<summary>🟣 <code>EXPAND Voice</code></summary>
 
-<img src="images/menu_2x.gif" alt="warpsurf interface" width="100%"/>
-
-*Users interact with warpsurf through a side panel. Settings are configured using the Options page, where users can add API keys, select models and model settings, configure web and live data settings. [2x SPEED]*
+<img src="images/ui2_voice.gif" alt="Voice input" width="100%"/>
 </details>
 
 ## Existing Features
