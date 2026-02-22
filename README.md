@@ -49,40 +49,21 @@ As we wait for models to get faster, our goals are to help grow the browser auto
 
 All demos are shown in real time.
 
-<table>
-<tr>
-<td width="50%" align="center" valign="top">🟢 <b>Agent</b><br><br><img src="images/ui2_agent.gif" width="100%"/><br><em>Using search-urls, warpsurf agents can navigate quickly and efficiently.</em></td>
-<td width="50%" align="center" valign="top">🔵 <b>Summarize</b><br><br><img src="images/ui2_summarize.gif" width="100%"/><br><em>Instantly summarize any page or selected text via a right-click context menu, delivering concise overviews in seconds.</em></td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top">🟠 <b>Tools</b><br><br><img src="images/ui2_tools.gif" width="100%"/><br><em>Access built-in tools and settings directly using natural language.</em></td>
-<td width="50%" align="center" valign="top">🟣 <b>Voice</b><br><br><img src="images/ui2_voice.gif" width="100%"/><br><em>Issue commands and make requests hands-free using voice input with real-time speech-to-text transcription.</em></td>
-</tr>
-</table>
+**Agent** — Using search-urls, warpsurf agents can navigate quickly and efficiently.
 
-<details>
-<summary>🟢 <code>EXPAND Agent</code></summary>
+<img src="images/agent.gif" alt="Agent workflow" width="100%"/>
 
-<img src="images/ui2_agent.gif" alt="Agent workflow" width="100%"/>
-</details>
+**Summarize** — Instantly summarize any page or selected text via a right-click context menu in seconds.
 
-<details>
-<summary>🔵 <code>EXPAND Summarize</code></summary>
+<img src="images/summarize.gif" alt="Summarize workflow" width="100%"/>
 
-<img src="images/ui2_summarize.gif" alt="Summarize workflow" width="100%"/>
-</details>
+**Tools** — Access built-in tools and settings directly using natural language.
 
-<details>
-<summary>🟠 <code>EXPAND Tools</code></summary>
+<img src="images/tools.gif" alt="Tools" width="100%"/>
 
-<img src="images/ui2_tools.gif" alt="Tools" width="100%"/>
-</details>
+**Voice** — Issue commands and make requests hands-free using voice input with real-time speech-to-text transcription.
 
-<details>
-<summary>🟣 <code>EXPAND Voice</code></summary>
-
-<img src="images/ui2_voice.gif" alt="Voice input" width="100%"/>
-</details>
+<img src="images/voice.gif" alt="Voice input" width="100%"/>
 
 ## Existing Features
 
