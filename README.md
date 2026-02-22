@@ -154,7 +154,6 @@ OpenAI, Anthropic, Google, xAI, OpenRouter, All OpenAI-compatible APIs
 ### Complimentary chrome extensions
 
 Adding chrome extensions that reduce popups (ads, CAPTCHAs, cookie banners) can improve the performance of warpsurf agents. These are some available from the chrome store:
-- [reCAPTCHA Solver](https://chromewebstore.google.com/detail/recaptcha-solver-auto-cap/infdcenbdoibcacogknkjleclhnjdmfh)
 - [Ad Blocker](https://chromewebstore.google.com/detail/ad-blocker-stands-adblock/lgblnfidahcdcjddiepkckcfdhpknnjh)
 
 
