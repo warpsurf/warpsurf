@@ -1,4 +1,5 @@
 import type { Message } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import { memo, useMemo, useState, useRef, useEffect } from 'react';
 import { Actors } from '@extension/storage';
 import { Virtuoso } from 'react-virtuoso';
@@ -34,6 +35,8 @@ export interface MessageListProps {
   onPinMessage?: (messageId: string) => void;
   onQuoteMessage?: (text: string) => void;
   scrollParent?: HTMLElement | null;
+  /** Resolved attachments keyed by attachment ID */
+  sessionAttachments?: Record<string, Attachment>;
 }
 
 export default memo(function MessageList({
@@ -58,6 +61,7 @@ export default memo(function MessageList({
   availableModelsForEstimation,
   onApproveEstimation,
   onCancelEstimation,
+  sessionAttachments = {},
 }: MessageListProps) {
   const lastAgentIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -112,6 +116,10 @@ export default memo(function MessageList({
             message.timestamp,
             index > 0 ? messages[index - 1].timestamp : undefined,
           );
+          // Resolve attachments for this message from session-level map
+          const attachmentIds = metadata?.attachmentIds || [];
+          const resolvedAttachments = attachmentIds.map((id: string) => sessionAttachments[id]).filter(Boolean);
+
           const messageBlockProps = {
             message,
             isSameActor: index > 0 && messages[index - 1].actor === message.actor,
@@ -132,6 +140,7 @@ export default memo(function MessageList({
             availableModelsForEstimation,
             onApproveEstimation,
             onCancelEstimation,
+            messageAttachments: resolvedAttachments,
           };
 
           const isUserMessage = message.actor === Actors.USER;

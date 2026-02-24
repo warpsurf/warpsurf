@@ -7,8 +7,10 @@ import { FaFileAlt } from 'react-icons/fa';
 import { ACTOR_PROFILES } from '../../types/message';
 import { formatUsd, formatTimestamp, formatDuration, hexToRgba } from '../../utils';
 import type { JobSummary, MessageMetadata, TraceItem, WorkerItem, ContextTabInfo } from './types';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import CodeBlock from './code-block';
 import { AgentTrajectory } from './agent-trajectory';
+import { AttachmentChip, InlineAttachmentGallery } from './attachment-preview';
 
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
 const EstimationPopUp = lazy(() => import('../modals/estimation-popup'));
@@ -100,6 +102,8 @@ export interface MessageBlockProps {
   onApproveEstimation?: (selectedModel?: string, updatedEstimation?: any) => void;
   onCancelEstimation?: () => void;
   hasPreviewPanel?: boolean;
+  /** Resolved attachments for this message (loaded from storage) */
+  messageAttachments?: Attachment[];
 }
 
 export default function MessageBlock({
@@ -119,6 +123,7 @@ export default function MessageBlock({
   onApproveEstimation,
   onCancelEstimation,
   hasPreviewPanel = false,
+  messageAttachments = [],
 }: MessageBlockProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [showTabContextTooltip, setShowTabContextTooltip] = useState(false);
@@ -592,8 +597,15 @@ export default function MessageBlock({
                 )}
                 {isAgentAggregate && collapsed && <span>{lastTrace?.content || content}</span>}
               </span>
-              {/* Inline timestamp, tab context, and job summary - rendered after content */}
+              {/* Inline attachment gallery for images */}
+              {isUser && messageAttachments.length > 0 && (
+                <InlineAttachmentGallery attachments={messageAttachments} isDarkMode={isDarkMode} />
+              )}
+              {/* Inline timestamp, tab context, attachments, and job summary */}
               {TabContextChip}
+              {isUser && messageAttachments.length > 0 && (
+                <AttachmentChip attachments={messageAttachments} isDarkMode={isDarkMode} />
+              )}
               {JobSummaryChip}
               <span
                 className={`ml-1.5 whitespace-nowrap ${compactMode ? 'text-[9px]' : 'text-[10px]'} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
