@@ -49,11 +49,19 @@ abstract class BasePrompt {
 
       let stepInfoDescription = '';
       if (context.stepInfo) {
-        stepInfoDescription = `Current step: ${context.stepInfo.stepNumber + 1}/${context.stepInfo.maxSteps}`;
+        const used = context.stepInfo.stepNumber + 1;
+        const max = context.stepInfo.maxSteps;
+        stepInfoDescription = `Current step: ${used}/${max}`;
+
+        const ratio = used / max;
+        if (ratio >= 0.75 && used < max) {
+          const remaining = max - used;
+          stepInfoDescription += `\nBUDGET WARNING: ${remaining} steps remaining (${Math.round(ratio * 100)}% used). Prioritize consolidating results and calling done. Partial results are far more valuable than exhausting all steps.`;
+        }
       }
 
-      const timeStr = new Date().toISOString().slice(0, 16).replace('T', ' '); // Format: YYYY-MM-DD HH:mm
-      stepInfoDescription += `Current date and time: ${timeStr}`;
+      const timeStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      stepInfoDescription += `\nCurrent date and time: ${timeStr}`;
 
       let actionResultsDescription = '';
       let extractionContent = ''; // Separate handling for extraction results (full content, temporary)
@@ -152,10 +160,17 @@ ${extractionContent}
       if (attachFailure) {
         let stepInfoDescription = '';
         if (context.stepInfo) {
-          stepInfoDescription = `Current step: ${context.stepInfo.stepNumber + 1}/${context.stepInfo.maxSteps}`;
+          const used = context.stepInfo.stepNumber + 1;
+          const max = context.stepInfo.maxSteps;
+          stepInfoDescription = `Current step: ${used}/${max}`;
+          const ratio = used / max;
+          if (ratio >= 0.75 && used < max) {
+            const remaining = max - used;
+            stepInfoDescription += `\nBUDGET WARNING: ${remaining} steps remaining (${Math.round(ratio * 100)}% used). Prioritize consolidating results and calling done. Partial results are far more valuable than exhausting all steps.`;
+          }
         }
         const timeStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-        stepInfoDescription += `Current date and time: ${timeStr}`;
+        stepInfoDescription += `\nCurrent date and time: ${timeStr}`;
 
         const stateDescription = `
 </task_history>
