@@ -2,6 +2,7 @@ export * from './shared-types';
 export * from './disclaimers';
 export * from './result';
 export * from './safe-operations';
+export * from './file-processor';
 
 function isInjectableUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -87,7 +88,9 @@ export async function stopPageFlash(targetTabId?: number): Promise<{ ok: boolean
           state.interval = null;
         }
         if (state.el) {
-          try { state.el.remove(); } catch {}
+          try {
+            state.el.remove();
+          } catch {}
           state.el = null;
         }
       },
