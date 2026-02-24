@@ -216,21 +216,73 @@ export class ToolWorkflow {
   }
 
   /**
+   * Condense model configuration data to avoid repetitive output.
+   * When multiple roles share the same model, groups them together
+   * instead of listing each role-model pair individually.
+   */
+  private condenseData(data: Record<string, unknown>): Record<string, unknown> {
+    const models = data.models;
+    if (!models || typeof models !== 'object' || Array.isArray(models)) return data;
+
+    const entries = Object.entries(models as Record<string, any>);
+    if (entries.length <= 1) return data;
+
+    // Group roles by modelName+provider, preserving the config for each group
+    const groups = new Map<string, { roles: string[]; modelName: string; provider: string }>();
+    for (const [role, config] of entries) {
+      const modelName = config?.modelName || 'unknown';
+      const provider = config?.provider || '';
+      const key = `${modelName}\0${provider}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.roles.push(role);
+      } else {
+        groups.set(key, { roles: [role], modelName, provider });
+      }
+    }
+
+    // If every role uses the same model, collapse entirely
+    if (groups.size === 1) {
+      const { roles, modelName, provider } = [...groups.values()][0];
+      return {
+        ...data,
+        models: { [`All ${roles.length} roles`]: { modelName, provider } },
+      };
+    }
+
+    // Multiple distinct models — group roles that share the same model
+    const condensed: Record<string, any> = {};
+    for (const { roles, modelName, provider } of groups.values()) {
+      condensed[roles.join(', ')] = { modelName, provider };
+    }
+    return { ...data, models: condensed };
+  }
+
+  /**
    * Format data from read-only tool calls into a natural language response
    * by making a lightweight second LLM call.
    */
   private async formatDataWithLLM(dataResults: ToolCallResult[]): Promise<string> {
-    const dataStr = dataResults.map(r => JSON.stringify(r.data, null, 2)).join('\n');
+    // Pre-process to condense repetitive model data
+    const condensed = dataResults.map(r => {
+      if (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) {
+        return { ...r, data: this.condenseData(r.data as Record<string, unknown>) };
+      }
+      return r;
+    });
+
+    const dataStr = condensed.map(r => JSON.stringify(r.data, null, 2)).join('\n');
     try {
       const { HumanMessage, SystemMessage } = await import('@langchain/core/messages');
       const formatMessages = [
         new SystemMessage(
-          'Format the data into a compact response. Rules:\n' +
-            '- Use simple bullet points (- item)\n' +
+          'Format the data into a compact, human-readable response. Rules:\n' +
+            '- Be concise — summarize, do NOT list every item if they repeat\n' +
+            '- If all roles use the same model, just state it once\n' +
+            '- Use simple bullet points (- item) only when listing distinct items\n' +
             '- NO blank lines between items\n' +
             '- NO code blocks or backticks around model names\n' +
             '- NO headers or sections\n' +
-            '- For model lists: "- modelName" on each line\n' +
             '- Keep it minimal and dense',
         ),
         new HumanMessage(`Request: ${this.currentTask}\n\nData:\n${dataStr}`),
@@ -241,11 +293,9 @@ export class ToolWorkflow {
       return text;
     } catch (e) {
       logger.warning('Failed to format data with LLM, falling back to plain text:', e);
-      // Fallback: simple text formatting
-      return dataResults
+      return condensed
         .map(r => {
           if (typeof r.data !== 'object') return String(r.data);
-          // Handle arrays (e.g., model lists)
           if (Array.isArray(r.data)) {
             return (r.data as string[]).map(item => `- ${item}`).join('\n');
           }
