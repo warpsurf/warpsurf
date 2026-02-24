@@ -7,6 +7,7 @@ import {
   chatHistoryStore,
 } from '@extension/storage';
 import { safePostMessage, safeStorageRemove, toStorableAttachment } from '@extension/shared/lib/utils';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import { initializeCostCalculator } from '../utils/cost-calculator';
 import { canInjectScripts, injectBuildDomTree } from '../utils/injection';
 import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
@@ -386,10 +387,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             }
 
             // Handle attachments for multi-agent workflow
-            const maAttachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
+            const maAttachments: Attachment[] = Array.isArray(message.attachments) ? message.attachments : [];
             if (maAttachments.length > 0) {
               try {
-                const storableMap: Record<string, any> = {};
+                const storableMap: Record<string, Attachment> = {};
                 for (const a of maAttachments) storableMap[a.id] = toStorableAttachment(a);
                 await chatHistoryStore.storeAttachments(sessionId, storableMap);
               } catch {}

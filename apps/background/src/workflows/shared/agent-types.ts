@@ -6,6 +6,8 @@ import { type Actors, ExecutionState, AgentEvent } from '@src/workflows/shared/e
 import type { EventData } from '@src/workflows/shared/event/types';
 import { AgentStepHistory } from '@src/workflows/shared/step-history';
 import { DOMHistoryElement } from '@src/browser/dom/history/view';
+import type { LoopDetector } from '@src/workflows/shared/loop-detector';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 
 export interface AgentOptions {
   maxSteps: number;
@@ -74,7 +76,9 @@ export class AgentContext {
   // Context tab IDs provided by user for reference
   contextTabIds: number[];
   // File/image attachments from user (in-memory, may include ephemeral large files)
-  attachments: any[];
+  attachments: Attachment[];
+  // Loop detection for stuck-agent nudges
+  loopDetector: LoopDetector | null;
   // URLs collected for site skill injection
   private _skillUrls: Set<string>;
 
@@ -101,6 +105,7 @@ export class AgentContext {
     this.actionResults = [];
     this.stateMessageAdded = false;
     this.history = new AgentStepHistory();
+    this.loopDetector = null;
     this.chatHistoryMessages = [];
     this.contextTabIds = [];
     this.attachments = [];

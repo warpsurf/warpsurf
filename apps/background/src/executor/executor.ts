@@ -18,10 +18,11 @@ import { ActionBuilder } from '@src/workflows/agent';
 import { EventManager } from '@src/workflows/shared/event';
 import { Actors, type EventCallback, EventType, ExecutionState } from '@src/workflows/shared/event';
 import { globalTokenTracker } from '../utils/token-tracker';
-import { ExtensionConflictError, RequestCancelledError } from '@src/workflows/shared/agent-errors';
+import { ExtensionConflictError, RequestCancelledError, isAbortedError } from '@src/workflows/shared/agent-errors';
 import { wrapUntrustedContent } from '@src/workflows/shared/messages';
 import { URLNotAllowedError } from '../browser/views';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import type { AgentStepHistory } from '@src/workflows/shared/step-history';
 import { generalSettingsStore, type GeneralSettingsConfig } from '@extension/storage';
 import { AutoWorkflow, type AutoAction, type AutoResult } from '@src/workflows/auto';
@@ -32,6 +33,7 @@ import { tabExists } from '@src/utils';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
 import { shouldInjectSkills, buildSkillsSystemMessage } from '@src/skills';
+import { LoopDetector } from '@src/workflows/shared/loop-detector';
 
 const logger = createLogger('Executor');
 
@@ -205,7 +207,7 @@ export class Executor {
   }
 
   /** Set user-provided file/image attachments for this session. */
-  setAttachments(attachments: any[]): void {
+  setAttachments(attachments: Attachment[]): void {
     this.context.attachments = attachments;
     logger.info(`Set ${attachments.length} attachments for executor`);
   }
@@ -796,6 +798,10 @@ export class Executor {
     context.nSteps = 0;
     const allowedMaxSteps = this.context.options.maxSteps;
 
+    if (this.generalSettings?.loopDetectionEnabled !== false) {
+      context.loopDetector = new LoopDetector(this.generalSettings?.loopDetectionWindow);
+    }
+
     try {
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_START, 'Starting browser automation...');
 
@@ -803,6 +809,8 @@ export class Executor {
       let step = 0;
       let validatorFailed = false;
       let webTask = undefined;
+      const finalResponseAfterFailure = this.generalSettings?.finalResponseAfterFailure !== false;
+
       for (step = 0; step < allowedMaxSteps; step++) {
         context.stepInfo = {
           stepNumber: context.nSteps,
@@ -817,13 +825,57 @@ export class Executor {
           break;
         }
 
+        const isLastStep = step === allowedMaxSteps - 1;
+        const isMaxFailures = context.consecutiveFailures >= context.options.maxFailures;
+
+        // --- Force done: max failures reached ---
+        if (isMaxFailures) {
+          if (finalResponseAfterFailure) {
+            logger.info(`Max failures (${context.options.maxFailures}) reached — forcing final done step`);
+            this.context.messageManager.addMessageWithTokens(
+              new HumanMessage(
+                `You have failed ${context.consecutiveFailures} consecutive times. ` +
+                  `You MUST call done now with whatever partial results you have.`,
+              ),
+            );
+            this.navigator.setDoneOnly(true);
+            try {
+              done = await this.navigate();
+            } finally {
+              this.navigator.setDoneOnly(false);
+            }
+          } else {
+            logger.error(`Stopping due to ${context.options.maxFailures} consecutive failures`);
+          }
+          break;
+        }
+
+        // --- Force done: last step ---
+        if (isLastStep) {
+          logger.info('Last step reached — forcing done');
+          this.context.messageManager.addMessageWithTokens(
+            new HumanMessage(
+              'This is your LAST step. You MUST call the done action now. ' +
+                'Include everything you found so far. Set success to true only if the task is fully complete, false otherwise.',
+            ),
+          );
+          this.navigator.setDoneOnly(true);
+          try {
+            done = await this.navigate();
+          } finally {
+            this.navigator.setDoneOnly(false);
+          }
+          break;
+        }
+
+        // --- Normal step ---
+
         // Check if planner is enabled
         const isPlannerEnabled = !!(
           this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enablePlanner
         );
         const isPlanningStep = context.nSteps % context.options.planningInterval === 0 || validatorFailed;
 
-        // Debug: Log planner activation check on first step
         if (step === 0) {
           logger.info('[Planner] Activation check:', {
             isPlannerEnabled,
@@ -866,16 +918,13 @@ export class Executor {
             this.context.messageManager.addPlan(JSON.stringify(plan), positionForPlan);
 
             if (webTask === undefined) {
-              // set the web task, and keep it not change from now on
               webTask = planOutput.result.web_task;
             }
 
             if (planOutput.result.done) {
-              // task is complete, skip navigation
               done = true;
               this.validator.setPlan(planOutput.result.next_steps);
             } else {
-              // task is not complete, let's navigate
               this.validator.setPlan(null);
               done = false;
             }
@@ -898,7 +947,6 @@ export class Executor {
         if (done) {
           const useValidator = this.context.options.validateOutput && isValidatorEnabled;
 
-          // Debug: Log validator activation check when task is done
           logger.info('[Validator] Activation check:', {
             done,
             validateOutput: this.context.options.validateOutput,
@@ -998,8 +1046,12 @@ export class Executor {
           },
         } as any);
         this._hasReachedTerminalState = true;
-      } else if (step >= allowedMaxSteps) {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, 'Task failed: Max steps reached');
+      } else if (step + 1 >= allowedMaxSteps || context.consecutiveFailures >= context.options.maxFailures) {
+        const reason =
+          context.consecutiveFailures >= context.options.maxFailures
+            ? `Too many consecutive failures (${context.consecutiveFailures})`
+            : 'Max steps reached';
+        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, `Task failed: ${reason}`);
         this._hasReachedTerminalState = true;
       } else if (this.context.stopped) {
       } else {
@@ -1053,9 +1105,18 @@ export class Executor {
         return true;
       }
     } catch (error) {
-      // All errors stop the workflow - the agent already emitted STEP_FAIL with the message
-      logger.error(`Failed to execute step: ${error}`);
-      throw error;
+      if (
+        error instanceof RequestCancelledError ||
+        error instanceof ExtensionConflictError ||
+        error instanceof URLNotAllowedError ||
+        isAbortedError(error) ||
+        (error instanceof Error && error.message.includes('AbortError'))
+      ) {
+        throw error;
+      }
+      context.consecutiveFailures++;
+      context.nSteps++;
+      logger.error(`Step failed (${context.consecutiveFailures}/${context.options.maxFailures}): ${error}`);
     }
     return false;
   }
@@ -1071,11 +1132,6 @@ export class Executor {
       if (this.context.stopped) {
         return true;
       }
-    }
-
-    if (this.context.consecutiveFailures >= this.context.options.maxFailures) {
-      logger.error(`Stopping due to ${this.context.options.maxFailures} consecutive failures`);
-      return true;
     }
 
     return false;

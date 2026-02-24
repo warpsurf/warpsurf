@@ -1,5 +1,6 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 
 type SessionMessage = { actor: string; content: string; timestamp?: number };
 
@@ -85,7 +86,7 @@ export function buildLLMMessagesWithHistory(
   sessionMessages: SessionMessage[],
   latestTaskText: string,
   opts: BuildChatHistoryOptions = {},
-  attachments?: any[],
+  attachments?: Attachment[],
 ) {
   const messages: Array<any> = [];
   messages.push(new SystemMessage(systemPrompt));

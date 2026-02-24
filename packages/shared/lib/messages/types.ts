@@ -1,6 +1,7 @@
 /**
  * Type-safe message protocol between background and panel
  */
+import type { Attachment } from '@extension/storage/lib/chat/types';
 
 // Background → Panel messages
 export type BackgroundMessage =
@@ -17,8 +18,8 @@ export type BackgroundMessage =
 
 // Panel → Background messages
 export type PanelMessage =
-  | { type: 'new_task'; task: string; agentType: string; tabId: number; taskId: string; attachments?: any[] }
-  | { type: 'follow_up_task'; task: string; agentType?: string; taskId: string; attachments?: any[] }
+  | { type: 'new_task'; task: string; agentType: string; tabId: number; taskId: string; attachments?: Attachment[] }
+  | { type: 'follow_up_task'; task: string; agentType?: string; taskId: string; attachments?: Attachment[] }
   | { type: 'cancel_task'; taskId: string; sessionId: string }
   | { type: 'pause_task' }
   | { type: 'resume_task' }

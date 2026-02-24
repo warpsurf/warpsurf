@@ -8,6 +8,7 @@ import { mergeContextTabIds } from '@src/workflows/shared/context/auto-tab-conte
 import { globalTokenTracker } from '../utils/token-tracker';
 import { toUIErrorPayload } from '@src/workflows/models/model-error';
 import { toStorableAttachment } from '@extension/shared/lib/utils/file-processor';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 // Triage resolution happens via Auto; no direct provider/model imports needed here
 
 type Deps = {
@@ -164,7 +165,7 @@ export async function handleNewTask(message: any, deps: Deps) {
   // If UI already merged auto-context (with exclusions), skip auto-merging here
   const skipAutoContext: boolean = message.skipAutoContext === true;
   // Extract file/image attachments
-  const attachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
+  const attachments: Attachment[] = Array.isArray(message.attachments) ? message.attachments : [];
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
   }
@@ -172,7 +173,7 @@ export async function handleNewTask(message: any, deps: Deps) {
   // Persist attachments to storage (stripping ephemeral data)
   if (attachments.length > 0) {
     try {
-      const storableMap: Record<string, any> = {};
+      const storableMap: Record<string, Attachment> = {};
       for (const a of attachments) {
         storableMap[a.id] = toStorableAttachment(a);
       }
@@ -431,7 +432,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     : [];
   // If UI already merged auto-context (with exclusions), skip auto-merging here
   const skipAutoContext: boolean = message.skipAutoContext === true;
-  const followUpAttachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
+  const followUpAttachments: Attachment[] = Array.isArray(message.attachments) ? message.attachments : [];
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
   }
@@ -439,7 +440,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
   // Persist follow-up attachments
   if (followUpAttachments.length > 0) {
     try {
-      const storableMap: Record<string, any> = {};
+      const storableMap: Record<string, Attachment> = {};
       for (const a of followUpAttachments) storableMap[a.id] = toStorableAttachment(a);
       await chatHistoryStore.storeAttachments(sessionId, storableMap);
     } catch {}
@@ -671,6 +672,11 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       }
     } catch {}
 
+    // Attach follow-up file/image attachments to the executor context
+    if (followUpAttachments.length > 0) {
+      attachFilesToExecutor(existing, followUpAttachments);
+    }
+
     try {
       await existing.addBrowserUseFollowUpTask(task);
     } catch {}
@@ -726,6 +732,11 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       }
     } catch (e) {
       logger.warning('[handleFollowUpTask] Failed to stop mirroring:', e);
+    }
+
+    // Attach follow-up file/image attachments to the executor context
+    if (followUpAttachments.length > 0) {
+      attachFilesToExecutor(existing, followUpAttachments);
     }
 
     try {

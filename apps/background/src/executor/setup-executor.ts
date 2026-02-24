@@ -1,5 +1,6 @@
 import BrowserContext from '../browser/context';
 import { Executor } from './executor';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import { createChatModel } from '../workflows/models/factory';
 import {
   AgentNameEnum,
@@ -149,7 +150,7 @@ export async function setupExecutor(
 }
 
 /** Attach user file/image attachments to an executor after setup. */
-export function attachFilesToExecutor(executor: any, attachments: any[]): void {
+export function attachFilesToExecutor(executor: any, attachments: Attachment[]): void {
   if (attachments?.length && typeof executor.setAttachments === 'function') {
     executor.setAttachments(attachments);
   }
