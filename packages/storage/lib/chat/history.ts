@@ -10,6 +10,7 @@ import type {
   RequestSummary,
   MessageMetadataValue,
   SessionStats,
+  Attachment,
 } from './types';
 import { Actors } from './types';
 // Access chrome safely in non-extension contexts
@@ -138,6 +139,16 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
           totalCost: 0,
           avgLatencyPerRequest: 0,
         });
+      } catch {}
+
+      // Clear attachments
+      try {
+        const s = createStorage<Record<string, Attachment>>(
+          `chat_attachments_${sessionId}`,
+          {},
+          { storageEnum: StorageEnum.Local, liveUpdate: true },
+        );
+        await s.set({});
       } catch {}
 
       // Update session metadata counters
@@ -412,6 +423,16 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       // Remove the session's messages
       const messagesStorage = getSessionMessagesStorage(sessionId);
       await messagesStorage.set([]);
+
+      // Remove attachments
+      try {
+        const s = createStorage<Record<string, Attachment>>(
+          `chat_attachments_${sessionId}`,
+          {},
+          { storageEnum: StorageEnum.Local, liveUpdate: true },
+        );
+        await s.set({});
+      } catch {}
     },
 
     addMessage: async (sessionId: string, message: Message): Promise<ChatMessage> => {
@@ -695,6 +716,25 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       const s = await storage.get();
       if (!s) return null;
       return s;
+    },
+
+    storeAttachments: async (sessionId: string, attachments: Record<string, Attachment>): Promise<void> => {
+      const storage = createStorage<Record<string, Attachment>>(
+        `chat_attachments_${sessionId}`,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
+      const existing = await storage.get();
+      await storage.set({ ...existing, ...attachments });
+    },
+
+    loadAttachments: async (sessionId: string): Promise<Record<string, Attachment>> => {
+      const storage = createStorage<Record<string, Attachment>>(
+        `chat_attachments_${sessionId}`,
+        {},
+        { storageEnum: StorageEnum.Local, liveUpdate: true },
+      );
+      return await storage.get();
     },
   };
 }

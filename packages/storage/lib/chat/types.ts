@@ -77,6 +77,37 @@ export interface ContextTabInfo {
   url?: string;
 }
 
+/** File/image attachment on a chat message */
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  type: 'image' | 'document';
+  /** base64 data URL — present for persisted files and in-memory ephemeral files */
+  dataUrl?: string;
+  /** Smaller thumbnail for UI preview (images only) */
+  thumbnailDataUrl?: string;
+  /** True when file was too large to persist to chrome.storage */
+  ephemeral: boolean;
+}
+
+/** Max file size (bytes) that will be persisted to chrome.storage */
+export const MAX_PERSISTENT_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
+export const MAX_ATTACHMENT_COUNT = 5;
+export const ACCEPTED_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/json',
+];
+
 // Per-message metadata used by UI (trace items, search queries, etc.)
 export interface MessageMetadataValue {
   searchQueries?: string[];
@@ -91,6 +122,8 @@ export interface MessageMetadataValue {
   agentColor?: string;
   // Context tabs that were provided with the request
   contextTabs?: ContextTabInfo[];
+  // Attachment IDs linked to this message (data lives in per-session attachment store)
+  attachmentIds?: string[];
 }
 
 // Aggregated per-session statistics surface in the UI footer
@@ -154,4 +187,8 @@ export interface ChatHistoryStorage {
   // Persist and load aggregated per-session statistics
   storeSessionStats: (sessionId: string, stats: SessionStats) => Promise<void>;
   loadSessionStats: (sessionId: string) => Promise<SessionStats | null>;
+
+  // Persist and load file attachments for a session
+  storeAttachments: (sessionId: string, attachments: Record<string, Attachment>) => Promise<void>;
+  loadAttachments: (sessionId: string) => Promise<Record<string, Attachment>>;
 }
