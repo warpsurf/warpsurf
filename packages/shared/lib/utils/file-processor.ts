@@ -17,6 +17,7 @@ export interface PendingAttachment {
 
 const MAX_IMAGE_DIMENSION = 2048;
 const THUMBNAIL_SIZE = 160;
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB hard ceiling
 
 function classifyFile(mime: string): 'image' | 'document' {
   return mime.startsWith('image/') ? 'image' : 'document';
@@ -31,10 +32,16 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+const TRANSPARENCY_FORMATS = new Set(['image/png', 'image/webp', 'image/svg+xml', 'image/gif']);
+
 function resizeImage(dataUrl: string, maxDim: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      if (img.width === 0 || img.height === 0) {
+        resolve(dataUrl);
+        return;
+      }
       if (img.width <= maxDim && img.height <= maxDim) {
         resolve(dataUrl);
         return;
@@ -51,7 +58,9 @@ function resizeImage(dataUrl: string, maxDim: number): Promise<string> {
         return;
       }
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
+      const mime = dataUrl.match(/^data:(image\/[^;]+)/)?.[1] || 'image/jpeg';
+      const outFormat = TRANSPARENCY_FORMATS.has(mime) ? 'image/png' : 'image/jpeg';
+      resolve(canvas.toDataURL(outFormat, outFormat === 'image/jpeg' ? 0.85 : undefined));
     };
     img.onerror = () => reject(new Error('Failed to load image'));
     img.src = dataUrl;
@@ -65,6 +74,9 @@ function generateThumbnail(dataUrl: string): Promise<string> {
 export function validateFile(file: File): string | null {
   if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
     return `Unsupported file type: ${file.type || 'unknown'}`;
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return `File too large (max ${MAX_FILE_SIZE / (1024 * 1024)} MB)`;
   }
   return null;
 }
@@ -132,6 +144,12 @@ export function toStorableAttachment(a: Attachment): Attachment {
     return { ...a, dataUrl: undefined, thumbnailDataUrl: undefined };
   }
   return a;
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export { MAX_ATTACHMENT_COUNT, ACCEPTED_MIME_TYPES, MAX_PERSISTENT_FILE_SIZE };
