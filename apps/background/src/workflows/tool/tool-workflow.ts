@@ -231,33 +231,43 @@ export class ToolWorkflow {
     const entries = Object.entries(models as Record<string, any>);
     if (entries.length <= 1) return data;
 
-    // Group roles by modelName+provider, preserving the config for each group
-    const groups = new Map<string, { roles: string[]; modelName: string; provider: string }>();
+    // Build a stable fingerprint for each role's full config (model + parameters)
+    const fingerprint = (config: any): string => {
+      const parts = [config?.modelName || 'unknown', config?.provider || ''];
+      const temp = config?.parameters?.temperature;
+      if (temp !== undefined) parts.push(`t=${temp}`);
+      const maxTokens = config?.parameters?.maxOutputTokens;
+      if (maxTokens !== undefined) parts.push(`mt=${maxTokens}`);
+      if (config?.reasoningEffort) parts.push(`re=${config.reasoningEffort}`);
+      if (config?.webSearch) parts.push('ws');
+      return parts.join('\0');
+    };
+
+    // Group roles by full config fingerprint
+    const groups = new Map<string, { roles: string[]; config: any }>();
     for (const [role, config] of entries) {
-      const modelName = config?.modelName || 'unknown';
-      const provider = config?.provider || '';
-      const key = `${modelName}\0${provider}`;
+      const key = fingerprint(config);
       const existing = groups.get(key);
       if (existing) {
         existing.roles.push(role);
       } else {
-        groups.set(key, { roles: [role], modelName, provider });
+        groups.set(key, { roles: [role], config });
       }
     }
 
-    // If every role uses the same model, collapse entirely
+    // If every role uses the same config, collapse entirely
     if (groups.size === 1) {
-      const { roles, modelName, provider } = [...groups.values()][0];
+      const { roles, config } = [...groups.values()][0];
       return {
         ...data,
-        models: { [`All ${roles.length} roles`]: { modelName, provider } },
+        models: { [`All ${roles.length} roles`]: config },
       };
     }
 
-    // Multiple distinct models — group roles that share the same model
+    // Multiple distinct configs — group roles that share the same config
     const condensed: Record<string, any> = {};
-    for (const { roles, modelName, provider } of groups.values()) {
-      condensed[roles.join(', ')] = { modelName, provider };
+    for (const { roles, config } of groups.values()) {
+      condensed[roles.join(', ')] = config;
     }
     return { ...data, models: condensed };
   }
