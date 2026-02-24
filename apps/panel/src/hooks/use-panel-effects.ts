@@ -217,6 +217,7 @@ export function usePanelEffects(params: {
               errorMessage?: string;
               contextMenuAction?: string;
               infoMessage?: string;
+              imageUrl?: string;
               forceNewSession?: boolean;
               requireWarningCheck?: boolean; // When true, show per-chat warning before auto-starting
             }
@@ -290,6 +291,9 @@ export function usePanelEffects(params: {
                 pendingAction.workflowType || 'chat',
                 contextTabs,
                 pendingAction.contextMenuAction,
+                undefined, // skipAutoContext
+                undefined, // attachments
+                pendingAction.imageUrl,
               );
             }, 50);
           } else {

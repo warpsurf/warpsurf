@@ -85,6 +85,20 @@ chrome.runtime.onInstalled.addListener(() => {
       () => {
         if (chrome.runtime.lastError) {
           logger.error('Failed to create summarize-page menu:', chrome.runtime.lastError.message);
+        }
+      },
+    );
+
+    // Create explain-image menu (only appears on right-click of an image)
+    chrome.contextMenus.create(
+      {
+        id: 'explain-image',
+        title: 'Explain image',
+        contexts: ['image'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Failed to create explain-image menu:', chrome.runtime.lastError.message);
         } else {
           logger.info('Context menus created successfully');
         }
@@ -113,6 +127,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       errorMessage?: string;
       contextMenuAction?: string;
       infoMessage?: string;
+      imageUrl?: string;
     } | null = null;
 
     const tabUrl = tab.url || '';
@@ -175,6 +190,28 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
           };
         }
       }
+    } else if (info.menuItemId === 'explain-image' && info.srcUrl) {
+      let contextTabId: number | undefined;
+      let infoMessage: string | undefined;
+      if (isRestricted) {
+        infoMessage = 'Page context unavailable (restricted page).';
+      } else if (tab.id) {
+        const allowedByFirewall = await isUrlAllowedByFirewall(tabUrl);
+        if (allowedByFirewall) {
+          contextTabId = tab.id;
+        } else {
+          infoMessage = 'Page context unavailable (blocked by firewall).';
+        }
+      }
+      pendingAction = {
+        prompt: 'Explain this image',
+        autoStart: true,
+        workflowType: 'chat',
+        contextTabId,
+        contextMenuAction: 'explain-image',
+        infoMessage,
+        imageUrl: info.srcUrl,
+      };
     }
 
     if (pendingAction) {
