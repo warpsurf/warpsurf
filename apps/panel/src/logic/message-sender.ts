@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actors, chatHistoryStore, generalSettingsStore } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 
 export type MessageSenderDeps = {
   logger: any;
@@ -149,7 +150,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
     contextTabIds?: number[],
     contextMenuAction?: string,
     skipAutoContext?: boolean,
-    attachments?: any[],
+    attachments?: Attachment[],
     imageUrl?: string,
   ) {
     logger.log('handleSendMessage', text, agentType, contextTabIds, contextMenuAction, skipAutoContext);

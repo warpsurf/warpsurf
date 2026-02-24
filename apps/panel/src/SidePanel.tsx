@@ -24,6 +24,7 @@ import { useDisclaimerGates } from './hooks/use-disclaimer-gates';
 import { useHistoryPrivacyGate } from './hooks/use-history-privacy-gate';
 import { useAutoTabContextPrivacyGate } from './hooks/use-auto-tab-context-privacy-gate';
 import { generalSettingsStore, warningsSettingsStore, chatHistoryStore, type ContextTabInfo } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import { createMessageSender } from './logic/message-sender';
 import { useVersionInfo } from './hooks/use-version-info';
 import { useChatHistory } from '@src/hooks/use-chat-history';
@@ -62,7 +63,7 @@ const SidePanel = () => {
   const [showInlineWorkflow, setShowInlineWorkflow] = useState<boolean>(false);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
-  const [sessionAttachments, setSessionAttachments] = useState<Record<string, any>>({});
+  const [sessionAttachments, setSessionAttachments] = useState<Record<string, Attachment>>({});
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showCloseTabs, setShowCloseTabs] = useState(false);
   const [workerTabGroups, setWorkerTabGroups] = useState<any[]>([]);
@@ -485,6 +486,7 @@ const SidePanel = () => {
     setHistoryContextLoading,
     setPaletteOpen,
     setIsStopping,
+    setSessionAttachments,
     workerTabGroups,
     currentTaskAgentType,
     pinnedMessageIds,

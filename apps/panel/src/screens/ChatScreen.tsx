@@ -1,5 +1,6 @@
 import { type MutableRefObject, useState, useEffect, useCallback } from 'react';
 import { Actors } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import type { FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { INLINE_CHAT_DISCLAIMER } from '@extension/shared/lib/utils/disclaimers';
 import MessageList from '../components/chat-interface/message-list';
@@ -86,7 +87,7 @@ export interface ChatScreenProps {
   // Callback to set pending context tabs (will be stored when user message is created)
   setPendingContextTabs?: (tabs: ContextTabInfo[] | null) => void;
   // Per-session resolved attachments (keyed by attachment ID)
-  sessionAttachments?: Record<string, any>;
+  sessionAttachments?: Record<string, Attachment>;
   // Callback to set pending attachment IDs (stored when user message is created)
   setPendingAttachmentIds?: (ids: string[] | null) => void;
   // Speech-to-text props

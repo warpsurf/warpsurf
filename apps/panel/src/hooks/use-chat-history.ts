@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
 import { isTransientSystemMessage } from '../utils';
 
@@ -53,7 +54,7 @@ export function useChatHistory({
   portRef?: MutableRefObject<chrome.runtime.Port | null>;
   setIsJobActive?: (v: boolean) => void;
   lastEventIdBySessionRef?: MutableRefObject<Map<string, string>>;
-  setSessionAttachments?: (v: Record<string, any>) => void;
+  setSessionAttachments?: (v: Record<string, Attachment>) => void;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
 

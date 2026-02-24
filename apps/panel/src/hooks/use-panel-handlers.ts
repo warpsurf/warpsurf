@@ -1,5 +1,6 @@
 import { useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, generalSettingsStore } from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import type { AgentType } from '../components/chat-interface/chat-input';
 import type { PaletteAction } from '../components/Header/command-palette';
@@ -58,6 +59,7 @@ export function usePanelHandlers(params: {
   setHistoryContextLoading: (v: boolean) => void;
   setPaletteOpen: (v: boolean) => void;
   setIsStopping: (v: boolean) => void;
+  setSessionAttachments?: (v: Record<string, Attachment>) => void;
   workerTabGroups: any[];
   currentTaskAgentType: string | null;
   pinnedMessageIds: Set<string>;
@@ -112,6 +114,7 @@ export function usePanelHandlers(params: {
     setHistoryContextLoading,
     setPaletteOpen,
     setIsStopping,
+    setSessionAttachments,
     workerTabGroups,
     currentTaskAgentType,
     pinnedMessageIds,
@@ -158,6 +161,7 @@ export function usePanelHandlers(params: {
       });
       setRequestSummaries({});
       setIsHistoricalSession(false);
+      setSessionAttachments?.({});
       processedJobSummariesRef.current.clear();
       lastAgentMessageRef.current = null;
 
