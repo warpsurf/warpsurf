@@ -4,8 +4,9 @@ import {
   generalSettingsStore,
   AgentNameEnum,
   getDefaultDisplayNameFromProviderId,
+  chatHistoryStore,
 } from '@extension/storage';
-import { safePostMessage, safeStorageRemove } from '@extension/shared/lib/utils';
+import { safePostMessage, safeStorageRemove, toStorableAttachment } from '@extension/shared/lib/utils';
 import { initializeCostCalculator } from '../utils/cost-calculator';
 import { canInjectScripts, injectBuildDomTree } from '../utils/injection';
 import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
@@ -382,6 +383,19 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             if (contextTabIds.length > 0) {
               orchestrator.setContextTabIds(contextTabIds);
               logger.info(`[start_multi_agent_workflow_v2] Set ${contextTabIds.length} context tabs`);
+            }
+
+            // Handle attachments for multi-agent workflow
+            const maAttachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
+            if (maAttachments.length > 0) {
+              try {
+                const storableMap: Record<string, any> = {};
+                for (const a of maAttachments) storableMap[a.id] = toStorableAttachment(a);
+                await chatHistoryStore.storeAttachments(sessionId, storableMap);
+              } catch {}
+              try {
+                (orchestrator as any).setAttachments?.(maAttachments);
+              } catch {}
             }
 
             // Optional: inject a dedicated Refiner model if configured

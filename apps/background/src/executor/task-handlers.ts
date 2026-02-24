@@ -1,12 +1,13 @@
 import BrowserContext from '../browser/context';
-import { setupExecutor } from './setup-executor';
+import { setupExecutor, attachFilesToExecutor } from './setup-executor';
 import { decideUseCurrentTab } from '@src/workflows/specialized/triage-tab-choice';
 import { estimationService } from '../workflows/specialized/estimator/service';
 import { Actors, ExecutionState } from '../workflows/shared/event/types';
-import { generalSettingsStore, agentModelStore, AgentNameEnum } from '@extension/storage';
+import { generalSettingsStore, agentModelStore, AgentNameEnum, chatHistoryStore } from '@extension/storage';
 import { mergeContextTabIds } from '@src/workflows/shared/context/auto-tab-context-service';
 import { globalTokenTracker } from '../utils/token-tracker';
 import { toUIErrorPayload } from '@src/workflows/models/model-error';
+import { toStorableAttachment } from '@extension/shared/lib/utils/file-processor';
 // Triage resolution happens via Auto; no direct provider/model imports needed here
 
 type Deps = {
@@ -159,10 +160,27 @@ export async function handleNewTask(message: any, deps: Deps) {
     ? message.contextTabIds.filter((id: any) => typeof id === 'number' && id > 0)
     : [];
   const contextMenuAction: string | undefined = message.contextMenuAction;
+  const imageUrl: string | undefined = message.imageUrl ? String(message.imageUrl) : undefined;
   // If UI already merged auto-context (with exclusions), skip auto-merging here
   const skipAutoContext: boolean = message.skipAutoContext === true;
+  // Extract file/image attachments
+  const attachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
+  }
+
+  // Persist attachments to storage (stripping ephemeral data)
+  if (attachments.length > 0) {
+    try {
+      const storableMap: Record<string, any> = {};
+      for (const a of attachments) {
+        storableMap[a.id] = toStorableAttachment(a);
+      }
+      await chatHistoryStore.storeAttachments(sessionId, storableMap);
+      deps.logger.info(`[handleNewTask] Persisted ${attachments.length} attachments for session ${sessionId}`);
+    } catch (e) {
+      deps.logger.warning('[handleNewTask] Failed to persist attachments:', e);
+    }
   }
 
   // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
@@ -368,7 +386,13 @@ export async function handleNewTask(message: any, deps: Deps) {
     contextTabIds,
     contextMenuAction,
     preTriageResult,
+    imageUrl,
   );
+
+  // Attach user-provided files/images to the executor context
+  if (attachments.length > 0) {
+    attachFilesToExecutor(executor, attachments);
+  }
 
   setCurrentExecutor(executor);
 
@@ -407,8 +431,18 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     : [];
   // If UI already merged auto-context (with exclusions), skip auto-merging here
   const skipAutoContext: boolean = message.skipAutoContext === true;
+  const followUpAttachments: any[] = Array.isArray(message.attachments) ? message.attachments : [];
   if (!task || !sessionId) {
     return currentPort?.postMessage({ type: 'error', error: 'Missing task or taskId' });
+  }
+
+  // Persist follow-up attachments
+  if (followUpAttachments.length > 0) {
+    try {
+      const storableMap: Record<string, any> = {};
+      for (const a of followUpAttachments) storableMap[a.id] = toStorableAttachment(a);
+      await chatHistoryStore.storeAttachments(sessionId, storableMap);
+    } catch {}
   }
 
   // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
