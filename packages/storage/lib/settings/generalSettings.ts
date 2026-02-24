@@ -45,6 +45,11 @@ export interface GeneralSettingsConfig {
   enableSiteSkills?: boolean;
   // Theme mode: 'auto' follows system, 'light' or 'dark' overrides system preference
   themeMode?: 'auto' | 'light' | 'dark';
+  // Loop detection: nudge the agent when it repeats actions or the page stops changing
+  loopDetectionEnabled?: boolean;
+  loopDetectionWindow?: number;
+  // When true, allow one final done-only step after hitting maxFailures instead of hard-stopping
+  finalResponseAfterFailure?: boolean;
   // User's preferred region/locale for websites (e.g., 'com', 'co.uk', 'de', 'fr')
   // When set, the agent will prefer regional versions of websites matching this preference
   preferredRegion?: string;
@@ -93,6 +98,9 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   themeMode: 'auto',
   // No default region - user should select their preference
   preferredRegion: undefined,
+  loopDetectionEnabled: true,
+  loopDetectionWindow: 20,
+  finalResponseAfterFailure: true,
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {

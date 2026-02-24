@@ -86,6 +86,16 @@ export class NavigatorActionRegistry {
       action: z.array(actionSchema),
     });
   }
+
+  setupDoneOnlySchema(): z.ZodType | null {
+    const done = this.actions['done'];
+    if (!done) return null;
+    const actionSchema = buildDynamicActionSchema([done]);
+    return z.object({
+      current_state: agentBrainSchema,
+      action: z.array(actionSchema),
+    });
+  }
 }
 
 export interface AgentNavigatorResult {
@@ -102,6 +112,9 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
   private _stateHistory: BrowserStateHistory | null = null;
   // Guardrails for repeated SERP extractions across steps
   private _lastSerpExtractSignature: string | null = null;
+  // Backup of full schema for restoring after done-only mode
+  private _fullModelOutputSchema: z.ZodType | null = null;
+  private _fullJsonSchema: Record<string, unknown> | null = null;
 
   constructor(
     actionRegistry: NavigatorActionRegistry,
@@ -114,6 +127,29 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
 
     // The zod object is too complex to be used directly, so we need to convert it to json schema first for the model to use
     this.jsonSchema = convertZodToJsonSchema(this.modelOutputSchema, 'AgentNavigatorOutput', true);
+  }
+
+  /**
+   * Restrict LLM output to the `done` action only, or restore the full schema.
+   * Used for force-done on last step / max failures.
+   */
+  setDoneOnly(enabled: boolean): void {
+    if (enabled) {
+      if (!this._fullModelOutputSchema) {
+        this._fullModelOutputSchema = this.modelOutputSchema;
+        this._fullJsonSchema = this.jsonSchema;
+      }
+      const doneSchema = this.actionRegistry.setupDoneOnlySchema();
+      if (doneSchema) {
+        this.modelOutputSchema = doneSchema;
+        this.jsonSchema = convertZodToJsonSchema(doneSchema, 'AgentNavigatorOutput', true);
+      }
+    } else if (this._fullModelOutputSchema && this._fullJsonSchema) {
+      this.modelOutputSchema = this._fullModelOutputSchema;
+      this.jsonSchema = this._fullJsonSchema;
+      this._fullModelOutputSchema = null;
+      this._fullJsonSchema = null;
+    }
   }
 
   async invoke(inputMessages: BaseMessage[]): Promise<this['ModelOutput']> {
@@ -209,6 +245,13 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       const currentState = await this.context.browserContext.getCachedState();
       browserStateHistory = new BrowserStateHistory(currentState);
 
+      // Loop detection: record page fingerprint (nudge injected later into local message array)
+      if (this.context.loopDetector && currentState) {
+        const elemText =
+          currentState.elementTree?.clickableElementsToString(this.context.options.includeAttributes) ?? '';
+        this.context.loopDetector.recordPageState(currentState.url, elemText);
+      }
+
       // check if the task is paused or stopped
       if (this.context.paused || this.context.stopped) {
         cancelled = true;
@@ -252,7 +295,13 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         logger.error('Failed to inject history context:', err);
       }
 
-      // logger.info('Navigator input message', inputMessages[inputMessages.length - 1]);
+      // Loop detection: inject nudge as ephemeral context (not stored in message history)
+      if (this.context.loopDetector) {
+        const nudge = this.context.loopDetector.getNudge();
+        if (nudge) {
+          inputMessages = [...inputMessages, new HumanMessage(nudge)];
+        }
+      }
 
       const modelOutput = await this.invoke(inputMessages);
 
@@ -273,7 +322,10 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
 
       // take the actions
       actionResults = await this.doMultiAction(actions);
-      // logger.info('Action results', JSON.stringify(actionResults, null, 2));
+
+      if (this.context.loopDetector) {
+        this.context.loopDetector.recordActions(actions);
+      }
 
       // Before replacing actionResults, clear any old extraction results that were already shown to the agent
       // (The agent saw them in the state message for this step, now it has responded, so we can clear them)
