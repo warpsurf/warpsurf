@@ -63,4 +63,6 @@ export interface MessageMetadata {
   finalPreviewBatch?: InlinePreviewBatch;
   // Context tabs that were provided with the request
   contextTabs?: ContextTabInfo[];
+  // Attachment IDs linked to this message
+  attachmentIds?: string[];
 }

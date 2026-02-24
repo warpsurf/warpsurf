@@ -10,13 +10,19 @@ import {
   FaStop,
   FaPause,
   FaPlay,
+  FaPlus,
 } from 'react-icons/fa';
-import { FiAlertOctagon } from 'react-icons/fi';
+import { FiAlertOctagon, FiPaperclip } from 'react-icons/fi';
 import { WorkflowType, WORKFLOW_DISPLAY_NAMES, WORKFLOW_DESCRIPTIONS, MicrophoneButton } from '@extension/shared';
+import { processFiles, toAttachment, type PendingAttachment } from '@extension/shared/lib/utils/file-processor';
+import type { Attachment } from '@extension/storage/lib/chat/types';
+import { ACCEPTED_MIME_TYPES } from '@extension/storage/lib/chat/types';
 import TabContextSelector from './tab-context-selector';
 import SessionStatsBar from '../footer/session-stats-bar';
 import { DebugButtons } from '../footer/debug-buttons';
 import CloseTabsButton from '../footer/close-tabs-button';
+import { PendingAttachmentStrip } from './attachment-preview';
+import { useFileDrop } from './use-file-drop';
 import type { ContextTabInfo } from './types';
 
 // Re-export for backward compatibility within this file
@@ -74,6 +80,7 @@ interface ChatInputProps {
     contextTabIds?: number[],
     contextMenuAction?: string,
     skipAutoContext?: boolean,
+    attachments?: Attachment[],
   ) => void;
   onStopTask: () => void;
   disabled: boolean;
@@ -106,6 +113,8 @@ interface ChatInputProps {
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
   // Callback to store context tabs metadata when sending a message
   onContextTabsCapture?: (timestamp: number, contextTabs: ContextTabInfo[]) => void;
+  // Callback to store attachment metadata when sending a message
+  onAttachmentsCapture?: (timestamp: number, attachmentIds: string[]) => void;
   // Speech-to-text props
   onMicClick?: () => void;
   onMicStop?: () => void;
@@ -171,6 +180,7 @@ export default function ChatInput({
   onExcludedAutoTabIdsChange,
   onAutoContextToggle,
   onContextTabsCapture,
+  onAttachmentsCapture,
   onMicClick,
   onMicStop,
   isRecording = false,
@@ -201,13 +211,11 @@ export default function ChatInput({
   const [text, setText] = useState('');
   const [handbackText, setHandbackText] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<WorkflowType>(WorkflowType.AUTO);
-  // Use external state if provided (for persistence), otherwise local state
   const [localContextTabIds, setLocalContextTabIds] = useState<number[]>([]);
   const contextTabIds = externalContextTabIds ?? localContextTabIds;
   const setContextTabIds = onContextTabsChange ?? setLocalContextTabIds;
   const [textareaHeight, setTextareaHeight] = useState(expandedComposer ? 220 : DEFAULT_HEIGHT);
   const [isResizing, setIsResizing] = useState(false);
-  const isSendButtonDisabled = useMemo(() => disabled || text.trim() === '', [disabled, text]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeStartY = useRef(0);
   const resizeStartHeight = useRef(0);
@@ -217,6 +225,62 @@ export default function ChatInput({
   const [workflowDropdownPosition, setWorkflowDropdownPosition] = useState({ top: 0, right: 0 });
   const workflowDropdownRef = useRef<HTMLDivElement>(null);
   const workflowButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Attachment state
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+
+  const isSendButtonDisabled = useMemo(
+    () => disabled || (text.trim() === '' && pendingAttachments.filter(a => a.status === 'ready').length === 0),
+    [disabled, text, pendingAttachments],
+  );
+
+  const handleFilesAdded = useCallback(
+    async (files: File[]) => {
+      const readyCount = pendingAttachments.filter(a => a.status !== 'error').length;
+      const results = await processFiles(files, readyCount);
+      setPendingAttachments(prev => [...prev, ...results]);
+    },
+    [pendingAttachments],
+  );
+
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        handleFilesAdded(files);
+      }
+    },
+    [handleFilesAdded],
+  );
+
+  // Drag and drop
+  const { isDragging, dropRef } = useFileDrop({ onFilesAdded: handleFilesAdded, disabled });
+
+  // Close plus menu on outside click
+  useEffect(() => {
+    if (!showPlusMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) setShowPlusMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPlusMenu]);
 
   // Close workflow dropdown on outside click
   useEffect(() => {
@@ -400,16 +464,26 @@ export default function ChatInput({
           }
         }
 
+        // Collect ready attachments
+        const readyAttachments = pendingAttachments.filter(a => a.status === 'ready' && a.dataUrl).map(toAttachment);
+
+        if (onAttachmentsCapture && readyAttachments.length > 0) {
+          onAttachmentsCapture(
+            timestamp,
+            readyAttachments.map(a => a.id),
+          );
+        }
+
         onSendMessage(
           cleanText || text,
           selectedAgent,
           finalContextTabIds.length ? finalContextTabIds : undefined,
           undefined,
           skipAutoContext,
+          readyAttachments.length > 0 ? readyAttachments : undefined,
         );
         setText('');
-        // Don't clear context tabs - they persist until user removes them
-        // Remember last manual choice; only reset if Auto
+        setPendingAttachments([]);
         setSelectedAgent(prev => (prev === WorkflowType.AUTO ? WorkflowType.AUTO : prev));
       }
     },
@@ -422,6 +496,8 @@ export default function ChatInput({
       autoContextTabIds,
       excludedAutoTabIds,
       onContextTabsCapture,
+      onAttachmentsCapture,
+      pendingAttachments,
     ],
   );
 
@@ -460,9 +536,19 @@ export default function ChatInput({
 
   return (
     <form
+      ref={dropRef as any}
       onSubmit={handleSubmit}
-      className={`overflow-visible rounded-xl border transition-colors liquid-glass ${disabled ? 'cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'} ${isDarkMode ? '' : ''}`}
+      className={`overflow-visible rounded-xl border transition-colors liquid-glass relative ${disabled ? 'cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'} ${isDragging ? (isDarkMode ? 'border-violet-400 bg-violet-900/10' : 'border-violet-400 bg-violet-50/50') : ''}`}
       aria-label="Chat input form">
+      {/* Drag overlay */}
+      {isDragging && (
+        <div
+          className={`absolute inset-0 z-10 flex items-center justify-center rounded-xl pointer-events-none ${isDarkMode ? 'bg-slate-900/60' : 'bg-white/60'}`}>
+          <span className={`text-sm font-medium ${isDarkMode ? 'text-violet-300' : 'text-violet-600'}`}>
+            Drop files here
+          </span>
+        </div>
+      )}
       <div className="flex flex-col overflow-hidden rounded-xl">
         {/* Resize handle */}
         <div
@@ -483,6 +569,7 @@ export default function ChatInput({
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           disabled={disabled}
           aria-disabled={disabled}
           style={{ height: textareaHeight }}
@@ -497,6 +584,28 @@ export default function ChatInput({
           }`}
           placeholder="What can I help you with? Enter / for workflow commands."
           aria-label="Message input"
+        />
+
+        {/* Pending attachments */}
+        <PendingAttachmentStrip
+          attachments={pendingAttachments}
+          onRemove={handleRemoveAttachment}
+          isDarkMode={isDarkMode}
+        />
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPTED_MIME_TYPES.join(',')}
+          className="hidden"
+          onChange={e => {
+            if (e.target.files?.length) {
+              handleFilesAdded(Array.from(e.target.files));
+              e.target.value = '';
+            }
+          }}
         />
         {showSlashMenu && (
           <div
@@ -521,19 +630,63 @@ export default function ChatInput({
 
         <div className={`flex items-center justify-between px-3 py-1.5`}>
           <div className="flex gap-1.5 text-gray-500 items-center">
-            {/* Tab Context Selector - available for all workflows */}
+            {/* Plus menu - Tabs + File attachments */}
             {!showStopButton && !historicalSessionId && (
-              <TabContextSelector
-                selectedTabIds={contextTabIds}
-                onSelectionChange={setContextTabIds}
-                isDarkMode={isDarkMode}
-                disabled={disabled}
-                autoContextEnabled={autoContextEnabled}
-                autoContextTabIds={autoContextTabIds}
-                excludedAutoTabIds={excludedAutoTabIds}
-                onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
-                onAutoContextToggle={onAutoContextToggle}
-              />
+              <div ref={plusMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowPlusMenu(!showPlusMenu)}
+                  disabled={disabled}
+                  title="Add context"
+                  className={`inline-flex items-center justify-center rounded-md p-1 text-xs transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                  <FaPlus className="w-3 h-3" />
+                  {(contextTabIds.length > 0 || pendingAttachments.length > 0) && (
+                    <span
+                      className={`ml-1 rounded-full px-1 text-[9px] font-bold ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
+                      {contextTabIds.length + pendingAttachments.filter(a => a.status === 'ready').length}
+                    </span>
+                  )}
+                </button>
+                {showPlusMenu && (
+                  <div
+                    className={`absolute left-0 bottom-full mb-1 z-50 w-48 rounded-lg border shadow-lg ${
+                      isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
+                    }`}>
+                    <div className="py-1">
+                      <div
+                        className={`px-1 py-0.5 ${isDarkMode ? 'border-b border-slate-700' : 'border-b border-gray-100'}`}>
+                        <TabContextSelector
+                          selectedTabIds={contextTabIds}
+                          onSelectionChange={setContextTabIds}
+                          isDarkMode={isDarkMode}
+                          disabled={disabled}
+                          autoContextEnabled={autoContextEnabled}
+                          autoContextTabIds={autoContextTabIds}
+                          excludedAutoTabIds={excludedAutoTabIds}
+                          onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
+                          onAutoContextToggle={onAutoContextToggle}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPlusMenu(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                          isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-50'
+                        }`}>
+                        <FiPaperclip className="w-3.5 h-3.5" />
+                        <span>Add files and images</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {/* Microphone button for voice input */}
             {onMicClick && !showStopButton && (
