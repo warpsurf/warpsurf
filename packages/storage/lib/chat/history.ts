@@ -37,6 +37,21 @@ const getSessionMessagesStorage = (sessionId: string) => {
   });
 };
 
+// Cached per-session attachment storage instances (avoids recreating listeners)
+const attachmentsStorageCache = new Map<string, ReturnType<typeof createStorage<Record<string, Attachment>>>>();
+const getAttachmentsStorage = (sessionId: string) => {
+  let s = attachmentsStorageCache.get(sessionId);
+  if (!s) {
+    s = createStorage<Record<string, Attachment>>(
+      `chat_attachments_${sessionId}`,
+      {},
+      { storageEnum: StorageEnum.Local, liveUpdate: true },
+    );
+    attachmentsStorageCache.set(sessionId, s);
+  }
+  return s;
+};
+
 // Helper function to get storage key for a specific session's agent state history
 const getSessionAgentStepHistoryKey = (sessionId: string) => `chat_agent_step_${sessionId}`;
 
@@ -143,12 +158,7 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
 
       // Clear attachments
       try {
-        const s = createStorage<Record<string, Attachment>>(
-          `chat_attachments_${sessionId}`,
-          {},
-          { storageEnum: StorageEnum.Local, liveUpdate: true },
-        );
-        await s.set({});
+        await getAttachmentsStorage(sessionId).set({});
       } catch {}
 
       // Update session metadata counters
@@ -426,12 +436,7 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
 
       // Remove attachments
       try {
-        const s = createStorage<Record<string, Attachment>>(
-          `chat_attachments_${sessionId}`,
-          {},
-          { storageEnum: StorageEnum.Local, liveUpdate: true },
-        );
-        await s.set({});
+        await getAttachmentsStorage(sessionId).set({});
       } catch {}
     },
 
@@ -719,21 +724,13 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
     },
 
     storeAttachments: async (sessionId: string, attachments: Record<string, Attachment>): Promise<void> => {
-      const storage = createStorage<Record<string, Attachment>>(
-        `chat_attachments_${sessionId}`,
-        {},
-        { storageEnum: StorageEnum.Local, liveUpdate: true },
-      );
+      const storage = getAttachmentsStorage(sessionId);
       const existing = await storage.get();
       await storage.set({ ...existing, ...attachments });
     },
 
     loadAttachments: async (sessionId: string): Promise<Record<string, Attachment>> => {
-      const storage = createStorage<Record<string, Attachment>>(
-        `chat_attachments_${sessionId}`,
-        {},
-        { storageEnum: StorageEnum.Local, liveUpdate: true },
-      );
+      const storage = getAttachmentsStorage(sessionId);
       return await storage.get();
     },
   };
