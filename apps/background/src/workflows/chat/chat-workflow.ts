@@ -66,7 +66,8 @@ export class ChatWorkflow {
         this.context.attachments,
       );
 
-      // For explain-image, replace the final HumanMessage with a multimodal one containing the image
+      // For explain-image, replace the final HumanMessage with a multimodal one containing the image.
+      // Clear after building so follow-ups in the same session use the default chat prompt.
       if (isExplainImage) {
         const lastIdx = messages.length - 1;
         messages[lastIdx] = new HumanMessage({
@@ -75,6 +76,8 @@ export class ChatWorkflow {
             { type: 'image_url', image_url: { url: this.imageUrl! } },
           ],
         });
+        this.imageUrl = undefined;
+        this.contextMenuAction = undefined;
       }
 
       // Inject context tabs if available (with dynamic budget based on model)
