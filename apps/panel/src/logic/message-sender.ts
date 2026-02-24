@@ -149,6 +149,8 @@ export function createMessageSender(deps: MessageSenderDeps) {
     contextTabIds?: number[],
     contextMenuAction?: string,
     skipAutoContext?: boolean,
+    attachments?: any[],
+    imageUrl?: string,
   ) {
     logger.log('handleSendMessage', text, agentType, contextTabIds, contextMenuAction, skipAutoContext);
     const trimmedText = text.trim();
@@ -246,6 +248,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
           sessionId: sessionIdRef.current,
           contextTabIds,
           skipAutoContext,
+          attachments,
         } as any);
         logger.log(
           'start_multi_agent_workflow_v2 sent',
@@ -265,6 +268,8 @@ export function createMessageSender(deps: MessageSenderDeps) {
           contextTabIds,
           contextMenuAction,
           skipAutoContext,
+          attachments,
+          imageUrl,
         });
         logger.log('follow_up_task sent', text, tabId, sessionIdRef.current, finalAgentType, skipAutoContext);
         setCurrentTaskAgentType(finalAgentType || null);
@@ -288,6 +293,8 @@ export function createMessageSender(deps: MessageSenderDeps) {
           contextTabIds,
           contextMenuAction,
           skipAutoContext,
+          attachments,
+          imageUrl,
         });
         logger.log('new_task sent', text, tabId, sessionIdRef.current, finalAgentType, skipAutoContext);
         setCurrentTaskAgentType(finalAgentType || null);
