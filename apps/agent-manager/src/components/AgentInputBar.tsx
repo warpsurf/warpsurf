@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown, FaArrowUp } from 'react-icons/fa';
+import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown, FaArrowUp, FaPlus } from 'react-icons/fa';
+import { FiPaperclip } from 'react-icons/fi';
 import { MicrophoneButton } from '@extension/shared';
+import { processFiles, toAttachment, type PendingAttachment } from '@extension/shared/lib/utils/file-processor';
+import { ACCEPTED_MIME_TYPES } from '@extension/storage/lib/chat/types';
 import { TabContextSelector } from './TabContextSelector';
 
 type AgentType = 'auto' | 'chat' | 'search' | 'agent' | 'multiagent';
@@ -30,12 +33,11 @@ const AGENT_OPTIONS: AgentOption[] = [
 
 interface AgentInputBarProps {
   isDarkMode: boolean;
-  onSendMessage: (text: string, agentType?: string, contextTabIds?: number[]) => Promise<void>;
+  onSendMessage: (text: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => Promise<void>;
   disabled?: boolean;
   autoContextEnabled?: boolean;
   autoContextTabIds?: number[];
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
-  // Speech-to-text props
   onMicClick?: () => void;
   onMicStop?: () => void;
   isRecording?: boolean;
@@ -44,6 +46,12 @@ interface AgentInputBarProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function AgentInputBar({
@@ -70,7 +78,12 @@ export function AgentInputBar({
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
   const workflowDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close workflow dropdown on outside click
+  // Attachment state
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
@@ -83,19 +96,62 @@ export function AgentInputBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [workflowDropdownOpen]);
 
+  useEffect(() => {
+    if (!showPlusMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) setShowPlusMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPlusMenu]);
+
   const selectedOption = AGENT_OPTIONS.find(o => o.type === selectedAgent) || AGENT_OPTIONS[0];
 
-  const isDisabled = useMemo(() => disabled || text.trim() === '' || isSubmitting, [disabled, text, isSubmitting]);
+  const isDisabled = useMemo(
+    () =>
+      disabled ||
+      (text.trim() === '' && pendingAttachments.filter(a => a.status === 'ready').length === 0) ||
+      isSubmitting,
+    [disabled, text, isSubmitting, pendingAttachments],
+  );
+
+  const handleFilesAdded = useCallback(
+    async (files: File[]) => {
+      const readyCount = pendingAttachments.filter(a => a.status !== 'error').length;
+      const results = await processFiles(files, readyCount);
+      setPendingAttachments(prev => [...prev, ...results]);
+    },
+    [pendingAttachments],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        handleFilesAdded(files);
+      }
+    },
+    [handleFilesAdded],
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = text.trim();
-      if (!trimmed || isSubmitting) return;
+      const readyAttachments = pendingAttachments.filter(a => a.status === 'ready' && a.dataUrl).map(toAttachment);
+      if ((!trimmed && readyAttachments.length === 0) || isSubmitting) return;
 
       setIsSubmitting(true);
       try {
-        // Combine auto context (minus excluded) with manual context
         let allContextTabIds: number[] = [];
         if (autoContextEnabled) {
           const effectiveAutoTabs = autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id));
@@ -104,10 +160,16 @@ export function AgentInputBar({
           allContextTabIds = manualContextTabIds;
         }
 
-        await onSendMessage(trimmed, selectedAgent, allContextTabIds.length > 0 ? allContextTabIds : undefined);
+        await onSendMessage(
+          trimmed,
+          selectedAgent,
+          allContextTabIds.length > 0 ? allContextTabIds : undefined,
+          readyAttachments.length > 0 ? readyAttachments : undefined,
+        );
         setText('');
         setManualContextTabIds([]);
         setExcludedAutoTabIds([]);
+        setPendingAttachments([]);
       } finally {
         setIsSubmitting(false);
       }
@@ -121,6 +183,7 @@ export function AgentInputBar({
       autoContextEnabled,
       autoContextTabIds,
       excludedAutoTabIds,
+      pendingAttachments,
     ],
   );
 
@@ -144,6 +207,7 @@ export function AgentInputBar({
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         disabled={disabled}
         placeholder="What can I help you with?"
         rows={2}
@@ -154,23 +218,110 @@ export function AgentInputBar({
         } ${disabled ? 'cursor-not-allowed' : ''}`}
       />
 
+      {/* Pending attachments */}
+      {pendingAttachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-1.5">
+          {pendingAttachments.map(a => (
+            <span
+              key={a.id}
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] ${
+                a.status === 'error'
+                  ? isDarkMode
+                    ? 'bg-red-900/40 text-red-300'
+                    : 'bg-red-50 text-red-600'
+                  : a.status === 'loading'
+                    ? isDarkMode
+                      ? 'bg-slate-700 text-slate-400'
+                      : 'bg-gray-100 text-gray-400'
+                    : isDarkMode
+                      ? 'bg-slate-700 text-slate-200'
+                      : 'bg-gray-100 text-gray-700'
+              }`}>
+              {a.status === 'loading' && (
+                <span className="w-2 h-2 rounded-full border border-t-transparent animate-spin border-current" />
+              )}
+              <span className="truncate max-w-[80px]">{a.filename}</span>
+              <span className="opacity-60">{formatSize(a.size)}</span>
+              <button
+                type="button"
+                onClick={() => setPendingAttachments(prev => prev.filter(x => x.id !== a.id))}
+                className="opacity-60 hover:opacity-100">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_MIME_TYPES.join(',')}
+        className="hidden"
+        onChange={e => {
+          if (e.target.files?.length) {
+            handleFilesAdded(Array.from(e.target.files));
+            e.target.value = '';
+          }
+        }}
+      />
+
       <div
         className={`flex items-center justify-between gap-2 px-3 pb-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
         <div className="flex items-center gap-2">
-          {/* Tab context selector */}
-          <TabContextSelector
-            selectedTabIds={manualContextTabIds}
-            onSelectionChange={setManualContextTabIds}
-            isDarkMode={isDarkMode}
-            disabled={disabled}
-            autoContextEnabled={autoContextEnabled}
-            autoContextTabIds={autoContextTabIds}
-            excludedAutoTabIds={excludedAutoTabIds}
-            onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
-            onAutoContextToggle={onAutoContextToggle}
-          />
+          {/* Plus menu - Tabs + Files */}
+          <div ref={plusMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPlusMenu(!showPlusMenu)}
+              disabled={disabled}
+              title="Add context"
+              className={`inline-flex items-center justify-center rounded-lg p-1 text-xs transition-colors ${
+                isDarkMode
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+              <FaPlus className="w-3 h-3" />
+            </button>
+            {showPlusMenu && (
+              <div
+                className={`absolute left-0 bottom-full mb-1 z-50 w-48 rounded-lg border shadow-lg ${
+                  isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
+                }`}>
+                <div className="py-1">
+                  <div
+                    className={`px-1 py-0.5 ${isDarkMode ? 'border-b border-slate-700' : 'border-b border-gray-100'}`}>
+                    <TabContextSelector
+                      selectedTabIds={manualContextTabIds}
+                      onSelectionChange={setManualContextTabIds}
+                      isDarkMode={isDarkMode}
+                      disabled={disabled}
+                      autoContextEnabled={autoContextEnabled}
+                      autoContextTabIds={autoContextTabIds}
+                      excludedAutoTabIds={excludedAutoTabIds}
+                      onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
+                      onAutoContextToggle={onAutoContextToggle}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPlusMenu(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                      isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-50'
+                    }`}>
+                    <FiPaperclip className="w-3.5 h-3.5" />
+                    <span>Add files and images</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
-          {/* Microphone button for voice input */}
           {onMicClick && (
             <MicrophoneButton
               isRecording={isRecording}
@@ -188,7 +339,6 @@ export function AgentInputBar({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Workflow dropdown selector */}
           <div ref={workflowDropdownRef} className="relative">
             <button
               type="button"
@@ -233,7 +383,6 @@ export function AgentInputBar({
             )}
           </div>
 
-          {/* Send button */}
           <button
             type="submit"
             disabled={isDisabled}
