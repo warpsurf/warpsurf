@@ -1,12 +1,7 @@
 import { FiX, FiFile, FiImage, FiAlertCircle, FiClock } from 'react-icons/fi';
+import { formatFileSize } from '@extension/shared/lib/utils/file-processor';
 import type { PendingAttachment } from '@extension/shared/lib/utils/file-processor';
 import type { Attachment } from '@extension/storage/lib/chat/types';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /** Renders pending attachments in the chat input area */
 export function PendingAttachmentStrip({
@@ -57,7 +52,7 @@ export function PendingAttachmentStrip({
           <span className="truncate max-w-[100px]" title={a.filename}>
             {a.filename}
           </span>
-          <span className="text-[10px] opacity-60">{formatSize(a.size)}</span>
+          <span className="text-[10px] opacity-60">{formatFileSize(a.size)}</span>
 
           {a.ephemeral && a.status === 'ready' && (
             <FiClock className="w-2.5 h-2.5 opacity-60" title="Session only — too large to save" />
@@ -137,7 +132,7 @@ export function AttachmentChip({ attachments, isDarkMode }: { attachments: Attac
                   <FiFile className="w-4 h-4 flex-shrink-0" />
                 )}
                 <span className="flex-1 truncate">{a.filename}</span>
-                <span className="text-[9px] opacity-60">{formatSize(a.size)}</span>
+                <span className="text-[9px] opacity-60">{formatFileSize(a.size)}</span>
                 {expired && <FiClock className="w-3 h-3 opacity-50" title="No longer available" />}
               </span>
             );

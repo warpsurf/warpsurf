@@ -237,14 +237,14 @@ export default function ChatInput({
     [disabled, text, pendingAttachments],
   );
 
-  const handleFilesAdded = useCallback(
-    async (files: File[]) => {
-      const readyCount = pendingAttachments.filter(a => a.status !== 'error').length;
-      const results = await processFiles(files, readyCount);
-      setPendingAttachments(prev => [...prev, ...results]);
-    },
-    [pendingAttachments],
-  );
+  const pendingAttachmentsRef = useRef(pendingAttachments);
+  pendingAttachmentsRef.current = pendingAttachments;
+
+  const handleFilesAdded = useCallback(async (files: File[]) => {
+    const readyCount = pendingAttachmentsRef.current.filter(a => a.status !== 'error').length;
+    const results = await processFiles(files, readyCount);
+    setPendingAttachments(prev => [...prev, ...results]);
+  }, []);
 
   const handleRemoveAttachment = useCallback((id: string) => {
     setPendingAttachments(prev => prev.filter(a => a.id !== id));

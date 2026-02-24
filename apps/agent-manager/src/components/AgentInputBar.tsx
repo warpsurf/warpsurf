@@ -2,7 +2,12 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown, FaArrowUp, FaPlus } from 'react-icons/fa';
 import { FiPaperclip } from 'react-icons/fi';
 import { MicrophoneButton } from '@extension/shared';
-import { processFiles, toAttachment, type PendingAttachment } from '@extension/shared/lib/utils/file-processor';
+import {
+  processFiles,
+  toAttachment,
+  formatFileSize,
+  type PendingAttachment,
+} from '@extension/shared/lib/utils/file-processor';
 import { ACCEPTED_MIME_TYPES } from '@extension/storage/lib/chat/types';
 import { TabContextSelector } from './TabContextSelector';
 
@@ -46,12 +51,6 @@ interface AgentInputBarProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function AgentInputBar({
@@ -115,14 +114,14 @@ export function AgentInputBar({
     [disabled, text, isSubmitting, pendingAttachments],
   );
 
-  const handleFilesAdded = useCallback(
-    async (files: File[]) => {
-      const readyCount = pendingAttachments.filter(a => a.status !== 'error').length;
-      const results = await processFiles(files, readyCount);
-      setPendingAttachments(prev => [...prev, ...results]);
-    },
-    [pendingAttachments],
-  );
+  const pendingAttachmentsRef = useRef(pendingAttachments);
+  pendingAttachmentsRef.current = pendingAttachments;
+
+  const handleFilesAdded = useCallback(async (files: File[]) => {
+    const readyCount = pendingAttachmentsRef.current.filter(a => a.status !== 'error').length;
+    const results = await processFiles(files, readyCount);
+    setPendingAttachments(prev => [...prev, ...results]);
+  }, []);
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
@@ -197,10 +196,38 @@ export function AgentInputBar({
     [handleSubmit],
   );
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!disabled && e.dataTransfer?.types.includes('Files')) setIsDragging(true);
+    },
+    [disabled],
+  );
+
+  const handleDragLeave = useCallback(() => setIsDragging(false), []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      if (disabled || !e.dataTransfer?.files.length) return;
+      const files = Array.from(e.dataTransfer.files).filter(f => ACCEPTED_MIME_TYPES.includes(f.type));
+      if (files.length > 0) handleFilesAdded(files);
+    },
+    [disabled, handleFilesAdded],
+  );
+
   return (
     <form
       onSubmit={handleSubmit}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       className={`overflow-visible rounded-xl border transition-colors ${
+        isDragging ? 'border-violet-400 bg-violet-50/10' : ''
+      } ${
         isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-white'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'}`}>
       <textarea
@@ -241,7 +268,7 @@ export function AgentInputBar({
                 <span className="w-2 h-2 rounded-full border border-t-transparent animate-spin border-current" />
               )}
               <span className="truncate max-w-[80px]">{a.filename}</span>
-              <span className="opacity-60">{formatSize(a.size)}</span>
+              <span className="opacity-60">{formatFileSize(a.size)}</span>
               <button
                 type="button"
                 onClick={() => setPendingAttachments(prev => prev.filter(x => x.id !== a.id))}
