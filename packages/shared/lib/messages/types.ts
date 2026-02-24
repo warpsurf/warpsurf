@@ -3,7 +3,7 @@
  */
 
 // Background → Panel messages
-export type BackgroundMessage = 
+export type BackgroundMessage =
   | { type: 'execution'; actor: string; state: string; data: ExecutionData; timestamp: number }
   | { type: 'tab-mirror-update'; data: MirrorData }
   | { type: 'tab-mirror-batch'; data: MirrorData[] }
@@ -17,8 +17,8 @@ export type BackgroundMessage =
 
 // Panel → Background messages
 export type PanelMessage =
-  | { type: 'new_task'; task: string; agentType: string; tabId: number; taskId: string }
-  | { type: 'follow_up_task'; task: string; agentType?: string; taskId: string }
+  | { type: 'new_task'; task: string; agentType: string; tabId: number; taskId: string; attachments?: any[] }
+  | { type: 'follow_up_task'; task: string; agentType?: string; taskId: string; attachments?: any[] }
   | { type: 'cancel_task'; taskId: string; sessionId: string }
   | { type: 'pause_task' }
   | { type: 'resume_task' }
@@ -52,4 +52,3 @@ export function isBackgroundMessage(msg: unknown): msg is BackgroundMessage {
 export function isPanelMessage(msg: unknown): msg is PanelMessage {
   return typeof msg === 'object' && msg !== null && 'type' in msg;
 }
-
