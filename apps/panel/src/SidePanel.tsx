@@ -62,6 +62,7 @@ const SidePanel = () => {
   const [showInlineWorkflow, setShowInlineWorkflow] = useState<boolean>(false);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
+  const [sessionAttachments, setSessionAttachments] = useState<Record<string, any>>({});
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showCloseTabs, setShowCloseTabs] = useState(false);
   const [workerTabGroups, setWorkerTabGroups] = useState<any[]>([]);
@@ -151,6 +152,8 @@ const SidePanel = () => {
   const cancelTimeoutRef = useRef<number | null>(null);
   // Ref to store pending context tabs info from chat-input, used by message sender callback
   const pendingContextTabsRef = useRef<ContextTabInfo[] | null>(null);
+  // Ref to store pending attachment IDs for the next user message
+  const pendingAttachmentIdsRef = useRef<string[] | null>(null);
 
   const logger = useMemo(() => createLogger(portRef), []);
   const { extensionVersion, releaseNotes } = useVersionInfo();
@@ -325,6 +328,7 @@ const SidePanel = () => {
     portRef,
     setIsJobActive,
     lastEventIdBySessionRef,
+    setSessionAttachments,
   });
 
   // Event setup (appendMessage, taskEventHandler, panelHandlers)
@@ -510,16 +514,20 @@ const SidePanel = () => {
         loadChatSessions: async () => {},
         createTaskId: () => Date.now().toString() + Math.random().toString(36).slice(2, 11),
         resetRunState,
-        // Callback when user message is created - store pending context tabs with correct timestamp
+        // Callback when user message is created - store pending context tabs and attachment IDs
         onUserMessageCreated: (timestamp: number) => {
           const contextTabs = pendingContextTabsRef.current;
-          pendingContextTabsRef.current = null; // Clear for next message
-          if (!contextTabs || contextTabs.length === 0) return;
+          pendingContextTabsRef.current = null;
+          const attachmentIds = pendingAttachmentIdsRef.current;
+          pendingAttachmentIdsRef.current = null;
+          if ((!contextTabs || contextTabs.length === 0) && (!attachmentIds || attachmentIds.length === 0)) return;
           const messageId = `${timestamp}-user`;
           setMessageMetadata((prev: any) => {
             const existing = prev[messageId] || {};
-            const next = { ...prev, [messageId]: { ...existing, contextTabs } };
-            // Also persist to storage
+            const patch: any = { ...existing };
+            if (contextTabs?.length) patch.contextTabs = contextTabs;
+            if (attachmentIds?.length) patch.attachmentIds = attachmentIds;
+            const next = { ...prev, [messageId]: patch };
             try {
               if (sessionIdRef.current) {
                 chatHistoryStore.storeMessageMetadata(sessionIdRef.current, next).catch(() => {});
@@ -1014,8 +1022,12 @@ const SidePanel = () => {
               onExcludedAutoTabIdsChange={setExcludedAutoTabIds}
               onAutoContextToggle={handleAutoContextToggle}
               setMessageMetadata={setMessageMetadata}
+              sessionAttachments={sessionAttachments}
               setPendingContextTabs={tabs => {
                 pendingContextTabsRef.current = tabs;
+              }}
+              setPendingAttachmentIds={ids => {
+                pendingAttachmentIdsRef.current = ids;
               }}
               onMicClick={stt.handleMicClick}
               onMicStop={stt.stopRecording}

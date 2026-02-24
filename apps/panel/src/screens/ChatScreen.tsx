@@ -85,6 +85,10 @@ export interface ChatScreenProps {
   setMessageMetadata?: (updater: (prev: any) => any) => void;
   // Callback to set pending context tabs (will be stored when user message is created)
   setPendingContextTabs?: (tabs: ContextTabInfo[] | null) => void;
+  // Per-session resolved attachments (keyed by attachment ID)
+  sessionAttachments?: Record<string, any>;
+  // Callback to set pending attachment IDs (stored when user message is created)
+  setPendingAttachmentIds?: (ids: string[] | null) => void;
   // Speech-to-text props
   onMicClick?: () => void;
   onMicStop?: () => void;
@@ -196,13 +200,18 @@ export function ChatScreen(props: ChatScreenProps) {
     };
   }, [setContextTabIdsRef]);
 
-  // Callback to capture context tabs info when sending a message
-  // This sets the pending tabs in SidePanel, which will be stored when user message is created
   const handleContextTabsCapture = useCallback(
     (_timestamp: number, contextTabs: ContextTabInfo[]) => {
       setPendingContextTabs?.(contextTabs);
     },
     [setPendingContextTabs],
+  );
+
+  const handleAttachmentsCapture = useCallback(
+    (_timestamp: number, attachmentIds: string[]) => {
+      props.setPendingAttachmentIds?.(attachmentIds);
+    },
+    [props.setPendingAttachmentIds],
   );
 
   return (
@@ -271,6 +280,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
                   onContextTabsCapture={handleContextTabsCapture}
+                  onAttachmentsCapture={handleAttachmentsCapture}
                   onMicClick={onMicClick}
                   onMicStop={onMicStop}
                   isRecording={isRecordingProp}
@@ -416,6 +426,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   onPinMessage={handlePinMessage}
                   onQuoteMessage={handleQuoteMessage}
                   scrollParent={panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null}
+                  sessionAttachments={props.sessionAttachments}
                 />
                 <div ref={messagesEndRef} />
                 {showJumpToLatest && (
@@ -462,6 +473,7 @@ export function ChatScreen(props: ChatScreenProps) {
                   onExcludedAutoTabIdsChange={onExcludedAutoTabIdsChange}
                   onAutoContextToggle={onAutoContextToggle}
                   onContextTabsCapture={handleContextTabsCapture}
+                  onAttachmentsCapture={handleAttachmentsCapture}
                   onMicClick={onMicClick}
                   onMicStop={onMicStop}
                   isRecording={isRecordingProp}
@@ -562,6 +574,7 @@ export function ChatScreen(props: ChatScreenProps) {
             onPinMessage={handlePinMessage}
             onQuoteMessage={handleQuoteMessage}
             scrollParent={panelRef.current?.querySelector('.messages-scroll') as HTMLElement | null}
+            sessionAttachments={props.sessionAttachments}
           />
           <div ref={messagesEndRef} />
           {showJumpToLatest && (

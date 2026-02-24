@@ -29,6 +29,7 @@ export function useChatHistory({
   portRef,
   setIsJobActive,
   lastEventIdBySessionRef,
+  setSessionAttachments,
 }: {
   logger: { log: (...args: any[]) => void; error: (...args: any[]) => void };
   setMessages: (v: any) => void;
@@ -52,6 +53,7 @@ export function useChatHistory({
   portRef?: MutableRefObject<chrome.runtime.Port | null>;
   setIsJobActive?: (v: boolean) => void;
   lastEventIdBySessionRef?: MutableRefObject<Map<string, string>>;
+  setSessionAttachments?: (v: Record<string, any>) => void;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
 
@@ -198,11 +200,13 @@ export function useChatHistory({
         // Load persisted metadata
         let restoredRootId: string | null = null;
         try {
-          const [savedSummaries, savedMetadata, savedStats] = await Promise.all([
+          const [savedSummaries, savedMetadata, savedStats, savedAttachments] = await Promise.all([
             chatHistoryStore.loadRequestSummaries(sessionId).catch(() => ({})),
             chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({})),
             chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
+            chatHistoryStore.loadAttachments(sessionId).catch(() => ({})),
           ]);
+          if (setSessionAttachments) setSessionAttachments(savedAttachments || {});
 
           // Get stored rootId for restoration
           restoredRootId = (savedMetadata as any)?.__sessionRootId || null;
