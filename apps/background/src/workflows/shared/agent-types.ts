@@ -73,6 +73,8 @@ export class AgentContext {
   chatHistoryMessages: any[];
   // Context tab IDs provided by user for reference
   contextTabIds: number[];
+  // File/image attachments from user (in-memory, may include ephemeral large files)
+  attachments: any[];
   // URLs collected for site skill injection
   private _skillUrls: Set<string>;
 
@@ -101,6 +103,7 @@ export class AgentContext {
     this.history = new AgentStepHistory();
     this.chatHistoryMessages = [];
     this.contextTabIds = [];
+    this.attachments = [];
     this._skillUrls = new Set();
   }
 

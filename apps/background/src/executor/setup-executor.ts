@@ -30,6 +30,7 @@ export async function setupExecutor(
   contextTabIds?: number[],
   contextMenuAction?: string,
   preTriageResult?: any,
+  imageUrl?: string,
 ) {
   const providers = await getAllProvidersDecrypted();
   if (Object.keys(providers).length === 0) {
@@ -135,6 +136,7 @@ export async function setupExecutor(
     retainTokenLogs: true,
     contextMenuAction,
     preTriageResult,
+    imageUrl,
   });
 
   // Set context tabs BEFORE initialize() so they're available for injection
@@ -144,4 +146,11 @@ export async function setupExecutor(
 
   await executor.initialize();
   return executor;
+}
+
+/** Attach user file/image attachments to an executor after setup. */
+export function attachFilesToExecutor(executor: any, attachments: any[]): void {
+  if (attachments?.length && typeof executor.setAttachments === 'function') {
+    executor.setAttachments(attachments);
+  }
 }

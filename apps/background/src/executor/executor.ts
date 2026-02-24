@@ -52,6 +52,8 @@ export interface ExecutorExtraArgs {
   contextMenuAction?: string;
   /** Pre-computed triage result from task-handlers to avoid duplicate AUTO calls. */
   preTriageResult?: AutoResult;
+  /** Image URL for the 'explain-image' context menu action. */
+  imageUrl?: string;
 }
 
 export class Executor {
@@ -149,7 +151,7 @@ export class Executor {
       prompt: this.validatorPrompt,
     });
 
-    this.chat = new ChatWorkflow(chatLLM, context, extraArgs?.contextMenuAction);
+    this.chat = new ChatWorkflow(chatLLM, context, extraArgs?.contextMenuAction, extraArgs?.imageUrl);
 
     this.search = new SearchWorkflow(searchLLM, context);
 
@@ -200,6 +202,12 @@ export class Executor {
     // Collect URLs from context tabs for skill injection
     this.collectSkillUrlsFromTabs(tabIds);
     logger.info(`Set ${tabIds.length} context tabs for executor`);
+  }
+
+  /** Set user-provided file/image attachments for this session. */
+  setAttachments(attachments: any[]): void {
+    this.context.attachments = attachments;
+    logger.info(`Set ${attachments.length} attachments for executor`);
   }
 
   /**
