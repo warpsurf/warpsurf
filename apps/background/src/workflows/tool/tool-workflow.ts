@@ -65,9 +65,13 @@ export class ToolWorkflow {
 
       // Build messages with chat history
       const sessionMessages = await this.getSessionMessages();
-      const messages = buildLLMMessagesWithHistory(systemPrompt, sessionMessages, this.currentTask, {
-        stripUserRequestTags: true,
-      });
+      const messages = buildLLMMessagesWithHistory(
+        systemPrompt,
+        sessionMessages,
+        this.currentTask,
+        { stripUserRequestTags: true },
+        this.context.attachments,
+      );
 
       const requestStartTime = Date.now();
       const response = await this.toolLLM.invoke(messages, { signal: this.context.controller.signal });

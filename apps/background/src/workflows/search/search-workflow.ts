@@ -51,9 +51,13 @@ export class SearchWorkflow {
 
       if (!this.currentTask) throw new Error('No task set');
 
-      const messages = buildLLMMessagesWithHistory(systemPrompt, await this.getSessionMessages(), this.currentTask, {
-        stripUserRequestTags: true,
-      });
+      const messages = buildLLMMessagesWithHistory(
+        systemPrompt,
+        await this.getSessionMessages(),
+        this.currentTask,
+        { stripUserRequestTags: true },
+        this.context.attachments,
+      );
 
       // Inject context tabs if available (with dynamic budget based on model)
       if (this.context.contextTabIds.length > 0) {

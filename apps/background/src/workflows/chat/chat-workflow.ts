@@ -5,6 +5,8 @@ import { Actors, ExecutionState } from '@src/workflows/shared/event/types';
 import { isAbortedError, isTimeoutError } from '../shared/agent-errors';
 import { systemPrompt } from './chat-prompt';
 import { explainSystemPrompt } from './explain-prompt';
+import { explainImageSystemPrompt } from './explain-image-prompt';
+import { HumanMessage } from '@langchain/core/messages';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildLLMMessagesWithHistory } from '@src/workflows/shared/utils/chat-history';
 import { globalTokenTracker, type TokenUsage } from '@src/utils/token-tracker';
@@ -31,11 +33,13 @@ export class ChatWorkflow {
   private chatLLM: any;
   private context: AgentContext;
   private contextMenuAction?: string;
+  private imageUrl?: string;
 
-  constructor(chatLLM: any, context: AgentContext, contextMenuAction?: string) {
+  constructor(chatLLM: any, context: AgentContext, contextMenuAction?: string, imageUrl?: string) {
     this.chatLLM = chatLLM;
     this.context = context;
     this.contextMenuAction = contextMenuAction;
+    this.imageUrl = imageUrl;
   }
 
   setTask(task: string) {
@@ -48,10 +52,30 @@ export class ChatWorkflow {
 
       if (!this.currentTask) throw new Error('No task set');
 
-      const prompt = this.contextMenuAction === 'explain-selection' ? explainSystemPrompt : systemPrompt;
-      const messages = buildLLMMessagesWithHistory(prompt, await this.getSessionMessages(), this.currentTask, {
-        stripUserRequestTags: true,
-      });
+      const isExplainImage = this.contextMenuAction === 'explain-image' && this.imageUrl;
+      const prompt = isExplainImage
+        ? explainImageSystemPrompt
+        : this.contextMenuAction === 'explain-selection'
+          ? explainSystemPrompt
+          : systemPrompt;
+      const messages = buildLLMMessagesWithHistory(
+        prompt,
+        await this.getSessionMessages(),
+        this.currentTask,
+        { stripUserRequestTags: true },
+        this.context.attachments,
+      );
+
+      // For explain-image, replace the final HumanMessage with a multimodal one containing the image
+      if (isExplainImage) {
+        const lastIdx = messages.length - 1;
+        messages[lastIdx] = new HumanMessage({
+          content: [
+            { type: 'text', text: `<user_request>\n${this.currentTask}\n</user_request>` },
+            { type: 'image_url', image_url: { url: this.imageUrl! } },
+          ],
+        });
+      }
 
       // Inject context tabs if available (with dynamic budget based on model)
       if (this.context.contextTabIds.length > 0) {

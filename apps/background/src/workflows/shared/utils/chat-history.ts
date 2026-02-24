@@ -85,12 +85,41 @@ export function buildLLMMessagesWithHistory(
   sessionMessages: SessionMessage[],
   latestTaskText: string,
   opts: BuildChatHistoryOptions = {},
+  attachments?: any[],
 ) {
   const messages: Array<any> = [];
   messages.push(new SystemMessage(systemPrompt));
   const block = buildChatHistoryBlock(sessionMessages, { ...opts, latestTaskText });
   if (block) messages.push(new SystemMessage(block));
-  messages.push(new HumanMessage(`<user_request>\n${latestTaskText}\n</user_request>`));
+
+  // Build the user message — multimodal if attachments are present
+  if (attachments?.length) {
+    const content: any[] = [{ type: 'text', text: `<user_request>\n${latestTaskText}\n</user_request>` }];
+    for (const a of attachments) {
+      if (a.type === 'image' && a.dataUrl) {
+        content.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+      } else if (a.dataUrl) {
+        // Document: decode base64 text content and include inline
+        try {
+          const b64 = a.dataUrl.split(',')[1];
+          const text =
+            a.mimeType?.startsWith('text/') || a.mimeType === 'application/json'
+              ? atob(b64)
+              : `[Binary file: ${a.filename} (${a.mimeType})]`;
+          content.push({ type: 'text', text: `<attached_file name="${a.filename}">\n${text}\n</attached_file>` });
+        } catch {
+          content.push({
+            type: 'text',
+            text: `<attached_file name="${a.filename}">[Could not decode file]</attached_file>`,
+          });
+        }
+      }
+    }
+    messages.push(new HumanMessage({ content }));
+  } else {
+    messages.push(new HumanMessage(`<user_request>\n${latestTaskText}\n</user_request>`));
+  }
+
   return messages;
 }
 
