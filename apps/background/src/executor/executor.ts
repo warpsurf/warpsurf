@@ -1,12 +1,6 @@
 type BaseChatModel = any;
 import { type ActionResult, AgentContext, type AgentOptions } from '@src/workflows/shared/agent-types';
-import {
-  AgentNavigator,
-  NavigatorActionRegistry,
-  AgentPlanner,
-  type PlannerOutput,
-  AgentValidator,
-} from '@src/workflows/agent';
+import { AgentNavigator, NavigatorActionRegistry, AgentPlanner, AgentValidator } from '@src/workflows/agent';
 import { ChatWorkflow } from '@src/workflows/chat';
 import { SearchWorkflow } from '@src/workflows/search';
 import { NavigatorPrompt, PlannerPrompt, ValidatorPrompt } from '@src/workflows/agent';
@@ -19,7 +13,7 @@ import { EventManager } from '@src/workflows/shared/event';
 import { Actors, type EventCallback, EventType, ExecutionState } from '@src/workflows/shared/event';
 import { globalTokenTracker } from '../utils/token-tracker';
 import { ExtensionConflictError, RequestCancelledError, isAbortedError } from '@src/workflows/shared/agent-errors';
-import { wrapUntrustedContent } from '@src/workflows/shared/messages';
+
 import { URLNotAllowedError } from '../browser/views';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { Attachment } from '@extension/storage/lib/chat/types';
@@ -33,7 +27,8 @@ import { tabExists } from '@src/utils';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
 import { shouldInjectSkills, buildSkillsSystemMessage } from '@src/skills';
-import { LoopDetector } from '@src/workflows/shared/loop-detector';
+import { LoopDetector } from '@src/workflows/agent/loop-detector';
+import { getScreenshotSizeForModel } from '@src/utils/image-resize';
 
 const logger = createLogger('Executor');
 
@@ -79,6 +74,7 @@ export class Executor {
   private hasRunBrowserUse: boolean = false;
   private _hasReachedTerminalState: boolean = false;
   private navigatorModelName?: string;
+  private readonly plannerLLM: BaseChatModel;
 
   public llmResponses: {
     auto: Array<{ request: string; response: any; timestamp: number }>;
@@ -120,6 +116,7 @@ export class Executor {
       extraArgs?.agentOptions ?? {},
     );
 
+    this.plannerLLM = plannerLLM;
     this.generalSettings = extraArgs?.generalSettings;
     this.retainTokenLogs = !!extraArgs?.retainTokenLogs;
     this.manualAgentType = extraArgs?.agentType;
@@ -128,11 +125,14 @@ export class Executor {
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
       extraArgs?.generalSettings?.preferredRegion,
+      context.options.useVision,
+      context.options.enableCoordinateClick,
     );
     this.plannerPrompt = new PlannerPrompt();
     this.validatorPrompt = new ValidatorPrompt(task);
 
-    const actionBuilder = new ActionBuilder(context, extractorLLM);
+    const modelName = (navigatorLLM as any).modelName || (navigatorLLM as any).model_name || '';
+    const actionBuilder = new ActionBuilder(context, extractorLLM, modelName);
     const navigatorActionRegistry = new NavigatorActionRegistry(actionBuilder.buildDefaultActions());
 
     this.navigator = new AgentNavigator(navigatorActionRegistry, {
@@ -162,8 +162,11 @@ export class Executor {
     this.autoService = new AutoWorkflow();
 
     this.context = context;
-    // Store model name for context budget calculations
-    this.navigatorModelName = (navigatorLLM as any).modelName || (navigatorLLM as any).model_name;
+    this.navigatorModelName = modelName;
+    // Auto-detect optimal screenshot size for the navigator model
+    if (!context.options.llmScreenshotSize && modelName) {
+      context.options.llmScreenshotSize = getScreenshotSizeForModel(modelName);
+    }
     // Initialize message history (allow optional messageContext for worker sessions)
     const systemMsg = extraArgs?.systemMessageOverride ?? this.navigatorPrompt.getSystemMessage();
     this.context.messageManager.initTaskMessages(systemMsg, task, extraArgs?.messageContext);
@@ -810,6 +813,9 @@ export class Executor {
       let validatorFailed = false;
       let webTask = undefined;
       const finalResponseAfterFailure = this.generalSettings?.finalResponseAfterFailure !== false;
+      const compactEvery = this.generalSettings?.compactEveryNSteps ?? 15;
+      const compactionEnabled = this.generalSettings?.messageCompactionEnabled !== false;
+      const compactionTriggerChars = this.generalSettings?.compactionTriggerChars ?? 40000;
 
       for (step = 0; step < allowedMaxSteps; step++) {
         context.stepInfo = {
@@ -823,6 +829,18 @@ export class Executor {
 
         if (await this.shouldStop()) {
           break;
+        }
+
+        if (compactionEnabled && step > 0 && step % compactEvery === 0) {
+          try {
+            const compacted = await this.context.messageManager.compactMessages({
+              llm: this.plannerLLM,
+              triggerCharCount: compactionTriggerChars,
+            });
+            if (compacted) logger.info('Message history compacted');
+          } catch (e) {
+            logger.warning('Message compaction error:', e);
+          }
         }
 
         const isLastStep = step === allowedMaxSteps - 1;
@@ -870,35 +888,51 @@ export class Executor {
 
         // --- Normal step ---
 
+        // Drain any live user messages queued during execution
+        const userMsgs = context.drainUserMessages();
+        if (userMsgs.length > 0) {
+          const combined = userMsgs.join('\n\n');
+          this.context.messageManager.addMessageWithTokens(new HumanMessage(`[USER INSTRUCTION]: ${combined}`));
+          // Notify UI that queued messages were consumed
+          this.context.emitEvent(Actors.SYSTEM, ExecutionState.STEP_OK, '', {
+            drainedMessages: userMsgs,
+          });
+          logger.info(`Injected ${userMsgs.length} live user message(s) into context`);
+        }
+
         // Check if planner is enabled
         const isPlannerEnabled = !!(
           this.generalSettings?.useFullPlanningPipeline || this.generalSettings?.enablePlanner
         );
         const isPlanningStep = context.nSteps % context.options.planningInterval === 0 || validatorFailed;
+        const replanOnStall = this.generalSettings?.planningReplanOnStall ?? 3;
+        const explorationLimit = this.generalSettings?.planningExplorationLimit ?? 5;
+        const needsReplan = context.plan !== null && replanOnStall > 0 && context.consecutiveFailures >= replanOnStall;
+        const needsExplorationPlan =
+          context.plan === null && explorationLimit > 0 && context.nSteps >= explorationLimit;
+        const hasLiveUserMessages = userMsgs.length > 0;
+
+        const shouldRunPlanner =
+          isPlannerEnabled &&
+          this.planner &&
+          (isPlanningStep || validatorFailed || needsReplan || needsExplorationPlan || hasLiveUserMessages);
 
         if (step === 0) {
           logger.info('[Planner] Activation check:', {
             isPlannerEnabled,
-            useFullPlanningPipeline: this.generalSettings?.useFullPlanningPipeline,
-            enablePlanner: this.generalSettings?.enablePlanner,
             plannerExists: !!this.planner,
             nSteps: context.nSteps,
             planningInterval: context.options.planningInterval,
             isPlanningStep,
-            willRunPlanner: isPlannerEnabled && this.planner && isPlanningStep,
+            willRunPlanner: shouldRunPlanner,
           });
         }
 
-        // Run planner when enabled (either legacy full pipeline or explicit enablePlanner)
-        if (isPlannerEnabled && this.planner && isPlanningStep) {
+        // Run planner when triggered
+        if (shouldRunPlanner) {
           validatorFailed = false;
-          // The first planning step is special, we don't want to add the browser state message to memory
-          let positionForPlan = 0;
           if (this.tasks.length > 1 || step > 0) {
             await this.navigator.addStateMessageToMemory();
-            positionForPlan = this.context.messageManager.length() - 1;
-          } else {
-            positionForPlan = this.context.messageManager.length();
           }
 
           const planOutput = await this.planner.execute();
@@ -910,20 +944,29 @@ export class Executor {
           });
 
           if (planOutput.result) {
-            const observation = wrapUntrustedContent(planOutput.result.observation);
-            const plan: PlannerOutput = {
-              ...planOutput.result,
-              observation,
-            };
-            this.context.messageManager.addPlan(JSON.stringify(plan), positionForPlan);
+            // Extract structured plan steps (with backward-compat for next_steps string)
+            const planSteps = planOutput.result.plan_steps?.length
+              ? planOutput.result.plan_steps
+              : planOutput.result.next_steps
+                ? planOutput.result.next_steps
+                    .split('\n')
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : [];
+
+            if (planSteps.length > 0) {
+              context.setPlan(planSteps);
+              await this.emitPlanState();
+            }
 
             if (webTask === undefined) {
               webTask = planOutput.result.web_task;
             }
 
+            const validatorSteps = planSteps.join('\n');
             if (planOutput.result.done) {
               done = true;
-              this.validator.setPlan(planOutput.result.next_steps);
+              this.validator.setPlan(validatorSteps);
             } else {
               this.validator.setPlan(null);
               done = false;
@@ -933,11 +976,16 @@ export class Executor {
               break;
             }
           }
+        } else if (hasLiveUserMessages && !isPlannerEnabled) {
+          // Planner disabled: user messages were injected as context above,
+          // navigator will see them and adjust. No structured plan update.
+          logger.info('Live user message injected (planner disabled — navigator will adapt)');
         }
 
         // execute the navigation step
         if (!done) {
           done = await this.navigate();
+          if (context.plan && !done) await this.emitPlanState();
         }
 
         // Break early if done and validator is not enabled
@@ -1077,6 +1125,14 @@ export class Executor {
         logger.info('Replay historical tasks is disabled, skipping history storage');
       }
     }
+  }
+
+  /** Emit current plan state to UI (empty details to avoid polluting trace/aggregate content). */
+  private async emitPlanState(): Promise<void> {
+    if (!this.context.plan) return;
+    await this.context.emitEvent(Actors.AGENT_PLANNER, ExecutionState.STEP_OK, '', {
+      plan: this.context.plan.map(item => ({ text: item.text, status: item.status })),
+    });
   }
 
   private async navigate(): Promise<boolean> {

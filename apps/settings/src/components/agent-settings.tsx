@@ -851,27 +851,96 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               <div>
                 <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="group relative inline-flex items-center gap-1 pb-1">
-                    Use Vision
+                    Vision Mode
                     <span
                       className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
                       ?
                     </span>
                     <span
                       className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
-                      Enable visual understanding
+                      Off: no screenshots. Auto: agent requests screenshots on demand. Always: every step includes a
+                      screenshot.
                     </span>
                   </span>
                 </h4>
                 <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Enable visual analysis
+                  {settings.useVision === 'auto'
+                    ? 'On-demand screenshots'
+                    : settings.useVision
+                      ? 'Screenshot every step'
+                      : 'No screenshots'}
+                </p>
+              </div>
+              <select
+                value={String(settings.useVision)}
+                onChange={e => {
+                  const v = e.target.value;
+                  updateSetting('useVision', v === 'true' ? true : v === 'auto' ? 'auto' : false);
+                }}
+                className={`rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'}`}>
+                <option value="false">Off</option>
+                <option value="auto">Auto</option>
+                <option value="true">Always</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                    Display Highlights
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      ?
+                    </span>
+                    <span
+                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                      Auto: highlights only appear on-demand with screenshots. Always On: highlights shown every step.
+                    </span>
+                  </span>
+                </h4>
+                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {settings.displayHighlights === 'auto' ? 'On-demand with screenshots' : 'Shown every step'}
+                </p>
+              </div>
+              <select
+                value={String(settings.displayHighlights ?? 'auto')}
+                onChange={e => {
+                  const v = e.target.value;
+                  updateSetting('displayHighlights', v === 'true' ? true : 'auto');
+                }}
+                className={`rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'}`}>
+                <option value="auto">Auto</option>
+                <option value="true">Always On</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                    Coordinate Clicking
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      ?
+                    </span>
+                    <span
+                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                      Allow the agent to click at exact pixel coordinates from screenshots. Useful for captchas and
+                      visually-identified targets.
+                    </span>
+                  </span>
+                </h4>
+                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Click by pixel position from screenshots
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => updateSetting('useVision', !settings.useVision)}
-                className={`toggle-slider ${settings.useVision ? 'toggle-on' : 'toggle-off'}`}
-                aria-pressed={settings.useVision}
-                aria-label="Use Vision toggle">
+                onClick={() => updateSetting('enableCoordinateClick', !settings.enableCoordinateClick)}
+                className={`toggle-slider ${settings.enableCoordinateClick ? 'toggle-on' : 'toggle-off'}`}
+                aria-pressed={!!settings.enableCoordinateClick}
+                aria-label="Coordinate Clicking toggle">
                 <span className="toggle-knob" />
               </button>
             </div>
