@@ -1,6 +1,7 @@
 import { HumanMessage, type SystemMessage } from '@langchain/core/messages';
 import type { AgentContext } from '@src/workflows/shared/agent-types';
 import { wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
+import { resizeBase64Image } from '@src/utils/image-resize';
 import { createLogger } from '@src/log';
 
 const logger = createLogger('BasePrompt');
@@ -30,6 +31,8 @@ abstract class BasePrompt {
     // In worker mode with no bound tab, return a placeholder message
     try {
       // Prefer smart state retrieval to avoid heavy DOM scans between action batches
+      // Pass raw VisionMode through: only true enables highlights + screenshot capture;
+      // 'auto' skips both (highlights are injected on-demand by the screenshot action).
       const browserState =
         (await (context.browserContext as any)
           .getSmartState?.(context.options.useVision)
@@ -119,6 +122,12 @@ abstract class BasePrompt {
             (tab: { id: number; url: string; title: string }) =>
               `- {id: ${tab.id}, url: ${tab.url}, title: ${tab.title}}`,
           ) || [];
+      const PLAN_MARKERS: Record<string, string> = { done: '[x]', current: '[>]', pending: '[ ]', skipped: '[-]' };
+      const planDescription = context.plan?.length
+        ? '\nCurrent plan:\n' +
+          context.plan.map((item, i) => `${PLAN_MARKERS[item.status]} ${i}: ${item.text}`).join('\n')
+        : '';
+
       const stateDescription = `
 </task_history>
 
@@ -129,20 +138,33 @@ Other available tabs:
   ${otherTabs.join('\n')}
 Interactive elements from top layer of the current page inside the viewport:
 ${formattedElementsText}
-${stepInfoDescription}
+${stepInfoDescription}${planDescription}
 ${actionResultsDescription}
 ${extractionContent}
 </browser_state>
 `;
 
-      if (browserState.screenshot && context.options.useVision) {
+      // Determine which screenshot (if any) to include:
+      // - useVision=true: always include the page screenshot
+      // - useVision='auto': include only an on-demand screenshot from the 'screenshot' action
+      // - useVision=false: never include
+      let screenshotB64: string | null = null;
+      if (context.options.useVision === true && browserState.screenshot) {
+        screenshotB64 = browserState.screenshot;
+      } else if (context.options.useVision === 'auto' && context.pendingScreenshot) {
+        screenshotB64 = context.pendingScreenshot;
+        context.pendingScreenshot = null;
+      }
+
+      if (screenshotB64) {
+        if (context.options.llmScreenshotSize) {
+          const [w, h] = context.options.llmScreenshotSize;
+          screenshotB64 = await resizeBase64Image(screenshotB64, w, h);
+        }
         return new HumanMessage({
           content: [
             { type: 'text', text: stateDescription },
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/jpeg;base64,${browserState.screenshot}` },
-            },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${screenshotB64}` } },
           ],
         });
       }
