@@ -84,10 +84,23 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             deps.laneColorByLaneRef.current.clear();
           } catch {}
           if (deps.getCurrentTaskAgentType() !== 'multiagent') {
-            if (deps.agentTraceRootIdRef.current) markAggregateComplete(deps);
-            deps.setAgentTraceRootId(null);
-            deps.agentTraceActiveRef.current = false;
-            deps.setActiveAggregateMessageId(null);
+            // Guard: only clear a root from a PREVIOUS run. When agentType is 'agent',
+            // the Navigator STEP_START can arrive before TASK_START due to async event
+            // delivery. In that case the root was just created for THIS run by resetRunState
+            // → createAggregateRoot, so destroying it here would break the workflow display.
+            // resetRunState (called at the start of handleSendMessage) already clears any
+            // stale root before the task is dispatched to the backend.
+            const existingRoot = deps.agentTraceRootIdRef.current;
+            if (existingRoot) {
+              const rootTs = Number(existingRoot.split('-')[0]);
+              const isSameRun = Math.abs(rootTs - timestamp) < 30000;
+              if (!isSameRun) {
+                markAggregateComplete(deps);
+                deps.setAgentTraceRootId(null);
+                deps.agentTraceActiveRef.current = false;
+                deps.setActiveAggregateMessageId(null);
+              }
+            }
           }
           deps.setShowCloseTabs(false);
         }
