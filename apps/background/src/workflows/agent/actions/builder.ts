@@ -1,4 +1,4 @@
-import { ActionResult, type AgentContext } from '@src/workflows/shared/agent-types';
+import { ActionResult, type AgentContext, isVisionActive } from '@src/workflows/shared/agent-types';
 import {
   clickElementActionSchema,
   doneActionSchema,
@@ -28,6 +28,8 @@ import {
   scrollToTopActionSchema,
   scrollToBottomActionSchema,
   requestUserControlActionSchema,
+  screenshotActionSchema,
+  clickCoordinateActionSchema,
 } from './schemas';
 import { resolveSearchUrl } from '@src/utils/search-pattern-resolver';
 
@@ -153,10 +155,12 @@ export function buildDynamicActionSchema(actions: Action[]): z.ZodType {
 export class ActionBuilder {
   private readonly context: AgentContext;
   private readonly extractorLLM: BaseChatModel;
+  private readonly modelName: string;
 
-  constructor(context: AgentContext, extractorLLM: BaseChatModel) {
+  constructor(context: AgentContext, extractorLLM: BaseChatModel, modelName?: string) {
     this.context = context;
     this.extractorLLM = extractorLLM;
+    this.modelName = modelName || '';
   }
 
   private checkCancelled(): void {
@@ -461,7 +465,7 @@ export class ActionBuilder {
         this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
         const page = await this.context.browserContext.getCurrentPage();
-        const state = await page.getState();
+        const state = page.getCachedState() || (await page.getState(this.context.options.useVision));
 
         const elementNode = state?.selectorMap.get(input.index);
         if (!elementNode) {
@@ -481,7 +485,7 @@ export class ActionBuilder {
         try {
           const initialTabIds = await this.context.browserContext.getAllTabIds();
           this.checkCancelled();
-          await page.clickElementNode(this.context.options.useVision, elementNode);
+          await page.clickElementNode(isVisionActive(this.context.options.useVision), elementNode);
           this.checkCancelled();
           let msg = `Clicked button with index ${input.index}: ${elementNode.getAllTextTillNextClickableElement(2)}`;
           logger.info(msg);
@@ -531,14 +535,14 @@ export class ActionBuilder {
         this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
         const page = await this.context.browserContext.getCurrentPage();
-        const state = await page.getState();
+        const state = page.getCachedState() || (await page.getState(this.context.options.useVision));
 
         const elementNode = state?.selectorMap.get(input.index);
         if (!elementNode) {
           throw new Error(`Element with index ${input.index} does not exist - retry or use alternative actions`);
         }
 
-        await page.inputTextElementNode(this.context.options.useVision, elementNode, input.text);
+        await page.inputTextElementNode(isVisionActive(this.context.options.useVision), elementNode, input.text);
         const msg = `Input ${input.text} into index ${input.index}`;
         this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
         return new ActionResult({ extractedContent: msg, includeInMemory: true });
@@ -608,7 +612,7 @@ export class ActionBuilder {
 
       const page = await this.context.browserContext.getCurrentPage();
       const nth = typeof input.nth === 'number' && input.nth > 0 ? input.nth : 1;
-      const ok = await page.clickSelector(input.selector, nth, this.context.options.useVision);
+      const ok = await page.clickSelector(input.selector, nth, isVisionActive(this.context.options.useVision));
       const msg = ok
         ? `Clicked selector '${input.selector}'${nth > 1 ? ` (#${nth})` : ''}`
         : `Selector '${input.selector}' not clickable${nth > 1 ? ` (#${nth})` : ''}`;
@@ -629,7 +633,7 @@ export class ActionBuilder {
         exact: !!input.exact,
         caseSensitive: !!input.case_sensitive,
         nth,
-        useVision: this.context.options.useVision,
+        useVision: isVisionActive(this.context.options.useVision),
       });
       const msg = ok
         ? `Clicked element with text '${input.text}'${nth > 1 ? ` (#${nth})` : ''}`
@@ -900,7 +904,7 @@ export class ActionBuilder {
         this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
         const page = await this.context.browserContext.getCurrentPage();
-        const state = await page.getState();
+        const state = page.getCachedState() || (await page.getState(this.context.options.useVision));
 
         const elementNode = state?.selectorMap.get(input.index);
         if (!elementNode) {
@@ -971,7 +975,7 @@ export class ActionBuilder {
         this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
         const page = await this.context.browserContext.getCurrentPage();
-        const state = await page.getState();
+        const state = page.getCachedState() || (await page.getState(this.context.options.useVision));
 
         const elementNode = state?.selectorMap.get(input.index);
         if (!elementNode) {
@@ -1049,6 +1053,61 @@ export class ActionBuilder {
         return new ActionResult({ extractedContent: msg, includeInMemory: true });
       }, requestUserControlActionSchema);
       actions.push(requestUserControl);
+    }
+
+    // On-demand screenshot (only in 'auto' vision mode)
+    if (this.context.options.useVision === 'auto') {
+      const screenshotAction = new Action(async (input: z.infer<typeof screenshotActionSchema.schema>) => {
+        this.checkCancelled();
+        const intent = input.intent || 'Capturing screenshot for visual analysis';
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+
+        const page = await this.context.browserContext.getCurrentPage();
+        const b64 = await page.takeScreenshotWithHighlights();
+        if (b64) {
+          this.context.pendingScreenshot = b64;
+          const msg = 'Screenshot captured — it will be included with the next browser state.';
+          this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
+          return new ActionResult({ extractedContent: msg, includeInMemory: true });
+        }
+        const msg = 'Failed to capture screenshot';
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_FAIL, msg);
+        return new ActionResult({ error: msg });
+      }, screenshotActionSchema);
+      actions.push(screenshotAction);
+    }
+
+    // Coordinate clicking (opt-in setting, requires vision)
+    if (this.context.options.enableCoordinateClick && isVisionActive(this.context.options.useVision)) {
+      const clickCoord = new Action(async (input: z.infer<typeof clickCoordinateActionSchema.schema>) => {
+        this.checkCancelled();
+        const intent = input.intent || `Click coordinate (${input.x}, ${input.y})`;
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
+
+        const page = await this.context.browserContext.getCurrentPage();
+        let actualX = input.x;
+        let actualY = input.y;
+
+        // Convert from LLM screenshot space to actual viewport space if screenshots were resized
+        const llmSize = this.context.options.llmScreenshotSize;
+        if (llmSize) {
+          const viewport = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+          actualX = Math.round((input.x / llmSize[0]) * viewport.w);
+          actualY = Math.round((input.y / llmSize[1]) * viewport.h);
+        }
+
+        try {
+          await page.clickAtCoordinate(actualX, actualY);
+          const msg = `Clicked coordinate (${input.x}, ${input.y})${llmSize ? ` → viewport (${actualX}, ${actualY})` : ''}`;
+          this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
+          return new ActionResult({ extractedContent: msg, includeInMemory: true });
+        } catch (error) {
+          const msg = `Coordinate click failed: ${error instanceof Error ? error.message : String(error)}`;
+          this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_FAIL, msg);
+          return new ActionResult({ error: msg });
+        }
+      }, clickCoordinateActionSchema);
+      actions.push(clickCoord);
     }
 
     return actions;

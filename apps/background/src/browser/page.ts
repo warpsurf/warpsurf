@@ -139,7 +139,7 @@ export default class Page {
   getElementScrollInfo = (el: DOMElementNode) => this._scroll.getScrollInfo(el);
   getCachedState = () => this._cache.cached;
 
-  async getState(useVision = false, cacheClickableElementsHashes = false): Promise<PageState> {
+  async getState(useVision: boolean | 'auto' = false, cacheClickableElementsHashes = false): Promise<PageState> {
     if (!this._validWebPage) return build_initial_state(this._tabId);
 
     try {
@@ -163,6 +163,34 @@ export default class Page {
   takeScreenshot = (fullPage?: boolean) => this._screenshots.capture(fullPage);
   getGoogleSearchResults = (max?: number) => this._screenshots.getGoogleSearchResults(max);
   getGoogleSearchResultsWithMeta = (max?: number) => this._screenshots.getGoogleSearchResultsWithMeta(max);
+
+  /** Inject highlights, capture a screenshot, then clean up. For on-demand vision. */
+  async takeScreenshotWithHighlights(): Promise<string | null> {
+    try {
+      await this.getClickableElements(true, -1);
+      const b64 = await this.takeScreenshot();
+      await this.removeHighlight();
+      return b64;
+    } catch {
+      await this.removeHighlight().catch(() => {});
+      return null;
+    }
+  }
+
+  /** Execute a function in the page context. Thin wrapper around Puppeteer page.evaluate. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async evaluate<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
+    const page = this._adapter.page;
+    if (!page) throw new Error('Puppeteer is not connected');
+    return await page.evaluate(fn, ...args);
+  }
+
+  /** Click at exact viewport coordinates using CDP mouse events. */
+  async clickAtCoordinate(x: number, y: number): Promise<void> {
+    const page = this._adapter.page;
+    if (!page) throw new Error('Puppeteer is not connected');
+    await page.mouse.click(x, y);
+  }
 
   url(): string {
     return this._adapter.page?.url() || this._state.url;

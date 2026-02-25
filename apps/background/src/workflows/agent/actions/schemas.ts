@@ -321,3 +321,23 @@ export const quickTextScanActionSchema: ActionSchema = {
     max_chars: z.number().int().min(200).max(50000).default(3000).describe('truncate to this many characters'),
   }),
 };
+
+export const screenshotActionSchema: ActionSchema = {
+  name: 'screenshot',
+  description:
+    'Capture a screenshot of the current page for visual analysis. Use when DOM text alone is insufficient to understand the page layout or content.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+  }),
+};
+
+export const clickCoordinateActionSchema: ActionSchema = {
+  name: 'click_coordinate',
+  description:
+    'Click at exact pixel coordinates on the page. Use when element indices are unreliable or for visually-identified targets.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    x: z.number().int().describe('X pixel coordinate'),
+    y: z.number().int().describe('Y pixel coordinate'),
+  }),
+};
