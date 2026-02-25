@@ -2,6 +2,7 @@ import { type BaseMessage, AIMessage, HumanMessage, SystemMessage, ToolMessage }
 import { MessageHistory, MessageMetadata } from '@src/workflows/shared/messages/views';
 import { createLogger } from '@src/log';
 import { wrapUserRequest, USER_REQUEST_TAG_START, USER_REQUEST_TAG_END } from '@src/workflows/shared/messages/utils';
+import { compactHistory } from '@src/workflows/specialized/message-compactor';
 
 const logger = createLogger('MessageManager');
 
@@ -629,6 +630,72 @@ export default class MessageManager {
     const id = toolCallId ?? this.nextToolId();
     const msg = new ToolMessage({ content, tool_call_id: String(id) });
     this.addMessageWithTokens(msg, messageType);
+  }
+
+  private static readonly COMPACTION_PREFIX = '[Procedural Memory Summary]\n';
+  private static readonly SCAFFOLD_TYPES = new Set(['init', 'context', 'skills']);
+
+  /**
+   * Summarize older step messages into a single procedural memory to prevent context overflow.
+   * Preserves scaffold (system/init/context/skills) and the most recent messages.
+   * The LLM summarization is delegated to the compactHistory workflow.
+   */
+  public async compactMessages(options: {
+    llm: any;
+    keepLastItems?: number;
+    summaryMaxChars?: number;
+    triggerCharCount?: number;
+  }): Promise<boolean> {
+    const { llm, keepLastItems = 6, summaryMaxChars = 6000, triggerCharCount = 40000 } = options;
+    const msgs = this.history.messages;
+
+    const estimatedChars = this.history.totalTokens * this.settings.estimatedCharactersPerToken;
+    if (estimatedChars < triggerCharCount) return false;
+
+    // Compactable = not scaffold-typed, not <task_history> marker, not in recency zone
+    const recentStart = Math.max(0, msgs.length - keepLastItems);
+    const compactIndices: number[] = [];
+    for (let i = 0; i < recentStart; i++) {
+      const type = msgs[i].metadata.message_type;
+      if (MessageManager.SCAFFOLD_TYPES.has(type ?? '')) continue;
+      if (MessageManager.getContentText(msgs[i].message) === '<task_history>') continue;
+      compactIndices.push(i);
+    }
+    if (compactIndices.length < 3) return false;
+
+    // Serialize compactable messages with role labels
+    const parts: string[] = [];
+    for (const i of compactIndices) {
+      const m = msgs[i].message;
+      const text = MessageManager.getContentText(m);
+      if (!text) continue;
+      const label = m instanceof AIMessage ? '[Agent]' : m instanceof ToolMessage ? '[Result]' : '[State]';
+      parts.push(`${label} ${text}`);
+    }
+
+    const summary = await compactHistory(llm, parts.join('\n---\n'), summaryMaxChars);
+    if (!summary) return false;
+
+    // Remove compacted messages (reverse to preserve indices), then insert summary
+    const insertAt = compactIndices[0];
+    for (let i = compactIndices.length - 1; i >= 0; i--) {
+      this.history.removeMessage(compactIndices[i]);
+    }
+    this.addMessageWithTokens(new HumanMessage(MessageManager.COMPACTION_PREFIX + summary), null, insertAt);
+
+    logger.info(`Compacted ${compactIndices.length} messages into summary (${summary.length} chars)`);
+    return true;
+  }
+
+  private static getContentText(message: BaseMessage): string {
+    if (typeof message.content === 'string') return message.content;
+    if (Array.isArray(message.content)) {
+      return message.content
+        .filter((item: any) => typeof item === 'object' && item !== null && 'text' in item)
+        .map((item: any) => item.text)
+        .join('');
+    }
+    return '';
   }
 
   public setCurrentTask(task: string): void {
