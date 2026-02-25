@@ -9,6 +9,27 @@ import { createSystemHandler } from './handlers/system-event-handler';
 let lastErrorContent: string | null = null;
 let lastErrorTime = 0;
 
+function persistCancelledContent(deps: any): void {
+  if (!deps.lastAgentMessageRef?.current) return;
+  const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
+  deps.setMessages?.((prev: any[]) =>
+    prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
+  );
+  try {
+    const sid = deps.sessionIdRef?.current;
+    if (sid) {
+      chatHistoryStore
+        .updateMessageContent(
+          sid,
+          deps.lastAgentMessageRef.current.actor,
+          deps.lastAgentMessageRef.current.timestamp,
+          'Task cancelled',
+        )
+        .catch(() => {});
+    }
+  } catch {}
+}
+
 export function createPanelHandlers(deps: any): any {
   return {
     onSessionSubscribed: (message: any) => {
@@ -564,10 +585,14 @@ export function createPanelHandlers(deps: any): any {
         jobActive: deps.jobActiveRef?.current,
       });
       if (!data) {
-        deps.setHasFirstPreview(false);
-        deps.setMirrorPreview(null);
-        deps.setMirrorPreviewBatch([]);
-        deps.setIsAgentModeActive(false);
+        // During an active workflow, keep the preview box mounted with last known data
+        // to avoid layout flickering when the agent navigates between pages.
+        if (!deps.jobActiveRef?.current) {
+          deps.setHasFirstPreview(false);
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.setIsAgentModeActive(false);
+        }
       } else {
         // Session gate: ignore updates when no session is active or session mismatches
         const currentSession = deps.sessionIdRef.current ? String(deps.sessionIdRef.current) : '';
@@ -655,10 +680,13 @@ export function createPanelHandlers(deps: any): any {
       );
 
       if (filteredAll.length === 0 || !deps.jobActiveRef.current) {
-        deps.setMirrorPreviewBatch([]);
-        deps.setMirrorPreview(null);
-        deps.setHasFirstPreview(false);
-        deps.setIsAgentModeActive(false);
+        // During an active workflow with no batch data, keep the preview mounted
+        if (!deps.jobActiveRef.current) {
+          deps.setMirrorPreviewBatch([]);
+          deps.setMirrorPreview(null);
+          deps.setHasFirstPreview(false);
+          deps.setIsAgentModeActive(false);
+        }
         return;
       }
 
@@ -874,12 +902,7 @@ export function createPanelHandlers(deps: any): any {
 
         // Stop animations - mark aggregate message as completed and update content
         const rootId = deps.agentTraceRootIdRef?.current;
-        if (deps.lastAgentMessageRef?.current) {
-          const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
-          deps.setMessages?.((prev: any[]) =>
-            prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
-          );
-        }
+        persistCancelledContent(deps);
         deps.setMessageMetadata?.((prev: any) => {
           const update: any = { ...prev, __workflowCancelled: true };
           if (rootId) update[rootId] = { ...prev[rootId], isCompleted: true };
@@ -917,12 +940,7 @@ export function createPanelHandlers(deps: any): any {
 
       // Stop animations - mark aggregate message as completed and update content
       const rootId = deps.agentTraceRootIdRef?.current;
-      if (deps.lastAgentMessageRef?.current) {
-        const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
-        deps.setMessages?.((prev: any[]) =>
-          prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
-        );
-      }
+      persistCancelledContent(deps);
       deps.setMessageMetadata?.((prev: any) => {
         const update: any = { ...prev, __workflowCancelled: true };
         if (rootId) update[rootId] = { ...prev[rootId], isCompleted: true };

@@ -405,14 +405,17 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           deps.setHasFirstPreview(false);
           try {
             const isAgentV2 = deps.getCurrentTaskAgentType() === 'multiagent';
+            const hasAggregate = !!deps.agentTraceRootIdRef.current;
             const cancelKey = `${deps.sessionIdRef.current || data?.taskId || 'unknown'}:cancelled`;
             const summaryData = parseJobSummary(data);
-            if (!isAgentV2 && !deps.processedJobSummariesRef.current.has(cancelKey)) {
+            if (!isAgentV2 && !hasAggregate && !deps.processedJobSummariesRef.current.has(cancelKey)) {
               deps.appendMessage({ actor: Actors.SYSTEM, content: 'Task cancelled', timestamp });
               deps.processedJobSummariesRef.current.add(cancelKey);
             }
             if (!isAgentV2) {
-              const messageId = `${timestamp}-${Actors.SYSTEM}`;
+              const messageId = hasAggregate
+                ? (deps.agentTraceRootIdRef.current as string)
+                : `${timestamp}-${Actors.SYSTEM}`;
               const requestSummary = {
                 inputTokens: Number(summaryData?.totalInputTokens) || 0,
                 outputTokens: Number(summaryData?.totalOutputTokens) || 0,
@@ -441,20 +444,6 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           if (deps.agentTraceRootIdRef.current) {
             addTraceItem(Actors.SYSTEM, 'Task cancelled', timestamp, deps);
             markAggregateComplete(deps);
-            try {
-              const sid = deps.sessionIdRef.current;
-              const cancelKey = `${String(sid || data?.taskId || 'unknown')}:cancelled`;
-              // Only persist a SYSTEM cancel line if we didn't already append one.
-              // (Non-v2 paths append via deps.appendMessage and mark cancelKey.)
-              if (sid && !deps.processedJobSummariesRef.current.has(cancelKey)) {
-                chatHistoryStore.addMessage(sid, {
-                  actor: Actors.SYSTEM,
-                  content: 'Task cancelled',
-                  timestamp,
-                } as any);
-                deps.processedJobSummariesRef.current.add(cancelKey);
-              }
-            } catch {}
           }
           try {
             const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
