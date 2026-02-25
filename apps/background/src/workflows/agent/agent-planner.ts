@@ -7,28 +7,24 @@ import { Actors, ExecutionState } from '@src/workflows/shared/event/types';
 import { isAbortedError, isTimeoutError, RequestCancelledError } from '../shared/agent-errors';
 const logger = createLogger('PlannerAgent');
 
-// Define Zod schema for planner output
+const boolFromString = () =>
+  z.union([
+    z.boolean(),
+    z.string().transform(val => {
+      if (val.toLowerCase() === 'true') return true;
+      if (val.toLowerCase() === 'false') return false;
+      throw new Error('Invalid boolean string');
+    }),
+  ]);
+
 export const plannerOutputSchema = z.object({
   observation: z.string(),
   challenges: z.string(),
-  done: z.union([
-    z.boolean(),
-    z.string().transform(val => {
-      if (val.toLowerCase() === 'true') return true;
-      if (val.toLowerCase() === 'false') return false;
-      throw new Error('Invalid boolean string');
-    }),
-  ]),
-  next_steps: z.string(),
+  done: boolFromString(),
+  plan_steps: z.array(z.string()).describe('Ordered list of concrete steps to accomplish the task.'),
+  next_steps: z.string().describe('Legacy fallback — use plan_steps instead.'),
   reasoning: z.string(),
-  web_task: z.union([
-    z.boolean(),
-    z.string().transform(val => {
-      if (val.toLowerCase() === 'true') return true;
-      if (val.toLowerCase() === 'false') return false;
-      throw new Error('Invalid boolean string');
-    }),
-  ]),
+  web_task: boolFromString(),
 });
 
 export type PlannerOutput = z.infer<typeof plannerOutputSchema>;
@@ -69,7 +65,8 @@ export class AgentPlanner extends BaseAgent<typeof plannerOutputSchema, PlannerO
       if (!modelOutput) {
         throw new Error('Failed to validate planner output');
       }
-      this.context.emitEvent(Actors.AGENT_PLANNER, ExecutionState.STEP_OK, modelOutput.next_steps);
+      const stepsText = modelOutput.plan_steps?.join('; ') || modelOutput.next_steps || '';
+      this.context.emitEvent(Actors.AGENT_PLANNER, ExecutionState.STEP_OK, stepsText);
       logger.info('Planner output', JSON.stringify(modelOutput, null, 2));
 
       return {

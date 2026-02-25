@@ -84,6 +84,12 @@ export class NavigatorActionRegistry {
     return z.object({
       current_state: agentBrainSchema,
       action: z.array(actionSchema),
+      current_plan_item: z
+        .number()
+        .int()
+        .nullable()
+        .optional()
+        .describe('Index of the plan step you are now working on.'),
     });
   }
 
@@ -94,6 +100,12 @@ export class NavigatorActionRegistry {
     return z.object({
       current_state: agentBrainSchema,
       action: z.array(actionSchema),
+      current_plan_item: z
+        .number()
+        .int()
+        .nullable()
+        .optional()
+        .describe('Index of the plan step you are now working on.'),
     });
   }
 }
@@ -304,6 +316,11 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       }
 
       const modelOutput = await this.invoke(inputMessages);
+
+      // Advance inline plan if the navigator indicated progress
+      if (this.context.plan && modelOutput.current_plan_item != null) {
+        this.context.advancePlan(modelOutput.current_plan_item);
+      }
 
       // check if the task is paused or stopped
       if (this.context.paused || this.context.stopped) {
