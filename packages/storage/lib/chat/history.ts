@@ -560,6 +560,26 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       return stored;
     },
 
+    updateMessageContent: async (
+      sessionId: string,
+      actor: string,
+      timestamp: number,
+      newContent: string,
+    ): Promise<void> => {
+      const sid = String(sessionId || '').trim();
+      if (!sid) return;
+      const messagesStorage = getSessionMessagesStorage(sid);
+      await messagesStorage.set(prev => {
+        const arr = Array.isArray(prev) ? prev : [];
+        return arr.map(m => {
+          if (String((m as any)?.actor || '') === actor && Number((m as any)?.timestamp || 0) === timestamp) {
+            return { ...m, content: newContent };
+          }
+          return m;
+        });
+      });
+    },
+
     deleteMessage: async (sessionId: string, messageId: string): Promise<void> => {
       // Get the messages storage for this session
       const messagesStorage = getSessionMessagesStorage(sessionId);

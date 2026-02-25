@@ -167,6 +167,9 @@ export interface ChatHistoryStorage {
   // Add a message to a chat session
   addMessage: (sessionId: string, message: Message) => Promise<ChatMessage>;
 
+  // Update the content of a specific message (matched by actor + timestamp)
+  updateMessageContent: (sessionId: string, actor: string, timestamp: number, newContent: string) => Promise<void>;
+
   // Delete a message from a chat session
   deleteMessage: (sessionId: string, messageId: string) => Promise<void>;
 
