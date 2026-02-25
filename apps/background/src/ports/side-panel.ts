@@ -868,6 +868,43 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             return;
           }
         }
+        case 'cancel_queued_message': {
+          const text = String(message.text || '');
+          const executor = getCurrentExecutor();
+          try {
+            const ctx = (executor as any)?.context;
+            if (ctx?.pendingUserMessages) {
+              const idx = ctx.pendingUserMessages.indexOf(text);
+              if (idx >= 0) {
+                ctx.pendingUserMessages.splice(idx, 1);
+                logger.info(`Cancelled queued message (${ctx.pendingUserMessages.length} remaining)`);
+              }
+            }
+          } catch {}
+          return;
+        }
+        case 'inject_live_message': {
+          const text = String(message.text || '').trim();
+          const executor = getCurrentExecutor();
+          if (!text || !executor) {
+            safePostMessage(port, { type: 'error', error: 'No active agent or empty message' });
+            return;
+          }
+          try {
+            const ctx = (executor as any).context;
+            if (ctx?.pendingUserMessages) {
+              ctx.pendingUserMessages.push(text);
+              logger.info(`Live message queued (${ctx.pendingUserMessages.length} pending)`);
+              safePostMessage(port, { type: 'live_message_queued', count: ctx.pendingUserMessages.length });
+            } else {
+              safePostMessage(port, { type: 'error', error: 'Agent not running a browser workflow' });
+            }
+          } catch (e) {
+            logger.error('Failed to queue live message:', e);
+            safePostMessage(port, { type: 'error', error: 'Failed to queue message' });
+          }
+          return;
+        }
         case 'hand_back_control': {
           const { tabId, instructions } = message;
           logger.info(`Hand back control requested for tab ${tabId}`);
