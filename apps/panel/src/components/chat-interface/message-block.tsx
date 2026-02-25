@@ -104,6 +104,8 @@ export interface MessageBlockProps {
   hasPreviewPanel?: boolean;
   /** Resolved attachments for this message (loaded from storage) */
   messageAttachments?: Attachment[];
+  /** Plan items for plan tab display */
+  planItems?: Array<{ text: string; status: string }>;
 }
 
 export default function MessageBlock({
@@ -124,10 +126,12 @@ export default function MessageBlock({
   onCancelEstimation,
   hasPreviewPanel = false,
   messageAttachments = [],
+  planItems,
 }: MessageBlockProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [showTabContextTooltip, setShowTabContextTooltip] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
+  const [expandedTab, setExpandedTab] = useState<'details' | 'plan'>('details');
   const [copied, setCopied] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<'above' | 'below'>('below');
   const [tabContextTooltipPosition, setTabContextTooltipPosition] = useState<'above' | 'below'>('below');
@@ -490,17 +494,57 @@ export default function MessageBlock({
             </span>
           )}
           {isAgentAggregate && (
-            <button
-              type="button"
-              onClick={() => setCollapsed(!collapsed)}
-              className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-600 hover:bg-gray-100'}`}>
-              <span className="flex items-center gap-1">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points={collapsed ? '6,9 12,15 18,9' : '18,15 12,9 6,15'} />
-                </svg>
-                {collapsed ? 'Details' : 'Hide'}
-              </span>
-            </button>
+            <span className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!collapsed && expandedTab === 'details') {
+                    setCollapsed(true);
+                    return;
+                  }
+                  setExpandedTab('details');
+                  setCollapsed(false);
+                }}
+                className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${
+                  !collapsed && expandedTab === 'details'
+                    ? isDarkMode
+                      ? 'text-violet-300 bg-slate-800 opacity-100'
+                      : 'text-violet-600 bg-gray-100 opacity-100'
+                    : isDarkMode
+                      ? 'text-slate-300 hover:bg-slate-800'
+                      : 'text-gray-600 hover:bg-gray-100'
+                }`}>
+                <span className="flex items-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points={!collapsed && expandedTab === 'details' ? '18,15 12,9 6,15' : '6,9 12,15 18,9'} />
+                  </svg>
+                  Details
+                </span>
+              </button>
+              {planItems && planItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!collapsed && expandedTab === 'plan') {
+                      setCollapsed(true);
+                      return;
+                    }
+                    setExpandedTab('plan');
+                    setCollapsed(false);
+                  }}
+                  className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${
+                    !collapsed && expandedTab === 'plan'
+                      ? isDarkMode
+                        ? 'text-violet-300 bg-slate-800 opacity-100'
+                        : 'text-violet-600 bg-gray-100 opacity-100'
+                      : isDarkMode
+                        ? 'text-slate-300 hover:bg-slate-800'
+                        : 'text-gray-600 hover:bg-gray-100'
+                  }`}>
+                  Plan
+                </button>
+              )}
+            </span>
           )}
           <div className="relative">
             <button
@@ -648,7 +692,34 @@ export default function MessageBlock({
                     </button>
                   </div>
                 )}
-              {isAgentAggregate && !collapsed && workerItems?.length && (
+              {isAgentAggregate && !collapsed && expandedTab === 'plan' && planItems && planItems.length > 0 && (
+                <div
+                  className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+                  <div className="space-y-0.5">
+                    {planItems.map((item, i) => {
+                      const marker =
+                        item.status === 'done'
+                          ? '\u2705'
+                          : item.status === 'current'
+                            ? '\u25B6\uFE0F'
+                            : item.status === 'skipped'
+                              ? '\u23ED\uFE0F'
+                              : '\u2B1C';
+                      return (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-1.5 ${
+                            item.status === 'done' ? 'opacity-50' : item.status === 'current' ? 'font-medium' : ''
+                          }`}>
+                          <span className="shrink-0 text-[11px]">{marker}</span>
+                          <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{item.text}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {isAgentAggregate && !collapsed && expandedTab === 'details' && workerItems?.length && (
                 <div
                   className="mt-2 rounded-md border p-2 text-xs clear-both"
                   style={agentColorHex ? { borderColor: agentColorHex } : undefined}>
@@ -689,7 +760,7 @@ export default function MessageBlock({
                   </div>
                 </div>
               )}
-              {isAgentAggregate && !collapsed && traceItems.length > 0 && (
+              {isAgentAggregate && !collapsed && expandedTab === 'details' && traceItems.length > 0 && (
                 <div className="mt-2 clear-both">
                   <AgentTrajectory traceItems={traceItems} isDarkMode={isDarkMode} compactMode={compactMode} />
                 </div>

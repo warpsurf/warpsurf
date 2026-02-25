@@ -7,6 +7,7 @@ import { EventType, type AgentEvent } from '../types/event';
 type BackgroundHandlers = {
   onExecution?: (event: AgentEvent) => void;
   onExecutionMeta?: (message: any) => void;
+  onLiveMessageQueued?: (message: any) => void;
   onWorkflowGraphUpdate?: (message: any) => void;
   onWorkflowPlanDataset?: (message: any) => void;
   onWorkflowProgress?: (message: any) => void;
@@ -240,6 +241,8 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           try {
             handlersRef.current.onExecutionMeta?.(message);
           } catch {}
+        } else if (message && message.type === 'live_message_queued') {
+          handlersRef.current.onLiveMessageQueued?.(message);
         } else if (message && message.type === 'workflow_graph_update') {
           handlersRef.current.onWorkflowGraphUpdate?.(message);
         } else if (message && message.type === 'workflow_plan_dataset') {

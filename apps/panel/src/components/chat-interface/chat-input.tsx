@@ -100,6 +100,11 @@ interface ChatInputProps {
   // Allow parent to control the selected agent programmatically
   setAgentSelector?: (setter: (agent: WorkflowType) => void) => void;
   isJobActive?: boolean;
+  isAgentModeActive?: boolean;
+  // Live message injection into running agent workflow
+  onInjectLiveMessage?: (text: string) => void;
+  queuedMessages?: string[];
+  onCancelQueuedMessage?: (index: number) => void;
   // Whether a stop request is pending confirmation
   isStopping?: boolean;
   // Context tabs - lifted state from parent for persistence across renders
@@ -171,6 +176,10 @@ export default function ChatInput({
   lastAutoDecision = null,
   setAgentSelector,
   isJobActive = false,
+  isAgentModeActive = false,
+  onInjectLiveMessage,
+  queuedMessages = [],
+  onCancelQueuedMessage,
   isStopping = false,
   contextTabIds: externalContextTabIds,
   onContextTabsChange,
@@ -232,10 +241,12 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
 
-  const isSendButtonDisabled = useMemo(
-    () => disabled || (text.trim() === '' && pendingAttachments.filter(a => a.status === 'ready').length === 0),
-    [disabled, text, pendingAttachments],
-  );
+  const canInjectLive = isJobActive && isAgentModeActive && !!onInjectLiveMessage;
+  const isSendButtonDisabled = useMemo(() => {
+    const hasContent = text.trim() !== '' || pendingAttachments.filter(a => a.status === 'ready').length > 0;
+    if (canInjectLive) return !hasContent;
+    return disabled || !hasContent;
+  }, [disabled, text, pendingAttachments, canInjectLive]);
 
   const pendingAttachmentsRef = useRef(pendingAttachments);
   pendingAttachmentsRef.current = pendingAttachments;
@@ -399,6 +410,15 @@ export default function ChatInput({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!text.trim()) return;
+
+      // Live injection into running agent workflow
+      if (canInjectLive && onInjectLiveMessage) {
+        onInjectLiveMessage(text.trim());
+        setText('');
+        return;
+      }
+
       if (text.trim()) {
         // Clean up text by removing prefixes if present
         let cleanText = text.trim();
@@ -498,6 +518,8 @@ export default function ChatInput({
       onContextTabsCapture,
       onAttachmentsCapture,
       pendingAttachments,
+      canInjectLive,
+      onInjectLiveMessage,
     ],
   );
 
@@ -549,6 +571,35 @@ export default function ChatInput({
           </span>
         </div>
       )}
+      {/* Queued live messages */}
+      {queuedMessages.length > 0 && (
+        <div
+          className={`flex flex-col gap-1 px-3 py-1.5 text-xs border-b ${
+            isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'
+          }`}>
+          {queuedMessages.map((msg, i) => (
+            <div key={`${i}-${msg.slice(0, 32)}`} className="flex items-center gap-1.5">
+              <span className="shrink-0 opacity-60">&#128340;</span>
+              <span className="truncate flex-1">{msg}</span>
+              {onCancelQueuedMessage && (
+                <button
+                  type="button"
+                  onClick={() => onCancelQueuedMessage(i)}
+                  className={`shrink-0 rounded p-0.5 opacity-50 hover:opacity-100 transition-opacity ${
+                    isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                  }`}
+                  title="Cancel queued message">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col overflow-hidden rounded-xl">
         {/* Resize handle */}
         <div
@@ -570,19 +621,15 @@ export default function ChatInput({
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          disabled={disabled}
-          aria-disabled={disabled}
           style={{ height: textareaHeight }}
           className={`w-full resize-none border-none p-2 focus:outline-none ${
-            disabled
-              ? isDarkMode
-                ? 'cursor-not-allowed bg-slate-800 text-gray-400'
-                : 'cursor-not-allowed bg-gray-100 text-gray-500'
-              : isDarkMode
-                ? 'bg-slate-800 text-gray-200'
-                : 'bg-white'
+            isDarkMode ? 'bg-slate-800 text-gray-200' : 'bg-white'
           }`}
-          placeholder="What can I help you with? Enter / for workflow commands."
+          placeholder={
+            isJobActive && isAgentModeActive
+              ? 'Send instructions to the running agent...'
+              : 'What can I help you with? Enter / for workflow commands.'
+          }
           aria-label="Message input"
         />
 

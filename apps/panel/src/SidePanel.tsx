@@ -75,7 +75,7 @@ const SidePanel = () => {
   const [requestSummaries, setRequestSummaries] = useState<{ [messageId: string]: any }>({});
   const [messageMetadata, setMessageMetadata] = useState<{ [messageId: string]: any }>({});
   const [displayHighlights, setDisplayHighlights] = useState<boolean>(false);
-  const [useVisionState, setUseVisionState] = useState<boolean>(false);
+  const [useVisionState, setUseVisionState] = useState<boolean | 'auto'>('auto');
   const [showTabPreviews, setShowTabPreviews] = useState<boolean>(true);
   const [forceChatView, setForceChatView] = useState<boolean>(false);
   const [enablePlanner, setEnablePlanner] = useState<boolean>(false);
@@ -96,6 +96,10 @@ const SidePanel = () => {
   const [hasFirstPreview, setHasFirstPreview] = useState(false);
   const [isJobActive, setIsJobActive] = useState(false);
   const [isAgentModeActive, setIsAgentModeActive] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<Array<{ text: string; status: string }> | null>(null);
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
+  const queuedMessagesRef = useRef(queuedMessages);
+  queuedMessagesRef.current = queuedMessages;
   const [showEmergencyStop, setShowEmergencyStop] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [agentTraceRootId, setAgentTraceRootId] = useState<string | null>(null);
@@ -389,6 +393,9 @@ const SidePanel = () => {
     setShowDashboard,
     setShowHistory,
     setCurrentTaskAgentType,
+    setCurrentPlan,
+    setQueuedMessages,
+    getQueuedMessages: () => queuedMessagesRef.current,
     currentTaskAgentType,
     workerTabGroups,
     messages,
@@ -962,6 +969,20 @@ const SidePanel = () => {
               pinnedMessageIds={pinnedMessageIds}
               currentTaskAgentType={currentTaskAgentType}
               isJobActive={isJobActive}
+              isAgentModeActive={isAgentModeActive}
+              currentPlan={currentPlan}
+              queuedMessages={queuedMessages}
+              onInjectLiveMessage={(text: string) => {
+                if (portRef.current) {
+                  portRef.current.postMessage({ type: 'inject_live_message', text });
+                  setQueuedMessages(prev => [...prev, text]);
+                }
+              }}
+              onCancelQueuedMessage={(index: number) => {
+                const text = queuedMessages[index];
+                setQueuedMessages(prev => prev.filter((_, i) => i !== index));
+                if (text) portRef.current?.postMessage({ type: 'cancel_queued_message', text });
+              }}
               tokenLog={tokenLog}
               useFullPlanningPipeline={useFullPlanningPipeline}
               enablePlanner={enablePlanner}

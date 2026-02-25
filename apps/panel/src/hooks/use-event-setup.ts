@@ -60,6 +60,9 @@ export function useEventSetup(params: {
   setShowDashboard: (v: boolean) => void;
   setShowHistory: (v: boolean) => void;
   setCurrentTaskAgentType: (v: string | null) => void;
+  setCurrentPlan?: (v: Array<{ text: string; status: string }> | null) => void;
+  setQueuedMessages?: (v: any) => void;
+  getQueuedMessages?: () => string[];
   currentTaskAgentType: string | null;
   workerTabGroups: any[];
   messages: any[];
@@ -466,6 +469,9 @@ export function useEventSetup(params: {
         setShowDashboard,
         setShowHistory,
         setCurrentTaskAgentType,
+        setCurrentPlan: params.setCurrentPlan,
+        setQueuedMessages: params.setQueuedMessages,
+        getQueuedMessages: params.getQueuedMessages,
       }),
     [
       logger,

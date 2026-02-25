@@ -37,6 +37,10 @@ export interface MessageListProps {
   scrollParent?: HTMLElement | null;
   /** Resolved attachments keyed by attachment ID */
   sessionAttachments?: Record<string, Attachment>;
+  /** Current plan items for the active agent run */
+  planItems?: Array<{ text: string; status: string }>;
+  /** When true, preview space is reserved for the aggregate root even without a screenshot */
+  isAgentWorkflowActive?: boolean;
 }
 
 export default memo(function MessageList({
@@ -62,6 +66,8 @@ export default memo(function MessageList({
   onApproveEstimation,
   onCancelEstimation,
   sessionAttachments = {},
+  planItems,
+  isAgentWorkflowActive = false,
 }: MessageListProps) {
   const lastAgentIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -105,10 +111,11 @@ export default memo(function MessageList({
           const hasLivePreview = !!(inlinePreview || inlinePreviewBatch?.length);
           const isFallbackLastAgent =
             !activeAggregateMessageId &&
-            hasLivePreview &&
+            (hasLivePreview || isAgentWorkflowActive) &&
             (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
-          // Only show preview panel when there's a live preview AND workflow is active
-          const showPreviewHere = hasLivePreview && (isCurrentRunRoot || isFallbackLastAgent);
+          // Reserve preview space when workflow is active (even without a screenshot yet)
+          const showPreviewHere =
+            (hasLivePreview || isAgentWorkflowActive) && (isCurrentRunRoot || isFallbackLastAgent);
           const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
           const agentColorHex =
             metadata?.agentColor || (activeAggregateMessageId === messageId ? inlinePreview?.color : undefined);
@@ -141,6 +148,7 @@ export default memo(function MessageList({
             onApproveEstimation,
             onCancelEstimation,
             messageAttachments: resolvedAttachments,
+            planItems: isCurrentRunRoot || isFallbackLastAgent ? planItems : undefined,
           };
 
           const isUserMessage = message.actor === Actors.USER;

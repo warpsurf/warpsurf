@@ -35,11 +35,16 @@ export interface ChatScreenProps {
   pinnedMessageIds: Set<string>;
   currentTaskAgentType: string | null;
   isJobActive: boolean;
+  isAgentModeActive?: boolean;
+  currentPlan?: Array<{ text: string; status: string }> | null;
+  queuedMessages?: string[];
+  onInjectLiveMessage?: (text: string) => void;
+  onCancelQueuedMessage?: (index: number) => void;
   tokenLog: any[];
   useFullPlanningPipeline: boolean;
   enablePlanner: boolean;
   enableValidator: boolean;
-  useVisionState: boolean;
+  useVisionState: boolean | 'auto';
   hasConfiguredModels: boolean | null;
   favoritePrompts: FavoritePrompt[];
   replayEnabled: boolean;
@@ -260,6 +265,10 @@ export function ChatScreen(props: ChatScreenProps) {
                   showStopButton={showStopButton}
                   isPaused={isPaused}
                   isJobActive={isJobActive}
+                  isAgentModeActive={props.isAgentModeActive}
+                  onInjectLiveMessage={props.onInjectLiveMessage}
+                  queuedMessages={props.queuedMessages}
+                  onCancelQueuedMessage={props.onCancelQueuedMessage}
                   isStopping={isStopping}
                   historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                   onSendMessage={handleSendMessage}
@@ -364,6 +373,8 @@ export function ChatScreen(props: ChatScreenProps) {
                   isPreviewCollapsed={isPreviewCollapsed}
                   activeAggregateMessageId={agentTraceRootId}
                   onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+                  planItems={props.currentPlan || undefined}
+                  isAgentWorkflowActive={!!props.isAgentModeActive && isJobActive}
                   pendingEstimation={pendingEstimation}
                   availableModelsForEstimation={availableModelsForEstimation}
                   onApproveEstimation={(selectedModel, updatedEstimation) => {
@@ -453,6 +464,10 @@ export function ChatScreen(props: ChatScreenProps) {
                   showStopButton={showStopButton}
                   isPaused={isPaused}
                   isJobActive={isJobActive}
+                  isAgentModeActive={props.isAgentModeActive}
+                  onInjectLiveMessage={props.onInjectLiveMessage}
+                  queuedMessages={props.queuedMessages}
+                  onCancelQueuedMessage={props.onCancelQueuedMessage}
                   isStopping={isStopping}
                   historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                   onSendMessage={handleSendMessage}

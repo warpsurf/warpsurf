@@ -27,7 +27,7 @@ export function usePanelEffects(params: {
   setHasProviders: (v: boolean | null) => void;
   setReplayEnabled: (v: boolean) => void;
   setDisplayHighlights: (v: boolean) => void;
-  setUseVisionState: (v: boolean) => void;
+  setUseVisionState: (v: boolean | 'auto') => void;
   setShowTabPreviews: (v: boolean) => void;
   setUseFullPlanningPipeline: (v: boolean) => void;
   setEnablePlanner: (v: boolean) => void;
@@ -348,7 +348,7 @@ export function usePanelEffects(params: {
         if (!settings) return;
         setReplayEnabled(settings.replayHistoricalTasks || false);
         setDisplayHighlights(settings.displayHighlights || false);
-        setUseVisionState(settings.useVision || false);
+        setUseVisionState(settings.useVision ?? 'auto');
         setShowTabPreviews(settings.showTabPreviews ?? true);
         setUseFullPlanningPipeline(settings.useFullPlanningPipeline || false);
         setEnablePlanner(settings.enablePlanner || false);
