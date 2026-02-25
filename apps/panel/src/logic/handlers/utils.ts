@@ -454,6 +454,16 @@ export function updateAggregateRootContent(content: string, deps: TaskEventHandl
         return m;
       }),
     );
+    // Persist updated content to storage so reloads show the correct message
+    const sid = deps.sessionIdRef.current;
+    if (sid) {
+      const sepIdx = rootId.indexOf('-');
+      const ts = Number(rootId.substring(0, sepIdx));
+      const actor = rootId.substring(sepIdx + 1);
+      if (ts && actor) {
+        chatHistoryStore.updateMessageContent(sid, actor, ts, content).catch(() => {});
+      }
+    }
   } catch {}
 }
 
