@@ -35,6 +35,7 @@ import {
   isUrlAllowedByFirewall,
 } from '../workflows/shared/context/context-tab-extractor';
 import { mergeContextTabIds } from '../workflows/shared/context/auto-tab-context-service';
+import { titleGenerator } from '../services/title-generator';
 
 type BaseChatModel = any;
 
@@ -428,6 +429,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 // Freeze mirrors when the orchestrator ends so previews remain
                 try {
                   await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId));
+                } catch {}
+                // Generate smart title for the session after workflow ends
+                try {
+                  titleGenerator.generateTitle(sessionId, query).catch(() => {});
                 } catch {}
               }
             })();

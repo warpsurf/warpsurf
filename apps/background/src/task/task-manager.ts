@@ -1077,8 +1077,8 @@ export class TaskManager extends EventEmitter {
       );
     } catch {}
 
-    // Generate smart title after task completes
-    if (event.state === ExecutionState.TASK_OK && this.isPrimarySession(task)) {
+    // Generate smart title after task completes (success, failure, or cancellation)
+    if (this.isPrimarySession(task)) {
       this.generateSmartTitle(sessionId, task);
     }
 
