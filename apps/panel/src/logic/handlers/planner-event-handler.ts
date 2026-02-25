@@ -33,7 +33,7 @@ export const createPlannerHandler: EventHandlerCreator = deps => {
         // Always create aggregate root on first STEP_START, even without content
         if (!deps.agentTraceRootIdRef.current) {
           createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Creating plan...', timestamp, deps, {
-            statusHint: 'navigating',
+            statusHint: 'planning',
           });
         }
         if (deps.agentTraceRootIdRef.current) {

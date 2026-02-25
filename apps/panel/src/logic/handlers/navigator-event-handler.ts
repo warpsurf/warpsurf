@@ -2,6 +2,7 @@
 
 import { Actors } from '@extension/storage';
 import { ExecutionState } from '../../types/event';
+import { stripWorkerSuffix } from '../../utils';
 import type { EventHandlerCreator } from './create-task-event-handler';
 import {
   createAggregateRoot,
@@ -42,11 +43,12 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
       return;
     }
 
-    const content = data?.details ?? (event as any)?.content ?? '';
+    const rawContent: string = data?.details ?? (event as any)?.content ?? '';
     const workerId = data?.workerId;
     const agentName = data?.agentName;
     const workerSuffix = workerId ? ` [${workerId}]` : '';
     const nameSuffix = agentName ? ` (${agentName})` : '';
+    const content = stripWorkerSuffix(rawContent);
     // Extract page URL/title from event data for trajectory tracking
     const pageUrl = typeof data?.pageUrl === 'string' ? data.pageUrl : undefined;
     const pageTitle = typeof data?.pageTitle === 'string' ? data.pageTitle : undefined;

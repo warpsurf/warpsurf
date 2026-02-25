@@ -5,7 +5,7 @@ import { FiCopy, FiClock, FiUser } from 'react-icons/fi';
 import { FaBrain, FaSearch, FaRobot, FaRandom, FaMagic, FaCog, FaChessKing, FaWrench } from 'react-icons/fa';
 import { FaFileAlt } from 'react-icons/fa';
 import { ACTOR_PROFILES } from '../../types/message';
-import { formatUsd, formatTimestamp, formatDuration, hexToRgba } from '../../utils';
+import { formatUsd, formatTimestamp, formatDuration, hexToRgba, stripWorkerSuffix } from '../../utils';
 import type { JobSummary, MessageMetadata, TraceItem, WorkerItem, ContextTabInfo } from './types';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import CodeBlock from './code-block';
@@ -141,6 +141,9 @@ export default function MessageBlock({
     isUsingCache: boolean;
     cacheDate: string | null;
   } | null>(null);
+  const [flashAction, setFlashAction] = useState<string | null>(null);
+  const traceItems: TraceItem[] = metadata?.traceItems || [];
+  const prevTraceCountRef = useRef(traceItems.length);
 
   // Fetch pricing cache status once on mount
   useEffect(() => {
@@ -182,12 +185,28 @@ export default function MessageBlock({
     return null;
   }, [content]);
 
-  const traceItems: TraceItem[] = metadata?.traceItems || [];
   const workerItems: WorkerItem[] | undefined = metadata?.workerItems;
   const lastTrace = traceItems[traceItems.length - 1];
   const displayTimestamp = isAgentAggregate && lastTrace ? lastTrace.timestamp : message.timestamp;
   const actor = ACTOR_PROFILES[message.actor as keyof typeof ACTOR_PROFILES] || { icon: '', name: '' };
   const totalWorkers = metadata?.totalWorkers || workerItems?.length;
+
+  // Flash the latest action text when a new trace item arrives
+  useEffect(() => {
+    const count = traceItems.length;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (count > prevTraceCountRef.current && count > 1 && lastTrace?.content) {
+      const actionText = stripWorkerSuffix(lastTrace.content);
+      if (actionText && actionText.length < 120) {
+        setFlashAction(actionText);
+        timer = setTimeout(() => setFlashAction(null), 2500);
+      }
+    }
+    prevTraceCountRef.current = count;
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [traceItems.length, lastTrace?.content]);
   const activeWorkers = useMemo(
     () =>
       workerItems?.filter(w => {
@@ -197,6 +216,11 @@ export default function MessageBlock({
     [workerItems],
   );
   const showMultiAvatar = (workerItems?.length || totalWorkers) && (isProgress || isAgentAggregate);
+  const isActiveWorkflow = !!(
+    isProgress ||
+    currentPhase ||
+    (isAgentAggregate && !metadata?.isCompleted && (isAgentWorking || statusHint))
+  );
   const isAgentMessage = message.actor !== Actors.USER && message.actor !== Actors.SYSTEM;
   const useDynamicColor = !!agentColorHex && isAgentMessage;
   const actorTint = useDynamicColor
@@ -475,75 +499,54 @@ export default function MessageBlock({
         {/* Floating actions */}
         <div className="float-right flex items-center gap-1 ml-2">
           {isPinned && <span className={`text-[10px] ${isDarkMode ? 'text-amber-300' : 'text-amber-600'}`}>📌</span>}
-          {isAgentAggregate && isAgentWorking && (
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`inline-block h-3 w-3 rounded-full border-2 border-t-transparent animate-spin ${isDarkMode ? 'border-slate-400' : 'border-gray-500'}`}
-              />
-              {statusHint && (
-                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {{
-                    routing: 'Routing',
-                    configuring: 'Configuring',
-                    thinking: 'Thinking',
-                    searching: 'Searching',
-                    navigating: 'Navigating',
-                  }[statusHint] || ''}
-                </span>
-              )}
+          {isActiveWorkflow && (
+            <span
+              className={`whitespace-nowrap ${compactMode ? 'text-[9px]' : 'text-[10px]'} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+              {formatTimestamp(displayTimestamp)}
             </span>
           )}
           {isAgentAggregate && (
             <span className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!collapsed && expandedTab === 'details') {
-                    setCollapsed(true);
-                    return;
-                  }
-                  setExpandedTab('details');
-                  setCollapsed(false);
-                }}
-                className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${
-                  !collapsed && expandedTab === 'details'
-                    ? isDarkMode
-                      ? 'text-violet-300 bg-slate-800 opacity-100'
-                      : 'text-violet-600 bg-gray-100 opacity-100'
-                    : isDarkMode
-                      ? 'text-slate-300 hover:bg-slate-800'
-                      : 'text-gray-600 hover:bg-gray-100'
-                }`}>
-                <span className="flex items-center gap-1">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points={!collapsed && expandedTab === 'details' ? '18,15 12,9 6,15' : '6,9 12,15 18,9'} />
-                  </svg>
-                  Details
-                </span>
-              </button>
-              {planItems && planItems.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!collapsed && expandedTab === 'plan') {
-                      setCollapsed(true);
-                      return;
-                    }
-                    setExpandedTab('plan');
-                    setCollapsed(false);
-                  }}
-                  className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${
-                    !collapsed && expandedTab === 'plan'
-                      ? isDarkMode
-                        ? 'text-violet-300 bg-slate-800 opacity-100'
-                        : 'text-violet-600 bg-gray-100 opacity-100'
-                      : isDarkMode
-                        ? 'text-slate-300 hover:bg-slate-800'
-                        : 'text-gray-600 hover:bg-gray-100'
-                  }`}>
-                  Plan
-                </button>
-              )}
+              {(['details', 'plan'] as const)
+                .filter(tab => tab === 'details' || (planItems && planItems.length > 0))
+                .map(tab => {
+                  const isOpen = !collapsed && expandedTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => {
+                        if (isOpen) {
+                          setCollapsed(true);
+                          return;
+                        }
+                        setExpandedTab(tab);
+                        setCollapsed(false);
+                      }}
+                      className={`opacity-60 hover:opacity-100 rounded px-1.5 py-0.5 text-xs font-medium transition-all ${
+                        isOpen
+                          ? isDarkMode
+                            ? 'text-violet-300 bg-slate-800 opacity-100'
+                            : 'text-violet-600 bg-gray-100 opacity-100'
+                          : isDarkMode
+                            ? 'text-slate-300 hover:bg-slate-800'
+                            : 'text-gray-600 hover:bg-gray-100'
+                      }`}>
+                      <span className="flex items-center gap-1">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2">
+                          <polyline points={isOpen ? '18,15 12,9 6,15' : '6,9 12,15 18,9'} />
+                        </svg>
+                        {tab === 'details' ? 'Details' : 'Plan'}
+                      </span>
+                    </button>
+                  );
+                })}
             </span>
           )}
           <div className="relative">
@@ -569,9 +572,10 @@ export default function MessageBlock({
         {/* Content area */}
         <div
           className={`${compactMode ? 'text-[13px] leading-[1.35]' : 'text-sm'} ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          {isProgress ? (
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-flex gap-0.5">
+          {/* Inline text content: pulsing dots when working, markdown/text otherwise */}
+          {isActiveWorkflow ? (
+            <div className="flex h-4 items-center gap-1 overflow-hidden">
+              <span className="flex gap-0.5 shrink-0">
                 {[0, 1, 2].map(i => (
                   <span
                     key={i}
@@ -580,19 +584,41 @@ export default function MessageBlock({
                   />
                 ))}
               </span>
-              <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                {{
-                  routing: 'Routing',
-                  configuring: 'Configuring',
-                  thinking: 'Thinking',
-                  searching: 'Searching',
-                  navigating: 'Navigating',
-                }[statusHint as string] || 'working...'}
+              <span className={`text-xs truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {flashAction ||
+                  (() => {
+                    const actorLabelMap: Record<string, string> = {
+                      agent_navigator: 'Navigating',
+                      agent_planner: 'Planning',
+                      planner: 'Planning',
+                      agent_validator: 'Validating',
+                      refiner: 'Refining',
+                    };
+                    const hintLabelMap: Record<string, string> = {
+                      routing: 'Routing',
+                      configuring: 'Configuring',
+                      thinking: 'Thinking',
+                      searching: 'Searching',
+                      navigating: 'Navigating',
+                      planning: 'Planning',
+                      validating: 'Validating',
+                    };
+                    const phaseLabelMap: Record<string, string> = {
+                      planner: 'Planning',
+                      processing: 'Processing',
+                      refiner: 'Refining',
+                      workers: 'Executing',
+                    };
+                    if (lastTrace?.actor && actorLabelMap[lastTrace.actor]) return actorLabelMap[lastTrace.actor];
+                    if (statusHint && hintLabelMap[statusHint]) return hintLabelMap[statusHint];
+                    if (currentPhase && phaseLabelMap[currentPhase]) return phaseLabelMap[currentPhase];
+                    return 'Working';
+                  })()}
               </span>
-            </span>
+            </div>
           ) : isEstimatorActive ? (
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-flex gap-0.5">
+            <div className="flex h-4 items-center gap-1 overflow-hidden">
+              <span className="flex gap-0.5 shrink-0">
                 {[0, 1, 2].map(i => (
                   <span
                     key={i}
@@ -602,188 +628,173 @@ export default function MessageBlock({
                 ))}
               </span>
               <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Estimating...</span>
-            </span>
-          ) : currentPhase ? (
-            <span className="inline-flex items-center gap-1.5">
-              {content && <span>{content}</span>}
-              <span className="inline-flex gap-0.5">
-                {[0, 1, 2].map(i => (
-                  <span
-                    key={i}
-                    className={`h-1.5 w-1.5 rounded-full animate-pulse ${currentPhase === 'planner' || currentPhase === 'refiner' ? 'bg-orange-400' : currentPhase === 'processing' ? 'bg-sky-400' : 'bg-amber-400'}`}
-                    style={{ animationDelay: `${i * 150}ms` }}
-                  />
-                ))}
-              </span>
-            </span>
+            </div>
           ) : (
-            <>
-              <span className="inline-md-content whitespace-pre-wrap break-words">
-                {(!isAgentAggregate || !collapsed) && (
-                  <Suspense
-                    fallback={
-                      <span
-                        className={`${isDarkMode ? 'bg-slate-800/60' : 'bg-gray-100/70'} inline-block h-4 w-32 animate-pulse rounded`}
-                      />
-                    }>
-                    <MarkdownRenderer
-                      components={{
-                        a: LinkComponent,
-                        code: ({ className, children }: any) => (
-                          <CodeBlock isDarkMode={isDarkMode} className={className}>
-                            {String(children)}
-                          </CodeBlock>
-                        ),
-                      }}>
-                      {content}
-                    </MarkdownRenderer>
-                  </Suspense>
-                )}
-                {isAgentAggregate && collapsed && <span>{lastTrace?.content || content}</span>}
-              </span>
-              {/* Inline attachment gallery for images */}
-              {isUser && messageAttachments.length > 0 && (
-                <InlineAttachmentGallery attachments={messageAttachments} isDarkMode={isDarkMode} />
-              )}
-              {/* Inline timestamp, tab context, attachments, and job summary */}
-              {TabContextChip}
-              {isUser && messageAttachments.length > 0 && (
-                <AttachmentChip attachments={messageAttachments} isDarkMode={isDarkMode} />
-              )}
-              {JobSummaryChip}
-              <span
-                className={`ml-1.5 whitespace-nowrap ${compactMode ? 'text-[9px]' : 'text-[10px]'} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                {formatTimestamp(displayTimestamp)}
-              </span>
-              {isEstimator && metadata?.estimation && metadata?.workflowStartTime && !metadata?.isCompleted && (
-                <ProgressBar
-                  estimation={metadata.estimation}
-                  startTime={metadata.workflowStartTime}
-                  isCompleted={!!metadata.isCompleted}
-                  isDarkMode={isDarkMode}
-                />
-              )}
-              {isEstimator &&
-                pendingEstimation &&
-                onApproveEstimation &&
-                onCancelEstimation &&
-                !metadata?.workflowStartTime &&
-                !metadata?.isCompleted && (
-                  <Suspense fallback={<div className="animate-pulse h-32 bg-slate-700/20 rounded" />}>
-                    <EstimationPopUp
-                      estimation={pendingEstimation}
-                      isDarkMode={isDarkMode}
-                      availableModels={availableModelsForEstimation || []}
-                      onApprove={onApproveEstimation}
-                      onCancel={onCancelEstimation}
+            <span className="inline-md-content whitespace-pre-wrap break-words">
+              {(!isAgentAggregate || !collapsed) && (
+                <Suspense
+                  fallback={
+                    <span
+                      className={`${isDarkMode ? 'bg-slate-800/60' : 'bg-gray-100/70'} inline-block h-4 w-32 animate-pulse rounded`}
                     />
-                  </Suspense>
-                )}
-              {!isAgentAggregate &&
-                metadata?.controlRequest?.type === 'request_user_control' &&
-                typeof metadata.controlRequest.tabId === 'number' &&
-                onTakeControl && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      className={controlBtnClass}
-                      onClick={() => onTakeControl(metadata.controlRequest!.tabId)}>
-                      Take Control
-                    </button>
-                  </div>
-                )}
-              {isAgentAggregate && !collapsed && expandedTab === 'plan' && planItems && planItems.length > 0 && (
-                <div
-                  className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
-                  <div className="space-y-0.5">
-                    {planItems.map((item, i) => {
-                      const marker =
-                        item.status === 'done'
-                          ? '\u2705'
-                          : item.status === 'current'
-                            ? '\u25B6\uFE0F'
-                            : item.status === 'skipped'
-                              ? '\u23ED\uFE0F'
-                              : '\u2B1C';
-                      return (
-                        <div
-                          key={i}
-                          className={`flex items-start gap-1.5 ${
-                            item.status === 'done' ? 'opacity-50' : item.status === 'current' ? 'font-medium' : ''
-                          }`}>
-                          <span className="shrink-0 text-[11px]">{marker}</span>
-                          <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{item.text}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                  }>
+                  <MarkdownRenderer
+                    components={{
+                      a: LinkComponent,
+                      code: ({ className, children }: any) => (
+                        <CodeBlock isDarkMode={isDarkMode} className={className}>
+                          {String(children)}
+                        </CodeBlock>
+                      ),
+                    }}>
+                    {content}
+                  </MarkdownRenderer>
+                </Suspense>
               )}
-              {isAgentAggregate && !collapsed && expandedTab === 'details' && workerItems?.length && (
-                <div
-                  className="mt-2 rounded-md border p-2 text-xs clear-both"
-                  style={agentColorHex ? { borderColor: agentColorHex } : undefined}>
-                  <div className={`mb-1 font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                    Web Agents
-                  </div>
-                  <div className="space-y-1">
-                    {workerItems
-                      .slice()
-                      .sort((a, b) => a.workerId.localeCompare(b.workerId))
-                      .map(worker => {
-                        const num = worker.workerId.replace(/\D/g, '') || '';
-                        return (
-                          <div key={worker.workerId} className="flex items-start gap-2">
-                            <span
-                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]"
-                              style={{
-                                backgroundColor: worker.color || agentColorHex || (isDarkMode ? '#334155' : '#f1f5f9'),
-                                color: '#fff',
-                              }}>
-                              {num || '•'}
-                            </span>
-                            <div className="min-w-0">
-                              <div
-                                className={`${isDarkMode ? 'text-slate-200' : 'text-gray-800'} truncate`}
-                                style={{ color: worker.color || undefined }}>
-                                {worker.text ||
-                                  (num ? `Web Agent ${num}` : worker.agentName || worker.workerId) ||
-                                  'working...'}
-                              </div>
-                              <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                {formatTimestamp(worker.timestamp)}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-              {isAgentAggregate && !collapsed && expandedTab === 'details' && traceItems.length > 0 && (
-                <div className="mt-2 clear-both">
-                  <AgentTrajectory traceItems={traceItems} isDarkMode={isDarkMode} compactMode={compactMode} />
-                </div>
-              )}
-              {!isUser &&
-                (() => {
-                  try {
-                    const obj = content.startsWith('{') ? JSON.parse(content) : null;
-                    if (obj?.type === 'job_summary')
-                      return (
-                        <span
-                          className={`ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] ${isDarkMode ? 'bg-slate-700/80 text-slate-300 border border-slate-600/50' : 'bg-gray-100/80 text-gray-500 border border-gray-200/50'}`}>
-                          <span>💰</span>
-                          <span>{(obj.totalTokens || obj.inputTokens + obj.outputTokens).toLocaleString()} tokens</span>
-                          <FiClock size={10} />
-                          <span>{obj.totalLatencySec}s</span>
-                        </span>
-                      );
-                  } catch {}
-                  return null;
-                })()}
-            </>
+              {isAgentAggregate && collapsed && <span>{content || lastTrace?.content}</span>}
+            </span>
           )}
+          {/* Always-visible metadata: timestamps, chips, summaries */}
+          {isUser && messageAttachments.length > 0 && (
+            <InlineAttachmentGallery attachments={messageAttachments} isDarkMode={isDarkMode} />
+          )}
+          {TabContextChip}
+          {isUser && messageAttachments.length > 0 && (
+            <AttachmentChip attachments={messageAttachments} isDarkMode={isDarkMode} />
+          )}
+          {JobSummaryChip}
+          {!isActiveWorkflow && (
+            <span
+              className={`ml-1.5 whitespace-nowrap ${compactMode ? 'text-[9px]' : 'text-[10px]'} ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+              {formatTimestamp(displayTimestamp)}
+            </span>
+          )}
+          {isEstimator && metadata?.estimation && metadata?.workflowStartTime && !metadata?.isCompleted && (
+            <ProgressBar
+              estimation={metadata.estimation}
+              startTime={metadata.workflowStartTime}
+              isCompleted={!!metadata.isCompleted}
+              isDarkMode={isDarkMode}
+            />
+          )}
+          {isEstimator &&
+            pendingEstimation &&
+            onApproveEstimation &&
+            onCancelEstimation &&
+            !metadata?.workflowStartTime &&
+            !metadata?.isCompleted && (
+              <Suspense fallback={<div className="animate-pulse h-32 bg-slate-700/20 rounded" />}>
+                <EstimationPopUp
+                  estimation={pendingEstimation}
+                  isDarkMode={isDarkMode}
+                  availableModels={availableModelsForEstimation || []}
+                  onApprove={onApproveEstimation}
+                  onCancel={onCancelEstimation}
+                />
+              </Suspense>
+            )}
+          {!isAgentAggregate &&
+            metadata?.controlRequest?.type === 'request_user_control' &&
+            typeof metadata.controlRequest.tabId === 'number' &&
+            onTakeControl && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className={controlBtnClass}
+                  onClick={() => onTakeControl(metadata.controlRequest!.tabId)}>
+                  Take Control
+                </button>
+              </div>
+            )}
+          {/* Expansion panels: always renderable regardless of working state */}
+          {isAgentAggregate && !collapsed && expandedTab === 'plan' && planItems && planItems.length > 0 && (
+            <div
+              className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+              <div className="space-y-0.5">
+                {planItems.map((item, i) => {
+                  const marker =
+                    item.status === 'done'
+                      ? '\u2705'
+                      : item.status === 'current'
+                        ? '\u25B6\uFE0F'
+                        : item.status === 'skipped'
+                          ? '\u23ED\uFE0F'
+                          : '\u2B1C';
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-1.5 ${
+                        item.status === 'done' ? 'opacity-50' : item.status === 'current' ? 'font-medium' : ''
+                      }`}>
+                      <span className="shrink-0 text-[11px]">{marker}</span>
+                      <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{item.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {isAgentAggregate && !collapsed && expandedTab === 'details' && workerItems?.length && (
+            <div
+              className="mt-2 rounded-md border p-2 text-xs clear-both"
+              style={agentColorHex ? { borderColor: agentColorHex } : undefined}>
+              <div className={`mb-1 font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>Web Agents</div>
+              <div className="space-y-1">
+                {workerItems
+                  .slice()
+                  .sort((a, b) => a.workerId.localeCompare(b.workerId))
+                  .map(worker => {
+                    const num = worker.workerId.replace(/\D/g, '') || '';
+                    return (
+                      <div key={worker.workerId} className="flex items-start gap-2">
+                        <span
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]"
+                          style={{
+                            backgroundColor: worker.color || agentColorHex || (isDarkMode ? '#334155' : '#f1f5f9'),
+                            color: '#fff',
+                          }}>
+                          {num || '•'}
+                        </span>
+                        <div className="min-w-0">
+                          <div
+                            className={`${isDarkMode ? 'text-slate-200' : 'text-gray-800'} truncate`}
+                            style={{ color: worker.color || undefined }}>
+                            {worker.text ||
+                              (num ? `Web Agent ${num}` : worker.agentName || worker.workerId) ||
+                              'working...'}
+                          </div>
+                          <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                            {formatTimestamp(worker.timestamp)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+          {isAgentAggregate && !collapsed && expandedTab === 'details' && traceItems.length > 0 && (
+            <div className="mt-2 clear-both">
+              <AgentTrajectory traceItems={traceItems} isDarkMode={isDarkMode} compactMode={compactMode} />
+            </div>
+          )}
+          {!isUser &&
+            (() => {
+              try {
+                const obj = content.startsWith('{') ? JSON.parse(content) : null;
+                if (obj?.type === 'job_summary')
+                  return (
+                    <span
+                      className={`ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] ${isDarkMode ? 'bg-slate-700/80 text-slate-300 border border-slate-600/50' : 'bg-gray-100/80 text-gray-500 border border-gray-200/50'}`}>
+                      <span>💰</span>
+                      <span>{(obj.totalTokens || obj.inputTokens + obj.outputTokens).toLocaleString()} tokens</span>
+                      <FiClock size={10} />
+                      <span>{obj.totalLatencySec}s</span>
+                    </span>
+                  );
+              } catch {}
+              return null;
+            })()}
         </div>
         {!isProgress && onRetryRequest && message.actor === Actors.AGENT_VALIDATOR && (
           <div
