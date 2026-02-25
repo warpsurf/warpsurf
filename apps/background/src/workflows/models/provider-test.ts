@@ -30,8 +30,8 @@ export async function handleTestProviderMessage(message: any, sendResponse: (res
     };
 
     if (type === 'gemini') {
-      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models';
-      testUrl = cfg.apiKey ? `${endpoint}?key=${encodeURIComponent(cfg.apiKey)}` : endpoint;
+      testUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+      if (cfg.apiKey) headers['x-goog-api-key'] = cfg.apiKey;
     } else if (type === 'custom_openai') {
       // Custom OpenAI-compatible provider - requires baseUrl
       if (!baseUrl) {
@@ -69,4 +69,3 @@ export async function handleTestProviderMessage(message: any, sendResponse: (res
     return sendResponse({ ok: false, latencyMs: dt, error: String(e?.message || e) });
   }
 }
-
