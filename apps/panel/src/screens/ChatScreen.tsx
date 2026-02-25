@@ -368,8 +368,10 @@ export function ChatScreen(props: ChatScreenProps) {
                   compactMode={compactMode}
                   jobSummaries={requestSummaries}
                   metadataByMessageId={messageMetadata}
-                  inlinePreview={hasFirstPreview ? mirrorPreview : null}
-                  inlinePreviewBatch={hasFirstPreview ? mirrorPreviewBatch : []}
+                  inlinePreview={hasFirstPreview || (props.isAgentModeActive && isJobActive) ? mirrorPreview : null}
+                  inlinePreviewBatch={
+                    hasFirstPreview || (props.isAgentModeActive && isJobActive) ? mirrorPreviewBatch : []
+                  }
                   isPreviewCollapsed={isPreviewCollapsed}
                   activeAggregateMessageId={agentTraceRootId}
                   onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
@@ -550,8 +552,8 @@ export function ChatScreen(props: ChatScreenProps) {
             compactMode={compactMode}
             jobSummaries={requestSummaries}
             metadataByMessageId={messageMetadata}
-            inlinePreview={hasFirstPreview ? mirrorPreview : null}
-            inlinePreviewBatch={hasFirstPreview ? mirrorPreviewBatch : []}
+            inlinePreview={hasFirstPreview || (props.isAgentModeActive && isJobActive) ? mirrorPreview : null}
+            inlinePreviewBatch={hasFirstPreview || (props.isAgentModeActive && isJobActive) ? mirrorPreviewBatch : []}
             isPreviewCollapsed={isPreviewCollapsed}
             activeAggregateMessageId={agentTraceRootId}
             onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}

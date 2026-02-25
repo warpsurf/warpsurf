@@ -1,6 +1,6 @@
 import type { Message } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
-import { memo, useMemo, useState, useRef, useEffect } from 'react';
+import { memo, useMemo } from 'react';
 import { Actors } from '@extension/storage';
 import { Virtuoso } from 'react-virtuoso';
 import { formatDay } from '../../utils';
@@ -78,16 +78,6 @@ export default memo(function MessageList({
 
   const shouldShowDateDivider = (currentTs: number, prevTs?: number) =>
     !prevTs || new Date(prevTs).toDateString() !== new Date(currentTs).toDateString();
-
-  const [fpsText, setFpsText] = useState('');
-  const lastFrameRef = useRef(0);
-  useEffect(() => {
-    if (!inlinePreview?.screenshot && !inlinePreviewBatch?.length) return;
-    const now = Date.now();
-    const dt = now - (lastFrameRef.current || 0);
-    lastFrameRef.current = now;
-    if (dt > 0 && dt < 4000) setFpsText(`${Math.min(60, 1000 / dt).toFixed(1)} fps`);
-  }, [inlinePreview?.screenshot, inlinePreviewBatch?.map?.(p => p?.screenshot || '').join('|')]);
 
   const DateDivider = ({ timestamp }: { timestamp: number }) => (
     <div className="my-2 flex items-center gap-2">
@@ -169,7 +159,6 @@ export default memo(function MessageList({
                     agentColorHex={agentColorHex}
                     isPaused={isPaused}
                     isPreviewCollapsed={isPreviewCollapsed}
-                    fpsText={fpsText}
                     isDarkMode={isDarkMode}
                     onTogglePreviewCollapsed={onTogglePreviewCollapsed}
                     onOpenPreviewTab={onOpenPreviewTab}
