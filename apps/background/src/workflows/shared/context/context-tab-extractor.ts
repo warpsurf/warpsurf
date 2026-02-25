@@ -60,7 +60,7 @@ export async function isUrlAllowedByFirewall(url: string): Promise<boolean> {
     if (!firewall.enabled) return true;
     return isUrlAllowed(url, firewall.allowList, firewall.denyList);
   } catch {
-    return true; // If firewall check fails, allow by default
+    return false;
   }
 }
 
