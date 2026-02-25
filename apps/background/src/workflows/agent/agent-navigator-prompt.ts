@@ -71,6 +71,20 @@ const humanInTheLoopGuidance = isApiMode
   - Call \`request_user_control\` if you actually see a login screen AFTER navigating
 - After requesting control, wait for the user to provide instructions before continuing.`;
 
+export const screenshotVisionGuidance = `
+- You have a \`screenshot\` action that captures a visual snapshot of the page with element index overlays.
+- **USE IT when you are:**
+  - **Stuck**: an expected element is missing, the DOM tree doesn't match what you expect, or repeated actions keep failing.
+  - **Verifying**: confirm a form submitted, a modal appeared/closed, or content loaded correctly.
+  - **Interpreting visual content**: the page relies on images, charts, canvas, or layout that DOM text cannot convey.
+  - **Debugging element selection**: you clicked/typed into the wrong element, or indices seem misaligned with the page.
+  - **Solving captchas**: capture the captcha image so you can interpret and solve it.
+- After capturing, the image is included with your next browser state — review it and adjust your approach.
+- Do NOT screenshot every step; use it as a targeted diagnostic tool when text-only state is insufficient.`;
+
+export const coordinateClickGuidance = `
+- You have a \`click_coordinate\` action to click at exact pixel (x, y) positions identified from a screenshot. This is essential for solving captchas and useful when element indices are missing or unreliable. Always take a \`screenshot\` first, then use coordinates from the image.`;
+
 export const navigatorSystemPromptTemplate = `
 <system_instructions>
 You are an AI agent designed to automate browser tasks. Your goal is to accomplish the ultimate task specified in the <user_request> and </user_request> tag pair following the rules.
@@ -199,6 +213,7 @@ ${siteSearchNavRule}
 
 - When an image is provided, use it to understand the page layout
 - Bounding boxes with labels on their top right corner correspond to element indexes
+{{vision_guidance_section}}
 
 12. FORM FILLING:
 
@@ -250,11 +265,14 @@ ${siteSearchNavRule}
 17. NO PAGE CONTEXT:
 ${noPageContextGuidance}
 
-18. PLAN:
+18. PLAN TRACKING:
 
-- Plan is a json string wrapped by the <plan> tag
-- If a plan is provided, follow the instructions in the next_steps exactly first
-- If no plan is provided, just continue with the task
+- Your current plan (if any) is shown in <browser_state> with status markers:
+  [x] done, [>] current, [ ] pending, [-] skipped
+- To advance the plan, include "current_plan_item": <index> in your top-level response
+  (all steps before that index are automatically marked done)
+- Focus on completing the current [>] step before advancing
+- If the plan seems wrong or the situation has changed, the planner will revise it
 {{region_preference_section}}
 </system_instructions>
 `;
