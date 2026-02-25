@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
-import { isTransientSystemMessage } from '../utils';
+import { isTransientSystemMessage, sanitizeMessageContent } from '../utils';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
 
@@ -93,13 +93,21 @@ export function useChatHistory({
     // Track setting changes to keep only the last value for each setting
     const settingChanges = new Map<string, { index: number; ts: number }>();
 
-    for (const msg of list) {
+    for (let msg of list) {
       const actor = String((msg as any)?.actor || '');
-      const content = String((msg as any)?.content ?? '').trim();
+      let content = String((msg as any)?.content ?? '').trim();
 
       // Skip transient system messages
       if (isTransientSystemMessage(actor, content)) {
         continue;
+      }
+
+      // Sanitize internal implementation details before display
+      const sanitized = sanitizeMessageContent(content);
+      if (sanitized === null) continue;
+      if (sanitized !== content) {
+        msg = { ...msg, content: sanitized };
+        content = sanitized;
       }
 
       const eventId = String((msg as any)?.eventId || '').trim();
@@ -200,13 +208,15 @@ export function useChatHistory({
 
         // Load persisted metadata
         let restoredRootId: string | null = null;
+        let savedMetadata: any = null;
         try {
-          const [savedSummaries, savedMetadata, savedStats, savedAttachments] = await Promise.all([
+          const [savedSummaries, loadedMetadata, savedStats, savedAttachments] = await Promise.all([
             chatHistoryStore.loadRequestSummaries(sessionId).catch(() => ({})),
             chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({})),
             chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
             chatHistoryStore.loadAttachments(sessionId).catch(() => ({})),
           ]);
+          savedMetadata = loadedMetadata;
           if (setSessionAttachments) setSessionAttachments(savedAttachments || {});
 
           // Get stored rootId for restoration
@@ -247,8 +257,84 @@ export function useChatHistory({
         if (agentTraceRootIdRef) agentTraceRootIdRef.current = restoredRootId;
         if (setAgentTraceRootId) setAgentTraceRootId(restoredRootId);
 
+        // Reconstruct stale aggregate root message content from metadata.
+        // Older sessions may have persisted the initial transient status (e.g.
+        // "Starting browser automation...") because updateAggregateRootContent
+        // only updated React state. Reconstruct from the trace items only when
+        // the stored content is a known transient placeholder.
+        const STALE_CONTENT_RE = [
+          /^Starting browser/i,
+          /^Initializing/i,
+          /^Navigation done$/i,
+          /^Navigating\.\.\.$/i,
+          /^Action (started|completed|failed)$/i,
+          /^(Creating|Processing|Refining) plan/i,
+          /^(Navigator|Planner|Validator) (started|failed)/i,
+          /^Showing progress\.\.\.$/i,
+          /^Processing as /i,
+          /^Estimating workflow\.\.\.$/i,
+          /^\d+\s+workers executing plan\b/i,
+          /^Cancelling workflow$/i,
+        ];
+        const isStaleContent = (c: string) => {
+          const t = c.trim();
+          return !t || STALE_CONTENT_RE.some(re => re.test(t));
+        };
+
+        let finalMessages = hasMessages ? dedupeMessages(fullSession.messages) : [];
+        let reconstructedContent: string | undefined;
+        if (restoredRootId && savedMetadata) {
+          const rootMeta = (savedMetadata as any)?.[restoredRootId];
+          if (rootMeta?.isCompleted && Array.isArray(rootMeta.traceItems) && rootMeta.traceItems.length > 0) {
+            const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
+            const storedContent = String((rootMsg as any)?.content ?? '').trim();
+            if (isStaleContent(storedContent)) {
+              const traceItems = rootMeta.traceItems as Array<{ actor: string; content: string; timestamp: number }>;
+              const STATUS_ONLY_RE = /^(Workflow completed|Task cancelled)$/i;
+              const lastSubstantial = [...traceItems].reverse().find(t => {
+                const c = t.content?.trim();
+                return c && !isStaleContent(c) && !STATUS_ONLY_RE.test(c);
+              });
+              const lastSystem = [...traceItems]
+                .reverse()
+                .find(t => t.actor === Actors.SYSTEM || t.actor?.toLowerCase?.() === 'system');
+              const bestContent =
+                lastSubstantial?.content || lastSystem?.content || traceItems[traceItems.length - 1]?.content;
+              if (bestContent) {
+                reconstructedContent = bestContent;
+                finalMessages = finalMessages.map((m: any) => {
+                  const msgId = `${m.timestamp}-${m.actor}`;
+                  if (msgId === restoredRootId) return { ...m, content: bestContent };
+                  return m;
+                });
+              }
+            }
+          }
+        }
+
+        // Remove standalone SYSTEM messages that duplicate the aggregate root content
+        // (e.g. a separate "Task cancelled" SYSTEM message when the aggregate root
+        // already shows "Task cancelled").
+        if (restoredRootId) {
+          const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
+          const rootContent = reconstructedContent || String((rootMsg as any)?.content ?? '').trim();
+          if (rootContent) {
+            const rootTs = Number((rootMsg as any)?.timestamp || 0);
+            finalMessages = finalMessages.filter((m: any) => {
+              const actor = String((m as any)?.actor || '');
+              const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
+              if (!isSystem) return true;
+              const content = String((m as any)?.content ?? '').trim();
+              if (content !== rootContent) return true;
+              if (!rootTs) return true;
+              const ts = Number((m as any)?.timestamp || 0);
+              return Math.abs(ts - rootTs) > 10000;
+            });
+          }
+        }
+
         // Set messages and common state
-        setMessages(hasMessages ? dedupeMessages(fullSession.messages) : []);
+        setMessages(finalMessages);
         setIsFollowUpMode(true);
         setIsHistoricalSession(false);
         setInputEnabled(true);
