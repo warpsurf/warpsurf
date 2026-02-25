@@ -10,7 +10,7 @@ const logger = createLogger('StateCache');
 export class CachedStateClickableElementsHashes {
   constructor(
     public url: string,
-    public hashes: Set<string>
+    public hashes: Set<string>,
   ) {}
 }
 
@@ -24,14 +24,14 @@ export class StateCache {
     private _getPage: () => any,
     private _getScrollInfo: () => Promise<[number, number, number]>,
     private _removeHighlight: () => Promise<void>,
-    private _takeScreenshot: (fullPage: boolean) => Promise<string | null>
+    private _takeScreenshot: (fullPage: boolean) => Promise<string | null>,
   ) {}
 
   get cached(): PageState | null {
     return this._state;
   }
 
-  async update(useVision = false, trackNew = false): Promise<PageState> {
+  async update(useVision: boolean | 'auto' = false, trackNew = false): Promise<PageState> {
     const page = this._getPage();
     if (!page) {
       logger.warning('Cannot update state: page not attached');
@@ -48,15 +48,24 @@ export class StateCache {
     try {
       await this._removeHighlight();
 
-      const displayHighlights = this._config.displayHighlights || useVision;
-      const content = await _getClickableElements(this._tabId, page.url(), displayHighlights, -1, this._config.viewportExpansion);
-      
+      // displayHighlights config: true → always on; 'auto' → derives from useVision
+      // useVision: true → highlights on; 'auto' → off (on-demand via screenshot); false → off
+      const displayHighlights =
+        this._config.displayHighlights === true || (this._config.displayHighlights === 'auto' && useVision === true);
+      const content = await _getClickableElements(
+        this._tabId,
+        page.url(),
+        displayHighlights,
+        -1,
+        this._config.viewportExpansion,
+      );
+
       if (!content) {
         logger.warning('Failed to get clickable elements');
         return this._state || this._buildEmptyState();
       }
 
-      const screenshot = useVision ? await this._takeScreenshot(this._config.viewportExpansion === -1) : null;
+      const screenshot = useVision === true ? await this._takeScreenshot(this._config.viewportExpansion === -1) : null;
       const [scrollY, visualViewportHeight, scrollHeight] = await this._getScrollInfo();
 
       const newState: PageState = {
@@ -124,4 +133,3 @@ export class StateCache {
     };
   }
 }
-

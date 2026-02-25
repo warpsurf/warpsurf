@@ -534,7 +534,7 @@ export class TaskManager extends EventEmitter {
       await this.tabGroups.applyTabColor(createdTabId, task, this.tasks);
 
       const settings = await generalSettingsStore.getSettings();
-      const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
+      const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
       await this.mirrors.setupMirroring(task, createdTabId, executor, visionEnabled);
 
       this.emit('tab-created', {
@@ -605,7 +605,7 @@ export class TaskManager extends EventEmitter {
     await this.tabGroups.applyTabColor(tabId, task, this.tasks);
 
     const settings = await generalSettingsStore.getSettings();
-    const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
+    const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
     await this.mirrors.setupMirroring(task, tabId, executor, visionEnabled);
     // Ensure mirror has the updated color from applyTabColor
     this.tabMirrorService.updateMirrorColor(tabId, task.color);

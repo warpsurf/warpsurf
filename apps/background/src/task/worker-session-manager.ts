@@ -191,7 +191,7 @@ export class WorkerSessionManager {
 
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
         const tabId = Number(event.data.tabId);
-        const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
+        const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
         await this.tabGroups.applyTabColor(tabId, task, this.getTasks());
         await this.mirrors.setupMirroring(task, tabId, task.executor!, visionEnabled);
       }
@@ -205,7 +205,7 @@ export class WorkerSessionManager {
       const ctx = (executor as any)?.getBrowserContext?.();
       const createdTabId = ctx?.getAndClearNewTabCreated?.();
       if (typeof createdTabId === 'number' && createdTabId > 0) {
-        const visionEnabled = (settings.showTabPreviews ?? true) || settings.useVision;
+        const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
         await this.tabGroups.applyTabColor(createdTabId, task, this.getTasks());
         await this.mirrors.setupMirroring(task, createdTabId, executor, visionEnabled);
       }

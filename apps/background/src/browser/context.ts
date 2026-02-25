@@ -623,7 +623,10 @@ export default class BrowserContext {
     return tabInfos;
   }
 
-  public async getCachedState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
+  public async getCachedState(
+    useVision: boolean | 'auto' = false,
+    cacheClickableElementsHashes = false,
+  ): Promise<BrowserState> {
     // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();
@@ -646,7 +649,10 @@ export default class BrowserContext {
     }
   }
 
-  public async getState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
+  public async getState(
+    useVision: boolean | 'auto' = false,
+    cacheClickableElementsHashes = false,
+  ): Promise<BrowserState> {
     // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();
@@ -671,7 +677,10 @@ export default class BrowserContext {
    * Get browser state with minimal DOM work: reuse cached state when URL unchanged;
    * refresh only when URL changed or cache is empty.
    */
-  public async getSmartState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
+  public async getSmartState(
+    useVision: boolean | 'auto' = false,
+    cacheClickableElementsHashes = false,
+  ): Promise<BrowserState> {
     // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();

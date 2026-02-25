@@ -6,8 +6,20 @@ import { type Actors, ExecutionState, AgentEvent } from '@src/workflows/shared/e
 import type { EventData } from '@src/workflows/shared/event/types';
 import { AgentStepHistory } from '@src/workflows/shared/step-history';
 import { DOMHistoryElement } from '@src/browser/dom/history/view';
-import type { LoopDetector } from '@src/workflows/shared/loop-detector';
+import type { LoopDetector } from '@src/workflows/agent/loop-detector';
 import type { Attachment } from '@extension/storage/lib/chat/types';
+
+export type VisionMode = boolean | 'auto';
+
+/** Returns true when vision capabilities are active (useVision is true or 'auto'). */
+export function isVisionActive(mode: VisionMode): boolean {
+  return mode === true || mode === 'auto';
+}
+
+export interface PlanItem {
+  text: string;
+  status: 'pending' | 'current' | 'done' | 'skipped';
+}
 
 export interface AgentOptions {
   maxSteps: number;
@@ -17,11 +29,15 @@ export interface AgentOptions {
   retryDelay: number;
   maxInputTokens: number;
   maxErrorLength: number;
-  useVision: boolean;
+  useVision: VisionMode;
   useVisionForPlanner: boolean;
   validateOutput: boolean;
   includeAttributes: string[];
   planningInterval: number;
+  /** Target screenshot dimensions [width, height] for the LLM. Auto-detected from model name. */
+  llmScreenshotSize?: [number, number];
+  /** Allow the agent to click at exact pixel coordinates from screenshots. */
+  enableCoordinateClick?: boolean;
 }
 
 export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
@@ -32,7 +48,7 @@ export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
   retryDelay: 10,
   maxInputTokens: 128000,
   maxErrorLength: 400,
-  useVision: false,
+  useVision: 'auto',
   useVisionForPlanner: true,
   validateOutput: true,
   includeAttributes: [
@@ -79,6 +95,13 @@ export class AgentContext {
   attachments: Attachment[];
   // Loop detection for stuck-agent nudges
   loopDetector: LoopDetector | null;
+  // Structured plan tracking
+  plan: PlanItem[] | null;
+  currentPlanIndex: number;
+  // Live user messages queued during execution (drained each step)
+  pendingUserMessages: string[];
+  // On-demand screenshot captured by the 'screenshot' action (consumed by prompt builder)
+  pendingScreenshot: string | null;
   // URLs collected for site skill injection
   private _skillUrls: Set<string>;
 
@@ -106,6 +129,10 @@ export class AgentContext {
     this.stateMessageAdded = false;
     this.history = new AgentStepHistory();
     this.loopDetector = null;
+    this.plan = null;
+    this.currentPlanIndex = 0;
+    this.pendingUserMessages = [];
+    this.pendingScreenshot = null;
     this.chatHistoryMessages = [];
     this.contextTabIds = [];
     this.attachments = [];
@@ -134,6 +161,41 @@ export class AgentContext {
   /** Clear skill URLs. */
   clearSkillUrls(): void {
     this._skillUrls.clear();
+  }
+
+  /** Replace the current plan with new steps. First step is marked current. */
+  setPlan(steps: string[]): void {
+    this.plan = steps.map((text, i) => ({
+      text,
+      status: i === 0 ? 'current' : 'pending',
+    }));
+    this.currentPlanIndex = 0;
+  }
+
+  /** Advance the plan to a new index, marking intermediate steps done. */
+  advancePlan(newIndex: number): void {
+    if (!this.plan) return;
+    const clamped = Math.max(0, Math.min(newIndex, this.plan.length - 1));
+    if (clamped === this.currentPlanIndex) return;
+    // Reset the old current item before moving
+    if (this.plan[this.currentPlanIndex]?.status === 'current') {
+      this.plan[this.currentPlanIndex].status = clamped > this.currentPlanIndex ? 'done' : 'pending';
+    }
+    // Mark intermediate steps done when advancing forward
+    for (let i = this.currentPlanIndex + 1; i < clamped; i++) {
+      if (this.plan[i].status === 'pending') {
+        this.plan[i].status = 'done';
+      }
+    }
+    this.plan[clamped].status = 'current';
+    this.currentPlanIndex = clamped;
+  }
+
+  /** Drain all queued user messages, returning them (empty array if none). */
+  drainUserMessages(): string[] {
+    if (this.pendingUserMessages.length === 0) return [];
+    const msgs = this.pendingUserMessages.splice(0);
+    return msgs;
   }
 
   async emitEvent(actor: Actors, state: ExecutionState, eventDetails: string, additionalData?: Partial<EventData>) {

@@ -10,10 +10,11 @@ export interface GeneralSettingsConfig {
   maxValidatorFailures: number;
   retryDelay: number;
   maxInputTokens: number;
-  useVision: boolean;
+  useVision: boolean | 'auto';
   useVisionForPlanner: boolean;
   planningInterval: number;
-  displayHighlights: boolean;
+  displayHighlights: boolean | 'auto';
+  enableCoordinateClick?: boolean;
   minWaitPageLoad: number;
   replayHistoricalTasks: boolean;
   maxWorkerAgents: number;
@@ -48,11 +49,19 @@ export interface GeneralSettingsConfig {
   // Loop detection: nudge the agent when it repeats actions or the page stops changing
   loopDetectionEnabled?: boolean;
   loopDetectionWindow?: number;
+  // Consecutive failures before forcing a planner replan (0 = disabled)
+  planningReplanOnStall?: number;
+  // Steps without a plan before nudging the planner to create one (0 = disabled)
+  planningExplorationLimit?: number;
   // When true, allow one final done-only step after hitting maxFailures instead of hard-stopping
   finalResponseAfterFailure?: boolean;
   // User's preferred region/locale for websites (e.g., 'com', 'co.uk', 'de', 'fr')
   // When set, the agent will prefer regional versions of websites matching this preference
   preferredRegion?: string;
+  // Message compaction: periodically summarize older step messages to prevent context overflow
+  messageCompactionEnabled?: boolean;
+  compactEveryNSteps?: number;
+  compactionTriggerChars?: number;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -69,10 +78,11 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   maxValidatorFailures: 3,
   retryDelay: 10,
   maxInputTokens: 128000,
-  useVision: false,
+  useVision: 'auto',
   useVisionForPlanner: false,
   planningInterval: 5,
-  displayHighlights: false,
+  displayHighlights: 'auto',
+  enableCoordinateClick: false,
   minWaitPageLoad: 2000,
   replayHistoricalTasks: false,
   maxWorkerAgents: 5, // When enabled, use up to 5 parallel workers
@@ -101,6 +111,11 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   loopDetectionEnabled: true,
   loopDetectionWindow: 20,
   finalResponseAfterFailure: true,
+  planningReplanOnStall: 3,
+  planningExplorationLimit: 5,
+  messageCompactionEnabled: true,
+  compactEveryNSteps: 15,
+  compactionTriggerChars: 40000,
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {
@@ -116,11 +131,6 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       ...currentSettings,
       ...settings,
     };
-
-    // Tie highlights to Vision: when Vision is enabled, highlights are on; when disabled, highlights off
-    if (typeof settings.useVision === 'boolean') {
-      updatedSettings.displayHighlights = settings.useVision;
-    }
 
     await storage.set(updatedSettings);
   },

@@ -110,7 +110,7 @@ export async function setupExecutor(
 
   browserContext.updateConfig({
     minimumWaitPageLoadTime: generalSettings.minWaitPageLoad / 1000.0,
-    displayHighlights: (generalSettings as any).displayHighlights ?? generalSettings.useVision,
+    displayHighlights: generalSettings.displayHighlights ?? 'auto',
     viewportExpansion: generalSettings.fullPageWindow ? -1 : 0,
   });
 
@@ -131,6 +131,7 @@ export async function setupExecutor(
       useVision: generalSettings.useVision,
       useVisionForPlanner: true,
       planningInterval: generalSettings.planningInterval,
+      enableCoordinateClick: generalSettings.enableCoordinateClick ?? false,
     },
     generalSettings: generalSettings,
     agentType: agentType,
