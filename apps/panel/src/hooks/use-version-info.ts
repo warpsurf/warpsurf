@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Revamped UI, added regional preferences, bug fixes, captcha handling, and search urls.';
+  const releaseNotes =
+    'Added file and image attachments, explain-image context menu, vision mode with coordinate clicking, loop detection, plan tracking, and agent reliability improvements.';
 
   useEffect(() => {
     try {
