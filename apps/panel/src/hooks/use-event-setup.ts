@@ -2,7 +2,7 @@ import { useMemo, useCallback, useRef, type MutableRefObject } from 'react';
 import { Actors, chatHistoryStore, type Message } from '@extension/storage';
 import { createTaskEventHandler } from '../logic/handlers/create-task-event-handler';
 import { createPanelHandlers } from '../logic/port-handlers';
-import { isTransientSystemMessage } from '../utils';
+import { isTransientSystemMessage, sanitizeMessageContent } from '../utils';
 
 export function useEventSetup(params: {
   portRef: MutableRefObject<chrome.runtime.Port | null>;
@@ -187,6 +187,14 @@ export function useEventSetup(params: {
 
   const appendMessage = useCallback(
     (newMessage: Message, sessionId?: string | null) => {
+      // Sanitize internal implementation details before displaying to user
+      const rawContent = String(newMessage.content ?? '');
+      const sanitized = sanitizeMessageContent(rawContent);
+      if (sanitized === null) return;
+      if (sanitized !== rawContent) {
+        newMessage = { ...newMessage, content: sanitized };
+      }
+
       const isProgressMessage =
         newMessage.content === 'Showing progress...' || newMessage.content === 'Estimating workflow...';
 

@@ -97,3 +97,49 @@ export function isTransientSystemMessage(actor: string, content: string): boolea
   const c = content.toLowerCase();
   return c.startsWith('processing as ') || c === 'estimating workflow...' || c === 'showing progress...';
 }
+
+/**
+ * Sanitizes a message's content for user-facing display. Returns `null` if the
+ * message should be hidden entirely, or a rewritten string otherwise.
+ *
+ * Handles:
+ * - Internal "Failed to invoke <model> with structured output: ..." error messages
+ * - Extraction content containing untrusted_content prompt-injection fences
+ * - Raw "Extraction completed successfully..." metadata headers
+ */
+export function sanitizeMessageContent(content: string): string | null {
+  if (!content || typeof content !== 'string') return content;
+
+  // (a) Internal model invocation errors
+  if (/^Failed to invoke .+ with structured output:/i.test(content)) {
+    const aborted = /abort/i.test(content);
+    return aborted ? 'Model request was cancelled.' : 'Model request failed.';
+  }
+
+  // (b) Extraction content with untrusted_content fences -- hide entirely
+  if (content.includes('<untrusted_content>') || content.includes('</untrusted_content>')) {
+    const lengthMatch = content.match(/Length:\s*(\d+)\s*characters/i);
+    const chars = lengthMatch?.[1];
+    return chars ? `Page content extracted (${Number(chars).toLocaleString()} characters).` : null;
+  }
+
+  // (c) Raw extraction metadata header shown as standalone message
+  if (/^Extraction completed successfully\./i.test(content)) {
+    const lengthMatch = content.match(/Length:\s*(\d+)\s*characters/i);
+    const chars = lengthMatch?.[1];
+    return chars ? `Page content extracted (${Number(chars).toLocaleString()} characters).` : 'Page content extracted.';
+  }
+
+  return content;
+}
+
+/**
+ * Strips "(Web Agent N)" and "[workerId]" suffixes from agent status text
+ * so user-visible labels stay clean.
+ */
+export function stripWorkerSuffix(text: string): string {
+  return text
+    .replace(/\s*\[[\w-]+\]\s*(?:\(Web Agent(?:\s+\d+)?\))?\s*$/i, '')
+    .replace(/\s*\(Web Agent(?:\s+\d+)?\)\s*$/i, '')
+    .trim();
+}

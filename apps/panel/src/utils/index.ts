@@ -10,6 +10,8 @@ export {
   formatDay,
   hexToRgba,
   isTransientSystemMessage,
+  sanitizeMessageContent,
+  stripWorkerSuffix,
 } from './formatting';
 export { createLogger } from './logger';
 export { downloadTokenLogCsv } from './download-token-log-csv';
