@@ -350,7 +350,6 @@ export async function handleNewTask(message: any, deps: Deps) {
       const groupColor = isWebAgent ? 'blue' : 'grey';
       await chrome.tabGroups.update(groupId, { title: groupTitle, color: groupColor });
       if (isWebAgent) {
-        // Set preferred group directly (don't call setPreferredGroupId to avoid redundant move)
         (browserContext as any)._preferredGroupId = groupId;
       }
       deps.logger.info(

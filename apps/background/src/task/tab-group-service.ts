@@ -2,11 +2,28 @@ import { createLogger } from '../log';
 import type { Task } from './task-manager';
 import { ExecutionState, Actors, EventType } from '../workflows/shared/event/types';
 
-const TAB_GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'] as unknown as Array<chrome.tabGroups.Color>;
+const TAB_GROUP_COLORS = [
+  'grey',
+  'blue',
+  'red',
+  'yellow',
+  'green',
+  'pink',
+  'purple',
+  'cyan',
+  'orange',
+] as unknown as Array<chrome.tabGroups.Color>;
 
 const TAB_GROUP_COLOR_HEX: Record<string, string> = {
-  grey: '#9CA3AF', blue: '#60A5FA', red: '#F87171', yellow: '#FBBF24',
-  green: '#34D399', pink: '#F472B6', purple: '#A78BFA', cyan: '#22D3EE', orange: '#FB923C',
+  grey: '#9CA3AF',
+  blue: '#60A5FA',
+  red: '#F87171',
+  yellow: '#FBBF24',
+  green: '#34D399',
+  pink: '#F472B6',
+  purple: '#A78BFA',
+  cyan: '#22D3EE',
+  orange: '#FB923C',
 };
 
 export class TabGroupService {
@@ -47,9 +64,9 @@ export class TabGroupService {
       task.groupColorName = colorName;
       task.color = TAB_GROUP_COLOR_HEX[colorName as string] || task.color;
     }
-    
+
     await this.propagateGroupToContext(task, groupId);
-    
+
     if (typeof task.tabId === 'number') {
       try {
         await chrome.tabs.group({ tabIds: [task.tabId], groupId });
@@ -62,16 +79,16 @@ export class TabGroupService {
 
   computeGroupTitle(task: Task, tasks: Map<string, Task>): string {
     let index = task.workerIndex;
-    
+
     if (!index) {
       const match = (task.name || '').match(/Web Agent\s+(\d+)/i);
       if (match) index = parseInt(match[1], 10);
     }
-    
+
     if (!index) {
       index = this.getNextWorkerNum(tasks);
     }
-    
+
     return `Web Agent ${index}`;
   }
 
@@ -82,7 +99,7 @@ export class TabGroupService {
 
   async getUsedColors(tasks: Map<string, Task>): Promise<Set<chrome.tabGroups.Color>> {
     const used = new Set<chrome.tabGroups.Color>();
-    
+
     try {
       const groups = await chrome.tabGroups.query({});
       groups.forEach(g => {
@@ -91,11 +108,11 @@ export class TabGroupService {
         }
       });
     } catch {}
-    
+
     tasks.forEach(t => {
       if (t.status === 'running' && t.groupColorName) used.add(t.groupColorName);
     });
-    
+
     return used;
   }
 
@@ -114,7 +131,7 @@ export class TabGroupService {
     // so we're guaranteed to be in a valid window for tab grouping
 
     if (!task.name?.includes('Web Agent')) return undefined;
-    
+
     if (typeof task.groupId === 'number' && task.groupId >= 0) {
       try {
         await chrome.tabGroups.get(task.groupId);
@@ -122,12 +139,12 @@ export class TabGroupService {
         return task.groupId;
       } catch {}
     }
-    
+
     const existingGroupId = (currentTab as any)?.groupId;
     if (typeof existingGroupId === 'number' && existingGroupId >= 0) {
       return existingGroupId;
     }
-    
+
     return await chrome.tabs.group({ tabIds: [tabId] });
   }
 
@@ -148,15 +165,15 @@ export class TabGroupService {
       task.groupColorName = colorName as chrome.tabGroups.Color;
       task.color = chosen.hex;
     }
-    
+
     const title = this.computeGroupTitle(task, tasks);
     task.name = title;
-    
-    const updatedGroup = await chrome.tabGroups.update(groupId, { 
-      color: colorName as chrome.tabGroups.Color, 
-      title 
+
+    const updatedGroup = await chrome.tabGroups.update(groupId, {
+      color: colorName as chrome.tabGroups.Color,
+      title,
     });
-    
+
     const finalColorName = (updatedGroup?.color || colorName) as unknown as string;
     task.groupColorName = finalColorName as unknown as chrome.tabGroups.Color;
     task.color = TAB_GROUP_COLOR_HEX[finalColorName] || task.color;
@@ -196,4 +213,3 @@ export class TabGroupService {
     return max + 1;
   }
 }
-
