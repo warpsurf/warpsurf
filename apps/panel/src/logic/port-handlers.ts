@@ -45,20 +45,60 @@ export function createPanelHandlers(deps: any): any {
         // Drop duplicate terminal events that sometimes arrive twice from background
         try {
           const key = `${(event as any).actor}|${(event as any).state}|${String((event as any)?.data?.taskId || '')}`;
-          // Use a window-scoped cache to dedupe within a short time window
           const win = window as any;
           win.__lastExecKeys = win.__lastExecKeys || new Map();
           const now = Date.now();
           const last = win.__lastExecKeys.get(key) as number | undefined;
           const isTerminal = String((event as any).state).startsWith('task.');
-          if (isTerminal && last && now - last < 1000) return; // suppress rapid duplicates
+          if (isTerminal && last && now - last < 1000) return;
           if (isTerminal) win.__lastExecKeys.set(key, now);
         } catch {}
+
+        // Extract plan state from execution events
+        try {
+          const plan = (event as any)?.data?.plan;
+          if (Array.isArray(plan) && plan.length > 0) {
+            deps.setCurrentPlan?.(plan);
+          }
+        } catch {}
+
+        // When the agent consumes queued messages: insert them into chat
+        // before the agent aggregate root, and remove from the queue strip
+        try {
+          const drained = event?.data?.drainedMessages;
+          if (Array.isArray(drained) && drained.length > 0) {
+            const rootId = deps.agentTraceRootIdRef?.current;
+            if (rootId) {
+              deps.setMessages?.((prev: any[]) => {
+                const rootIdx = prev.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
+                const newMsgs = drained.map((text: string) => ({
+                  actor: 'user',
+                  content: text,
+                  timestamp: Date.now(),
+                }));
+                if (rootIdx >= 0) {
+                  return [...prev.slice(0, rootIdx), ...newMsgs, ...prev.slice(rootIdx)];
+                }
+                return [...prev, ...newMsgs];
+              });
+            }
+            deps.setQueuedMessages?.((prev: string[]) => {
+              const remaining = [...prev];
+              for (const msg of drained) {
+                const idx = remaining.indexOf(msg);
+                if (idx >= 0) remaining.splice(idx, 1);
+              }
+              return remaining;
+            });
+          }
+        } catch {}
+
         (deps.taskEventHandler as any)(event);
       } catch (e) {
         deps.logger.error('Task event handler error', e);
       }
     },
+    onLiveMessageQueued: (_message: any) => {},
     onExecutionMeta: (message: any) => {
       try {
         const data = (message as any)?.data;
@@ -373,6 +413,15 @@ export function createPanelHandlers(deps: any): any {
       } catch {}
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
+      deps.setCurrentPlan?.(null);
+      // Restore any unconsumed queued messages to the input box
+      try {
+        const pending = deps.getQueuedMessages?.() || [];
+        if (pending.length > 0 && deps.setInputTextRef?.current) {
+          deps.setInputTextRef.current(pending.join('\n'));
+        }
+      } catch {}
+      deps.setQueuedMessages?.([]);
       try {
         deps.setIsFollowUpMode(true);
       } catch {}

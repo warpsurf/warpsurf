@@ -41,6 +41,10 @@ export interface EventData {
   pageUrl?: string;
   /** Current page title when action was performed */
   pageTitle?: string;
+  /** Current plan state for UI rendering */
+  plan?: Array<{ text: string; status: string }>;
+  /** Messages drained from the live-injection queue this step */
+  drainedMessages?: string[];
   /** Structured model/provider error payload for UI-safe rendering */
   error?: {
     kind: string;
