@@ -61,10 +61,12 @@ export interface BrowserContextConfig {
   homePageUrl: string;
 
   /**
-   * Display highlights on interactive elements
-   * @default true
+   * Display highlights on interactive elements.
+   * 'auto': off when vision is off, on-demand when vision is auto, always when vision is always-on.
+   * true: always show highlights regardless of vision mode.
+   * @default 'auto'
    */
-  displayHighlights: boolean;
+  displayHighlights: boolean | 'auto';
 }
 
 export const DEFAULT_BROWSER_CONTEXT_CONFIG: BrowserContextConfig = {
@@ -77,7 +79,7 @@ export const DEFAULT_BROWSER_CONTEXT_CONFIG: BrowserContextConfig = {
   deniedUrls: [],
   includeDynamicAttributes: true,
   homePageUrl: 'https://www.google.com',
-  displayHighlights: false,
+  displayHighlights: 'auto',
 };
 
 export interface PageState extends DOMState {

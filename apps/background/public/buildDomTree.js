@@ -7,8 +7,7 @@ window.buildDomTree = (
   },
 ) => {
   const { showHighlightElements, focusHighlightIndex, viewportExpansion, debugMode } = args;
-  // Make sure to do highlight elements always, but we can hide the highlights if needed
-  const doHighlightElements = true;
+  const doHighlightElements = showHighlightElements;
 
   let highlightIndex = 0; // Reset highlight index
 
@@ -1247,8 +1246,8 @@ window.buildDomTree = (
           } else {
             highlightElement(node, nodeData.highlightIndex, parentIframe);
           }
-          return true; // Successfully highlighted
         }
+        return true; // Index assigned (visual overlay only when doHighlightElements)
       } else {
         // console.log(`Skipping highlight for ${nodeData.tagName} (outside viewport)`);
       }
@@ -1382,7 +1381,7 @@ window.buildDomTree = (
       for (const name of attributeNames) {
         nodeData.attributes[name] = node.getAttribute(name);
       }
-      
+
       // Capture actual content for input elements and contentEditable divs
       if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
         // For form inputs, capture the current value
