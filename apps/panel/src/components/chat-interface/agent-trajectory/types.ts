@@ -1,3 +1,5 @@
+import type { ComponentType, CSSProperties } from 'react';
+
 /** Semantic categories for grouping actions */
 export type ActionCategory =
   | 'navigation'
@@ -16,6 +18,8 @@ export type ActionCategory =
 /** Visual display config for an action */
 export interface ActionDisplay {
   icon: string;
+  /** React icon component to render instead of the emoji string */
+  IconComponent?: ComponentType<{ className?: string; size?: number; style?: CSSProperties }>;
   iconColor: { light: string; dark: string };
   categoryLabel: string;
   causesNavigation: boolean;
@@ -50,6 +54,7 @@ export interface DisplayAction {
   actionName: string;
   category: ActionCategory;
   icon: string;
+  IconComponent?: ComponentType<{ className?: string; size?: number; style?: CSSProperties }>;
   iconColor: string;
   label: string;
   details?: { primary?: string; secondary?: string };

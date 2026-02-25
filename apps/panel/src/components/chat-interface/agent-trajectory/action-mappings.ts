@@ -1,4 +1,27 @@
 import type { ActionMapping } from './types';
+import {
+  FaSearch,
+  FaGlobe,
+  FaArrowLeft,
+  FaExternalLinkAlt,
+  FaExchangeAlt,
+  FaTimes,
+  FaMousePointer,
+  FaKeyboard,
+  FaListUl,
+  FaArrowsAltV,
+  FaArrowUp,
+  FaArrowDown,
+  FaFileAlt,
+  FaEye,
+  FaSave,
+  FaClock,
+  FaHandPaper,
+  FaCheckCircle,
+  FaBolt,
+  FaAlignLeft,
+} from 'react-icons/fa';
+import { FiCommand } from 'react-icons/fi';
 
 const truncate = (str: string, max: number) => (str.length <= max ? str : str.slice(0, max - 1) + '…');
 
@@ -18,6 +41,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'search',
     display: {
       icon: '🔍',
+      IconComponent: FaSearch,
       iconColor: { light: '#4285F4', dark: '#8AB4F8' },
       categoryLabel: 'Search',
       causesNavigation: true,
@@ -32,6 +56,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'navigation',
     display: {
       icon: '🌐',
+      IconComponent: FaGlobe,
       iconColor: { light: '#1A73E8', dark: '#8AB4F8' },
       categoryLabel: 'Navigate',
       causesNavigation: true,
@@ -47,6 +72,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'navigation',
     display: {
       icon: '◀️',
+      IconComponent: FaArrowLeft,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Navigate',
       causesNavigation: true,
@@ -62,6 +88,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'tab',
     display: {
       icon: '➕',
+      IconComponent: FaExternalLinkAlt,
       iconColor: { light: '#34A853', dark: '#81C995' },
       categoryLabel: 'Tab',
       causesNavigation: true,
@@ -77,6 +104,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'tab',
     display: {
       icon: '🔀',
+      IconComponent: FaExchangeAlt,
       iconColor: { light: '#FBBC04', dark: '#FDD663' },
       categoryLabel: 'Tab',
       causesNavigation: false,
@@ -90,6 +118,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'tab',
     display: {
       icon: '✖️',
+      IconComponent: FaTimes,
       iconColor: { light: '#EA4335', dark: '#F28B82' },
       categoryLabel: 'Tab',
       causesNavigation: false,
@@ -105,6 +134,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'click',
     display: {
       icon: '👆',
+      IconComponent: FaMousePointer,
       iconColor: { light: '#E37400', dark: '#FBBC04' },
       categoryLabel: 'Click',
       causesNavigation: false,
@@ -118,6 +148,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'click',
     display: {
       icon: '👆',
+      IconComponent: FaMousePointer,
       iconColor: { light: '#E37400', dark: '#FBBC04' },
       categoryLabel: 'Click',
       causesNavigation: false,
@@ -131,6 +162,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'click',
     display: {
       icon: '👆',
+      IconComponent: FaMousePointer,
       iconColor: { light: '#E37400', dark: '#FBBC04' },
       categoryLabel: 'Click',
       causesNavigation: false,
@@ -146,6 +178,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'input',
     display: {
       icon: '✏️',
+      IconComponent: FaKeyboard,
       iconColor: { light: '#185ABC', dark: '#8AB4F8' },
       categoryLabel: 'Input',
       causesNavigation: false,
@@ -159,6 +192,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'input',
     display: {
       icon: '⌨️',
+      IconComponent: FiCommand,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Keyboard',
       causesNavigation: false,
@@ -172,6 +206,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'input',
     display: {
       icon: '📋',
+      IconComponent: FaListUl,
       iconColor: { light: '#1A73E8', dark: '#8AB4F8' },
       categoryLabel: 'Select',
       causesNavigation: false,
@@ -185,6 +220,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'input',
     display: {
       icon: '📋',
+      IconComponent: FaListUl,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Inspect',
       causesNavigation: false,
@@ -200,6 +236,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '↕️',
+      IconComponent: FaArrowsAltV,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -219,6 +256,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '⬆️',
+      IconComponent: FaArrowUp,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -232,6 +270,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '⬇️',
+      IconComponent: FaArrowDown,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -245,6 +284,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '🔎',
+      IconComponent: FaSearch,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -258,6 +298,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '🎯',
+      IconComponent: FaArrowsAltV,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -271,6 +312,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '⏫',
+      IconComponent: FaArrowUp,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -284,6 +326,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'scroll',
     display: {
       icon: '⏬',
+      IconComponent: FaArrowDown,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scroll',
       causesNavigation: false,
@@ -299,6 +342,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'extract',
     display: {
       icon: '📜',
+      IconComponent: FaAlignLeft,
       iconColor: { light: '#34A853', dark: '#81C995' },
       categoryLabel: 'Extract',
       causesNavigation: false,
@@ -312,6 +356,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'extract',
     display: {
       icon: '📄',
+      IconComponent: FaFileAlt,
       iconColor: { light: '#1A73E8', dark: '#8AB4F8' },
       categoryLabel: 'Read',
       causesNavigation: false,
@@ -325,6 +370,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'extract',
     display: {
       icon: '👁️',
+      IconComponent: FaEye,
       iconColor: { light: '#5F6368', dark: '#9AA0A6' },
       categoryLabel: 'Scan',
       causesNavigation: false,
@@ -340,6 +386,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'cache',
     display: {
       icon: '💾',
+      IconComponent: FaSave,
       iconColor: { light: '#9334E6', dark: '#C58AF9' },
       categoryLabel: 'Cache',
       causesNavigation: false,
@@ -355,6 +402,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'wait',
     display: {
       icon: '⏳',
+      IconComponent: FaClock,
       iconColor: { light: '#FBBC04', dark: '#FDD663' },
       categoryLabel: 'Wait',
       causesNavigation: false,
@@ -368,6 +416,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'control',
     display: {
       icon: '🖐️',
+      IconComponent: FaHandPaper,
       iconColor: { light: '#EA4335', dark: '#F28B82' },
       categoryLabel: 'Handoff',
       causesNavigation: false,
@@ -382,6 +431,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
     category: 'complete',
     display: {
       icon: '✅',
+      IconComponent: FaCheckCircle,
       iconColor: { light: '#34A853', dark: '#81C995' },
       categoryLabel: 'Complete',
       causesNavigation: false,
@@ -400,6 +450,7 @@ const UNKNOWN_MAPPING: ActionMapping = {
   category: 'system',
   display: {
     icon: '⚡',
+    IconComponent: FaBolt,
     iconColor: { light: '#5F6368', dark: '#9AA0A6' },
     categoryLabel: 'Action',
     causesNavigation: false,

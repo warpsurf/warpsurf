@@ -9,11 +9,12 @@ interface ActionItemProps {
 
 export default function ActionItem({ action, isDarkMode, showTimestamp = false }: ActionItemProps) {
   const failedClass = !action.success ? (isDarkMode ? 'text-red-400' : 'text-red-600') : '';
+  const Icon = action.IconComponent;
 
   return (
     <div className="group/action flex items-start gap-2 py-0.5">
-      <span className="w-5 shrink-0 text-center" title={action.category}>
-        {action.icon}
+      <span className="flex w-5 shrink-0 items-center justify-center" title={action.category}>
+        {Icon ? <Icon size={13} style={{ color: action.iconColor }} /> : action.icon}
       </span>
       <div className="min-w-0 flex-1">
         <span

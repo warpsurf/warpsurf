@@ -250,6 +250,7 @@ const toDisplay = (parsed: ParsedAction, isDarkMode: boolean): DisplayAction => 
     actionName: parsed.actionName,
     category: mapping.category,
     icon: mapping.display.icon,
+    IconComponent: mapping.display.IconComponent,
     iconColor: isDarkMode ? mapping.display.iconColor.dark : mapping.display.iconColor.light,
     label: truncateLabel(rawLabel),
     details: mapping.extractDetails(parsed.args) || undefined,
