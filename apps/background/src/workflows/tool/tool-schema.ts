@@ -25,6 +25,7 @@ export const ALLOWED_GENERAL_SETTINGS = [
   'useVision',
   'useVisionForPlanner',
   'displayHighlights',
+  'enableCoordinateClick',
   'showTabPreviews',
   'fullPageWindow',
   // Agent behavior
