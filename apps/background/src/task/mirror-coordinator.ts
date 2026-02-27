@@ -13,27 +13,24 @@ export class MirrorCoordinator {
     this.tabMirrorService.setDashboardPort(port);
   }
 
-  async setupMirroring(
-    task: Task,
-    tabId: number,
-    executor: Executor,
-    visionEnabled: boolean
-  ): Promise<void> {
+  async setupMirroring(task: Task, tabId: number, executor: Executor, visionEnabled: boolean): Promise<void> {
     if (task.tabId && task.tabId !== tabId) {
       this.tabMirrorService.stopMirroring(task.tabId);
     }
     task.tabId = tabId;
-    
+
     if (visionEnabled) {
       this.registerScreenshotProvider(tabId, executor);
-      try { this.tabMirrorService.reserveDebuggerForPuppeteer(tabId, true); } catch {}
+      try {
+        this.tabMirrorService.reserveDebuggerForPuppeteer(tabId, true);
+      } catch {}
     }
-    
+
     const sessionId = task.parentSessionId || task.id;
     this.tabMirrorService.startMirroring(tabId, task.id, task.color, sessionId, task.workerIndex);
     // Ensure mirror has the correct color (may have been updated by applyTabColor)
     this.tabMirrorService.updateMirrorColor(tabId, task.color);
-    
+
     this.sendInitialMirrorUpdate(tabId, sessionId);
   }
 
@@ -63,11 +60,20 @@ export class MirrorCoordinator {
 
   async pauseAndResume(tabId: number, task: Task, delayMs: number = 3000): Promise<void> {
     this.tabMirrorService.stopMirroring(tabId);
-    setTimeout(() => {
-      if (task.status === 'running') {
-        this.tabMirrorService.startMirroring(tabId, task.id, task.color, task.parentSessionId || task.id, task.workerIndex);
-      }
-    }, Math.max(0, delayMs));
+    setTimeout(
+      () => {
+        if (task.status === 'running') {
+          this.tabMirrorService.startMirroring(
+            tabId,
+            task.id,
+            task.color,
+            task.parentSessionId || task.id,
+            task.workerIndex,
+          );
+        }
+      },
+      Math.max(0, delayMs),
+    );
   }
 
   getAllMirrors(): any[] {
@@ -99,19 +105,22 @@ export class MirrorCoordinator {
 
   private sendInitialMirrorUpdate(tabId: number, sessionId: string): void {
     if (!this.sidePanelPort) return;
-    
+
     setTimeout(() => {
       try {
-        const mirrors = (this.tabMirrorService as any).getActiveMirrors?.() || 
-                       this.tabMirrorService.getCurrentMirrors();
+        // Skip if this tab is no longer the active one for its session
+        if (!this.tabMirrorService.isActiveTabForSession(tabId, sessionId)) return;
+
+        const mirrors =
+          (this.tabMirrorService as any).getActiveMirrors?.() || this.tabMirrorService.getCurrentMirrors();
         const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
-        
+
         if (mirrorData) {
-          this.sidePanelPort?.postMessage({ 
-            type: 'tab-mirror-update', 
-            data: { ...mirrorData, sessionId } 
+          this.sidePanelPort?.postMessage({
+            type: 'tab-mirror-update',
+            data: { ...mirrorData, sessionId },
           });
-          
+
           const batch = mirrors.map((m: any) => ({ ...m, sessionId }));
           this.sidePanelPort?.postMessage({ type: 'tab-mirror-batch', data: batch });
         }
@@ -119,4 +128,3 @@ export class MirrorCoordinator {
     }, 800);
   }
 }
-
