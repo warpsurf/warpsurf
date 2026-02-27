@@ -46,6 +46,21 @@ export function createPanelHandlers(deps: any): any {
             deps.setCurrentTaskAgentType?.(String(message.agentType));
           } catch {}
         }
+        if (isRunning) {
+          deps.setInputEnabled(false);
+          deps.setIsAgentModeActive(true);
+        }
+        // Restore live workflow graph for running multiagent sessions
+        if (message?.workflowGraph && message?.agentType === 'multiagent') {
+          try {
+            deps.setMessageMetadata((prev: any) => ({
+              ...prev,
+              __workflowGraph: message.workflowGraph,
+              __workflowGraphInitial: (prev as any)?.__workflowGraphInitial || message.workflowGraph,
+            }));
+            deps.setShowInlineWorkflow?.(true);
+          } catch {}
+        }
       } catch {}
     },
     onShortcut: (text: string) => {
@@ -75,11 +90,15 @@ export function createPanelHandlers(deps: any): any {
           if (isTerminal) win.__lastExecKeys.set(key, now);
         } catch {}
 
-        // Extract plan state from execution events
+        // Extract plan state from execution events (only for current session)
         try {
           const plan = (event as any)?.data?.plan;
           if (Array.isArray(plan) && plan.length > 0) {
-            deps.setCurrentPlan?.(plan);
+            const evtSid = String((event as any)?.data?.taskId || (event as any)?.data?.sessionId || '');
+            const curSid = String(deps.sessionIdRef?.current || '');
+            if (!evtSid || !curSid || evtSid === curSid) {
+              deps.setCurrentPlan?.(plan);
+            }
           }
         } catch {}
 
@@ -680,7 +699,6 @@ export function createPanelHandlers(deps: any): any {
       );
 
       if (filteredAll.length === 0 || !deps.jobActiveRef.current) {
-        // During an active workflow with no batch data, keep the preview mounted
         if (!deps.jobActiveRef.current) {
           deps.setMirrorPreviewBatch([]);
           deps.setMirrorPreview(null);

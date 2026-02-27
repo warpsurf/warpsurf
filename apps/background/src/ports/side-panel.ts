@@ -875,7 +875,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         }
         case 'cancel_queued_message': {
           const text = String(message.text || '');
-          const executor = getCurrentExecutor();
+          const sid = String(message.sessionId || '');
+          const executor = (sid && taskManager.getTask(sid)?.executor) || getCurrentExecutor();
           try {
             const ctx = (executor as any)?.context;
             if (ctx?.pendingUserMessages) {
@@ -890,7 +891,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         }
         case 'inject_live_message': {
           const text = String(message.text || '').trim();
-          const executor = getCurrentExecutor();
+          const sid = String(message.sessionId || '');
+          const executor = (sid && taskManager.getTask(sid)?.executor) || getCurrentExecutor();
           if (!text || !executor) {
             safePostMessage(port, { type: 'error', error: 'No active agent or empty message' });
             return;
@@ -899,7 +901,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             const ctx = (executor as any).context;
             if (ctx?.pendingUserMessages) {
               ctx.pendingUserMessages.push(text);
-              logger.info(`Live message queued (${ctx.pendingUserMessages.length} pending)`);
+              logger.info(`Live message queued for ${sid || 'current'} (${ctx.pendingUserMessages.length} pending)`);
               safePostMessage(port, { type: 'live_message_queued', count: ctx.pendingUserMessages.length });
             } else {
               safePostMessage(port, { type: 'error', error: 'Agent not running a browser workflow' });
@@ -1204,7 +1206,15 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               String((getCurrentExecutor() as any)?.context?.taskId || '') === String(sessionId) ||
               String(taskManager.getTask?.(String(sessionId))?.status || '') === 'running';
 
-            safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType });
+            // Include live workflow graph for running multiagent sessions so the
+            // panel can restore the graph/plan tabs when switching between sessions
+            let workflowGraph = null;
+            try {
+              const wf = workflowsBySession.get(String(sessionId));
+              if (wf) workflowGraph = wf.getCurrentGraph?.() || null;
+            } catch {}
+
+            safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType, workflowGraph });
             return;
           } catch (e) {
             logger.error('[SidePanel] subscribe_to_session failed:', e);
