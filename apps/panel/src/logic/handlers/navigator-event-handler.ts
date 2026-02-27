@@ -109,13 +109,9 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
       case ExecutionState.STEP_FAIL:
         setIsAgentModeActive(true);
         if (deps.agentTraceRootIdRef.current) {
-          addTraceItem(
-            Actors.AGENT_NAVIGATOR,
-            `Navigator failed: ${content || ''}${workerSuffix}${nameSuffix}`,
-            timestamp,
-            deps,
-            { pageUrl, pageTitle },
-          );
+          const failContent = `Navigator failed: ${content || ''}${workerSuffix}${nameSuffix}`;
+          addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, { pageUrl, pageTitle });
+          if (content) updateAggregateRootContent(content, deps);
         }
         break;
 

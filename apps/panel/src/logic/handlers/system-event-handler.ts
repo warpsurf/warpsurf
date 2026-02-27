@@ -19,6 +19,7 @@ import {
   updateRequestSummary,
   updateLastAgentMessageSummary,
   updateAggregateRootSummary,
+  updateAggregateRootContent,
   addTraceItem,
   markAggregateComplete,
   persistFinalPreview,
@@ -332,6 +333,7 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           }
           if (deps.getCurrentTaskAgentType() !== 'multiagent' && deps.agentTraceRootIdRef.current) {
             addTraceItem(Actors.SYSTEM, failText, timestamp, deps);
+            updateAggregateRootContent(failText, deps);
             markAggregateComplete(deps);
           } else if (deps.getCurrentTaskAgentType() !== 'multiagent') {
             deps.appendMessage({ actor: Actors.SYSTEM, content: failText, timestamp });

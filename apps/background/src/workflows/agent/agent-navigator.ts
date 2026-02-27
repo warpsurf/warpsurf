@@ -390,8 +390,10 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         throw new RequestCancelledError((error as Error).message);
       }
 
-      // URL not allowed - re-throw as-is
+      // URL not allowed - emit failure event so the UI main message reflects the block
       if (error instanceof URLNotAllowedError) {
+        const msg = error.message || 'URL not allowed by firewall';
+        this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_FAIL, msg);
         throw error;
       }
 
