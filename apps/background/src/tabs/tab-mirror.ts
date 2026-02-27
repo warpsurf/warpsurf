@@ -34,6 +34,7 @@ export class TabMirrorService {
   private reservedByPuppeteer: Set<number> = new Set();
   private visionEnabled = true;
   private sessionToTabs: Map<string, Set<number>> = new Map();
+  private sessionActiveTab: Map<string, number> = new Map();
   private tabWorkerIndex: Map<number, number> = new Map();
   private tabColor: Map<number, string> = new Map();
   private previewLogInterval?: NodeJS.Timeout;
@@ -171,7 +172,8 @@ export class TabMirrorService {
     this.dashboardPort = port;
     if (port && this.currentMirrors.size > 0) {
       const allMirrors = Array.from(this.currentMirrors.values()).filter(m => this.mirrorIntervals.has(m.tabId));
-      if (allMirrors.length > 1) {
+      const uniqueAgents = new Set(allMirrors.map(m => m.agentId));
+      if (uniqueAgents.size > 1) {
         safePostMessage(port, { type: 'tab-mirror-batch', data: allMirrors });
       }
       const latest = this.getLatestMirror();
@@ -255,6 +257,24 @@ export class TabMirrorService {
     this.tabColor.set(tabId, color);
     if (typeof workerIndex === 'number') this.tabWorkerIndex.set(tabId, workerIndex);
     if (sessionId) {
+      if (typeof workerIndex !== 'number') {
+        // Mark as the session's active tab. captureAndSendTabData also
+        // checks this before sending, so even if interval-stopping below
+        // loses a race, the stale tab's captures are silently dropped.
+        this.sessionActiveTab.set(sessionId, tabId);
+
+        // Best-effort: stop mirror intervals on older tabs in this session
+        // to avoid wasting CDP screenshot captures (~30/s with 10 tabs).
+        const existing = this.sessionToTabs.get(sessionId);
+        if (existing) {
+          for (const oldTabId of existing) {
+            if (oldTabId !== tabId && this.mirrorIntervals.has(oldTabId)) {
+              safeClearInterval(this.mirrorIntervals.get(oldTabId)!);
+              this.mirrorIntervals.delete(oldTabId);
+            }
+          }
+        }
+      }
       let set = this.sessionToTabs.get(sessionId);
       if (!set) {
         set = new Set();
@@ -277,6 +297,16 @@ export class TabMirrorService {
           return;
         }
         if (this.suspendedTabs.has(tabId)) return;
+        // Skip all CDP work for non-active tabs (handles races where
+        // the best-effort interval stop in startMirroring missed this tab)
+        if (sessionId && !this.tabWorkerIndex.has(tabId)) {
+          const active = this.sessionActiveTab.get(sessionId);
+          if (active !== undefined && active !== tabId) {
+            safeClearInterval(interval);
+            this.mirrorIntervals.delete(tabId);
+            return;
+          }
+        }
         // Use stored color to pick up updates from updateMirrorColor
         const currentColor = this.tabColor.get(tabId) || color;
         await this.captureAndSendTabData(tabId, agentId, currentColor, sessionId);
@@ -300,10 +330,13 @@ export class TabMirrorService {
     this.reservedByPuppeteer.delete(tabId);
     this.tabWorkerIndex.delete(tabId);
     this.tabColor.delete(tabId);
-    for (const [, set] of this.sessionToTabs) set.delete(tabId);
+    for (const [sid, set] of this.sessionToTabs) {
+      set.delete(tabId);
+      if (this.sessionActiveTab.get(sid) === tabId) this.sessionActiveTab.delete(sid);
+    }
     if (this.dashboardPort) {
       safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: null });
-      safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: this.getCurrentMirrors() });
+      safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: this.getActiveMirrors() });
     }
   }
 
@@ -312,9 +345,16 @@ export class TabMirrorService {
     const mirror = this.currentMirrors.get(tabId);
     if (!mirror) return;
     mirror.color = color;
+    // Skip sending for non-active tabs to avoid flickering
+    const sid = mirror.sessionId;
+    if (sid && !this.tabWorkerIndex.has(tabId)) {
+      const active = this.sessionActiveTab.get(sid);
+      if (active !== undefined && active !== tabId) return;
+    }
     if (this.dashboardPort) {
       const active = this.getActiveMirrors();
-      if (active.length === 1) {
+      const uniqueAgents = new Set(active.map(m => m.agentId));
+      if (uniqueAgents.size <= 1) {
         safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: mirror });
       } else {
         safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: active });
@@ -328,12 +368,20 @@ export class TabMirrorService {
       safeClearInterval(this.mirrorIntervals.get(tabId)!);
       this.mirrorIntervals.delete(tabId);
     }
+    this.currentMirrors.delete(tabId);
     this.unregisterScreenshotProvider(tabId);
     this.suspendedTabs.delete(tabId);
     this.reservedByPuppeteer.delete(tabId);
     this.tabWorkerIndex.delete(tabId);
     this.tabColor.delete(tabId);
     this.stopPreviewLoggingIfIdle();
+  }
+
+  /** Check whether a non-worker tab is the currently active tab for its session. */
+  isActiveTabForSession(tabId: number, sessionId: string): boolean {
+    if (this.tabWorkerIndex.has(tabId)) return true; // worker tabs are always "active"
+    const active = this.sessionActiveTab.get(sessionId);
+    return active === undefined || active === tabId;
   }
 
   suspendMirroring(tabId: number) {
@@ -357,6 +405,7 @@ export class TabMirrorService {
     this.currentMirrors.clear();
     this.tabWorkerIndex.clear();
     this.tabColor.clear();
+    this.sessionActiveTab.clear();
     safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: [] });
   }
 
@@ -576,9 +625,19 @@ export class TabMirrorService {
         lastUpdated: Date.now(),
       };
       this.currentMirrors.set(tabId, mirrorData);
+      // For non-worker single-agent tabs, only send updates for the session's
+      // active tab.  Multiple tabs may have running intervals due to async
+      // races during rapid tab creation, but only the latest matters.
+      if (sessionId && !this.tabWorkerIndex.has(tabId)) {
+        const activeTab = this.sessionActiveTab.get(sessionId);
+        if (activeTab !== undefined && activeTab !== tabId) {
+          return;
+        }
+      }
       if (this.dashboardPort) {
         const active = this.getActiveMirrors();
-        if (active.length === 1) {
+        const uniqueAgents = new Set(active.map(m => m.agentId));
+        if (uniqueAgents.size <= 1) {
           safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: mirrorData });
         } else {
           safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: active });
