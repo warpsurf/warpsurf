@@ -60,6 +60,9 @@ export function usePanelHandlers(params: {
   setPaletteOpen: (v: boolean) => void;
   setIsStopping: (v: boolean) => void;
   setSessionAttachments?: (v: Record<string, Attachment>) => void;
+  setCurrentPlan?: (v: Array<{ text: string; status: string }> | null) => void;
+  setQueuedMessages?: (v: string[]) => void;
+  agentTraceRootIdRef: MutableRefObject<string | null>;
   workerTabGroups: any[];
   currentTaskAgentType: string | null;
   pinnedMessageIds: Set<string>;
@@ -115,6 +118,9 @@ export function usePanelHandlers(params: {
     setPaletteOpen,
     setIsStopping,
     setSessionAttachments,
+    setCurrentPlan,
+    setQueuedMessages,
+    agentTraceRootIdRef,
     workerTabGroups,
     currentTaskAgentType,
     pinnedMessageIds,
@@ -144,7 +150,10 @@ export function usePanelHandlers(params: {
       setIsAgentModeActive(false);
       setCurrentTaskAgentType(null);
       setAgentTraceRootId(null);
+      agentTraceRootIdRef.current = null;
       agentTraceActiveRef.current = false;
+      setCurrentPlan?.(null);
+      setQueuedMessages?.([]);
       setMessageMetadata({});
       setShowCloseTabs(false);
       setIsPaused(false);
@@ -198,6 +207,9 @@ export function usePanelHandlers(params: {
       setSessionStats,
       setRequestSummaries,
       setIsHistoricalSession,
+      setCurrentPlan,
+      setQueuedMessages,
+      agentTraceRootIdRef,
     ],
   );
 
@@ -314,6 +326,9 @@ export function usePanelHandlers(params: {
       setMirrorPreviewBatch([]);
       setShowCloseTabs(false);
       setIsJobActive(false);
+      setCurrentPlan?.(null);
+      setQueuedMessages?.([]);
+      setCurrentTaskAgentType(null);
       setForceChatView(true);
       const sid = sessionIdRef.current;
       if (sid) {
@@ -354,6 +369,9 @@ export function usePanelHandlers(params: {
     setShowCloseTabs,
     setIsJobActive,
     setForceChatView,
+    setCurrentPlan,
+    setQueuedMessages,
+    setCurrentTaskAgentType,
   ]);
 
   const handlePauseTask = useCallback(async () => {

@@ -334,6 +334,9 @@ const SidePanel = () => {
     setIsJobActive,
     lastEventIdBySessionRef,
     setSessionAttachments,
+    setCurrentPlan,
+    setQueuedMessages,
+    setCurrentTaskAgentType,
   });
 
   // Event setup (appendMessage, taskEventHandler, panelHandlers)
@@ -494,6 +497,9 @@ const SidePanel = () => {
     setPaletteOpen,
     setIsStopping,
     setSessionAttachments,
+    setCurrentPlan,
+    setQueuedMessages,
+    agentTraceRootIdRef,
     workerTabGroups,
     currentTaskAgentType,
     pinnedMessageIds,
@@ -974,14 +980,19 @@ const SidePanel = () => {
               queuedMessages={queuedMessages}
               onInjectLiveMessage={(text: string) => {
                 if (portRef.current) {
-                  portRef.current.postMessage({ type: 'inject_live_message', text });
+                  portRef.current.postMessage({ type: 'inject_live_message', text, sessionId: sessionIdRef.current });
                   setQueuedMessages(prev => [...prev, text]);
                 }
               }}
               onCancelQueuedMessage={(index: number) => {
                 const text = queuedMessages[index];
                 setQueuedMessages(prev => prev.filter((_, i) => i !== index));
-                if (text) portRef.current?.postMessage({ type: 'cancel_queued_message', text });
+                if (text)
+                  portRef.current?.postMessage({
+                    type: 'cancel_queued_message',
+                    text,
+                    sessionId: sessionIdRef.current,
+                  });
               }}
               tokenLog={tokenLog}
               useFullPlanningPipeline={useFullPlanningPipeline}

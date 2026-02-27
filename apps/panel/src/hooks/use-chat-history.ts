@@ -31,6 +31,9 @@ export function useChatHistory({
   setIsJobActive,
   lastEventIdBySessionRef,
   setSessionAttachments,
+  setCurrentPlan,
+  setQueuedMessages,
+  setCurrentTaskAgentType,
 }: {
   logger: { log: (...args: any[]) => void; error: (...args: any[]) => void };
   setMessages: (v: any) => void;
@@ -55,6 +58,9 @@ export function useChatHistory({
   setIsJobActive?: (v: boolean) => void;
   lastEventIdBySessionRef?: MutableRefObject<Map<string, string>>;
   setSessionAttachments?: (v: Record<string, Attachment>) => void;
+  setCurrentPlan?: (v: Array<{ text: string; status: string }> | null) => void;
+  setQueuedMessages?: (v: string[]) => void;
+  setCurrentTaskAgentType?: (v: string | null) => void;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
 
@@ -202,9 +208,12 @@ export function useChatHistory({
         sessionIdRef.current = sessionId;
         setShowDashboard(false);
 
-        // Clear preview state to prevent leakage between sessions
+        // Clear transient state to prevent leakage between sessions
         if (setMirrorPreview) setMirrorPreview(null);
         if (setMirrorPreviewBatch) setMirrorPreviewBatch([]);
+        setCurrentPlan?.(null);
+        setQueuedMessages?.([]);
+        setCurrentTaskAgentType?.(null);
 
         // Load persisted metadata
         let restoredRootId: string | null = null;
@@ -385,6 +394,9 @@ export function useChatHistory({
       setIsJobActive,
       lastEventIdBySessionRef,
       dedupeMessages,
+      setCurrentPlan,
+      setQueuedMessages,
+      setCurrentTaskAgentType,
     ],
   );
 

@@ -301,10 +301,10 @@ export function useEventSetup(params: {
     agentTraceRootIdRef.current = null;
     lastAgentMessageRef.current = null;
     workflowEndedRef.current = false;
-    // Clear preview state for fresh task runs
     setHasFirstPreview(false);
     setMirrorPreview(null);
     setMirrorPreviewBatch([]);
+    params.setCurrentPlan?.(null);
     try {
       const sid = sessionIdRef.current;
       if (sid) cancelSummaryTargetsRef.current.delete(sid);
@@ -320,6 +320,7 @@ export function useEventSetup(params: {
     setHasFirstPreview,
     setMirrorPreview,
     setMirrorPreviewBatch,
+    params.setCurrentPlan,
   ]);
 
   const taskEventHandler = useMemo(
