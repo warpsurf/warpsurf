@@ -191,6 +191,7 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             if (content && content !== 'Task completed successfully') {
               logger.log('[TASK_OK] Adding final trace item:', content.substring(0, 100));
               addTraceItem(Actors.SYSTEM, content, timestamp, deps);
+              updateAggregateRootContent(content, deps);
             } else {
               logger.log('[TASK_OK] Skipping generic completion message');
             }

@@ -38,7 +38,7 @@ export const createPlannerHandler: EventHandlerCreator = deps => {
         }
         if (deps.agentTraceRootIdRef.current) {
           addTraceItem(Actors.AGENT_PLANNER, content || 'Planner started', timestamp, deps);
-          if (content) updateAggregateRootContent(content, deps);
+          // Trace item only — don't overwrite aggregate root with transient planner status
         }
         break;
 
