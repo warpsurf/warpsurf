@@ -29,7 +29,8 @@ export default function PreviewPanel({
   onOpenPreviewTab,
   onTakeControl,
 }: PreviewPanelProps) {
-  const hasBatch = inlinePreviewBatch?.length > 0;
+  const hasBatch = inlinePreviewBatch?.length > 1;
+  const effectivePreview = inlinePreview ?? (inlinePreviewBatch?.length === 1 ? inlinePreviewBatch[0] : null);
   const openBtnBase = `rounded px-2 py-0.5 transition-all`;
   const openBtnEnabled = isDarkMode
     ? 'bg-violet-700 text-white hover:bg-violet-600'
@@ -46,8 +47,8 @@ export default function PreviewPanel({
       <div
         className={`px-2 pt-2 pb-1 flex items-center justify-between text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
         <div className="flex items-center gap-2 min-w-0">
-          <div className="truncate" title={inlinePreview?.url || inlinePreview?.title || ''}>
-            {inlinePreview?.url || inlinePreview?.title || 'Preview'}
+          <div className="truncate" title={effectivePreview?.url || effectivePreview?.title || ''}>
+            {effectivePreview?.url || effectivePreview?.title || 'Preview'}
           </div>
           {isPaused && (
             <span
@@ -65,14 +66,14 @@ export default function PreviewPanel({
           </button>
           <button
             type="button"
-            onClick={() => inlinePreview?.tabId && onOpenPreviewTab?.(inlinePreview.tabId)}
-            disabled={!inlinePreview?.tabId}
-            className={`${openBtnBase} ${inlinePreview?.tabId ? openBtnEnabled : openBtnDisabled}`}
-            style={inlinePreview?.tabId && agentColorHex ? { backgroundColor: agentColorHex } : undefined}>
+            onClick={() => effectivePreview?.tabId && onOpenPreviewTab?.(effectivePreview.tabId)}
+            disabled={!effectivePreview?.tabId}
+            className={`${openBtnBase} ${effectivePreview?.tabId ? openBtnEnabled : openBtnDisabled}`}
+            style={effectivePreview?.tabId && agentColorHex ? { backgroundColor: agentColorHex } : undefined}>
             Open
           </button>
-          {inlinePreview?.tabId && (
-            <button type="button" onClick={() => onTakeControl?.(inlinePreview.tabId)} className={controlBtn}>
+          {effectivePreview?.tabId && (
+            <button type="button" onClick={() => onTakeControl?.(effectivePreview.tabId)} className={controlBtn}>
               Take control
             </button>
           )}
@@ -122,15 +123,15 @@ export default function PreviewPanel({
               </div>
             ))}
           </div>
-        ) : inlinePreview?.screenshot ? (
-          <img src={inlinePreview.screenshot} alt="" className="w-full max-h-80 object-cover" />
+        ) : effectivePreview?.screenshot ? (
+          <img src={effectivePreview.screenshot} alt="" className="w-full max-h-80 object-cover" />
         ) : (
           <div
             className={`flex flex-col items-center justify-center rounded min-h-[80px] px-3 py-4 ${isDarkMode ? 'bg-slate-800/30 text-slate-400' : 'bg-gray-50 text-gray-600'}`}>
             <div className="truncate text-sm max-w-full">
-              {inlinePreview?.title || inlinePreview?.url || 'Loading preview...'}
+              {effectivePreview?.title || effectivePreview?.url || 'Loading preview...'}
             </div>
-            {inlinePreview?.tabId && <div className="mt-1 text-[10px] opacity-60">Tab {inlinePreview.tabId}</div>}
+            {effectivePreview?.tabId && <div className="mt-1 text-[10px] opacity-60">Tab {effectivePreview.tabId}</div>}
           </div>
         ))}
     </div>
