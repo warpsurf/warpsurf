@@ -198,13 +198,25 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
                 }
               } catch {}
             }
-            // Only filter non-terminal events - terminal events must always be processed
-            // to ensure UI updates even if user switched sessions mid-task
-            if (!isTerminalEvent && !sessionMatches) {
+            // Filter ALL events (including terminal) that don't match the current session.
+            // Terminal events for other sessions are already stored in pending_terminal_events
+            // above and will be replayed when the user navigates to that session.
+            // The system handler's isEventForCurrentSession would gate UI updates anyway, but
+            // code that runs before that check (updateWorkerProgress, drainedMessages) can
+            // corrupt the current session's state with data from other sessions.
+            if (!sessionMatches) {
+              // Still track cancellation for non-matching sessions to drop stale mirror updates
+              try {
+                if (isTerminalEvent) {
+                  const d2: any = (message as any)?.data || {};
+                  const sid = String(d2?.parentSessionId || d2?.sessionId || d2?.taskId || '');
+                  if (sid) cancelledSessionsRef.current.add(sid);
+                }
+              } catch {}
               return;
             }
           } catch {}
-          // Track cancellation to drop late mirror updates
+          // Track cancellation to drop late mirror updates (for matching sessions)
           try {
             const state = String((message as any)?.state || (message as any)?.data?.state || '').toLowerCase();
             if (state === 'task.cancel' || state === 'task.ok' || state === 'task.fail') {
@@ -243,16 +255,25 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           } catch {}
         } else if (message && message.type === 'live_message_queued') {
           handlersRef.current.onLiveMessageQueued?.(message);
-        } else if (message && message.type === 'workflow_graph_update') {
-          handlersRef.current.onWorkflowGraphUpdate?.(message);
-        } else if (message && message.type === 'workflow_plan_dataset') {
-          handlersRef.current.onWorkflowPlanDataset?.(message);
-        } else if (message && message.type === 'workflow_progress') {
-          handlersRef.current.onWorkflowProgress?.(message);
-        } else if (message && message.type === 'final_answer') {
-          handlersRef.current.onFinalAnswer?.(message);
-        } else if (message && message.type === 'workflow_ended') {
-          handlersRef.current.onWorkflowEnded?.(message);
+        } else if (
+          message &&
+          (message.type === 'workflow_graph_update' ||
+            message.type === 'workflow_plan_dataset' ||
+            message.type === 'workflow_progress' ||
+            message.type === 'final_answer' ||
+            message.type === 'workflow_ended')
+        ) {
+          // Session gate: workflow messages carry data.sessionId — only process for current session
+          const wfSessionId = String(message?.data?.sessionId || '');
+          const isForCurrentSession =
+            !wfSessionId || !sessionIdRef.current || wfSessionId === String(sessionIdRef.current);
+          if (!isForCurrentSession) return;
+
+          if (message.type === 'workflow_graph_update') handlersRef.current.onWorkflowGraphUpdate?.(message);
+          else if (message.type === 'workflow_plan_dataset') handlersRef.current.onWorkflowPlanDataset?.(message);
+          else if (message.type === 'workflow_progress') handlersRef.current.onWorkflowProgress?.(message);
+          else if (message.type === 'final_answer') handlersRef.current.onFinalAnswer?.(message);
+          else if (message.type === 'workflow_ended') handlersRef.current.onWorkflowEnded?.(message);
         } else if (message && message.type === 'workflow_started') {
           // New run for a session: unmark it from cancelled so mirrors/progress show again
           try {
