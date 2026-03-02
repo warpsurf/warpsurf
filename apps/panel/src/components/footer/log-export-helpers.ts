@@ -518,11 +518,10 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
             return entryLines;
           };
 
-          // Helper to categorize logs within a run
           interface RunLogs {
             estimator: any[];
-            planner: any[];
-            refiner: any[];
+            commodore: any[];
+            captain: any[];
             validator: any[];
             workers: Map<number, any[]>;
             other: any[];
@@ -531,8 +530,8 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
           const categorizeLogsForRun = (logs: any[]): RunLogs => {
             const result: RunLogs = {
               estimator: [],
-              planner: [],
-              refiner: [],
+              commodore: [],
+              captain: [],
               validator: [],
               workers: new Map(),
               other: [],
@@ -544,10 +543,10 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
 
               if (role.includes('estimator')) {
                 result.estimator.push(u);
-              } else if (role.includes('planner')) {
-                result.planner.push(u);
-              } else if (role.includes('refiner')) {
-                result.refiner.push(u);
+              } else if (role.includes('commodore') || role.includes('planner')) {
+                result.commodore.push(u);
+              } else if (role.includes('captain') || role.includes('refiner')) {
+                result.captain.push(u);
               } else if (role.includes('validator')) {
                 result.validator.push(u);
               } else if (Number.isFinite(workerIndex) && workerIndex > 0) {
@@ -575,24 +574,24 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
               });
             }
 
-            // Output planner logs
-            if (runLogs.planner.length > 0) {
+            // Output commodore (planner) logs
+            if (runLogs.commodore.length > 0) {
               lines.push('\n---');
-              lines.push(`\n${headingLevel} Planner`);
-              lines.push(`\n_${runLogs.planner.length} API call(s)_`);
-              runLogs.planner.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-              runLogs.planner.forEach((u, idx) => {
+              lines.push(`\n${headingLevel} Commodore`);
+              lines.push(`\n_${runLogs.commodore.length} API call(s)_`);
+              runLogs.commodore.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              runLogs.commodore.forEach((u, idx) => {
                 lines.push(...formatLogEntry(u, idx + 1, subHeadingLevel));
               });
             }
 
-            // Output refiner logs
-            if (runLogs.refiner.length > 0) {
+            // Output captain (overseer) logs
+            if (runLogs.captain.length > 0) {
               lines.push('\n---');
-              lines.push(`\n${headingLevel} Refiner`);
-              lines.push(`\n_${runLogs.refiner.length} API call(s)_`);
-              runLogs.refiner.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-              runLogs.refiner.forEach((u, idx) => {
+              lines.push(`\n${headingLevel} Captain`);
+              lines.push(`\n_${runLogs.captain.length} API call(s)_`);
+              runLogs.captain.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              runLogs.captain.forEach((u, idx) => {
                 lines.push(...formatLogEntry(u, idx + 1, subHeadingLevel));
               });
             }
@@ -700,4 +699,135 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
       console.warn('[Panel] combined_session_logs request timed out after 10s');
     }, 10000);
   } catch {}
+}
+
+// ---------- Per-role download helpers for multiagent workflow ----------
+
+type RoleFilter = (u: any) => boolean;
+
+function downloadRoleLogs(
+  port: chrome.runtime.Port | null,
+  sessionIdRaw: string | null,
+  roleName: string,
+  filter: RoleFilter,
+  filename: string,
+): void {
+  try {
+    if (!port || port.name !== 'side-panel-connection') return;
+    const sessionId = String(sessionIdRaw || '');
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const once = (ev: any) => {
+      try {
+        if (ev?.type === 'combined_session_logs' && String(ev?.sessionId || '') === sessionId) {
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
+
+          const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
+          const filtered = usages.filter(filter);
+          const lines: string[] = [];
+          lines.push(`# ${roleName} Logs for session ${sessionId}`);
+          lines.push('');
+          lines.push(`API calls: ${filtered.length}`);
+
+          if (filtered.length === 0) {
+            lines.push('');
+            lines.push(`_No ${roleName} API calls recorded._`);
+          } else {
+            filtered.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            filtered.forEach((u, idx) => {
+              const ts = new Date(Number(u?.timestamp || Date.now())).toISOString();
+              const provider = String(u?.provider || 'Unknown');
+              const model = String(u?.modelName || 'unknown');
+              const inTok = Number(u?.inputTokens || 0);
+              const outTok = Number(u?.outputTokens || 0);
+              const totalTok = Number(u?.totalTokens || inTok + outTok);
+              const cost = typeof u?.cost === 'number' ? u.cost.toFixed(6) : String(u?.cost || 0);
+              lines.push('');
+              lines.push(`## Step ${idx + 1} • ${ts}`);
+              lines.push(`- provider: ${provider}`);
+              lines.push(`- model: ${model}`);
+              lines.push(`- tokens: in ${inTok}, out ${outTok}, total ${totalTok}`);
+              lines.push(`- cost: $${cost}`);
+              lines.push('');
+              lines.push('Input');
+              lines.push('```text');
+              lines.push(clampText(extractRequestText((u as any)?.request, (u as any)?.role)) || '');
+              lines.push('```');
+              lines.push('');
+              lines.push('Output');
+              lines.push('```text');
+              lines.push(clampText(extractResponseText((u as any)?.response)) || '');
+              lines.push('```');
+            });
+          }
+
+          const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${filename}-${sessionId}.md`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      } catch {}
+    };
+
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
+    port.postMessage({ type: 'get_combined_session_logs', sessionId });
+    timeoutId = setTimeout(() => {
+      try {
+        port.onMessage.removeListener(once);
+      } catch {}
+      console.warn(`[Panel] ${roleName} logs download timed out after 10s`);
+    }, 10000);
+  } catch {}
+}
+
+export function downloadCommodoreLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
+  downloadRoleLogs(
+    port,
+    sessionId,
+    'Commodore',
+    u => {
+      const role = String(u?.role || '').toLowerCase();
+      return role.includes('commodore') || role.includes('planner');
+    },
+    'commodore-logs',
+  );
+}
+
+export function downloadCaptainLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
+  downloadRoleLogs(
+    port,
+    sessionId,
+    'Captain',
+    u => {
+      const role = String(u?.role || '').toLowerCase();
+      return role.includes('captain') || role.includes('refiner');
+    },
+    'captain-logs',
+  );
+}
+
+export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
+  downloadRoleLogs(
+    port,
+    sessionId,
+    'Sailors',
+    u => {
+      const workerIndex = Number(u?.workerIndex);
+      return Number.isFinite(workerIndex) && workerIndex > 0;
+    },
+    'sailor-logs',
+  );
 }
