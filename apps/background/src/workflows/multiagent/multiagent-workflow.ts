@@ -1,62 +1,47 @@
 import { createLogger } from '@src/log';
 import type { TaskManager } from '../../task/task-manager';
-import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId, SubtaskOutputs, PriorOutput } from './multiagent-types';
-import { planSubtasksFromQuery } from './multiagent-planner';
+import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId } from './multiagent-types';
+import { Commodore } from './roles/commodore';
+import { Quartermaster } from './roles/quartermaster';
+import { Captain, type CaptainConfig } from './roles/captain';
+import { Sailor } from './roles/sailor';
+import { LivePlan } from './live-plan';
+import { CaptainState } from './captain-state';
+import { buildMergedGraphAfterScheduleConsecutive, collapsePlanByConsecutiveMerges } from './multiagent-merging';
+import { buildGraphData } from './multiagent-visualization';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils/chat-history';
-import { allocateTasks, deriveWorkerQueues } from './multiagent-scheduler';
-import { buildMergedGraphAfterScheduleConsecutive, collapsePlanByConsecutiveMerges } from './multiagent-merging';
-import { refinePlanWithLLM } from './multiagent-refiner';
-import { buildGraphData } from './multiagent-visualization';
-import { buildPriorOutputsSection } from './multiagent-placeholders';
 import { errorLog } from '../../utils/error-log';
 import { globalTokenTracker } from '../../utils/token-tracker';
 import { safePostMessage } from '@extension/shared/lib/utils';
+import { trajectoryPersistence } from '../../task/trajectory-persistence';
+import type { WorkflowEvent, SubtaskStatus } from './workflow-events';
 
 const logger = createLogger('workflow:multiagent');
 
 /**
- * Coordinates multiple parallel browser agents for complex tasks.
- * Decomposes tasks into subtasks, schedules workers, and merges results.
+ * Orchestrates multiple parallel browser agents for complex tasks.
+ * Wires together the four roles: Commodore, Quartermaster, Captain, Sailors.
  */
 export class MultiAgentWorkflow {
   private taskManager: TaskManager;
   private getPort: PortGetter;
   private config: WorkflowConfig;
   private sessionId: string;
-  private subtasksById = new Map<
-    SubtaskId,
-    {
-      title: string;
-      prompt: string;
-      deps: SubtaskId[];
-      isFinal?: boolean;
-      noBrowse?: boolean;
-      suggestedUrls?: string[];
-      suggestedSearchQueries?: string[];
-    }
-  >();
-  private outputs: SubtaskOutputs = {};
-  // Persisted outputs by session; in-memory map for development as requested
-  private static persistedBySession: Map<string, SubtaskOutputs> = new Map();
-  private status: Map<SubtaskId, 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled'> = new Map();
-  private workerTaskIds: number[] = [];
-  private workerSessionIdByWorker = new Map<number, string>();
-  private busyWorkers = new Set<number>();
-  // v2 workflow: disable shared groups; keep fields for backward compatibility but unused
-  private primaryGroupId?: number;
-  private primaryGroupColor?: chrome.tabGroups.Color;
   private cancelled = false;
-  // Cache last graph inputs for reliable redraws (e.g., on cancel)
+  private captain?: Captain;
+  private captainState?: CaptainState;
+
+  // Graph state for UI
   private lastNodes: Array<{ id: number; title: string }> = [];
   private lastSchedule: Record<number, number[]> = {};
   private lastDeps: Record<number, number[]> = {};
-  private currentPlan?: TaskPlan;
-  // refinementPerformed exists elsewhere; do not redeclare
-  private refinementPerformed = false;
-  private refinerLLM: any | null = null;
-  private abortController: AbortController = new AbortController();
+  private statusMap = new Map<SubtaskId, SubtaskStatus>();
+
+  // Backward-compat fields
   private contextTabIds: number[] = [];
+  /** @deprecated Refiner is no longer used; Captain handles prompt refinement. */
+  private refinerLLM: any = null;
 
   constructor(taskManager: TaskManager, getPort: PortGetter, sessionId: string, config: WorkflowConfig) {
     this.taskManager = taskManager;
@@ -65,17 +50,15 @@ export class MultiAgentWorkflow {
     this.config = { maxWorkers: Math.max(1, config.maxWorkers || 16) };
   }
 
-  /** Set context tab IDs for the planner to reference */
   setContextTabIds(tabIds: number[]): void {
     this.contextTabIds = tabIds;
   }
 
-  /** Optional setter to inject a dedicated refiner model separate from the planner model. */
-  setRefinerModel(llm: any | null) {
+  /** @deprecated Refiner model is no longer used. Captain handles refinement. */
+  setRefinerModel(llm: any) {
     this.refinerLLM = llm;
   }
 
-  /** Get current workflow graph for UI restoration after panel reconnect */
   getCurrentGraph(): any {
     if (this.lastNodes.length === 0) return null;
     const titles: Record<number, string> = {};
@@ -84,702 +67,320 @@ export class MultiAgentWorkflow {
     const graph = buildGraphData(merged.vizSchedules, merged.dependenciesViz, merged.groupTitles, merged.durations);
     return {
       ...graph,
-      nodes: graph.nodes.map(n => ({ ...n, status: this.status.get(n.id) || 'not_started' })),
+      nodes: graph.nodes.map(n => ({ ...n, status: this.statusMap.get(n.id) || 'not_started' })),
     };
-  }
-
-  private emit(type: string, data: any) {
-    const port = this.getPort();
-    if (port) {
-      safePostMessage(port as any, { type, data });
-    } else {
-      logger.info(`[MultiAgent] No port available for event: ${type}`);
-    }
-  }
-
-  private buildDispatchPrompt(subtaskId: SubtaskId): string {
-    const s = this.subtasksById.get(subtaskId)!;
-    // Gather prior outputs for deps
-    const priors: PriorOutput[] = [];
-    for (const d of s.deps) {
-      const o = this.outputs[d];
-      if (o)
-        priors.push({
-          title: this.subtasksById.get(d)?.title || `Task ${d}`,
-          output: o.result,
-          tabIds: o.tabIds || [],
-          rawJson: o.raw,
-        });
-    }
-    const priorText = priors.length > 0 ? `\n\n${buildPriorOutputsSection(priors)}` : '';
-    const header = [`\nYour task is to ${s.title}.\nSpecifically, you must: ${s.prompt}`].join('\n');
-    const suggestions: string[] = [];
-    const sugUrls = Array.isArray(s.suggestedUrls) ? s.suggestedUrls : [];
-    const sugQueries = Array.isArray(s.suggestedSearchQueries) ? s.suggestedSearchQueries : [];
-    if (sugUrls.length > 0) {
-      suggestions.push(['Suggested URLs:', ...sugUrls.map((u: string) => `- ${u}`)].join('\n'));
-    } else if (sugQueries.length > 0) {
-      suggestions.push(['Suggested search queries:', ...sugQueries.map((q: string) => `- ${q}`)].join('\n'));
-    }
-    const suggestionText = suggestions.length > 0 ? `\n\n${suggestions.join('\n')}` : '';
-    return `${header}${suggestionText}${priorText}`;
-  }
-
-  private updateGraph(
-    nodes: Array<{ id: number; title: string }>,
-    workerSchedules: Record<number, number[]>,
-    deps: Record<number, number[]>,
-  ) {
-    // Persist last-known graph inputs for later status-only redraws
-    this.lastNodes = nodes;
-    this.lastSchedule = workerSchedules;
-    this.lastDeps = deps;
-    const titles: Record<number, string> = {};
-    for (const n of nodes) titles[n.id] = n.title;
-    const merged = buildMergedGraphAfterScheduleConsecutive(deps, titles, workerSchedules);
-    const graph = buildGraphData(merged.vizSchedules, merged.dependenciesViz, merged.groupTitles, merged.durations);
-    // attach status coloring
-    const annotated = {
-      ...graph,
-      nodes: graph.nodes.map(n => ({ ...n, status: this.status.get(n.id) || 'not_started' })),
-    };
-    this.emit('workflow_graph_update', { sessionId: this.sessionId, graph: annotated });
-  }
-
-  private setStatus(id: SubtaskId, st: 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled') {
-    this.status.set(id, st);
   }
 
   async start(query: string, plannerLLM: any): Promise<void> {
     this.cancelled = false;
-    this.abortController.abort();
-    this.abortController = new AbortController();
     (globalTokenTracker as any)?.clearTokensForTask?.(String(this.sessionId));
-    const oldWorkers = (globalTokenTracker as any)?.getWorkersForParent?.(String(this.sessionId));
-    if (Array.isArray(oldWorkers)) {
-      for (const w of oldWorkers) {
-        (globalTokenTracker as any)?.clearTokensForTask?.(String((w as any)?.sessionId || ''));
-      }
-    }
-
-    // Increment workflow run index for this session (to distinguish multiple runs in logs)
     const runIndex = (globalTokenTracker as any)?.incrementWorkflowRunIndex?.(String(this.sessionId)) || 1;
-    logger.info(`[Orchestrator] Starting workflow run ${runIndex} for session ${this.sessionId}`);
+    logger.info(`Starting workflow run ${runIndex} for session ${this.sessionId}`);
 
-    // 0) Emit immediate overall progress so the UI shows activity right away
-    this.emit('workflow_progress', { sessionId: this.sessionId, actor: 'multiagent', message: 'Creating plan...' });
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'multiagent',
+      message: 'Commodore planning...',
+    });
+    this.trace('planner', 'Planning workflow...');
 
-    // Check if cancelled before planning
-    if (this.cancelled) {
-      this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-      return;
-    }
+    if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
 
-    // 1) Plan
+    // 1. Commodore creates the plan
     let plan: TaskPlan;
-    {
-      const prevTaskId = (globalTokenTracker as any)?.getCurrentTaskId?.() || null;
-      const prevRole = (globalTokenTracker as any)?.getCurrentRole?.() || null;
-      try {
-        (globalTokenTracker as any)?.setCurrentTaskId?.(this.sessionId);
-        (globalTokenTracker as any)?.setCurrentRole?.('planner');
-        let historyBlock: string | undefined;
-        const session = await chatHistoryStore.getSession(this.sessionId).catch(() => null);
-        if (session) {
-          const sessionMsgs = Array.isArray(session?.messages) ? session!.messages : [];
-          const block = buildChatHistoryBlock(sessionMsgs as any, {
-            latestTaskText: query,
-            stripUserRequestTags: true,
-          });
-          if (block && block.trim().length > 0) historyBlock = block;
-        }
-        plan = await planSubtasksFromQuery(
-          query,
-          plannerLLM,
-          this.config.maxWorkers,
-          this.abortController.signal,
-          historyBlock,
-          this.sessionId,
-          this.contextTabIds,
-        );
-      } finally {
-        (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
-        (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
+    const commodore = new Commodore();
+    try {
+      const prevTaskId = (globalTokenTracker as any)?.getCurrentTaskId?.();
+      const prevRole = (globalTokenTracker as any)?.getCurrentRole?.();
+      (globalTokenTracker as any)?.setCurrentTaskId?.(this.sessionId);
+      (globalTokenTracker as any)?.setCurrentRole?.('commodore');
+
+      let historyBlock: string | undefined;
+      const session = await chatHistoryStore.getSession(this.sessionId).catch(() => null);
+      if (session) {
+        const msgs = Array.isArray(session?.messages) ? session.messages : [];
+        const block = buildChatHistoryBlock(msgs as any, { latestTaskText: query, stripUserRequestTags: true });
+        if (block?.trim()) historyBlock = block;
       }
+
+      plan = await commodore.createPlan(query, plannerLLM, this.config.maxWorkers, undefined, {
+        historyBlock,
+        sessionId: this.sessionId,
+        contextTabIds: this.contextTabIds,
+      });
+
+      (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
+      (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
+    } catch (e: any) {
+      logger.error('Commodore planning failed:', e);
+      return this.emitEnded(false, e?.message || 'Planning failed');
     }
 
-    // Check if cancelled after planning
-    if (this.cancelled) {
-      this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-      return;
-    }
-    const plannerOutput = JSON.stringify(plan, null, 2);
-    this.emit('workflow_progress', {
-      sessionId: this.sessionId,
-      actor: 'planner',
-      message: `Plan created:\n${plannerOutput}`,
-    });
-    // Emit overseer/overall progress to UI after planning completes
+    if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
+
+    const planSummary = plan.subtasks.map(s => `  ${s.id}. ${s.title}`).join('\n');
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      message: `Planning complete. Scheduling workers for: ${plan.task}`,
+      message: `Plan created: ${plan.subtasks.length} tasks`,
     });
-    let nodes = plan.subtasks.map(s => ({ id: s.id, title: s.title }));
-    for (const s of plan.subtasks) {
-      this.subtasksById.set(s.id, {
-        title: s.title,
-        prompt: s.prompt,
-        deps: s.startCriteria,
-        isFinal: !!s.isFinal,
-        noBrowse: (s as any).noBrowse,
-        suggestedUrls: (s as any).suggestedUrls,
-        suggestedSearchQueries: (s as any).suggestedSearchQueries,
-      });
-      this.setStatus(s.id, 'not_started');
-    }
-    this.currentPlan = plan;
+    this.trace('planner', `Plan created (${plan.subtasks.length} subtasks):\n${planSummary}`);
 
-    // 2) Schedule (initial)
-    this.emit('workflow_progress', { sessionId: this.sessionId, actor: 'multiagent', message: 'Processing plan...' });
-    await new Promise<void>(resolve => setTimeout(resolve, 150));
+    // 2. Quartermaster schedules (with consecutive merging)
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'multiagent',
+      message: 'Quartermaster assigning crew...',
+    });
+    const quartermaster = new Quartermaster();
 
-    // Check if cancelled before scheduling
-    if (this.cancelled) {
-      this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-      return;
-    }
+    // Collapse consecutive same-worker subtasks
+    const initialSchedule = quartermaster.schedule(plan, this.config.maxWorkers);
+    const { collapsedPlan } = collapsePlanByConsecutiveMerges(plan, initialSchedule.schedule);
+    if (collapsedPlan?.subtasks?.length > 0) plan = collapsedPlan;
 
-    let schedule = allocateTasks(plan.dependencies, plan.durations, this.config.maxWorkers);
-    const { collapsedPlan } = collapsePlanByConsecutiveMerges(plan, schedule);
-    if (collapsedPlan && Array.isArray(collapsedPlan.subtasks) && collapsedPlan.subtasks.length > 0) {
-      plan = collapsedPlan;
-      this.currentPlan = collapsedPlan;
-    }
+    const { schedule, queues } = quartermaster.schedule(plan, this.config.maxWorkers);
 
-    // Recompute schedule and queues based on the collapsed plan
-    schedule = allocateTasks(plan.dependencies, plan.durations, this.config.maxWorkers);
-    const queues = deriveWorkerQueues(schedule);
+    if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
 
-    // Rebuild subtasks mapping after collapse
-    this.subtasksById.clear();
-    for (const s of plan.subtasks) {
-      this.subtasksById.set(s.id, {
-        title: s.title,
-        prompt: s.prompt,
-        deps: s.startCriteria,
-        isFinal: !!s.isFinal,
-        noBrowse: (s as any).noBrowse,
-        suggestedUrls: (s as any).suggestedUrls,
-        suggestedSearchQueries: (s as any).suggestedSearchQueries,
-      });
-      if (!this.status.has(s.id)) this.setStatus(s.id, 'not_started');
-    }
-    nodes = plan.subtasks.map(s => ({ id: s.id, title: s.title }));
+    // Initialize status tracking and graph
+    const livePlan = new LivePlan(plan);
+    this.captainState = new CaptainState(livePlan);
+    this.statusMap = this.captainState.subtaskStatus;
+    this.lastNodes = plan.subtasks.map(s => ({ id: s.id, title: s.title }));
+    this.lastSchedule = schedule;
+    this.lastDeps = plan.dependencies;
 
-    // 2.5) Optional refinement: improve prompts/titles/noBrowse using the planner model on the collapsed plan
-    if (!this.refinementPerformed && !this.cancelled) {
-      try {
-        this.emit('workflow_progress', { sessionId: this.sessionId, actor: 'multiagent', message: 'Refining plan...' });
-
-        // Check if cancelled before refinement
-        if (this.cancelled) {
-          this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-          return;
-        }
-
-        // Prefer a dedicated Refiner model if provided; otherwise fall back to plannerLLM
-        const llmForRefinement = this.refinerLLM || plannerLLM;
-        const prevTaskId = (globalTokenTracker as any)?.getCurrentTaskId?.() || null;
-        const prevRole = (globalTokenTracker as any)?.getCurrentRole?.() || null;
-        let refined: TaskPlan;
-        try {
-          (globalTokenTracker as any)?.setCurrentTaskId?.(this.sessionId);
-          (globalTokenTracker as any)?.setCurrentRole?.('refiner');
-          refined = await refinePlanWithLLM(plan, llmForRefinement, this.abortController.signal, this.sessionId);
-        } finally {
-          (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
-          (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
-        }
-
-        // Check if cancelled after refinement
-        if (this.cancelled) {
-          this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-          return;
-        }
-        // Rebuild subtasksById from refined plan (still collapsed structure)
-        this.subtasksById.clear();
-        for (const s of refined.subtasks) {
-          this.subtasksById.set(s.id, {
-            title: s.title,
-            prompt: s.prompt,
-            deps: s.startCriteria,
-            isFinal: !!s.isFinal,
-            noBrowse: (s as any).noBrowse,
-            suggestedUrls: (s as any).suggestedUrls,
-            suggestedSearchQueries: (s as any).suggestedSearchQueries,
-          });
-        }
-        // Overwrite plan reference so downstream dataset/graph reflect refinements
-        plan = refined;
-        this.currentPlan = refined;
-        nodes = plan.subtasks.map(s => ({ id: s.id, title: s.title }));
-        const refinedOutput = JSON.stringify(refined, null, 2);
-        this.emit('workflow_progress', {
-          sessionId: this.sessionId,
-          actor: 'refiner',
-          message: `Plan refined:\n${refinedOutput}`,
-        });
-        this.refinementPerformed = true;
-        this.emit('workflow_progress', {
-          sessionId: this.sessionId,
-          actor: 'multiagent',
-          message: 'Refinement complete.',
-        });
-      } catch (e) {
-        // On any failure, continue with original plan
-        this.emit('workflow_progress', {
-          sessionId: this.sessionId,
-          actor: 'multiagent',
-          message: 'Refinement skipped (error). Proceeding.',
-        });
-      }
-    } else {
-      this.emit('workflow_progress', {
-        sessionId: this.sessionId,
-        actor: 'multiagent',
-        message: 'Refinement already performed. Skipping.',
-      });
-    }
-
+    // Emit plan dataset for UI
     const taskWorkerMap: Record<number, number> = {};
-    for (const [widStr, arr] of Object.entries(queues)) {
-      const wid = Number(widStr);
-      for (const t of arr) taskWorkerMap[Number(t)] = wid;
+    for (const [wid, arr] of Object.entries(queues)) {
+      for (const t of arr) taskWorkerMap[Number(t)] = Number(wid);
     }
-    const dataset = {
-      task: plan.task,
-      max_workers: this.config.maxWorkers,
-      dependencies: plan.dependencies,
-      schedule: queues,
-      subtasks: plan.subtasks.map(s => ({
-        id: s.id,
-        title: s.title,
-        prompt: s.prompt,
-        start_criteria: s.startCriteria,
-        is_final: !!s.isFinal,
-        no_browse: !!(s as any).noBrowse,
-        suggested_urls: (s as any).suggestedUrls || [],
-        suggested_search_queries: (s as any).suggestedSearchQueries || [],
-        worker: taskWorkerMap[s.id] ?? null,
-      })),
-    };
-    this.emit('workflow_plan_dataset', { sessionId: this.sessionId, dataset });
+    this.emit('workflow_plan_dataset', {
+      sessionId: this.sessionId,
+      dataset: {
+        task: plan.task,
+        max_workers: this.config.maxWorkers,
+        dependencies: plan.dependencies,
+        schedule: queues,
+        subtasks: plan.subtasks.map(s => ({
+          id: s.id,
+          title: s.title,
+          prompt: s.prompt,
+          start_criteria: s.startCriteria,
+          is_final: !!s.isFinal,
+          no_browse: !!s.noBrowse,
+          suggested_urls: s.suggestedUrls || [],
+          suggested_search_queries: s.suggestedSearchQueries || [],
+          worker: taskWorkerMap[s.id] ?? null,
+        })),
+      },
+    });
 
-    this.updateGraph(nodes, schedule, plan.dependencies);
+    this.updateGraph();
 
-    // Disable shared group coordination in v2; each worker maintains its own dedicated group
-    // This avoids mixing tabs and ensures isolation and non-duplication of searches per worker.
-
-    this.workerTaskIds = Object.keys(queues).map(n => Number(n));
-    const activeWorkerCount = Object.values(queues).filter(q => Array.isArray(q) && q.length > 0).length;
+    const activeWorkerCount = Object.values(queues).filter(q => q.length > 0).length;
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      message: `${activeWorkerCount} workers executing plan...`,
+      message: `${activeWorkerCount} workers deployed`,
     });
-    for (const wid of this.workerTaskIds) {
-      const humanIndex = wid + 1;
-      this.emit('workflow_progress', {
-        sessionId: this.sessionId,
-        actor: 'multiagent',
-        workerId: humanIndex,
-        message: `Worker ${humanIndex} ready`,
-      });
-    }
+    this.trace('scheduler', `Scheduled across ${activeWorkerCount} workers`);
 
-    // 4) Dispatch loop honoring deps; failure policy: cancel all on first failure
-    // Track whether a task is already enqueued or completed
-    const done = new Set<number>();
-    const enqueued = new Set<number>();
-    const workerToQueueIds = new Map<number, number[]>(
-      Object.entries(queues).map(([wid, q]) => [Number(wid), q.slice()]),
+    // 3. Captain takes command
+    const sailor = new Sailor(this.taskManager, this.sessionId, plan.task);
+    const captainLLM = this.refinerLLM || plannerLLM;
+
+    const captainConfig: CaptainConfig = { maxWorkers: this.config.maxWorkers };
+
+    this.captain = new Captain(this.captainState, sailor, captainLLM, this.sessionId, captainConfig, event =>
+      this.handleWorkflowEvent(event),
     );
-    const taskToWorker = new Map<number, number>();
-    for (const [wid, q] of workerToQueueIds.entries()) for (const t of q) taskToWorker.set(t, wid);
-    const queuePointers = new Map<number, number>(); // per-worker scan cursor to avoid re-scanning from start forever
-    for (const wid of workerToQueueIds.keys()) queuePointers.set(wid, 0);
 
-    const tryDispatch = async () => {
-      // Stop dispatching if cancelled
-      if (this.cancelled) {
-        return false;
+    try {
+      const finalAnswer = await this.captain.run();
+      if (!this.cancelled) {
+        this.trace('system', `Final answer: ${(finalAnswer || '').slice(0, 500)}`);
+        this.emit('final_answer', { sessionId: this.sessionId, text: finalAnswer });
+        (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
+        this.emitEnded(true);
       }
-
-      let progress = false;
-      for (const [wid, q] of workerToQueueIds.entries()) {
-        // Check cancellation before each worker dispatch
-        if (this.cancelled) {
-          return false;
-        }
-
-        if (this.busyWorkers.has(wid)) continue; // do not dispatch if worker already running a subtask
-        // Find next not-started, deps satisfied task for this worker
-        const startIdx = queuePointers.get(wid) ?? 0;
-        for (let i = startIdx; i < q.length; i++) {
-          const t = q[i];
-          if (done.has(t) || enqueued.has(t)) continue;
-          const s = this.subtasksById.get(t)!;
-          if (s.deps.every(d => done.has(d))) {
-            // If cancelled between loop checks, mark as cancelled and skip starting
-            if (this.cancelled) {
-              this.setStatus(t, 'cancelled');
-              done.add(t);
-              this.updateGraph(nodes, schedule, plan.dependencies);
-              continue;
-            }
-            enqueued.add(t);
-            progress = true;
-            // Build prompt with prior outputs
-            const prompt = this.buildDispatchPrompt(t);
-            // Ensure a worker session exists for this worker; lazily create if missing
-            let sessionId = this.workerSessionIdByWorker.get(wid);
-            if (!sessionId) {
-              const humanIndexLazy = wid + 1;
-              const pretty = `Web Agent ${humanIndexLazy}`;
-              // Do not set an initial user task to avoid confusing workers before dispatch.
-              // The specific subtask will be delivered as the first follow-up instruction.
-              const initialInstruction = '';
-              logger.info(`[Orchestrator] Creating worker session for Web Agent ${humanIndexLazy} (wid=${wid})`);
-              try {
-                sessionId = await this.taskManager.createWorkerSession(
-                  initialInstruction,
-                  pretty,
-                  this.sessionId,
-                  plan.task,
-                  humanIndexLazy,
-                );
-                this.workerSessionIdByWorker.set(wid, sessionId);
-                const task = this.taskManager.getTask(sessionId);
-                logger.info(
-                  `[Orchestrator] Successfully created worker session ${sessionId} for Web Agent ${humanIndexLazy}`,
-                );
-                this.emit('worker_session_created', {
-                  sessionId: this.sessionId,
-                  workerId: humanIndexLazy,
-                  workerSessionId: sessionId,
-                  color: task?.color,
-                });
-              } catch (error) {
-                logger.error(`[Orchestrator] Failed to create worker session for Web Agent ${humanIndexLazy}:`, error);
-                throw error;
-              }
-              if (this.cancelled) {
-                await this.taskManager.endWorkerSession(sessionId, 'cancelled').catch(() => {});
-                this.setStatus(t, 'cancelled');
-                done.add(t);
-                this.updateGraph(nodes, schedule, plan.dependencies);
-                continue;
-              }
-            }
-            this.busyWorkers.add(wid);
-            this.setStatus(t, 'running');
-            this.updateGraph(nodes, schedule, plan.dependencies);
-            // Emit per-worker task start progress only if not cancelled
-            if (!this.cancelled) {
-              this.emit('workflow_progress', {
-                sessionId: this.sessionId,
-                actor: 'multiagent',
-                workerId: wid + 1,
-                message: `Starting subtask ${t}: ${this.subtasksById.get(t)?.title || ''}`,
-              });
-            }
-            // Run subtask on this worker session
-            (async () => {
-              // Check if cancelled before running subtask
-              if (this.cancelled) {
-                this.setStatus(t, 'cancelled');
-                done.add(t);
-                this.busyWorkers.delete(wid);
-                this.updateGraph(nodes, schedule, plan.dependencies);
-                return;
-              }
-
-              // If this subtask depends on previous outputs that include tabIds, pass them to reuse
-              const depTabIds = s.deps.flatMap(d => this.outputs[d]?.tabIds || []);
-              const uniqueTabIds = Array.from(new Set(depTabIds)).filter(n => typeof n === 'number') as number[];
-              const res = await this.taskManager.runWorkerSubtask(
-                sessionId!,
-                prompt,
-                uniqueTabIds.length > 0 ? uniqueTabIds : undefined,
-                t,
-              );
-              const ot = (res as any)?.outputText;
-              if (typeof ot === 'string' && ot.toLowerCase().includes('cancel')) {
-                this.setStatus(t, 'cancelled');
-                this.cancelled = true;
-                await Promise.all(
-                  Array.from(this.workerSessionIdByWorker.values()).map(id =>
-                    this.taskManager.endWorkerSession(id, 'cancelled').catch(() => {}),
-                  ),
-                );
-                this.busyWorkers.delete(wid);
-                this.updateGraph(nodes, schedule, plan.dependencies);
-                this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-                return;
-              }
-              if (!res.ok) {
-                this.setStatus(t, 'failed');
-                this.cancelled = true;
-                errorLog.add({
-                  sessionId: this.sessionId,
-                  taskId: sessionId!,
-                  workerId: wid + 1,
-                  source: 'worker_failure',
-                  message: res.error || 'Subtask failed',
-                });
-                await Promise.all(
-                  Array.from(this.workerSessionIdByWorker.values()).map(id =>
-                    this.taskManager.endWorkerSession(id, 'cancelled').catch(() => {}),
-                  ),
-                );
-                (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
-                this.busyWorkers.delete(wid);
-                this.updateGraph(nodes, schedule, plan.dependencies);
-                this.emit('workflow_ended', {
-                  sessionId: this.sessionId,
-                  ok: false,
-                  error: res.error || 'Subtask failed',
-                });
-                return;
-              }
-              // Emit worker output to UI for visibility
-              if (res.outputText) {
-                this.emit('workflow_progress', {
-                  sessionId: this.sessionId,
-                  actor: 'multiagent', // Use a recognized actor
-                  workerId: wid + 1,
-                  message: res.outputText,
-                });
-              }
-
-              let rawOut: any = undefined;
-              if (res.outputText && typeof res.outputText === 'string') {
-                const trimmed = res.outputText.trim();
-                const fence = trimmed.match(/```json\s*([\s\S]*?)```/i);
-                const candidate = fence ? fence[1] : trimmed;
-                if (
-                  (candidate.startsWith('[') && candidate.endsWith(']')) ||
-                  (candidate.startsWith('{') && candidate.endsWith('}'))
-                ) {
-                  try {
-                    rawOut = JSON.parse(candidate);
-                  } catch {
-                    // Invalid JSON, keep as text
-                  }
-                }
-              }
-              this.outputs[t] = {
-                result: res.outputText || (rawOut ? JSON.stringify(rawOut) : ''),
-                raw: rawOut,
-                tabIds: res.tabIds || [],
-              };
-              if (this.cancelled) {
-                this.setStatus(t, 'cancelled');
-              } else {
-                this.setStatus(t, 'completed');
-              }
-              done.add(t);
-              this.busyWorkers.delete(wid);
-              // Emit per-worker completion only if not cancelled
-              if (!this.cancelled) {
-                this.emit('workflow_progress', {
-                  sessionId: this.sessionId,
-                  actor: 'multiagent',
-                  workerId: wid + 1,
-                  message: `Completed subtask ${t}`,
-                });
-              }
-              // persist after each completion (dev-time persistence)
-              MultiAgentWorkflow.persistedBySession.set(this.sessionId, this.outputs);
-              this.updateGraph(nodes, schedule, plan.dependencies);
-              const buildFinalText = (): string => {
-                if (this.subtasksById.get(t)?.isFinal) {
-                  const out = (this.outputs[t]?.result || '').toString().trim();
-                  const raw = this.outputs[t]?.raw as any;
-                  if (raw && typeof raw === 'object') {
-                    const fromDone = raw?.done?.text || raw?.text;
-                    const s = (fromDone || '').toString().trim();
-                    if (s.length > 0) return s;
-                  }
-                  if (out.length > 0) return out;
-                }
-                const orderedIds = Array.from(this.subtasksById.keys()).sort((a, b) => a - b);
-                const parts: string[] = [];
-                for (const id of orderedIds) {
-                  const val = (this.outputs[id]?.result || '').toString().trim();
-                  if (val) parts.push(val);
-                  if (parts.join('\n\n').length > 4000) break;
-                }
-                const joined = parts.join('\n\n').trim();
-                return joined.length > 0 ? joined : 'Workflow completed successfully.';
-              };
-
-              if (this.subtasksById.get(t)?.isFinal) {
-                if (!this.cancelled) {
-                  const finalText = buildFinalText();
-                  this.emit('final_answer', { sessionId: this.sessionId, text: finalText });
-                  await Promise.all(
-                    Array.from(this.workerSessionIdByWorker.values()).map(id =>
-                      this.taskManager.endWorkerSession(id, 'completed').catch(() => {}),
-                    ),
-                  );
-                  (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
-                  this.emit('workflow_ended', { sessionId: this.sessionId, ok: true });
-                  return;
-                }
-              }
-              if (done.size >= this.subtasksById.size) {
-                if (!this.cancelled) {
-                  await Promise.all(
-                    Array.from(this.workerSessionIdByWorker.values()).map(id =>
-                      this.taskManager.endWorkerSession(id, 'completed').catch(() => {}),
-                    ),
-                  );
-                  const finalText = (() => {
-                    const orderedIds = Array.from(this.subtasksById.keys()).sort((a, b) => a - b);
-                    const parts: string[] = [];
-                    for (const id of orderedIds) {
-                      const val = (this.outputs[id]?.result || '').toString().trim();
-                      if (val) parts.push(val);
-                      if (parts.join('\n\n').length > 4000) break;
-                    }
-                    const joined = parts.join('\n\n').trim();
-                    return joined.length > 0 ? joined : 'Workflow completed successfully.';
-                  })();
-                  this.emit('final_answer', { sessionId: this.sessionId, text: finalText });
-                  (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
-                  this.emit('workflow_ended', { sessionId: this.sessionId, ok: true });
-                  return;
-                }
-              }
-              // Continue dispatching after a completion without deep recursion (unless cancelled)
-              if (!this.cancelled) {
-                setTimeout(() => {
-                  tryDispatch().catch(() => {});
-                }, 0);
-              }
-            })();
-            // Advance the worker's scan cursor past this index to avoid re-visiting
-            queuePointers.set(wid, i + 1);
-            break; // dispatch one at a time per call
-          }
-        }
-      }
-      return progress;
-    };
-
-    // Check if cancelled before initial dispatch
-    if (this.cancelled) {
-      this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user' });
-      return;
+    } catch (e: any) {
+      logger.error('Captain execution failed:', e);
+      errorLog.add({
+        sessionId: this.sessionId,
+        taskId: this.sessionId,
+        source: 'captain_failure',
+        message: e?.message || 'Workflow failed',
+      });
+      (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
+      this.emitEnded(false, e?.message || 'Workflow failed');
     }
-
-    // Kick off initial dispatch until no progress; subsequent progress occurs in callbacks
-    await tryDispatch();
   }
 
-  /** Robustly cancels all workflow activity with timeout for stuck workers */
   async cancelAll(): Promise<void> {
-    this.emit('workflow_progress', {
-      sessionId: this.sessionId,
-      actor: 'multiagent',
-      message: 'Cancelling workflow...',
-    });
-
     this.cancelled = true;
-    this.abortController.abort();
-
-    // Mark non-completed tasks as cancelled
-    for (const [id, st] of this.status.entries()) {
-      if (st !== 'completed') this.status.set(id, 'cancelled');
+    if (this.captain) {
+      await this.captain.cancel();
     }
-    this.busyWorkers.clear();
+    (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
+  }
 
-    // Actively cancel running tasks AND end worker sessions
-    const cancellationPromises = Array.from(this.workerSessionIdByWorker.entries()).map(
-      async ([workerId, sessionId]) => {
-        try {
-          await this.taskManager.cancelTask(sessionId);
-        } catch {}
-        try {
-          await this.taskManager.endWorkerSession(sessionId, 'cancelled');
-        } catch {}
-      },
-    );
+  // --- Event routing: translate Captain events into panel messages ---
 
-    // Also cancel any worker sessions linked to parent session
+  private handleWorkflowEvent(event: WorkflowEvent): void {
+    switch (event.type) {
+      case 'schedule_ready':
+        break; // Already handled above during initialization
+
+      case 'subtask_dispatched': {
+        const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'multiagent',
+          workerId: event.sailorId + 1,
+          message: `Worker ${event.sailorId + 1} deployed: ${title}`,
+        });
+        this.trace('overseer', `Dispatched subtask ${event.subtaskId} "${title}" to worker ${event.sailorId + 1}`);
+
+        // Emit worker session creation if this is the first dispatch for this sailor
+        const task = this.taskManager.getTask(this.captainState?.sailorSessionIds.get(event.sailorId) || '');
+        if (task) {
+          this.emit('worker_session_created', {
+            sessionId: this.sessionId,
+            workerId: event.sailorId + 1,
+            workerSessionId: this.captainState?.sailorSessionIds.get(event.sailorId),
+            color: task.color,
+          });
+        }
+        this.updateGraph();
+        break;
+      }
+
+      case 'subtask_completed': {
+        const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
+        const workerId = (this.captainState?.sailorAssignments.get(event.subtaskId) ?? 0) + 1;
+        if (event.output.text) {
+          this.emit('workflow_progress', {
+            sessionId: this.sessionId,
+            actor: 'multiagent',
+            workerId,
+            message: event.output.text,
+          });
+        }
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'multiagent',
+          workerId,
+          message: `Completed: ${title}`,
+        });
+        const outputSnippet = event.output.text ? ` — ${event.output.text.slice(0, 200)}` : '';
+        this.trace('worker', `Subtask ${event.subtaskId} "${title}" completed (worker ${workerId})${outputSnippet}`);
+        this.updateGraph();
+        break;
+      }
+
+      case 'subtask_failed': {
+        const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'multiagent',
+          message: `Failed: ${title} — ${event.error}`,
+        });
+        this.trace('worker', `Subtask ${event.subtaskId} "${title}" failed: ${event.error}`);
+        this.updateGraph();
+        break;
+      }
+
+      case 'captain_decision':
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'multiagent',
+          message: event.decision.status_message,
+        });
+        this.trace('overseer', `Decision: ${event.decision.action} — ${event.decision.status_message}`);
+        break;
+
+      case 'speculative_launched':
+        this.trace('overseer', `Speculative path launched for subtask ${(event as any).subtaskId ?? 'unknown'}`);
+        this.updateGraph();
+        break;
+
+      case 'speculative_resolved':
+        this.trace(
+          'overseer',
+          `Speculative path resolved for subtask ${(event as any).subtaskId ?? 'unknown'} — winner: ${(event as any).winnerId ?? 'unknown'}`,
+        );
+        this.updateGraph();
+        break;
+
+      case 'plan_modified':
+        // Re-cache graph data from the updated plan
+        if (this.captainState) {
+          const updated = this.captainState.plan.toTaskPlan();
+          this.lastNodes = updated.subtasks.map(s => ({ id: s.id, title: s.title }));
+          this.lastDeps = updated.dependencies;
+          const qm = new Quartermaster();
+          const { schedule } = qm.schedule(updated, this.config.maxWorkers);
+          this.lastSchedule = schedule;
+        }
+        this.trace('overseer', 'Plan modified');
+        this.updateGraph();
+        break;
+
+      case 'workflow_complete':
+        this.trace('system', 'Workflow completed successfully');
+        break;
+
+      case 'workflow_aborted':
+        this.trace('system', `Workflow aborted: ${event.reason}`);
+        this.updateGraph();
+        this.emitEnded(false, event.reason);
+        break;
+    }
+  }
+
+  // --- Helpers ---
+
+  private emit(type: string, data: any): void {
+    const port = this.getPort();
+    if (import.meta.env.DEV) {
+      logger.info(`[emit] ${type}`, data?.message || data?.text || '');
+    }
+    if (port) {
+      safePostMessage(port as any, { type, data });
+    } else if (import.meta.env.DEV) {
+      logger.warning(`[emit] No port available for ${type} — message dropped`);
+    }
+  }
+
+  private trace(actor: string, content: string): void {
     try {
-      await (this.taskManager as any).cancelAllForParentSession?.(this.sessionId);
+      trajectoryPersistence.addTraceItem(this.sessionId, actor, content, Date.now());
     } catch {}
+  }
 
-    // Wait with 3s timeout to avoid hanging on stuck workers
-    await Promise.race([
-      Promise.allSettled(cancellationPromises),
-      new Promise<void>(resolve => setTimeout(resolve, 3000)),
-    ]);
-
-    this.workerSessionIdByWorker.clear();
-
-    // Update graph to show cancelled state
-    if (this.lastNodes.length > 0) {
-      this.updateGraph(this.lastNodes, this.lastSchedule, this.lastDeps);
-    } else {
-      const nodes = Array.from(this.subtasksById.entries()).map(([id, s]) => ({ id, title: s.title }));
-      const deps: Record<number, number[]> = {};
-      for (const [id, s] of this.subtasksById.entries()) deps[id] = s.deps || [];
-      this.updateGraph(nodes, this.lastSchedule, deps);
-    }
-
-    // Freeze mirrors so previews remain visible
+  private emitEnded(ok: boolean, error?: string): void {
+    this.emit('workflow_ended', { sessionId: this.sessionId, ok, error });
     try {
-      await (this.taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
+      if (!ok && error) this.trace('system', `Workflow failed: ${error}`);
+      trajectoryPersistence.markCompleted(this.sessionId);
     } catch {}
+  }
 
-    // Build summary from token usage
-    const usages = (globalTokenTracker as any)?.getTokensForTask?.(this.sessionId) || [];
-    let summary: any | undefined;
-    if (Array.isArray(usages) && usages.length > 0) {
-      const totalInputTokens = usages.reduce((sum: number, u: any) => sum + (u.inputTokens || 0), 0);
-      const totalOutputTokens = usages.reduce((sum: number, u: any) => sum + (u.outputTokens || 0), 0);
-      let hasAnyCost = false;
-      const totalCost =
-        usages.reduce((sum: number, u: any) => {
-          const c = Number(u.cost);
-          if (isFinite(c) && c >= 0) {
-            hasAnyCost = true;
-            return sum + c;
-          }
-          return sum;
-        }, 0) || (hasAnyCost ? 0 : -1);
-      const last = usages[usages.length - 1] || {};
-      const ts = usages
-        .map((u: any) => Number(u?.timestamp || 0))
-        .filter((n: number) => Number.isFinite(n) && n > 0)
-        .sort((a: number, b: number) => a - b);
-      const totalLatencyMs = ts.length >= 2 ? Math.max(0, ts[ts.length - 1] - ts[0]) : ts.length === 1 ? 100 : 0;
-      summary = {
-        totalInputTokens,
-        totalOutputTokens,
-        totalLatencyMs,
-        totalLatencySeconds: (totalLatencyMs / 1000).toFixed(2),
-        totalCost,
-        apiCallCount: usages.length,
-        provider: last.provider || 'Unknown',
-        modelName: last.modelName || 'unknown',
-      };
-    }
-
-    this.emit('workflow_ended', { sessionId: this.sessionId, ok: false, error: 'Cancelled by user', summary });
+  private updateGraph(): void {
+    if (this.lastNodes.length === 0) return;
+    const titles: Record<number, string> = {};
+    for (const n of this.lastNodes) titles[n.id] = n.title;
+    const merged = buildMergedGraphAfterScheduleConsecutive(this.lastDeps, titles, this.lastSchedule);
+    const graph = buildGraphData(merged.vizSchedules, merged.dependenciesViz, merged.groupTitles, merged.durations);
+    const annotated = {
+      ...graph,
+      nodes: graph.nodes.map(n => ({
+        ...n,
+        status: this.statusMap.get(n.id) || 'not_started',
+      })),
+    };
+    this.emit('workflow_graph_update', { sessionId: this.sessionId, graph: annotated });
   }
 }
