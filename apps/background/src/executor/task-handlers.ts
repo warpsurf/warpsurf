@@ -25,6 +25,27 @@ const estimationResolvers = new Map<string, (approved: boolean) => void>();
 // Store recalculated estimation when user approves with a different model
 const estimationDataForApproval = new Map<string, any>();
 
+// Sessions cancelled before an executor was created (e.g. during auto triage).
+// Checked at multiple points in handleNewTask / handleFollowUpTask so the
+// workflow never starts if the user already pressed cancel.
+const cancelledSessions = new Set<string>();
+
+/**
+ * Mark a session as cancelled before an executor exists.
+ * Called from the cancel_task handler in side-panel.ts.
+ */
+export function markSessionCancelled(sessionId: string): void {
+  cancelledSessions.add(sessionId);
+}
+
+function isSessionCancelled(sessionId: string): boolean {
+  return cancelledSessions.has(sessionId);
+}
+
+function consumeSessionCancellation(sessionId: string): boolean {
+  return cancelledSessions.delete(sessionId);
+}
+
 /**
  * Run workflow estimation flow if enabled.
  * Returns true if task should proceed, false if cancelled.
@@ -294,6 +315,21 @@ export async function handleNewTask(message: any, deps: Deps) {
     }
   } catch {}
 
+  // Bail out early if the user cancelled while triage was running
+  if (isSessionCancelled(sessionId)) {
+    consumeSessionCancellation(sessionId);
+    try {
+      currentPort?.postMessage({
+        type: 'execution',
+        actor: 'auto',
+        state: 'task.cancel',
+        data: { taskId: sessionId, step: 0, maxSteps: 0, details: 'Task cancelled' },
+        timestamp: Date.now(),
+      });
+    } catch {}
+    return;
+  }
+
   // Determine mode using effective agent type
   const agentTypeNorm = String(effectiveAgentType || '').toLowerCase();
   const isWebAgent = agentTypeNorm === 'agent';
@@ -332,6 +368,12 @@ export async function handleNewTask(message: any, deps: Deps) {
         });
       } catch {}
     }
+  }
+
+  // Check again after estimation — user may have cancelled in the meantime
+  if (isSessionCancelled(sessionId)) {
+    consumeSessionCancellation(sessionId);
+    return;
   }
 
   const browserContext = new BrowserContext({ forceNewTab: true });
@@ -409,6 +451,14 @@ export async function handleNewTask(message: any, deps: Deps) {
       taskManager.setSingleAgentExecutor(sessionId, executor, -1, undefined, () => setCurrentExecutor(null));
     }
   } catch {}
+
+  // Final cancellation check before execution begins
+  if (consumeSessionCancellation(sessionId)) {
+    try {
+      executor.cancel();
+    } catch {}
+    return;
+  }
 
   // Execute - executor.execute() handles its own error events via TASK_FAIL
   try {
@@ -555,6 +605,20 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       }
     }
   } catch {}
+
+  // Bail out early if the user cancelled while triage was running
+  if (consumeSessionCancellation(sessionId)) {
+    try {
+      currentPort?.postMessage({
+        type: 'execution',
+        actor: 'auto',
+        state: 'task.cancel',
+        data: { taskId: sessionId, step: 0, maxSteps: 0, details: 'Task cancelled' },
+        timestamp: Date.now(),
+      });
+    } catch {}
+    return;
+  }
 
   const existing = getCurrentExecutor();
 
