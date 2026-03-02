@@ -198,11 +198,26 @@ export function createPanelHandlers(deps: any): any {
         const workerId = (message as any)?.data?.workerId;
         const actorHint = (message as any)?.data?.actor;
         const timestamp = Date.now();
+        if (import.meta.env.DEV) {
+          console.debug('[onWorkflowProgress]', {
+            text,
+            workerId,
+            actorHint,
+            sessionId: (message as any)?.data?.sessionId,
+          });
+        }
 
-        // Handle cancel messages
+        // Handle explicit cancel messages (not substring matches like "noise cancellation")
         try {
-          const lowered = String(text).toLowerCase();
-          if (lowered.includes('cancel')) {
+          const lowered = String(text).toLowerCase().trim();
+          const isCancelMessage =
+            lowered === 'cancelled by user' ||
+            lowered === 'task cancelled' ||
+            lowered === 'workflow cancelled' ||
+            lowered === 'workflow cancelled.' ||
+            lowered.startsWith('cancelled:') ||
+            /^cancel{1,2}ed\b/.test(lowered);
+          if (isCancelMessage) {
             let shouldAppend = false;
             deps.setMessageMetadata((prev: any) => {
               const already = !!(prev as any)?.__cancelMessageShown;
@@ -271,9 +286,10 @@ export function createPanelHandlers(deps: any): any {
         // Update the main message content for phase lines
         try {
           const isPhaseLine =
-            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|\d+\s+workers executing plan)\b/i.test(
+            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+workers?\s+(executing plan|deployed))\b/i.test(
               text,
-            );
+            ) ||
+            (workerId && /^Worker\s+\d+\s+deployed:/i.test(text));
           if (isPhaseLine) {
             updateAggregateRootContent(text, deps);
           }
