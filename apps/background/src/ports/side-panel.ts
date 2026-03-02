@@ -226,6 +226,13 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           }
 
           try {
+            // Mark session cancelled so in-flight triage/setup in handleNewTask
+            // will bail out before starting the workflow.
+            try {
+              const { markSessionCancelled } = await import('../executor/task-handlers');
+              markSessionCancelled(id);
+            } catch {}
+
             // Cancel any pending estimation
             try {
               const { cancelEstimation } = await import('../executor/task-handlers');
@@ -257,6 +264,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               for (const [key, w] of workflowsBySession.entries()) {
                 if (w === wf) workflowsBySession.delete(key);
               }
+              // Safety net: cancel any straggling child tasks the captain may have missed
+              try {
+                await (taskManager as any).cancelAllForParentSession?.(id);
+              } catch {}
               try {
                 await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id);
               } catch {}

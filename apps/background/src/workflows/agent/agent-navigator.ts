@@ -201,7 +201,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
             return response.parsed;
           }
         } catch (error) {
-          if (isAbortedError(error)) {
+          if (isAbortedError(error) || this.context.stopped) {
             throw error;
           }
           const errorMessage = `Failed to invoke ${this.modelName} with structured output: ${error}`;

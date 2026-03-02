@@ -1,6 +1,8 @@
 export function isAbortedError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return error.name === 'AbortError' || error.message.includes('Aborted');
+  if (error.name === 'AbortError') return true;
+  const msg = error.message.toLowerCase();
+  return msg.includes('aborted') || msg.includes('signal is aborted');
 }
 
 /**

@@ -497,6 +497,13 @@ export class Executor {
     const jobStartTime = Date.now();
     const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType);
 
+    // Bail out immediately if already cancelled before execution began
+    if (this.context.stopped) {
+      this._hasReachedTerminalState = true;
+      workflowLogger.taskCancelled(currentTaskNum);
+      return;
+    }
+
     try {
       let autoResult: AutoResult;
 
@@ -806,6 +813,9 @@ export class Executor {
     }
 
     try {
+      if (await this.shouldStop()) {
+        return;
+      }
       this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_START, 'Starting browser automation...');
 
       let done = false;
@@ -1162,6 +1172,7 @@ export class Executor {
       }
     } catch (error) {
       if (
+        context.stopped ||
         error instanceof RequestCancelledError ||
         error instanceof ExtensionConflictError ||
         error instanceof URLNotAllowedError ||
