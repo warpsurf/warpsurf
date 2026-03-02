@@ -104,18 +104,21 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
     if (providersFromStorage.size === 0 && Object.keys(providers).length === 0) return;
     if (hasLoadedModels.current) return;
     hasLoadedModels.current = true;
-    
+
     const loadAndMergeModels = async () => {
       try {
         const providerTypes = ['openai', 'anthropic', 'gemini', 'grok'];
         const results: Record<string, string[]> = {};
         const updates: Record<string, string[]> = {};
-        
+
         for (const provider of providerTypes) {
-          const result = await (window as any).chrome?.runtime?.sendMessage?.({ type: 'get_provider_models', provider });
+          const result = await (window as any).chrome?.runtime?.sendMessage?.({
+            type: 'get_provider_models',
+            provider,
+          });
           if (result?.ok && result.models?.length > 0) {
             results[provider] = result.models;
-            
+
             // Merge with existing models (keep user-added, add new from registry)
             if (providers[provider]) {
               const existing = providers[provider].modelNames || [];
@@ -129,9 +132,9 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
             }
           }
         }
-        
+
         setAvailableModels(results);
-        
+
         // Apply merged models to providers
         if (Object.keys(updates).length > 0) {
           setProviders(prev => {
@@ -285,13 +288,9 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
 
   const handleOpenRouterProviderToggle = (groupId: string, enabled: boolean) => {
     const currentEnabled = providers['openrouter']?.enabledSubProviders || [];
-    const newEnabled = enabled
-      ? [...currentEnabled, groupId]
-      : currentEnabled.filter(id => id !== groupId);
-    
-    const newModels = openRouterGroups
-      .filter(g => newEnabled.includes(g.id))
-      .flatMap(g => g.models);
+    const newEnabled = enabled ? [...currentEnabled, groupId] : currentEnabled.filter(id => id !== groupId);
+
+    const newModels = openRouterGroups.filter(g => newEnabled.includes(g.id)).flatMap(g => g.models);
 
     setModifiedProviders(prev => new Set(prev).add('openrouter'));
     setProviders(prev => ({
@@ -303,7 +302,6 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
       },
     }));
   };
-
 
   const getButtonProps = (provider: string) => {
     const isInStorage = providersFromStorage.has(provider);
@@ -345,7 +343,8 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
         setProviderTestLatency(prev => ({ ...prev, [providerId]: 'Not configured' }));
         return;
       }
-      const result = await ((window as any).chrome?.runtime?.sendMessage?.({ type: 'test_provider', providerId }) ?? (async () => ({ ok: false, error: 'Runtime unavailable' }))());
+      const result = await ((window as any).chrome?.runtime?.sendMessage?.({ type: 'test_provider', providerId }) ??
+        (async () => ({ ok: false, error: 'Runtime unavailable' }))());
       if (result && result.ok) {
         const latency = typeof result.latencyMs === 'number' ? `${result.latencyMs} ms` : 'OK';
         setProviderTestLatency(prev => ({ ...prev, [providerId]: latency }));
@@ -509,7 +508,7 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
 
   const addBuiltInProvider = (provider: string) => {
     const config = getDefaultProviderConfig(provider);
-    
+
     // Use dynamically fetched models from registry if available
     if (provider !== ProviderTypeEnum.OpenRouter && availableModels[provider]?.length > 0) {
       config.modelNames = [...availableModels[provider]];
@@ -597,8 +596,29 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
           🔑 LLM Provider API Keys
         </h2>
         <h6 className={`mb-4 text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          Using uncapped API keys is risky. Where possible, set spending limits or caps to an amount you are comfortable losing.
+          Using uncapped API keys is risky. Where possible, set spending limits or caps to an amount you are comfortable
+          losing.
         </h6>
+
+        <div
+          className={`mb-4 rounded-md border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-amber-200 bg-amber-50'}`}>
+          <p className={`mb-2 text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+            Don't have an API key yet?
+          </p>
+          <p className={`mb-3 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            You need an API key from an LLM provider to use this extension. Gemini offers a free tier to get started.
+          </p>
+          <a
+            href="https://ai.google.dev/gemini-api/docs/api-key"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-block rounded-md px-3 py-1.5 text-xs font-medium ${
+              isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}>
+            Create a Gemini API key ↗
+          </a>
+        </div>
+
         <div className="space-y-6">
           {getSortedProviders().length === 0 ? (
             <div className="py-8 text-center text-gray-500">
@@ -780,15 +800,15 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
                     {providerConfig.type === ProviderTypeEnum.OpenRouter && (
                       <>
                         <div className="flex items-start">
-                          <label className={`w-20 pt-2 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <label
+                            className={`w-20 pt-2 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                             Providers
                           </label>
                           <div className="flex-1">
                             <button
                               type="button"
                               onClick={() => setOpenRouterProvidersExpanded(prev => !prev)}
-                              className={`flex w-full items-center justify-between rounded-md border p-3 ${isDarkMode ? 'border-slate-600 bg-slate-700 hover:bg-slate-600' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
-                            >
+                              className={`flex w-full items-center justify-between rounded-md border p-3 ${isDarkMode ? 'border-slate-600 bg-slate-700 hover:bg-slate-600' : 'border-gray-300 bg-white hover:bg-gray-50'}`}>
                               <span className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                                 {(providerConfig.enabledSubProviders || []).length > 0
                                   ? `${(providerConfig.enabledSubProviders || []).length} provider(s) selected`
@@ -798,28 +818,40 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
                                 className={`h-4 w-4 transition-transform ${openRouterProvidersExpanded ? 'rotate-180' : ''} ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}
                                 fill="none"
                                 stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
+                                viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
                             </button>
                             {openRouterProvidersExpanded && (
-                              <div className={`mt-2 grid grid-cols-2 gap-2 rounded-md border p-3 ${isDarkMode ? 'border-slate-600 bg-slate-700' : 'border-gray-300 bg-white'}`}>
+                              <div
+                                className={`mt-2 grid grid-cols-2 gap-2 rounded-md border p-3 ${isDarkMode ? 'border-slate-600 bg-slate-700' : 'border-gray-300 bg-white'}`}>
                                 {openRouterLoading ? (
-                                  <span className={`col-span-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>
+                                  <span
+                                    className={`col-span-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    Loading...
+                                  </span>
                                 ) : openRouterGroups.length === 0 ? (
-                                  <span className={`col-span-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No providers available</span>
+                                  <span
+                                    className={`col-span-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    No providers available
+                                  </span>
                                 ) : (
                                   openRouterGroups.map(group => (
-                                    <label key={group.id} className={`flex items-center gap-2 cursor-pointer rounded p-2 ${isDarkMode ? 'hover:bg-slate-600' : 'hover:bg-gray-100'}`}>
+                                    <label
+                                      key={group.id}
+                                      className={`flex items-center gap-2 cursor-pointer rounded p-2 ${isDarkMode ? 'hover:bg-slate-600' : 'hover:bg-gray-100'}`}>
                                       <input
                                         type="checkbox"
                                         checked={(providerConfig.enabledSubProviders || []).includes(group.id)}
                                         onChange={e => handleOpenRouterProviderToggle(group.id, e.target.checked)}
                                         className="rounded border-gray-300"
                                       />
-                                      <span className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{group.displayName}</span>
-                                      <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>({group.modelCount})</span>
+                                      <span className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                                        {group.displayName}
+                                      </span>
+                                      <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        ({group.modelCount})
+                                      </span>
                                     </label>
                                   ))
                                 )}
@@ -829,7 +861,8 @@ export const ApiKeysSettings = ({ isDarkMode = false }: ApiKeysSettingsProps) =>
                         </div>
 
                         <div className="flex items-start">
-                          <label className={`w-20 pt-2 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <label
+                            className={`w-20 pt-2 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                             Models
                           </label>
                           <div className="flex-1 space-y-2">
