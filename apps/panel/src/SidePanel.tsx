@@ -8,8 +8,8 @@ import ChatHistoryList from './components/history/chat-history-list';
 import { AgentDashboard } from './components/history/agent-dashboard';
 import SetupChecklist from './components/setup/setup-checklist';
 import PopulationChart from './components/fish/population-chart';
-import WorkflowGraphSection from './components/multiagent-visualization/visualization-section';
 import WorkflowGraphModal from './components/multiagent-visualization/visualization-modal';
+import { ErrorBoundary } from './components/error-boundary';
 import './SidePanel.css';
 import Branding from './components/Header/Branding';
 import HeaderActions from './components/Header/header-actions';
@@ -908,15 +908,6 @@ const SidePanel = () => {
               onSelect={handlePaletteSelect}
             />
           </Suspense>
-          <WorkflowGraphSection
-            isDarkMode={isDarkMode}
-            graph={(messageMetadata as any)?.__workflowGraph || null}
-            laneInfo={computedLaneInfo}
-            showInline={showInlineWorkflow}
-            setShowInline={v => setShowInlineWorkflow(typeof v === 'function' ? v(showInlineWorkflow) : v)}
-            onOpenFullScreen={() => setShowWorkflowModal(true)}
-          />
-
           {showPopulations ? (
             <div className="flex-1 overflow-hidden min-h-0">
               <PopulationChart fishRef={fishRef} isDarkMode={isDarkMode} onBack={() => setShowPopulations(false)} />
@@ -977,6 +968,9 @@ const SidePanel = () => {
               isJobActive={isJobActive}
               isAgentModeActive={isAgentModeActive}
               currentPlan={currentPlan}
+              workflowGraph={(messageMetadata as any)?.__workflowGraph || undefined}
+              workflowLaneInfo={computedLaneInfo}
+              onOpenWorkflowFullScreen={() => setShowWorkflowModal(true)}
               queuedMessages={queuedMessages}
               onInjectLiveMessage={(text: string) => {
                 if (portRef.current) {
@@ -1081,11 +1075,16 @@ const SidePanel = () => {
         </div>
       </div>
       {showWorkflowModal && (messageMetadata as any)?.__workflowGraph && (
-        <WorkflowGraphModal
-          graph={(messageMetadata as any).__workflowGraph}
-          laneInfo={computedLaneInfo}
-          onClose={() => setShowWorkflowModal(false)}
-        />
+        <ErrorBoundary
+          resetKey={currentSessionId ?? ''}
+          fallback={<div className="text-xs text-red-400 p-2">Graph error</div>}>
+          <WorkflowGraphModal
+            graph={(messageMetadata as any).__workflowGraph}
+            laneInfo={computedLaneInfo}
+            isDarkMode={isDarkMode}
+            onClose={() => setShowWorkflowModal(false)}
+          />
+        </ErrorBoundary>
       )}
       {firstRunModal}
       {livePricingModal}

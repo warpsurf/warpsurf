@@ -37,6 +37,9 @@ export interface ChatScreenProps {
   isJobActive: boolean;
   isAgentModeActive?: boolean;
   currentPlan?: Array<{ text: string; status: string }> | null;
+  workflowGraph?: any;
+  workflowLaneInfo?: Record<number, { label: string; color?: string }>;
+  onOpenWorkflowFullScreen?: () => void;
   queuedMessages?: string[];
   onInjectLiveMessage?: (text: string) => void;
   onCancelQueuedMessage?: (index: number) => void;
@@ -376,6 +379,9 @@ export function ChatScreen(props: ChatScreenProps) {
                   activeAggregateMessageId={agentTraceRootId}
                   onTogglePreviewCollapsed={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
                   planItems={props.currentPlan || undefined}
+                  workflowGraph={props.workflowGraph}
+                  workflowLaneInfo={props.workflowLaneInfo}
+                  onOpenWorkflowFullScreen={props.onOpenWorkflowFullScreen}
                   isAgentWorkflowActive={!!props.isAgentModeActive && isJobActive}
                   pendingEstimation={pendingEstimation}
                   availableModelsForEstimation={availableModelsForEstimation}

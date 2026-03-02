@@ -39,6 +39,12 @@ export interface MessageListProps {
   sessionAttachments?: Record<string, Attachment>;
   /** Current plan items for the active agent run */
   planItems?: Array<{ text: string; status: string }>;
+  /** Multi-agent workflow graph for the Plan tab */
+  workflowGraph?: any;
+  /** Lane info for the workflow graph */
+  workflowLaneInfo?: Record<number, { label: string; color?: string }>;
+  /** Callback to open full-screen workflow graph */
+  onOpenWorkflowFullScreen?: () => void;
   /** When true, preview space is reserved for the aggregate root even without a screenshot */
   isAgentWorkflowActive?: boolean;
 }
@@ -67,6 +73,9 @@ export default memo(function MessageList({
   onCancelEstimation,
   sessionAttachments = {},
   planItems,
+  workflowGraph,
+  workflowLaneInfo,
+  onOpenWorkflowFullScreen,
   isAgentWorkflowActive = false,
 }: MessageListProps) {
   const lastAgentIndex = useMemo(() => {
@@ -139,6 +148,9 @@ export default memo(function MessageList({
             onCancelEstimation,
             messageAttachments: resolvedAttachments,
             planItems: isCurrentRunRoot || isFallbackLastAgent ? planItems : undefined,
+            workflowGraph: isCurrentRunRoot || isFallbackLastAgent ? workflowGraph : undefined,
+            workflowLaneInfo: isCurrentRunRoot || isFallbackLastAgent ? workflowLaneInfo : undefined,
+            onOpenWorkflowFullScreen: isCurrentRunRoot || isFallbackLastAgent ? onOpenWorkflowFullScreen : undefined,
           };
 
           const isUserMessage = message.actor === Actors.USER;

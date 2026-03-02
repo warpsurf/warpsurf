@@ -14,6 +14,7 @@ import { AttachmentChip, InlineAttachmentGallery } from './attachment-preview';
 
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
 const EstimationPopUp = lazy(() => import('../modals/estimation-popup'));
+import WorkflowGraph from '../multiagent-visualization/visualization-graph';
 
 const ACTOR_TINTS: Record<string, { dark: string; light: string }> = {
   [Actors.USER]: { dark: 'text-slate-200', light: 'text-green-900' },
@@ -106,6 +107,12 @@ export interface MessageBlockProps {
   messageAttachments?: Attachment[];
   /** Plan items for plan tab display */
   planItems?: Array<{ text: string; status: string }>;
+  /** Multi-agent workflow graph for the Plan tab */
+  workflowGraph?: any;
+  /** Lane info for the workflow graph */
+  workflowLaneInfo?: Record<number, { label: string; color?: string }>;
+  /** Callback to open full-screen workflow graph */
+  onOpenWorkflowFullScreen?: () => void;
 }
 
 export default function MessageBlock({
@@ -127,6 +134,9 @@ export default function MessageBlock({
   hasPreviewPanel = false,
   messageAttachments = [],
   planItems,
+  workflowGraph,
+  workflowLaneInfo,
+  onOpenWorkflowFullScreen,
 }: MessageBlockProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [showTabContextTooltip, setShowTabContextTooltip] = useState(false);
@@ -178,10 +188,15 @@ export default function MessageBlock({
   }, [content, message.actor, message.timestamp, metadata]);
   const currentPhase = useMemo((): 'planner' | 'processing' | 'refiner' | 'workers' | null => {
     const lower = content.toLowerCase();
-    if (lower.startsWith('creating plan')) return 'planner';
-    if (lower.startsWith('processing plan')) return 'processing';
+    if (lower.startsWith('creating plan') || lower.startsWith('commodore planning')) return 'planner';
+    if (lower.startsWith('processing plan') || lower.startsWith('quartermaster')) return 'processing';
     if (lower.startsWith('refining plan') || lower.includes('refinement complete')) return 'refiner';
-    if (/(\d+)\s+workers executing plan/i.test(content) || lower.includes('workers executing plan')) return 'workers';
+    if (
+      /(\d+)\s+workers?\s+(executing plan|deployed)/i.test(content) ||
+      lower.includes('workers executing plan') ||
+      lower.startsWith('mission planned')
+    )
+      return 'workers';
     return null;
   }, [content]);
 
@@ -485,7 +500,15 @@ export default function MessageBlock({
         {/* Secondary role indicator for agent aggregate */}
         {(isProgress || isAgentAggregate) &&
           lastTrace?.actor &&
-          ['agent_navigator', 'agent_planner', 'agent_validator', 'planner', 'refiner'].includes(lastTrace.actor) &&
+          [
+            'agent_navigator',
+            'agent_planner',
+            'agent_validator',
+            'planner',
+            'refiner',
+            'overseer',
+            'scheduler',
+          ].includes(lastTrace.actor) &&
           (() => {
             const role = ACTOR_PROFILES[lastTrace.actor as keyof typeof ACTOR_PROFILES];
             return role?.icon ? (
@@ -508,7 +531,7 @@ export default function MessageBlock({
           {isAgentAggregate && (
             <span className="flex items-center gap-0.5">
               {(['details', 'plan'] as const)
-                .filter(tab => tab === 'details' || (planItems && planItems.length > 0))
+                .filter(tab => tab === 'details' || (planItems && planItems.length > 0) || workflowGraph)
                 .map(tab => {
                   const isOpen = !collapsed && expandedTab === tab;
                   return (
@@ -593,6 +616,9 @@ export default function MessageBlock({
                       planner: 'Planning',
                       agent_validator: 'Validating',
                       refiner: 'Refining',
+                      overseer: 'Commanding',
+                      scheduler: 'Scheduling',
+                      worker: 'Executing',
                     };
                     const hintLabelMap: Record<string, string> = {
                       routing: 'Routing',
@@ -707,32 +733,50 @@ export default function MessageBlock({
               </div>
             )}
           {/* Expansion panels: always renderable regardless of working state */}
-          {isAgentAggregate && !collapsed && expandedTab === 'plan' && planItems && planItems.length > 0 && (
-            <div
-              className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
-              <div className="space-y-0.5">
-                {planItems.map((item, i) => {
-                  const marker =
-                    item.status === 'done'
-                      ? '\u2705'
-                      : item.status === 'current'
-                        ? '\u25B6\uFE0F'
-                        : item.status === 'skipped'
-                          ? '\u23ED\uFE0F'
-                          : '\u2B1C';
-                  return (
-                    <div
-                      key={i}
-                      className={`flex items-start gap-1.5 ${
-                        item.status === 'done' ? 'opacity-50' : item.status === 'current' ? 'font-medium' : ''
-                      }`}>
-                      <span className="shrink-0 text-[11px]">{marker}</span>
-                      <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{item.text}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {isAgentAggregate && !collapsed && expandedTab === 'plan' && (
+            <>
+              {workflowGraph ? (
+                <div className="mt-2 clear-both">
+                  <div className="flex items-center justify-end mb-1">
+                    {onOpenWorkflowFullScreen && (
+                      <button
+                        type="button"
+                        className={`text-[10px] font-medium rounded-lg px-2 py-0.5 transition-colors ${isDarkMode ? 'bg-[#1d1d1a] hover:bg-[#252522] border border-[#2f2f29] text-slate-300' : 'bg-[#f7f7f5] hover:bg-[#ededeb] border border-[#deded7] text-gray-600'}`}
+                        onClick={onOpenWorkflowFullScreen}>
+                        Full screen
+                      </button>
+                    )}
+                  </div>
+                  <WorkflowGraph graph={workflowGraph} compact laneInfo={workflowLaneInfo} isDarkMode={isDarkMode} />
+                </div>
+              ) : planItems && planItems.length > 0 ? (
+                <div
+                  className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+                  <div className="space-y-0.5">
+                    {planItems.map((item, i) => {
+                      const marker =
+                        item.status === 'done'
+                          ? '\u2705'
+                          : item.status === 'current'
+                            ? '\u25B6\uFE0F'
+                            : item.status === 'skipped'
+                              ? '\u23ED\uFE0F'
+                              : '\u2B1C';
+                      return (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-1.5 ${
+                            item.status === 'done' ? 'opacity-50' : item.status === 'current' ? 'font-medium' : ''
+                          }`}>
+                          <span className="shrink-0 text-[11px]">{marker}</span>
+                          <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{item.text}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
           {isAgentAggregate && !collapsed && expandedTab === 'details' && workerItems?.length && (
             <div
