@@ -180,15 +180,17 @@ export function useChatHistory({
           return !t || STALE_CONTENT_RE.some(re => re.test(t));
         };
 
-        let finalMessages = hasMessages ? dedupeMessages(fullSession.messages) : [];
+        // Reconstruct stale aggregate root content BEFORE dedup so that
+        // duplicate root messages (from panel + background race) have matching
+        // content and get caught by the deduplication pass.
+        let rawMessages = hasMessages ? (fullSession.messages as any[]) : [];
         let reconstructedContent: string | undefined;
         if (restoredRootId && savedMetadata) {
           const rootMeta = (savedMetadata as any)?.[restoredRootId];
           if (rootMeta?.isCompleted && Array.isArray(rootMeta.traceItems) && rootMeta.traceItems.length > 0) {
-            const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
+            const rootMsg = rawMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
             const storedContent = String((rootMsg as any)?.content ?? '').trim();
             if (isStaleContent(storedContent)) {
-              // Prefer explicitly stored final answer (set by onFinalAnswer)
               const storedFinal = rootMeta.finalAnswerContent;
               if (storedFinal && typeof storedFinal === 'string' && storedFinal.trim()) {
                 reconstructedContent = storedFinal.trim();
@@ -213,7 +215,7 @@ export function useChatHistory({
                 reconstructedContent = raw ? stripFinalPrefix(raw) : undefined;
               }
               if (reconstructedContent) {
-                finalMessages = finalMessages.map((m: any) => {
+                rawMessages = rawMessages.map((m: any) => {
                   const msgId = `${m.timestamp}-${m.actor}`;
                   if (msgId === restoredRootId) return { ...m, content: reconstructedContent };
                   return m;
@@ -222,6 +224,7 @@ export function useChatHistory({
             }
           }
         }
+        let finalMessages = dedupeMessages(rawMessages);
 
         // Remove standalone SYSTEM messages that duplicate the aggregate root content
         // (e.g. a separate "Task cancelled" SYSTEM message when the aggregate root
