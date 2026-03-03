@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { FaChessKing } from 'react-icons/fa';
 import type { TraceItem, WorkerItem } from '../types';
 import { groupActionsBySite, flattenToActions } from './trajectory-parser';
 import SiteGroup from './site-group';
@@ -66,42 +67,76 @@ function WorkerSection({
   );
 }
 
+function CaptainSection({ items, isDarkMode }: { items: TraceItem[]; isDarkMode: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-2 mb-2">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full"
+          style={{ backgroundColor: isDarkMode ? '#d97706' : '#f59e0b' }}>
+          <FaChessKing className="h-2 w-2 text-white" />
+        </span>
+        <span className={`text-[11px] font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>Captain</span>
+      </div>
+      <div className="ml-6 space-y-1">
+        {items.map((item, i) => (
+          <div key={`captain-${item.timestamp}-${i}`} className="flex items-start gap-2 text-[11px]">
+            <span className={`shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+              {new Date(item.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </span>
+            <span className={isDarkMode ? 'text-slate-300' : 'text-gray-600'}>{item.content}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AgentTrajectory({ traceItems, isDarkMode, workerItems }: AgentTrajectoryProps) {
-  const hasWorkerIds = traceItems.some(t => t.workerId != null);
-
-  const workerGroups = useMemo(() => {
-    if (!hasWorkerIds) return null;
-
-    const groups = new Map<string, TraceItem[]>();
-    const unassigned: TraceItem[] = [];
+  const { captainItems, workerGroups, unassigned } = useMemo(() => {
+    const captain: TraceItem[] = [];
+    const workers = new Map<string, TraceItem[]>();
+    const other: TraceItem[] = [];
 
     for (const item of traceItems) {
-      if (item.workerId != null) {
+      if (item.actor === 'captain') {
+        captain.push(item);
+      } else if (item.workerId != null) {
         const key = String(item.workerId);
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(item);
+        if (!workers.has(key)) workers.set(key, []);
+        workers.get(key)!.push(item);
       } else {
-        unassigned.push(item);
+        other.push(item);
       }
     }
 
-    if (groups.size === 0) return null;
-    return { groups, unassigned };
-  }, [traceItems, hasWorkerIds]);
+    return {
+      captainItems: captain,
+      workerGroups: workers.size > 0 ? workers : null,
+      unassigned: other,
+    };
+  }, [traceItems]);
 
-  if (workerGroups && workerGroups.groups.size > 0) {
+  if ((workerGroups && workerGroups.size > 0) || captainItems.length > 0) {
     const workerMap = new Map<string, WorkerItem>();
     if (workerItems) {
       for (const w of workerItems) workerMap.set(String(w.workerId), w);
     }
 
-    const sortedKeys = Array.from(workerGroups.groups.keys()).sort((a, b) => {
-      const numA = parseInt(a.replace(/\D/g, '')) || 0;
-      const numB = parseInt(b.replace(/\D/g, '')) || 0;
-      return numA - numB;
-    });
+    const sortedKeys = workerGroups
+      ? Array.from(workerGroups.keys()).sort((a, b) => {
+          const numA = parseInt(a.replace(/\D/g, '')) || 0;
+          const numB = parseInt(b.replace(/\D/g, '')) || 0;
+          return numA - numB;
+        })
+      : [];
 
-    const unassignedActions = flattenToActions(workerGroups.unassigned, isDarkMode);
+    const unassignedActions = flattenToActions(unassigned, isDarkMode);
 
     return (
       <div className="mt-2">
@@ -117,12 +152,13 @@ export default function AgentTrajectory({ traceItems, isDarkMode, workerItems }:
             </div>
           </div>
         )}
+        <CaptainSection items={captainItems} isDarkMode={isDarkMode} />
         {sortedKeys.map(key => (
           <WorkerSection
             key={key}
             workerId={key}
             workerItem={workerMap.get(key)}
-            traceItems={workerGroups.groups.get(key)!}
+            traceItems={workerGroups!.get(key)!}
             isDarkMode={isDarkMode}
           />
         ))}
