@@ -21,11 +21,13 @@ export type CaptainActionType =
   | { type: 'dispatch_subtask'; subtask_id: SubtaskId; refined_prompt?: string }
   | { type: 'cancel_subtask'; subtask_id: SubtaskId; reason: string }
   | { type: 'retry_subtask'; subtask_id: SubtaskId; modified_prompt?: string; reassign_to_crew?: number }
+  | { type: 'skip_subtask'; subtask_id: SubtaskId; reason: string }
   | { type: 'add_subtask'; subtask: NewSubtaskSpec; after_dependencies: SubtaskId[] }
   | { type: 'modify_subtask'; subtask_id: SubtaskId; new_prompt?: string; new_title?: string; no_browse?: boolean }
   | { type: 'modify_plan'; revised_subtasks: NewSubtaskSpec[]; reason: string }
   | { type: 'launch_speculative'; goal_id: string; alternatives: NewSubtaskSpec[] }
   | { type: 'resolve_speculative'; goal_id: string; winner_id: SubtaskId }
+  | { type: 'complete_workflow'; reason: string }
   | { type: 'abort_workflow'; reason: string }
   | { type: 'pause_workflow'; reason: string };
 
@@ -34,7 +36,7 @@ export interface CaptainDecision {
   actions: CaptainActionType[];
 }
 
-export type SubtaskStatus = 'pending' | 'dispatched' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type SubtaskStatus = 'pending' | 'dispatched' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped';
 
 export type WorkflowEvent =
   | { type: 'plan_created'; plan: TaskPlan }
