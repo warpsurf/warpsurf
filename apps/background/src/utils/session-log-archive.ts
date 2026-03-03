@@ -1,8 +1,12 @@
 import type { TokenUsage } from './token-tracker';
 
+/** Max API call log entries retained for the current chat session. Oldest are evicted first. */
+const MAX_LOGS_PER_SESSION = 500;
+
 class SessionLogArchive {
   private archive: Map<string, TokenUsage[]> = new Map();
   private keys: Map<string, Set<string>> = new Map();
+  private currentSessionId: string | null = null;
 
   private keyFor(u: TokenUsage): string {
     try {
@@ -27,6 +31,14 @@ class SessionLogArchive {
     const sid = String(sessionId);
     if (!sid) return;
     if (!Array.isArray(usages) || usages.length === 0) return;
+
+    // Only keep logs for the most recent session — clear everything else on session switch
+    if (this.currentSessionId && this.currentSessionId !== sid) {
+      this.archive.clear();
+      this.keys.clear();
+    }
+    this.currentSessionId = sid;
+
     const list = this.archive.get(sid) || [];
     const seen = this.keys.get(sid) || new Set<string>();
     for (const u of usages) {
@@ -36,7 +48,16 @@ class SessionLogArchive {
       list.push(u);
     }
     // Stable chronological order
-    list.sort((a, b) => (Number(a?.timestamp || 0)) - (Number(b?.timestamp || 0)));
+    list.sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+
+    // Keep only the most recent entries
+    if (list.length > MAX_LOGS_PER_SESSION) {
+      const evicted = list.splice(0, list.length - MAX_LOGS_PER_SESSION);
+      for (const u of evicted) {
+        seen.delete(this.keyFor(u));
+      }
+    }
+
     this.archive.set(sid, list);
     this.keys.set(sid, seen);
   }
@@ -44,16 +65,17 @@ class SessionLogArchive {
   get(sessionId: string): TokenUsage[] {
     const sid = String(sessionId);
     const list = this.archive.get(sid) || [];
-    return [...list].sort((a, b) => (Number(a?.timestamp || 0)) - (Number(b?.timestamp || 0)));
+    return [...list].sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
   }
 
   clear(sessionId: string): void {
     const sid = String(sessionId);
     this.archive.delete(sid);
     this.keys.delete(sid);
+    if (this.currentSessionId === sid) {
+      this.currentSessionId = null;
+    }
   }
 }
 
 export const sessionLogArchive = new SessionLogArchive();
-
-
