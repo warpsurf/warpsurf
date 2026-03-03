@@ -32,6 +32,7 @@ type BackgroundHandlers = {
   }) => void;
   onRestoreViewState?: (data: { currentSessionId?: string; viewMode?: string }) => void;
   onSessionSubscribed?: (message: any) => void;
+  onWorkflowStarted?: (message: any) => void;
   onDisconnect?: (error?: any) => void;
   onSpeechToTextResult?: (message: any) => void;
   onSpeechToTextError?: (message: any) => void;
@@ -282,6 +283,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
               cancelledSessionsRef.current.delete(sid);
             }
           } catch {}
+          handlersRef.current.onWorkflowStarted?.(message);
         } else if (message && message.type === 'shortcut') {
           try {
             const text = String((message as any)?.data?.text || '');
