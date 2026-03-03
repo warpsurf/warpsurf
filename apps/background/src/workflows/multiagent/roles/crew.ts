@@ -33,7 +33,7 @@ export class Crew {
   }
 
   async createSession(crewId: number): Promise<string> {
-    const label = `Crew ${crewId}`;
+    const label = `Crew ${crewId + 1}`;
     logger.info(`Creating session for ${label}`);
     return this.taskManager.createWorkerSession('', label, this.parentSessionId, this.taskContext, crewId);
   }
@@ -76,6 +76,16 @@ export class Crew {
         stepsUsed: 0,
       },
     };
+  }
+
+  async pause(sessionId: string): Promise<void> {
+    const task = this.taskManager.getTask(sessionId);
+    if (task?.executor) await (task.executor as any).pause?.();
+  }
+
+  async resume(sessionId: string): Promise<void> {
+    const task = this.taskManager.getTask(sessionId);
+    if (task?.executor) await (task.executor as any).resume?.();
   }
 
   async cancel(sessionId: string): Promise<void> {
