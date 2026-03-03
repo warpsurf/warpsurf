@@ -255,6 +255,19 @@ export default class BrowserContext {
     return false;
   }
 
+  /**
+   * Detach the debugger from all attached pages without clearing ownership or currentTabId.
+   * Called between subtasks so other crews can attach to released tabs.
+   */
+  public async releaseAllDebuggers(): Promise<void> {
+    for (const [, page] of this._attachedPages) {
+      try {
+        await page.detachPuppeteer();
+      } catch {}
+    }
+    this._attachedPages.clear();
+  }
+
   public async detachPage(tabId: number): Promise<void> {
     // detach page
     const page = this._attachedPages.get(tabId);
@@ -457,7 +470,20 @@ export default class BrowserContext {
     await this.waitForTabEvents(tabId, { waitForUpdate: false, waitForActivation: false });
 
     const page = await this._getOrCreatePage(tab);
-    await this.attachPage(page);
+    let attached = await this.attachPage(page);
+    if (!attached) {
+      // Another context may hold the debugger — force-detach via Chrome API and retry.
+      // Clear the PuppeteerAdapter backoff that was just set by the failed attempt;
+      // without this the retry returns false immediately for 30 seconds.
+      try {
+        await chrome.debugger.detach({ tabId });
+      } catch {}
+      page.clearAttachBackoff();
+      attached = await this.attachPage(page);
+    }
+    if (!attached) {
+      throw new Error(`switchTab: could not attach debugger to tab ${tabId}`);
+    }
     this._currentTabId = tabId;
     return page;
   }
@@ -662,7 +688,8 @@ export default class BrowserContext {
     // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
 
     try {
@@ -675,9 +702,9 @@ export default class BrowserContext {
       const browserState: BrowserState = { ...pageState, tabs: tabInfos };
       return browserState;
     } catch (e) {
-      // Fallback to placeholder in any failure case
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
   }
 
@@ -685,10 +712,10 @@ export default class BrowserContext {
     useVision: boolean | 'auto' = false,
     cacheClickableElementsHashes = false,
   ): Promise<BrowserState> {
-    // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
 
     try {
@@ -701,7 +728,8 @@ export default class BrowserContext {
       return browserState;
     } catch (e) {
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
   }
 
@@ -716,7 +744,8 @@ export default class BrowserContext {
     // In worker mode without a bound tab, return a placeholder state to allow planning
     if (this._forceNewTab && (this._currentTabId === null || this._currentTabId === undefined)) {
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
 
     try {
@@ -729,7 +758,6 @@ export default class BrowserContext {
           pageState = await currentPage.getState(useVision, cacheClickableElementsHashes);
         }
       } catch {
-        // Fallback: compute fresh state
         pageState = await currentPage.getState(useVision, cacheClickableElementsHashes);
       }
       const tabInfos = await this.getTabInfos();
@@ -737,7 +765,8 @@ export default class BrowserContext {
       return browserState;
     } catch (e) {
       const blank = build_initial_state();
-      return { ...blank, tabs: [] } as BrowserState;
+      const tabInfos = await this.getTabInfos().catch(() => [] as TabInfo[]);
+      return { ...blank, tabs: tabInfos } as BrowserState;
     }
   }
 

@@ -64,6 +64,7 @@ export class PuppeteerAdapter {
     } catch {
       // Debugger may already be detached or tab closed
     }
+    PuppeteerAdapter._backoff.delete(this._tabId);
   }
 
   get page(): PuppeteerPage | null {
@@ -76,6 +77,10 @@ export class PuppeteerAdapter {
 
   get attached(): boolean {
     return this._page !== null;
+  }
+
+  clearBackoff(): void {
+    PuppeteerAdapter._backoff.delete(this._tabId);
   }
 
   private _cleanup(): void {

@@ -102,6 +102,7 @@ export default class Page {
   }
 
   attachPuppeteer = () => this._adapter.attach();
+  clearAttachBackoff = () => this._adapter.clearBackoff();
   detachPuppeteer = async () => {
     await this._adapter.detach();
     this._state = build_initial_state(this._tabId);
