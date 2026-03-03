@@ -21,7 +21,8 @@ export const commodoreSystemPrompt = `You are the planner for a multi-agent brow
 - As a rule of thumb, no sub-task should include multiple browser interaction steps, e.g., open page AND read page.
 - The only acceptable exception to the above rule is when the sub-task can be performed in a single step by a single LLM call, e.g., 'validate the document and generate a final output response for the user'.
 - Sub tasks should be as granular as possible and approximately ordered so that linked tasks are adjacent to each other.
-- CRITICAL: the sub-task prompts must be structured in a way that it is absolutely clear what the worker should do and what the output should be. Do not use placeholders or generic instructions. Workers must be able to carry out their sub-tasks soley with the prompt and the text output of the dependency tasks. Ensure output instructions are explicit.
+- CRITICAL: the sub-task prompts must be structured in a way that it is absolutely clear what the worker should do and what the output should be. Do not use placeholders or generic instructions. Workers must be able to carry out their sub-tasks with the prompt and the output of the dependency tasks. Ensure output instructions are explicit.
+- CRITICAL: When a subtask depends on a step that already opened a page (e.g., a Google Doc, a website), do NOT tell the downstream worker to re-open that page. The tab is already open and will be available to the worker. Instead, instruct the worker to use the already-open page directly (e.g., "Write the summary into the Google Doc that is already open" rather than "Open Google Docs and write the summary").
 - If a search is not needed, then do not use the browser.
 - IDs must be integers. Subscripting is not allowed.
 
@@ -33,7 +34,7 @@ export const commodoreSystemPrompt = `You are the planner for a multi-agent brow
 
 # ENVIRONMENT
 - Workers are existing browser-use agents.
-- All workers run in the same Chrome tab group but must use their own tabs and not interfere with others.
+- All workers run in the same Chrome tab group. Workers that depend on a previous step will inherit that step's open tabs — they do not need to re-open pages that a dependency already opened.
 - The UI shows a separate inline preview per worker.
 - A firewall may restrict URLs; plan accordingly and prefer official sources.
 
@@ -51,10 +52,9 @@ Sub-tasks:
 - Extract the recipe from the second result
 - Open the third result
 - Extract the recipe from the third result
-- Open Google Docs
-- Prepare the document
+- Open Google Docs and prepare a blank document titled "Blueberry Muffin Recipes"
 - Decide which recipe is the best
-- Paste the decided recipe into the document
+- Write the decided recipe into the already-open Google Doc (do not re-open Google Docs)
 - Validate the document and generate a response for the user
 
 {

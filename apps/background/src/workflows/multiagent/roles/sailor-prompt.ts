@@ -12,7 +12,7 @@ const multiagentPostSections = `
 
 19. MULTI-AGENT GUIDANCE:
 - Do not attempt unrelated steps or the overall task.
-- Tab IDs provided by previous steps are for reference only; do not reuse them unless the subtask explicitly instructs you to do so.
+- Before navigating anywhere, always review your currently open tabs. A previous step may have already opened or prepared a page you need. Use switch_tab to go to it instead of opening a duplicate.
 - When the subtask goal is achieved, provide a final output where relevant and stop.
 - If the subtask is marked no_browse, do not perform any navigation or search unless the subtask prompt explicitly includes a navigation/search action.
 `;
