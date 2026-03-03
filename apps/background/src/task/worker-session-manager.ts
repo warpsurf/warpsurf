@@ -8,7 +8,6 @@ import { generalSettingsStore, AgentNameEnum } from '@extension/storage';
 import { SailorPrompt } from '@src/workflows/multiagent/roles/sailor-prompt';
 import { ExecutionState } from '../workflows/shared/event/types';
 import { globalTokenTracker } from '../utils/token-tracker';
-import { workflowLogger } from '../executor/workflow-logger';
 
 interface WorkerSession {
   executor: Executor;
@@ -27,7 +26,7 @@ export class WorkerSessionManager {
   private logger = createLogger('WorkerSessionManager');
   private sessions = new Map<string, WorkerSession>();
   private captures = new Map<string, CaptureWindow>();
-  private sidePanelPort?: chrome.runtime.Port;
+  private onForwardEvent?: (task: Task, event: any) => Promise<void>;
 
   constructor(
     private getTasks: () => Map<string, Task>,
@@ -35,8 +34,8 @@ export class WorkerSessionManager {
     private tabGroups: TabGroupService,
   ) {}
 
-  setSidePanelPort(port?: chrome.runtime.Port): void {
-    this.sidePanelPort = port;
+  setForwardEventHandler(handler: (task: Task, event: any) => Promise<void>): void {
+    this.onForwardEvent = handler;
   }
 
   async createSession(
@@ -65,7 +64,13 @@ export class WorkerSessionManager {
       });
     } catch {}
 
+    if (options.workerIndex != null) {
+      (executor as any).__workerIndex = options.workerIndex;
+    }
+
     task.executor = executor;
+
+    await this.tabGroups.createGroupForWorker(task, this.getTasks());
     this.propagateGroupId(task);
 
     this.setupTokenTracking(task.id, options.workerIndex, options.parentSessionId);
@@ -100,14 +105,11 @@ export class WorkerSessionManager {
       this.startCapture(taskId);
       this.setupSubtaskTracking(taskId, options.subtaskId);
       await this.adoptTargetTabs(task.executor, options.targetTabIds);
-      workflowLogger.setWorkerIndex(task.workerIndex ?? null);
       task.executor.addFollowUpTask(prompt, 'agent');
       session.started = true;
       await task.executor.execute();
-      workflowLogger.setWorkerIndex(null);
       return this.extractOutput(taskId, task);
     } catch (e: any) {
-      workflowLogger.setWorkerIndex(null);
       return { ok: false, error: e?.message || String(e) };
     }
   }
@@ -169,17 +171,39 @@ export class WorkerSessionManager {
   private async adoptTargetTabs(executor: Executor, targetTabIds?: number[]): Promise<void> {
     if (!Array.isArray(targetTabIds) || targetTabIds.length === 0) return;
 
-    try {
-      const ctx = (executor as any).getBrowserContext?.();
-      if (ctx) {
-        targetTabIds.forEach(tid => {
-          try {
-            ctx.registerOwnedTab(Number(tid));
-          } catch {}
-        });
-        await ctx.switchTab(Number(targetTabIds[0]));
+    const ctx = (executor as any).getBrowserContext?.();
+    if (!ctx) {
+      this.logger.warn('[adoptTargetTabs] No browser context available — cannot adopt tabs');
+      return;
+    }
+
+    // Register all target tabs as owned first
+    for (const tid of targetTabIds) {
+      const id = Number(tid);
+      try {
+        ctx.registerOwnedTab(id);
+      } catch (e) {
+        this.logger.warn(`[adoptTargetTabs] Failed to register tab ${id} as owned:`, e);
       }
-    } catch {}
+    }
+
+    // Try switching to the first valid target tab
+    for (const tid of targetTabIds) {
+      const id = Number(tid);
+      try {
+        const tab = await chrome.tabs.get(id).catch(() => null);
+        if (!tab) {
+          this.logger.warn(`[adoptTargetTabs] Tab ${id} no longer exists, skipping`);
+          continue;
+        }
+        await ctx.switchTab(id);
+        this.logger.info(`[adoptTargetTabs] Successfully switched to dependency tab ${id} (url=${tab.url})`);
+        return;
+      } catch (e) {
+        this.logger.warn(`[adoptTargetTabs] Failed to switch to tab ${id}:`, e);
+      }
+    }
+    this.logger.warn('[adoptTargetTabs] Could not switch to any dependency tab — worker will use default tab');
   }
 
   private setupEventHandlers(task: Task, settings: any): void {
@@ -187,16 +211,24 @@ export class WorkerSessionManager {
     (task.executor as any).__taskManagerSubscribed = true;
 
     task.executor!.subscribeExecutionEvents(async event => {
-      if (task.status !== 'running') return;
-
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
         const tabId = Number(event.data.tabId);
         const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
-        await this.tabGroups.applyTabColor(tabId, task, this.getTasks());
+        if (typeof task.groupId !== 'number' || task.groupId < 0) {
+          await this.tabGroups.assignTabToWorkerGroup(tabId, task, this.getTasks());
+        } else {
+          await this.tabGroups.applyTabColor(tabId, task, this.getTasks());
+        }
         await this.mirrors.setupMirroring(task, tabId, task.executor!, visionEnabled);
       }
 
-      this.captureEvent(task.id, event);
+      if (task.status === 'running') {
+        this.captureEvent(task.id, event);
+      }
+
+      try {
+        await this.onForwardEvent?.(task, event);
+      } catch {}
     });
   }
 
@@ -264,7 +296,6 @@ export class WorkerSessionManager {
 
     if (msg) {
       cap.messages.push(msg);
-      this.emitProgress(taskId, msg);
       this.captureCleanDone(cap, msg);
     }
   }
@@ -281,25 +312,6 @@ export class WorkerSessionManager {
           }
         }
       }
-    } catch {}
-  }
-
-  private emitProgress(taskId: string, message: string): void {
-    if (!this.sidePanelPort) return;
-
-    try {
-      const task = this.getTasks().get(taskId);
-      if (!task) return;
-
-      this.sidePanelPort.postMessage({
-        type: 'workflow_progress',
-        data: {
-          sessionId: task.parentSessionId || task.id,
-          actor: 'worker',
-          workerId: task.workerIndex || 1,
-          message,
-        },
-      });
     } catch {}
   }
 
