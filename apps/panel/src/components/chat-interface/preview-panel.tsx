@@ -34,6 +34,15 @@ export default function PreviewPanel({
 }: PreviewPanelProps) {
   const hasBatch = inlinePreviewBatch?.length > 1;
   const effectivePreview = inlinePreview ?? (inlinePreviewBatch?.length === 1 ? inlinePreviewBatch[0] : null);
+
+  // Don't render anything for completed sessions with no meaningful preview data
+  if (readOnly) {
+    const hasAnyContent = hasBatch
+      ? inlinePreviewBatch.some(p => p.screenshot || p.url)
+      : !!(effectivePreview?.screenshot || effectivePreview?.url);
+    if (!hasAnyContent) return null;
+  }
+
   const openBtnBase = `rounded px-2 py-0.5 transition-all`;
   const openBtnEnabled = isDarkMode
     ? 'bg-violet-700 text-white hover:bg-violet-600'
