@@ -3,11 +3,19 @@ import { Actors, chatHistoryStore } from '@extension/storage';
 import { ExecutionState } from '@extension/shared/lib/utils';
 import { computeRequestSummaryFromSessionLogs, dedupeMessages } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
-import { createAggregateRoot, addTraceItem, updateAggregateRootContent, moveToCompleted } from './handlers/utils';
+import {
+  createAggregateRoot,
+  addTraceItem,
+  updateAggregateRootContent,
+  moveToCompleted,
+  markAggregateComplete,
+} from './handlers/utils';
 import { createSystemHandler } from './handlers/system-event-handler';
 
 let lastErrorContent: string | null = null;
 let lastErrorTime = 0;
+
+const MULTIAGENT_ACTORS = new Set(['multiagent', 'captain', 'planner', 'quartermaster', 'commodore', 'crew']);
 
 function persistCancelledContent(deps: any): void {
   if (!deps.lastAgentMessageRef?.current) return;
@@ -112,24 +120,31 @@ export function createPanelHandlers(deps: any): any {
         } catch {}
 
         // When the agent consumes queued messages: insert them into chat
-        // before the agent aggregate root, and remove from the queue strip
+        // before the agent aggregate root, persist, and remove from the queue strip
         try {
           const drained = event?.data?.drainedMessages;
           if (Array.isArray(drained) && drained.length > 0) {
             const rootId = deps.agentTraceRootIdRef?.current;
             if (rootId) {
+              const now = Date.now();
+              const newMsgs = drained.map((text: string, i: number) => ({
+                actor: 'user',
+                content: text,
+                timestamp: now + i,
+              }));
               deps.setMessages?.((prev: any[]) => {
                 const rootIdx = prev.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
-                const newMsgs = drained.map((text: string) => ({
-                  actor: 'user',
-                  content: text,
-                  timestamp: Date.now(),
-                }));
                 if (rootIdx >= 0) {
                   return [...prev.slice(0, rootIdx), ...newMsgs, ...prev.slice(rootIdx)];
                 }
                 return [...prev, ...newMsgs];
               });
+              const sid = deps.sessionIdRef?.current;
+              if (sid) {
+                for (const msg of newMsgs) {
+                  chatHistoryStore.addMessage(sid, msg as any).catch(() => {});
+                }
+              }
             }
             deps.setQueuedMessages?.((prev: string[]) => {
               const remaining = [...prev];
@@ -189,8 +204,15 @@ export function createPanelHandlers(deps: any): any {
               };
             }
             const hasInitial = (prev as any)?.__workflowGraphInitial !== undefined;
-            if (hasInitial) return { ...prev, __workflowGraph: graph } as any;
-            return { ...prev, __workflowGraphInitial: graph, __workflowGraph: graph } as any;
+            const next = hasInitial
+              ? { ...prev, __workflowGraph: graph }
+              : { ...prev, __workflowGraphInitial: graph, __workflowGraph: graph };
+            try {
+              if (deps.sessionIdRef.current) {
+                chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next as any).catch(() => {});
+              }
+            } catch {}
+            return next as any;
           });
         }
       } catch {}
@@ -300,16 +322,14 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
 
-        // Only create aggregate message for browser-use or multi-agent workflows
         const isAppropriateWorkflow =
           deps.getCurrentTaskAgentType?.() === 'agent' ||
           deps.getCurrentTaskAgentType?.() === 'multiagent' ||
-          actorHint === 'multiagent';
+          MULTIAGENT_ACTORS.has(actorHint);
         if (!isAppropriateWorkflow) return;
 
         // Use the SAME utilities as single-agent workflow for consistency
-        const actorToUse =
-          actorHint === 'multiagent' || actorHint === 'captain' ? Actors.MULTIAGENT : Actors.AGENT_NAVIGATOR;
+        const actorToUse = MULTIAGENT_ACTORS.has(actorHint) ? Actors.MULTIAGENT : Actors.AGENT_NAVIGATOR;
         const traceActor = actorHint || Actors.SYSTEM;
 
         if (text) {
@@ -319,9 +339,11 @@ export function createPanelHandlers(deps: any): any {
           addTraceItem(traceActor, text, timestamp, deps, workerId != null ? { workerId } : undefined);
         }
 
-        // Update the main message content for phase lines (skip captain status messages)
+        // Update the main message content for phase lines
+        // Only generic 'multiagent' actor drives the phase content — role-specific
+        // actors (planner, quartermaster, captain) only create trace items.
         try {
-          if (actorHint !== 'captain') {
+          if (actorHint === 'multiagent') {
             const isPhaseLine =
               /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Crew)\s+(executing plan|deployed))\b/i.test(
                 text,
@@ -341,11 +363,12 @@ export function createPanelHandlers(deps: any): any {
             const workerKey = String(workerId);
             const prevWorkerItems: Array<any> = Array.isArray(existing.workerItems) ? existing.workerItems : [];
             const without = prevWorkerItems.filter((w: any) => String(w.workerId) !== workerKey);
+            const colorMap: Record<string, string> = existing.workerColorMap || {};
             const item = {
               workerId: workerKey,
               text,
               agentName: `Crew ${workerKey}`,
-              color: existing.agentColor || '#A78BFA',
+              color: colorMap[workerKey] || existing.agentColor || '#A78BFA',
               timestamp,
             };
             return {
@@ -412,6 +435,11 @@ export function createPanelHandlers(deps: any): any {
       } catch {}
     },
     onWorkflowEnded: (message: any) => {
+      // Clear per-run dedup flag so follow-up runs in the same session can apply stats
+      try {
+        const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
+        if (sid) deps.processedJobSummariesRef.current.delete(`${sid}:workflow_stats_applied`);
+      } catch {}
       try {
         const data = message.data || {};
         if (data.ok === false && data.error) {
@@ -429,11 +457,13 @@ export function createPanelHandlers(deps: any): any {
               const jobSummaryId = `${sid}_${s.totalLatencyMs || 0}_${s.totalCost || 0}_workflow_end_cancel`;
               if (!deps.processedJobSummariesRef.current.has(jobSummaryId)) {
                 deps.processedJobSummariesRef.current.add(jobSummaryId);
+                deps.processedJobSummariesRef.current.add(`${sid}:workflow_stats_applied`);
                 deps.updateSessionStats({
                   totalInputTokens: Number(s.totalInputTokens) || 0,
                   totalOutputTokens: Number(s.totalOutputTokens) || 0,
                   totalLatencyMs: Number(s.totalLatencyMs) || Math.round(Number(s.totalLatencySeconds) * 1000) || 0,
-                  totalCost: Number(s.totalCost) || 0,
+                  totalCost: Math.max(0, Number(s.totalCost) || 0),
+                  requestCount: Number(s.apiCallCount) || 1,
                 });
               }
               if (deps.cancelSummaryTargetsRef.current.has(sid)) {
@@ -519,6 +549,50 @@ export function createPanelHandlers(deps: any): any {
         if (sid && deps.getCurrentTaskAgentType?.() === 'multiagent') {
           const ok = message?.data?.ok !== false;
           moveToCompleted(sid, ok ? 'completed' : 'failed', deps);
+        }
+      } catch {}
+      // Finalize multiagent aggregate root (TASK_OK handler skips multiagent)
+      try {
+        if (deps.getCurrentTaskAgentType?.() === 'multiagent') {
+          markAggregateComplete(deps);
+        }
+      } catch {}
+      // Apply multiagent summary directly from workflow_ended (avoids reliance on async get_session_logs)
+      try {
+        const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
+        const s = (message as any)?.data?.summary;
+        if (sid && s && deps.getCurrentTaskAgentType?.() === 'multiagent') {
+          const target = deps.lastAgentMessageRef.current;
+          if (target) {
+            const messageId = `${target.timestamp}-${target.actor}`;
+            const requestSummary = {
+              inputTokens: Number(s.totalInputTokens) || 0,
+              outputTokens: Number(s.totalOutputTokens) || 0,
+              latency: (
+                s.totalLatencySeconds ?? (s.totalLatencyMs ? (s.totalLatencyMs / 1000).toFixed(2) : '0.00')
+              ).toString(),
+              cost: Number(s.totalCost) || 0,
+              apiCalls: Number(s.apiCallCount) || 0,
+            };
+            deps.setRequestSummaries((prev: any) => {
+              const next = { ...prev, [messageId]: requestSummary } as any;
+              try {
+                if (deps.sessionIdRef.current) chatHistoryStore.storeRequestSummaries(deps.sessionIdRef.current, next);
+              } catch {}
+              return next;
+            });
+            const statsKey = `${sid}:workflow_stats_applied`;
+            if (!deps.processedJobSummariesRef.current.has(statsKey)) {
+              deps.processedJobSummariesRef.current.add(statsKey);
+              deps.updateSessionStats({
+                totalInputTokens: Number(s.totalInputTokens) || 0,
+                totalOutputTokens: Number(s.totalOutputTokens) || 0,
+                totalLatencyMs: Number(s.totalLatencyMs) || Math.round(Number(s.totalLatencySeconds) * 1000) || 0,
+                totalCost: Math.max(0, Number(s.totalCost) || 0),
+                requestCount: Number(s.apiCallCount) || 1,
+              });
+            }
+          }
         }
       } catch {}
       deps.setIsJobActive(false);
@@ -616,12 +690,18 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
 
-        deps.updateSessionStats({
-          totalInputTokens: Number(summary.inputTokens) || 0,
-          totalOutputTokens: Number(summary.outputTokens) || 0,
-          totalLatencyMs: totalLatencyMs || 0,
-          totalCost: Number(summary.cost) || 0,
-        });
+        // Only update session stats if onWorkflowEnded hasn't already applied them
+        const statsKey = `${sid}:workflow_stats_applied`;
+        if (!deps.processedJobSummariesRef.current.has(statsKey)) {
+          deps.processedJobSummariesRef.current.add(statsKey);
+          deps.updateSessionStats({
+            totalInputTokens: Number(summary.inputTokens) || 0,
+            totalOutputTokens: Number(summary.outputTokens) || 0,
+            totalLatencyMs: totalLatencyMs || 0,
+            totalCost: Math.max(0, Number(summary.cost) || 0),
+            requestCount: Number(summary.apiCalls) || 1,
+          });
+        }
       } catch {}
     },
     onError: (message: any) => {
@@ -925,12 +1005,24 @@ export function createPanelHandlers(deps: any): any {
           });
         }
         if (rootId) {
+          const wId = String(data.workerId);
+          const wColor = data.color || '#A78BFA';
           deps.setMessageMetadata((prev: any) => {
             const existing: any = prev[rootId] || {};
             const mapping = Array.isArray(existing.workerSessionMap) ? existing.workerSessionMap : [];
-            const dedup = mapping.filter((m: any) => String(m.workerId) !== String(data.workerId));
-            const nextMap = [...dedup, { workerId: String(data.workerId), sessionId: String(data.workerSessionId) }];
-            return { ...prev, [rootId]: { ...existing, workerSessionMap: nextMap } } as any;
+            const dedup = mapping.filter((m: any) => String(m.workerId) !== wId);
+            const nextMap = [...dedup, { workerId: wId, sessionId: String(data.workerSessionId) }];
+            const prevColorMap: Record<string, string> = existing.workerColorMap || {};
+            const workerColorMap = { ...prevColorMap, [wId]: wColor };
+            // Retroactively fix any workerItems that were created before the color was known
+            let workerItems = Array.isArray(existing.workerItems) ? existing.workerItems : [];
+            if (workerItems.some((w: any) => String(w.workerId) === wId && w.color !== wColor)) {
+              workerItems = workerItems.map((w: any) => (String(w.workerId) === wId ? { ...w, color: wColor } : w));
+            }
+            return {
+              ...prev,
+              [rootId]: { ...existing, workerSessionMap: nextMap, workerColorMap, workerItems },
+            } as any;
           });
         }
       } catch {}
