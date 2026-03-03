@@ -139,17 +139,21 @@ export class TrajectoryPersistenceService {
   private async ensureRootMessage(sessionId: string, actor: string, timestamp: number, content: string): Promise<void> {
     const trimmed = String(content || '').trim();
     if (!trimmed || this.isFallbackOutput(trimmed)) return;
+    // Use a deterministic eventId so both background and panel dedup against
+    // the same key, preventing duplicate root messages in storage.
+    const eventId = `root-${sessionId}-${timestamp}`;
     try {
       const session = await chatHistoryStore.getSession(sessionId);
       const exists = session?.messages?.some(
         m =>
-          Number(m.timestamp) === Number(timestamp) &&
-          String(m.actor || '').toLowerCase() === String(actor || '').toLowerCase(),
+          String((m as any)?.eventId || '') === eventId ||
+          (Number(m.timestamp) === Number(timestamp) &&
+            String(m.actor || '').toLowerCase() === String(actor || '').toLowerCase()),
       );
       if (exists) return;
     } catch {}
     try {
-      await chatHistoryStore.addMessage(sessionId, { actor, content: trimmed, timestamp } as any);
+      await chatHistoryStore.addMessage(sessionId, { actor, content: trimmed, timestamp, eventId } as any);
     } catch (e) {
       logger.error(`[Trajectory] Failed to persist root message for ${sessionId}:`, e);
     }

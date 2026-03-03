@@ -421,10 +421,14 @@ export function createAggregateRoot(
   options?: { statusHint?: string },
 ): string {
   const rootId = `${timestamp}-${actor}`;
+  // Deterministic eventId matching the background's ensureRootMessage so both
+  // persistence paths dedup against the same key in storage.
+  const sessionId = deps.sessionIdRef.current || '';
+  const eventId = sessionId ? `root-${sessionId}-${timestamp}` : undefined;
   deps.setAgentTraceRootId(rootId);
   deps.agentTraceRootIdRef.current = rootId;
   deps.agentTraceActiveRef.current = true;
-  deps.appendMessage({ actor, content, timestamp, statusHint: options?.statusHint } as any);
+  deps.appendMessage({ actor, content, timestamp, statusHint: options?.statusHint, eventId } as any);
   deps.lastAgentMessageRef.current = { timestamp, actor };
   // CRITICAL: Store rootId as __sessionRootId so it persists across session switches
   deps.setMessageMetadata(prev => {
