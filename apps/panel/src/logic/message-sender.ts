@@ -152,6 +152,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
     skipAutoContext?: boolean,
     attachments?: Attachment[],
     imageUrl?: string,
+    overrideSessionId?: string,
   ) {
     logger.log('handleSendMessage', text, agentType, contextTabIds, contextMenuAction, skipAutoContext);
     const trimmedText = text.trim();
@@ -192,21 +193,17 @@ export function createMessageSender(deps: MessageSenderDeps) {
       setShowStopButton(true);
 
       if (!isFollowUpMode()) {
-        // CRITICAL: Generate and set session ID SYNCHRONOUSLY before any async operations
-        // This ensures events arriving immediately have a valid session ID to match against
-        const newId = deps.createTaskId();
+        // Use pre-assigned session ID (e.g. from agent manager) or generate a new one
+        const newId = overrideSessionId || deps.createTaskId();
         sessionIdRef.current = newId;
         setCurrentSessionId(newId);
 
         if (!incognitoMode()) {
-          // Create session in storage with the pre-generated ID
-          // MUST await to ensure session exists before adding messages
           try {
             await chatHistoryStore.createSessionWithId(newId, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
             logger.log('newSession created with pre-generated ID:', newId);
           } catch (err) {
             logger.error('Failed to create session in storage:', err);
-            // Continue anyway - session will be created lazily if needed
           }
         }
       }

@@ -212,6 +212,7 @@ export function usePanelEffects(params: {
               prompt: string;
               autoStart: boolean;
               workflowType?: string;
+              sessionId?: string;
               contextTabId?: number;
               contextTabIds?: number[];
               errorMessage?: string;
@@ -219,7 +220,7 @@ export function usePanelEffects(params: {
               infoMessage?: string;
               imageUrl?: string;
               forceNewSession?: boolean;
-              requireWarningCheck?: boolean; // When true, show per-chat warning before auto-starting
+              requireWarningCheck?: boolean;
             }
           | undefined;
         if (pendingAction) {
@@ -272,19 +273,18 @@ export function usePanelEffects(params: {
           if (pendingAction.autoStart && handleSendMessage) {
             // For actions requiring warning check, show disclaimer and wait for acceptance
             if (pendingAction.requireWarningCheck && ensurePerChatBeforeNewSession) {
-              // Reset acceptance state and show warning (handleNewChat should have done this,
-              // but we ensure it here in case of timing issues)
               if (resetPerChatAcceptance) {
                 resetPerChatAcceptance();
               }
-              // Show per-chat warning and wait for acceptance before executing
               await ensurePerChatBeforeNewSession(false, false);
             }
 
-            // Submit the task
             const contextTabs =
               pendingAction.contextTabIds || (pendingAction.contextTabId ? [pendingAction.contextTabId] : undefined);
-            // Small delay to let UI update
+            // Pass the pre-generated sessionId (e.g. from agent manager) so the
+            // panel uses it instead of generating a new one. This ensures the user
+            // message is persisted against the same ID the agent manager references.
+            const overrideSessionId = pendingAction.sessionId || undefined;
             setTimeout(() => {
               (handleSendMessage as any)(
                 pendingAction.prompt,
@@ -294,6 +294,7 @@ export function usePanelEffects(params: {
                 undefined, // skipAutoContext
                 undefined, // attachments
                 pendingAction.imageUrl,
+                overrideSessionId,
               );
             }, 50);
           } else {
