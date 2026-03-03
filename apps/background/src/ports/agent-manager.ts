@@ -207,6 +207,19 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
             };
           }
         }
+        // Add cached per-worker screenshots for completed multiagent agents
+        if (agent.workers) {
+          for (const worker of agent.workers) {
+            if (!worker.screenshot) {
+              const cached = taskManager.tabMirrorService.getCachedScreenshot(worker.workerId);
+              if (cached) {
+                worker.screenshot = cached.screenshot;
+                if (!worker.url) worker.url = cached.url;
+                if (!worker.title) worker.title = cached.title;
+              }
+            }
+          }
+        }
       }
 
       // Also include data from storage for completed agents
