@@ -197,6 +197,10 @@ export class MultiAgentWorkflow {
       ({ schedule, queues } = remapSchedule(schedule, queues, earlyMap));
     }
 
+    const qmLog = Quartermaster.buildLog(plan, { schedule, queues }, this.config.maxWorkers);
+    this.trace('quartermaster', Quartermaster.formatSummary(qmLog));
+    this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log: qmLog });
+
     if (this.cancelled) {
       for (const d of validDispatches) sailor.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, 'Cancelled by user');
@@ -399,19 +403,22 @@ export class MultiAgentWorkflow {
         this.updateGraph();
         break;
 
-      case 'plan_modified':
+      case 'plan_modified': {
         // Re-cache graph data from the updated plan
         if (this.captainState) {
           const updated = this.captainState.plan.toTaskPlan();
           this.lastNodes = updated.subtasks.map(s => ({ id: s.id, title: s.title }));
           this.lastDeps = updated.dependencies;
-          const qm = new Quartermaster();
-          const { schedule } = qm.schedule(updated, this.config.maxWorkers);
-          this.lastSchedule = schedule;
+          const result = new Quartermaster().schedule(updated, this.config.maxWorkers);
+          this.lastSchedule = result.schedule;
+          const log = Quartermaster.buildLog(updated, result, this.config.maxWorkers, event.reason);
+          this.trace('quartermaster', Quartermaster.formatSummary(log));
+          this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log });
         }
-        this.trace('overseer', 'Plan modified');
+        this.trace('overseer', `Plan modified: ${event.reason}`);
         this.updateGraph();
         break;
+      }
 
       case 'workflow_complete':
         this.trace('system', 'Workflow completed successfully');
