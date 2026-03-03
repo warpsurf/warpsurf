@@ -1,6 +1,7 @@
 import { createLogger } from '@src/log';
 import type { TaskManager } from '@src/task/task-manager';
 import type { StructuredOutput } from '../workflow-events';
+import type { SailorLogEntry } from '../captain-state';
 
 const logger = createLogger('Sailor');
 
@@ -23,6 +24,12 @@ export class Sailor {
     this.taskManager = taskManager;
     this.parentSessionId = parentSessionId;
     this.taskContext = taskContext;
+  }
+
+  getSessionLogs(sessionId: string): SailorLogEntry[] {
+    const task = this.taskManager.getTask(sessionId);
+    if (!task) return [];
+    return task.logs;
   }
 
   async createSession(sailorId: number): Promise<string> {
