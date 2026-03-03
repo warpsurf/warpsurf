@@ -382,7 +382,6 @@ export function ChatScreen(props: ChatScreenProps) {
                   workflowGraph={props.workflowGraph}
                   workflowLaneInfo={props.workflowLaneInfo}
                   onOpenWorkflowFullScreen={props.onOpenWorkflowFullScreen}
-                  isAgentWorkflowActive={!!props.isAgentModeActive && isJobActive}
                   pendingEstimation={pendingEstimation}
                   availableModelsForEstimation={availableModelsForEstimation}
                   onApproveEstimation={(selectedModel, updatedEstimation) => {
