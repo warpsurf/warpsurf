@@ -932,6 +932,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         case 'cancel_queued_message': {
           const text = String(message.text || '');
           const sid = String(message.sessionId || '');
+          const wf = sid ? workflowsBySession.get(sid) : null;
+          if (wf) {
+            wf.cancelUserMessage(text);
+            return;
+          }
           const executor = (sid && taskManager.getTask(sid)?.executor) || getCurrentExecutor();
           try {
             const ctx = (executor as any)?.context;
@@ -948,8 +953,18 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         case 'inject_live_message': {
           const text = String(message.text || '').trim();
           const sid = String(message.sessionId || '');
+          if (!text) {
+            safePostMessage(port, { type: 'error', error: 'Empty message' });
+            return;
+          }
+          const wf = sid ? workflowsBySession.get(sid) : null;
+          if (wf) {
+            wf.injectUserMessage(text);
+            safePostMessage(port, { type: 'live_message_queued', count: 1 });
+            return;
+          }
           const executor = (sid && taskManager.getTask(sid)?.executor) || getCurrentExecutor();
-          if (!text || !executor) {
+          if (!executor) {
             safePostMessage(port, { type: 'error', error: 'No active agent or empty message' });
             return;
           }
@@ -991,6 +1006,13 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         }
         case 'pause_task': {
           try {
+            const sid = String(message.sessionId || '');
+            const wf = sid ? workflowsBySession.get(sid) : null;
+            if (wf) {
+              await wf.pauseAll();
+              safePostMessage(port, { type: 'success' });
+              return;
+            }
             const current = getCurrentExecutor();
             if (!current) {
               safePostMessage(port, { type: 'error', error: 'No active task to pause' });
@@ -1006,6 +1028,14 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
         }
         case 'resume_task': {
           try {
+            const sid = String(message.sessionId || '');
+            const wf = sid ? workflowsBySession.get(sid) : null;
+            if (wf) {
+              const userMsg = String(message.text || '').trim() || undefined;
+              await wf.resumeAll(userMsg);
+              safePostMessage(port, { type: 'success' });
+              return;
+            }
             const current = getCurrentExecutor();
             if (!current) {
               safePostMessage(port, { type: 'error', error: 'No active task to resume' });
