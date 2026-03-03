@@ -8,8 +8,16 @@ import { Quartermaster } from './quartermaster';
 import { Crew, type CrewResult } from './crew';
 import { CaptainState } from '../captain-state';
 import { buildPriorOutputsSection } from '../multiagent-placeholders';
+import {
+  buildCaptainActions,
+  parseDecision,
+  executeActions,
+  MAX_TOTAL_ATTEMPTS,
+  type CaptainAction,
+  type CaptainActionContext,
+} from '../captain-actions';
 import type { SubtaskId, PriorOutput, WorkerSchedule, WorkerQueues } from '../multiagent-types';
-import type { CaptainDecision, CaptainActionType, StructuredOutput, WorkflowEvent } from '../workflow-events';
+import type { CaptainDecision, StructuredOutput, WorkflowEvent } from '../workflow-events';
 
 const logger = createLogger('Captain');
 
@@ -68,6 +76,9 @@ export class Captain {
   private lastCaptainCallTime = 0;
   private captainCallInFlight = false;
 
+  private captainActions: CaptainAction[];
+  private actionNames: Set<string>;
+
   constructor(
     state: CaptainState,
     crew: Crew,
@@ -87,6 +98,20 @@ export class Captain {
     this.onEvent = onEvent;
 
     this.state.setCrewLogProvider(sid => this.crew.getSessionLogs(sid));
+
+    const ctx: CaptainActionContext = {
+      state: this.state,
+      crew: this.crew,
+      findCrewSession: id => this.findCrewSession(id),
+      abort: reason => this.abort(reason),
+      pause: reason => this.pause(reason),
+      finalize: answer => this.finalize(answer),
+      buildFinalAnswer: () => this.buildFinalAnswer(),
+      emit: event => this.onEvent(event),
+      isCancelled: () => this.cancelled,
+    };
+    this.captainActions = buildCaptainActions(ctx);
+    this.actionNames = new Set(this.captainActions.map(a => a.name()));
   }
 
   /**
@@ -210,29 +235,56 @@ export class Captain {
       return this.finalize(this.buildFinalAnswer());
     }
 
-    await this.dispatchReady();
-
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
-    const outputSnippet = output.text?.slice(0, 200) || '(no output)';
-    await this.consultAndExecute(
-      `Subtask "${title}" completed. Output: ${outputSnippet}\n\nReview: Is this output sufficient for downstream tasks? Should any pending subtask prompts be refined with this context? Return empty actions if all looks good.`,
-    );
+
+    const resolved = this.state.getResolvedIds();
+    const pendingFanOut = this.state.plan
+      .getReadySubtasks(resolved)
+      .filter(
+        id => this.state.subtaskStatus.get(id) === 'pending' && this.state.plan.getDependencies(id).includes(subtaskId),
+      );
+
+    if (pendingFanOut.length >= 2) {
+      // Fan-out: consult Captain FIRST so it can inject specific URLs/details
+      // into each research subtask before they are dispatched.
+      const outputSnippet = output.text?.slice(0, 2000) || '(no output)';
+      await this.consultAndExecute(
+        `Subtask "${title}" completed and unblocked ${pendingFanOut.length} parallel downstream tasks. Full output:\n${outputSnippet}\n\nCRITICAL — FAN-OUT: Use modify_subtask to inject the specific item URL and name from this output into each pending downstream subtask's prompt BEFORE they are dispatched. This is your only chance to refine prompts before workers start. Review the output, identify each item, and update each research subtask with the exact URL and item name.`,
+      );
+      await this.dispatchReady();
+    } else {
+      // Normal completion: dispatch immediately, then consult asynchronously.
+      await this.dispatchReady();
+      const outputSnippet = output.text?.slice(0, 200) || '(no output)';
+      await this.consultAndExecute(
+        `Subtask "${title}" completed. Output: ${outputSnippet}\n\nReview: Is this output sufficient for downstream tasks? Should any pending subtask prompts be refined with this context? Return empty actions if all looks good.`,
+      );
+    }
   }
 
   async handleSubtaskFailed(subtaskId: SubtaskId, error: string): Promise<void> {
     if (this.cancelled) return;
 
     const failCount = this.state.recordFailure(subtaskId, error);
+    const totalAttempts = this.state.dispatchAttempts.get(subtaskId) ?? 0;
     const crewId = this.state.crewAssignments.get(subtaskId);
     if (crewId !== undefined) this.state.busyCrew.delete(crewId);
 
     this.onEvent({ type: 'subtask_failed', subtaskId, error });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
 
+    // Hard cap: if total dispatch attempts exceeded, permanently fail and move on
+    if (totalAttempts >= MAX_TOTAL_ATTEMPTS) {
+      logger.warning(`Subtask "${title}" permanently failed after ${totalAttempts} total attempts. Skipping.`);
+      this.state.subtaskStatus.set(subtaskId, 'failed');
+      await this.dispatchReady();
+      return;
+    }
+
     const canAutoRetry = failCount <= this.config.maxRetries;
     const trigger = canAutoRetry
-      ? `Subtask "${title}" failed (attempt ${failCount}/${this.config.maxRetries + 1}). Error: ${error}\n\nAn automatic retry is available. You may modify_subtask to refine the prompt before the retry fires, or take other action. Return empty actions to allow the default retry.`
-      : `Subtask "${title}" failed after ${failCount} attempts (max retries exhausted). Error: ${error}\n\nAutomatic retry is no longer available. You must decide: retry_subtask with a modified prompt, add alternative subtasks, restructure the plan, or abort.`;
+      ? `Subtask "${title}" failed (attempt ${totalAttempts}/${MAX_TOTAL_ATTEMPTS} total). Error: ${error}\n\nAn automatic retry is available. You may modify_subtask to refine the prompt before the retry fires, or take other action. Return empty actions to allow the default retry.`
+      : `Subtask "${title}" failed after ${totalAttempts} total attempts (max: ${MAX_TOTAL_ATTEMPTS}). Error: ${error}\n\nAutomatic retry is no longer available. You must decide: cancel this subtask, restructure the plan to work around it, or abort if unrecoverable. Do NOT use retry_subtask if the error is a session or infrastructure problem.`;
 
     const decision = await this.consultAndExecute(trigger);
 
@@ -241,13 +293,15 @@ export class Captain {
         a =>
           (a.type === 'retry_subtask' && a.subtask_id === subtaskId) ||
           (a.type === 'cancel_subtask' && a.subtask_id === subtaskId) ||
+          (a.type === 'skip_subtask' && a.subtask_id === subtaskId) ||
           a.type === 'abort_workflow' ||
           a.type === 'pause_workflow' ||
+          a.type === 'complete_workflow' ||
           a.type === 'modify_plan',
       ) ?? false;
 
     if (canAutoRetry && !captainHandledThis) {
-      logger.info(`Default retry for ${title} (attempt ${failCount + 1})`);
+      logger.info(`Default retry for ${title} (attempt ${totalAttempts + 1}/${MAX_TOTAL_ATTEMPTS})`);
       this.state.subtaskStatus.set(subtaskId, 'pending');
       await this.dispatchReady();
     } else if (!canAutoRetry && !captainHandledThis) {
@@ -317,21 +371,21 @@ export class Captain {
   private async dispatchReady(): Promise<void> {
     if (this.cancelled || this.paused) return;
 
-    const completed = this.state.getCompletedIds();
-    const ready = this.state.plan.getReadySubtasks(completed).filter(id => {
+    const resolved = this.state.getResolvedIds();
+    const ready = this.state.plan.getReadySubtasks(resolved).filter(id => {
       const st = this.state.subtaskStatus.get(id);
       return st === 'pending';
     });
     if (import.meta.env.DEV) {
       const statuses = Object.fromEntries([...this.state.subtaskStatus]);
       logger.info(
-        `[dispatchReady] completed=${completed.length} ready=${ready.length} busy=${this.state.busyCrew.size}`,
+        `[dispatchReady] resolved=${resolved.size} ready=${ready.length} busy=${this.state.busyCrew.size}`,
         statuses,
       );
     }
 
     for (const subtaskId of ready) {
-      if (this.cancelled) return;
+      if (this.cancelled || this.paused) return;
 
       const crewId = this.pickCrew(subtaskId);
       if (crewId === null) break;
@@ -360,13 +414,18 @@ export class Captain {
 
     if (this.state.busyCrew.size === 0 && !this.state.isAllDone() && !this.cancelled) {
       const pendingCount = [...this.state.subtaskStatus.values()].filter(s => s === 'pending').length;
-      if (pendingCount === 0 && !this.state.isAllDone()) {
+      if (pendingCount === 0) {
         this.finalize(this.buildFinalAnswer());
+      } else if (this.state.hasBlockedSubtasks()) {
+        await this.consultAndExecute(
+          `Workflow is blocked: ${pendingCount} subtask(s) are waiting on failed dependencies that will never complete. Use skip_subtask on the failed dependencies to unblock downstream work, or finalize with available results.`,
+        );
       }
     }
   }
 
   private async runSubtask(subtaskId: SubtaskId, sessionId: string, prompt: string, crewId: number): Promise<void> {
+    this.state.incrementDispatchAttempts(subtaskId);
     this.state.markRunning(subtaskId);
     this.onEvent({ type: 'subtask_running', subtaskId });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
@@ -520,46 +579,11 @@ export class Captain {
       (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
 
       const parsed = extractJsonFromModelOutput(content);
-      return this.validateDecision(parsed);
+      return parseDecision(parsed, this.actionNames);
     } finally {
       clearTimeout(timeout);
     }
   }
-
-  private validateDecision(raw: any): CaptainDecision {
-    const statusMessage = String(raw?.status_message || 'Processing...');
-    const actions: CaptainActionType[] = [];
-
-    for (const a of Array.isArray(raw?.actions) ? raw.actions : []) {
-      if (!a?.type) continue;
-      switch (a.type) {
-        case 'dispatch_subtask':
-        case 'cancel_subtask':
-        case 'retry_subtask':
-        case 'modify_subtask':
-        case 'abort_workflow':
-        case 'pause_workflow':
-          actions.push(a);
-          break;
-        case 'add_subtask':
-          if (a.subtask?.title && a.subtask?.prompt) actions.push(a);
-          break;
-        case 'modify_plan':
-          if (Array.isArray(a.revised_subtasks)) actions.push(a);
-          break;
-        case 'launch_speculative':
-          if (a.goal_id && Array.isArray(a.alternatives)) actions.push(a);
-          break;
-        case 'resolve_speculative':
-          if (a.goal_id && typeof a.winner_id === 'number') actions.push(a);
-          break;
-      }
-    }
-
-    return { status_message: statusMessage, actions };
-  }
-
-  // --- Action execution ---
 
   private async executeDecision(decision: CaptainDecision, drainedMessages?: string[]): Promise<void> {
     this.onEvent({
@@ -567,98 +591,8 @@ export class Captain {
       decision,
       drainedMessages: drainedMessages?.length ? drainedMessages : undefined,
     });
-    let planModified = false;
 
-    for (const action of decision.actions) {
-      if (this.cancelled) return;
-
-      switch (action.type) {
-        case 'dispatch_subtask': {
-          const sub = this.state.plan.getSubtask(action.subtask_id);
-          if (sub && this.state.subtaskStatus.get(action.subtask_id) === 'pending') {
-            if (action.refined_prompt)
-              this.state.plan.modifySubtask(action.subtask_id, { prompt: action.refined_prompt });
-          }
-          break;
-        }
-        case 'cancel_subtask': {
-          const sessionId = this.findCrewSession(action.subtask_id);
-          if (sessionId) await this.crew.cancel(sessionId);
-          this.state.subtaskStatus.set(action.subtask_id, 'cancelled');
-          const sid = this.state.crewAssignments.get(action.subtask_id);
-          if (sid !== undefined) this.state.busyCrew.delete(sid);
-          break;
-        }
-        case 'retry_subtask': {
-          if (action.modified_prompt) {
-            this.state.plan.modifySubtask(action.subtask_id, { prompt: action.modified_prompt });
-          }
-          this.state.subtaskStatus.set(action.subtask_id, 'pending');
-          this.state.failureCounts.set(action.subtask_id, 0);
-          break;
-        }
-        case 'add_subtask': {
-          const newId = this.state.plan.addSubtask(action.subtask);
-          this.state.subtaskStatus.set(newId, 'pending');
-          planModified = true;
-          break;
-        }
-        case 'modify_subtask': {
-          const changes: any = {};
-          if (action.new_prompt) changes.prompt = action.new_prompt;
-          if (action.new_title) changes.title = action.new_title;
-          if (action.no_browse !== undefined) changes.noBrowse = action.no_browse;
-          this.state.plan.modifySubtask(action.subtask_id, changes);
-          break;
-        }
-        case 'modify_plan': {
-          const newIds = this.state.plan.replacePendingSubtasks(action.revised_subtasks, this.state.getCompletedIds());
-          for (const id of newIds) this.state.subtaskStatus.set(id, 'pending');
-          planModified = true;
-          this.onEvent({ type: 'plan_modified', reason: action.reason, addedIds: newIds, removedIds: [] });
-          break;
-        }
-        case 'launch_speculative': {
-          const ids: SubtaskId[] = [];
-          for (const alt of action.alternatives) {
-            const id = this.state.plan.addSubtask(alt);
-            this.state.subtaskStatus.set(id, 'pending');
-            ids.push(id);
-          }
-          this.state.plan.addSpeculativeGroup(action.goal_id, ids);
-          this.state.speculativeRaces.set(action.goal_id, { candidates: ids });
-          planModified = true;
-          this.onEvent({ type: 'speculative_launched', goalId: action.goal_id, candidates: ids });
-          break;
-        }
-        case 'resolve_speculative': {
-          const losers = this.state.plan.resolveSpeculation(action.goal_id, action.winner_id);
-          for (const lid of losers) {
-            const sid = this.findCrewSession(lid);
-            if (sid) await this.crew.cancel(sid);
-            this.state.subtaskStatus.set(lid, 'cancelled');
-          }
-          const race = this.state.speculativeRaces.get(action.goal_id);
-          if (race) race.winner = action.winner_id;
-          this.onEvent({
-            type: 'speculative_resolved',
-            goalId: action.goal_id,
-            winnerId: action.winner_id,
-            cancelledIds: losers,
-          });
-          planModified = true;
-          break;
-        }
-        case 'abort_workflow': {
-          this.abort(action.reason);
-          return;
-        }
-        case 'pause_workflow': {
-          await this.pause(action.reason);
-          return;
-        }
-      }
-    }
+    const { planModified } = await executeActions(this.captainActions, decision, () => this.cancelled);
 
     if (planModified) {
       const updatedPlan = this.state.plan.toTaskPlan();
