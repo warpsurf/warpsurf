@@ -86,6 +86,11 @@ export class MultiAgentWorkflow {
       actor: 'multiagent',
       message: 'Commodore planning...',
     });
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'planner',
+      message: 'Planning task decomposition...',
+    });
 
     if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
 
@@ -174,10 +179,11 @@ export class MultiAgentWorkflow {
       actor: 'multiagent',
       message: `Plan created: ${plan.subtasks.length} tasks` + (warmCount ? ` (${warmCount} warm-started)` : ''),
     });
-    this.trace(
-      'planner',
-      `Plan created (${plan.subtasks.length} subtasks, ${warmCount} warm-started):\n${planSummary}`,
-    );
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'planner',
+      message: `Plan created (${plan.subtasks.length} subtasks, ${warmCount} warm-started):\n${planSummary}`,
+    });
 
     // --- Phase 2: Quartermaster scheduling + consecutive merging ---
     this.emit('workflow_progress', {
@@ -200,8 +206,16 @@ export class MultiAgentWorkflow {
     }
 
     const qmLog = Quartermaster.buildLog(plan, { schedule, queues }, this.config.maxWorkers);
-    this.trace('quartermaster', Quartermaster.formatSummary(qmLog));
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'quartermaster',
+      message: Quartermaster.formatSummary(qmLog),
+    });
     this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log: qmLog });
+
+    for (let i = 0; i < 10 && !this.cancelled; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
 
     if (this.cancelled) {
       for (const d of validDispatches) crew.cancel(d.sessionId).catch(() => {});
@@ -307,8 +321,7 @@ export class MultiAgentWorkflow {
 
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
-      actor: 'multiagent',
-      workerId: crewId + 1,
+      actor: 'planner',
       message: `Warm start: Crew ${crewId + 1} deployed early — ${subtask.title}`,
     });
     return { subtaskId: subtask.id, crewId, sessionId, resultPromise };
@@ -437,7 +450,11 @@ export class MultiAgentWorkflow {
           const result = new Quartermaster().schedule(updated, this.config.maxWorkers);
           this.lastSchedule = result.schedule;
           const log = Quartermaster.buildLog(updated, result, this.config.maxWorkers, event.reason);
-          this.trace('quartermaster', Quartermaster.formatSummary(log));
+          this.emit('workflow_progress', {
+            sessionId: this.sessionId,
+            actor: 'quartermaster',
+            message: Quartermaster.formatSummary(log),
+          });
           this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log });
         }
         this.trace('overseer', `Plan modified: ${event.reason}`);
@@ -514,11 +531,75 @@ export class MultiAgentWorkflow {
     } catch {}
   }
 
+  private buildSummary(): any {
+    try {
+      const usages = globalTokenTracker.getTokensForTask(this.sessionId);
+      if (!usages || usages.length === 0) return null;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let totalCost = 0;
+      let hasAnyCost = false;
+      const timestamps: number[] = [];
+      const startTimes: number[] = [];
+      for (const u of usages) {
+        inputTokens += Math.max(0, Number((u as any).inputTokens) || 0);
+        outputTokens += Math.max(0, Number((u as any).outputTokens) || 0);
+        const c = Number((u as any).cost);
+        if (isFinite(c) && c >= 0) {
+          totalCost += c;
+          hasAnyCost = true;
+        }
+        const ts = Number((u as any).timestamp);
+        if (isFinite(ts) && ts > 0) timestamps.push(ts);
+        const start = Number((u as any).requestStartTime || (u as any).timestamp);
+        if (isFinite(start) && start > 0) startTimes.push(start);
+      }
+      if (!hasAnyCost) totalCost = -1;
+      let totalLatencyMs = 0;
+      if (startTimes.length > 0 && timestamps.length > 0) {
+        totalLatencyMs = Math.max(0, Math.max(...timestamps) - Math.min(...startTimes));
+      }
+      return {
+        totalInputTokens: inputTokens,
+        totalOutputTokens: outputTokens,
+        totalCost,
+        totalLatencyMs,
+        totalLatencySeconds: (totalLatencyMs / 1000).toFixed(2),
+        apiCallCount: usages.length,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private emitEnded(ok: boolean, error?: string): void {
-    this.emit('workflow_ended', { sessionId: this.sessionId, ok, error });
+    const summary = this.buildSummary();
+    this.emit('workflow_ended', { sessionId: this.sessionId, ok, error, summary });
     try {
       if (!ok && error) this.trace('system', `Workflow failed: ${error}`);
       trajectoryPersistence.markCompleted(this.sessionId);
+    } catch {}
+    // Persist workflow graph + plan items from the background so they survive
+    // even when the panel is closed (e.g. workflows initiated from Agent Manager).
+    try {
+      const patch: Record<string, any> = {};
+      const graph = this.getCurrentGraph();
+      if (graph) {
+        patch.__workflowGraph = graph;
+        patch.__workflowGraphInitial = graph;
+      }
+      if (this.captainState?.plan) {
+        const subtasks = this.captainState.plan.getAllSubtasks();
+        if (subtasks.length > 0) {
+          patch.__workflowPlanItems = subtasks.map(s => ({
+            text: s.title,
+            status: this.statusMap.get(s.id) === 'completed' ? 'done' : String(this.statusMap.get(s.id) || 'pending'),
+          }));
+        }
+      }
+      if (Object.keys(patch).length > 0) {
+        chatHistoryStore.storeMessageMetadata(this.sessionId, patch as any).catch(() => {});
+      }
     } catch {}
   }
 
