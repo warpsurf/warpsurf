@@ -382,21 +382,26 @@ export function persistFinalPreview(deps: TaskEventHandlerDeps): void {
       hasBatch: Array.isArray(batch) && batch.length > 0,
       batchLength: batch?.length,
     });
+    const hasContent = (p: any) => !!(p?.screenshot || p?.url);
     deps.setMessageMetadata((prev: any) => {
       const existing: any = prev[rootId] || {};
-      const next: any = { ...prev };
-      if (Array.isArray(batch) && batch.length > 0) {
-        next[rootId] = { ...existing, finalPreviewBatch: batch };
+      const filteredBatch = Array.isArray(batch) ? batch.filter(hasContent) : [];
+      let previewUpdate: Record<string, any> | null = null;
+      if (filteredBatch.length > 0) {
+        previewUpdate = { finalPreviewBatch: filteredBatch };
         deps.logger.log('[persistFinalPreview] Saved finalPreviewBatch');
       } else {
-        const singlePreview = (deps as any)?.mirrorPreview || existing.finalPreview;
-        if (singlePreview) {
-          next[rootId] = { ...existing, finalPreview: singlePreview };
+        const singlePreview = existing.finalPreview;
+        if (singlePreview && hasContent(singlePreview)) {
+          previewUpdate = { finalPreview: singlePreview };
           deps.logger.log('[persistFinalPreview] Saved finalPreview');
-        } else {
-          deps.logger.log('[persistFinalPreview] No preview to save');
         }
       }
+      if (!previewUpdate) {
+        deps.logger.log('[persistFinalPreview] No preview to save');
+        return prev;
+      }
+      const next = { ...prev, [rootId]: { ...existing, ...previewUpdate } };
       try {
         if (deps.sessionIdRef.current) {
           chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);
