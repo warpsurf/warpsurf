@@ -42,15 +42,17 @@ export function updateWorkerProgress(event: AgentEvent, deps: TaskEventHandlerDe
     const rootId = deps.agentTraceRootIdRef.current as string;
     const workerKey = String(workerId);
     const timestamp = Date.now();
-    const item: WorkerProgressItem = {
-      workerId: workerKey,
-      text: (data as any)?.details || (data as any)?.message || '',
-      agentName: (data as any)?.agentName,
-      color: (data as any)?.agentColor,
-      timestamp,
-    };
+    const eventColor = (data as any)?.agentColor;
     deps.setMessageMetadata(prev => {
       const existing: any = prev[rootId] || {};
+      const colorMap: Record<string, string> = existing.workerColorMap || {};
+      const item: WorkerProgressItem = {
+        workerId: workerKey,
+        text: (data as any)?.details || (data as any)?.message || '',
+        agentName: (data as any)?.agentName,
+        color: eventColor || colorMap[workerKey] || existing.agentColor,
+        timestamp,
+      };
       const prevWorkerItems: Array<any> = Array.isArray(existing.workerItems) ? existing.workerItems : [];
       const without = prevWorkerItems.filter((w: any) => String(w.workerId) !== workerKey);
       return {
