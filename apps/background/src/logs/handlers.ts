@@ -182,7 +182,7 @@ export function handleGetSessionLogs(port: chrome.runtime.Port, taskManager: any
     for (const [k, arr] of Object.entries(workers)) {
       perWorker[Number(k)] = sum(arr);
     }
-    const overall = sum(usages);
+    const overall = { ...sum(usages), apiCalls: usages.length };
 
     const data = { main: mainUsages, workers, totals: { perWorker, overall } };
     return port.postMessage({ type: 'session_logs', sessionId: String(sessionId), data });
