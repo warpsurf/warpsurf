@@ -192,8 +192,9 @@ export default function MessageBlock({
     if (lower.startsWith('processing plan') || lower.startsWith('quartermaster')) return 'processing';
     if (lower.startsWith('refining plan') || lower.includes('refinement complete')) return 'refiner';
     if (
-      /(\d+)\s+workers?\s+(executing plan|deployed)/i.test(content) ||
+      /(\d+)\s+(?:workers?|sailors?)\s+(executing plan|deployed)/i.test(content) ||
       lower.includes('workers executing plan') ||
+      lower.includes('sailors deployed') ||
       lower.startsWith('mission planned')
     )
       return 'workers';
@@ -232,9 +233,8 @@ export default function MessageBlock({
   );
   const showMultiAvatar = (workerItems?.length || totalWorkers) && (isProgress || isAgentAggregate);
   const isActiveWorkflow = !!(
-    isProgress ||
-    currentPhase ||
-    (isAgentAggregate && !metadata?.isCompleted && (isAgentWorking || statusHint))
+    !metadata?.isCompleted &&
+    (isProgress || currentPhase || (isAgentAggregate && (isAgentWorking || statusHint)))
   );
   const isAgentMessage = message.actor !== Actors.USER && message.actor !== Actors.SYSTEM;
   const useDynamicColor = !!agentColorHex && isAgentMessage;
@@ -306,7 +306,7 @@ export default function MessageBlock({
       rel="noopener noreferrer"
     />
   );
-  const transformWorkerLabel = (text: string) => text.replace(/\bWorker\s*w(\d+)\b/gi, 'Web Agent $1');
+  const transformWorkerLabel = (text: string) => text.replace(/\bWorker\s*w(\d+)\b/gi, 'Sailor $1');
   const controlBtnClass = `rounded px-3 py-1.5 text-sm font-medium ${isDarkMode ? 'bg-amber-600 text-white hover:bg-amber-500' : 'bg-amber-500 text-white hover:bg-amber-600'}`;
 
   // Job summary tooltip component (inline)
@@ -782,7 +782,7 @@ export default function MessageBlock({
             <div
               className="mt-2 rounded-md border p-2 text-xs clear-both"
               style={agentColorHex ? { borderColor: agentColorHex } : undefined}>
-              <div className={`mb-1 font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>Web Agents</div>
+              <div className={`mb-1 font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>Sailors</div>
               <div className="space-y-1">
                 {workerItems
                   .slice()
@@ -804,7 +804,7 @@ export default function MessageBlock({
                             className={`${isDarkMode ? 'text-slate-200' : 'text-gray-800'} truncate`}
                             style={{ color: worker.color || undefined }}>
                             {worker.text ||
-                              (num ? `Web Agent ${num}` : worker.agentName || worker.workerId) ||
+                              (num ? `Sailor ${num}` : worker.agentName || worker.workerId) ||
                               'working...'}
                           </div>
                           <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -819,7 +819,12 @@ export default function MessageBlock({
           )}
           {isAgentAggregate && !collapsed && expandedTab === 'details' && traceItems.length > 0 && (
             <div className="mt-2 clear-both">
-              <AgentTrajectory traceItems={traceItems} isDarkMode={isDarkMode} compactMode={compactMode} />
+              <AgentTrajectory
+                traceItems={traceItems}
+                isDarkMode={isDarkMode}
+                compactMode={compactMode}
+                workerItems={workerItems}
+              />
             </div>
           )}
           {!isUser &&
