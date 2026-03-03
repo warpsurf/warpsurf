@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actors, chatHistoryStore } from '@extension/storage';
 import { ExecutionState } from '@extension/shared/lib/utils';
-import { computeRequestSummaryFromSessionLogs, isTransientSystemMessage } from '../utils/index';
+import { computeRequestSummaryFromSessionLogs, dedupeMessages } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
 import { createAggregateRoot, addTraceItem, updateAggregateRootContent, moveToCompleted } from './handlers/utils';
 import { createSystemHandler } from './handlers/system-event-handler';
@@ -199,6 +199,17 @@ export function createPanelHandlers(deps: any): any {
       try {
         const ds = (message as any)?.data?.dataset;
         if (ds) deps.setMessageMetadata((prev: any) => ({ ...prev, __workflowPlanDataset: ds }) as any);
+      } catch {}
+    },
+    onWorkflowQuartermasterLog: (message: any) => {
+      try {
+        const log = (message as any)?.data?.log;
+        if (!log) return;
+        deps.setMessageMetadata((prev: any) => {
+          // Initial schedule (non-reschedule) resets the array for the new run
+          const existing: any[] = log.isReschedule ? (prev as any)?.__quartermasterLogs || [] : [];
+          return { ...prev, __quartermasterLogs: [...existing, log] } as any;
+        });
       } catch {}
     },
     onWorkflowProgress: (message: any) => {
@@ -1070,58 +1081,7 @@ export function createPanelHandlers(deps: any): any {
 
         // Restore messages if available
         if (session?.messages && Array.isArray(session.messages)) {
-          const WINDOW_MS = 5000;
-          const lastByActorContent = new Map<string, number>();
-          const lastNonSystemByContent = new Map<string, number>();
-          const systemIndexByContent = new Map<string, number>();
-          const deduped: any[] = [];
-          const removeSystemAt = (idx: number) => {
-            deduped.splice(idx, 1);
-            for (const [key, val] of systemIndexByContent.entries()) {
-              if (val === idx) systemIndexByContent.delete(key);
-              else if (val > idx) systemIndexByContent.set(key, val - 1);
-            }
-          };
-          for (const msg of session.messages) {
-            const actor = String((msg as any)?.actor || '');
-            const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
-            const content = String((msg as any)?.content ?? '').trim();
-            const ts = Number((msg as any)?.timestamp || 0);
-            if (isTransientSystemMessage(actor, content)) continue;
-            if (!content) {
-              deduped.push(msg);
-              continue;
-            }
-            const key = `${actor}|${content}`;
-            const last = lastByActorContent.get(key);
-            if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
-              continue;
-            }
-            if (isSystem) {
-              const lastNon = lastNonSystemByContent.get(content);
-              if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
-                continue;
-              }
-              const sysIdx = systemIndexByContent.get(content);
-              if (sysIdx != null) {
-                const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
-                if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
-              }
-              systemIndexByContent.set(content, deduped.length);
-            } else {
-              const sysIdx = systemIndexByContent.get(content);
-              if (sysIdx != null) {
-                const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
-                if (Math.abs(ts - prevTs) <= WINDOW_MS) {
-                  removeSystemAt(sysIdx);
-                }
-              }
-              lastNonSystemByContent.set(content, ts);
-            }
-            lastByActorContent.set(key, ts);
-            deduped.push(msg);
-          }
-          deps.setMessages(deduped);
+          deps.setMessages(dedupeMessages(session.messages));
 
           // Find the last aggregate root message (agent message) to restore trajectory state
           const agentActors = [
@@ -1319,60 +1279,9 @@ export function createPanelHandlers(deps: any): any {
           deps.setCurrentSessionId(data.currentSessionId);
           const session = await chatHistoryStore.getSession(data.currentSessionId);
           if (session?.messages) {
-            const WINDOW_MS = 5000;
-            const lastByActorContent = new Map<string, number>();
-            const lastNonSystemByContent = new Map<string, number>();
-            const systemIndexByContent = new Map<string, number>();
-            const deduped: any[] = [];
-            const removeSystemAt = (idx: number) => {
-              deduped.splice(idx, 1);
-              for (const [key, val] of systemIndexByContent.entries()) {
-                if (val === idx) systemIndexByContent.delete(key);
-                else if (val > idx) systemIndexByContent.set(key, val - 1);
-              }
-            };
-            for (const msg of session.messages) {
-              const actor = String((msg as any)?.actor || '');
-              const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
-              const content = String((msg as any)?.content ?? '').trim();
-              const ts = Number((msg as any)?.timestamp || 0);
-              if (isTransientSystemMessage(actor, content)) continue;
-              if (!content) {
-                deduped.push(msg);
-                continue;
-              }
-              const key = `${actor}|${content}`;
-              const last = lastByActorContent.get(key);
-              if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
-                continue;
-              }
-              if (isSystem) {
-                const lastNon = lastNonSystemByContent.get(content);
-                if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
-                  continue;
-                }
-                const sysIdx = systemIndexByContent.get(content);
-                if (sysIdx != null) {
-                  const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
-                  if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
-                }
-                systemIndexByContent.set(content, deduped.length);
-              } else {
-                const sysIdx = systemIndexByContent.get(content);
-                if (sysIdx != null) {
-                  const prevTs = Number((deduped[sysIdx] as any)?.timestamp || 0);
-                  if (Math.abs(ts - prevTs) <= WINDOW_MS) {
-                    removeSystemAt(sysIdx);
-                  }
-                }
-                lastNonSystemByContent.set(content, ts);
-              }
-              lastByActorContent.set(key, ts);
-              deduped.push(msg);
-            }
-            deps.setMessages(deduped);
+            deps.setMessages(dedupeMessages(session.messages));
             deps.setIsHistoricalSession(true);
-            deps.setIsFollowUpMode(true); // Enable follow-up mode for restored sessions
+            deps.setIsFollowUpMode(true);
           }
         }
       } catch {}

@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
-import { isTransientSystemMessage, sanitizeMessageContent } from '../utils';
+import { dedupeMessages } from '../utils';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
 
@@ -63,140 +63,6 @@ export function useChatHistory({
   setCurrentTaskAgentType?: (v: string | null) => void;
 }) {
   const [chatSessions, setChatSessions] = useState<ChatSessionMeta[]>([]);
-
-  const dedupeMessages = useCallback((messages: any[] | undefined | null) => {
-    const list = Array.isArray(messages) ? messages : [];
-    const WINDOW_MS = 5000;
-    const seenEventIds = new Set<string>();
-    const lastByActorContent = new Map<string, number>();
-    const lastNonSystemByContent = new Map<string, number>();
-    const systemIndexByContent = new Map<string, number>();
-    const out: any[] = [];
-
-    const removeSystemAt = (idx: number) => {
-      out.splice(idx, 1);
-      for (const [key, val] of systemIndexByContent.entries()) {
-        if (val === idx) systemIndexByContent.delete(key);
-        else if (val > idx) systemIndexByContent.set(key, val - 1);
-      }
-    };
-
-    // Normalize content for deduplication (strip leading status icons)
-    const normalizeForDedupe = (content: string): string => {
-      return content.replace(/^[✓✗]\s*/, '').trim();
-    };
-
-    // Extract setting name from "settingName set to value" pattern
-    const extractSettingName = (content: string): string | null => {
-      const normalized = normalizeForDedupe(content);
-      const match = normalized.match(/^(\w+)\s+set\s+to\s+/i);
-      return match ? match[1].toLowerCase() : null;
-    };
-
-    // Track seen content to detect duplicates regardless of timestamp
-    const seenContent = new Set<string>();
-
-    // Track actor+timestamp pairs to dedupe race-condition duplicates
-    const seenActorTimestamp = new Set<string>();
-
-    // Track setting changes to keep only the last value for each setting
-    const settingChanges = new Map<string, { index: number; ts: number }>();
-
-    for (let msg of list) {
-      const actor = String((msg as any)?.actor || '');
-      let content = String((msg as any)?.content ?? '').trim();
-
-      // Skip transient system messages
-      if (isTransientSystemMessage(actor, content)) {
-        continue;
-      }
-
-      // Sanitize internal implementation details before display
-      const sanitized = sanitizeMessageContent(content);
-      if (sanitized === null) continue;
-      if (sanitized !== content) {
-        msg = { ...msg, content: sanitized };
-        content = sanitized;
-      }
-
-      const eventId = String((msg as any)?.eventId || '').trim();
-      if (eventId) {
-        if (seenEventIds.has(eventId)) continue;
-        seenEventIds.add(eventId);
-      }
-      const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
-      const ts = Number((msg as any)?.timestamp || 0);
-      if (!content) {
-        out.push(msg);
-        continue;
-      }
-
-      // Dedupe messages with same actor+timestamp (race-condition duplicates from addMessage/updateMessageContent)
-      if (!isSystem && ts) {
-        const atKey = `${actor}|${ts}`;
-        if (seenActorTimestamp.has(atKey)) continue;
-        seenActorTimestamp.add(atKey);
-      }
-
-      // Skip duplicate content from the same actor (normalize to handle ✓/✗ prefix variations)
-      const normalizedContent = normalizeForDedupe(content);
-      const contentKey = `${actor}|${normalizedContent}`;
-      if (seenContent.has(contentKey)) {
-        continue;
-      }
-      seenContent.add(contentKey);
-
-      const key = `${actor}|${content}`;
-      const last = lastByActorContent.get(key);
-      if (last != null && (last === ts || Math.abs(ts - last) <= WINDOW_MS)) {
-        continue;
-      }
-
-      if (isSystem) {
-        const lastNon = lastNonSystemByContent.get(content);
-        if (lastNon != null && Math.abs(ts - lastNon) <= WINDOW_MS) {
-          continue;
-        }
-        const sysIdx = systemIndexByContent.get(content);
-        if (sysIdx != null) {
-          const prevTs = Number((out[sysIdx] as any)?.timestamp || 0);
-          if (Math.abs(ts - prevTs) <= WINDOW_MS) continue;
-        }
-        systemIndexByContent.set(content, out.length);
-      } else {
-        const sysIdx = systemIndexByContent.get(content);
-        if (sysIdx != null) {
-          const prevTs = Number((out[sysIdx] as any)?.timestamp || 0);
-          if (Math.abs(ts - prevTs) <= WINDOW_MS) {
-            removeSystemAt(sysIdx);
-          }
-        }
-        lastNonSystemByContent.set(content, ts);
-      }
-
-      // For setting changes, remove previous value if a new value is set within the window
-      const settingName = extractSettingName(content);
-      if (settingName && actor.toLowerCase() === 'tool') {
-        const prev = settingChanges.get(settingName);
-        if (prev && Math.abs(ts - prev.ts) <= WINDOW_MS) {
-          // Remove the previous setting change message
-          out.splice(prev.index, 1);
-          // Update indices in settingChanges for messages after the removed one
-          for (const [key, val] of settingChanges.entries()) {
-            if (val.index > prev.index) {
-              settingChanges.set(key, { index: val.index - 1, ts: val.ts });
-            }
-          }
-        }
-        // Record index where this message will be pushed (current length of out)
-        settingChanges.set(settingName, { index: out.length, ts });
-      }
-
-      lastByActorContent.set(key, ts);
-      out.push(msg);
-    }
-    return out;
-  }, []);
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -417,7 +283,6 @@ export function useChatHistory({
       portRef,
       setIsJobActive,
       lastEventIdBySessionRef,
-      dedupeMessages,
       setCurrentPlan,
       setQueuedMessages,
       setCurrentTaskAgentType,
