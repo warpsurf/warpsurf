@@ -432,8 +432,13 @@ export class Captain {
     if (import.meta.env.DEV)
       logger.info(`[runSubtask] START #${subtaskId} "${title}" on crew ${crewId} (session=${sessionId})`);
 
+    // Only inherit tabs from dependencies completed by the SAME crew to prevent
+    // multiple crews fighting over the same tab (e.g., search results page).
     const deps = this.state.plan.getDependencies(subtaskId);
-    const depTabIds = deps.flatMap(d => this.state.subtaskOutputs.get(d)?.tabIds ?? []);
+    const depTabIds = deps.flatMap(d => {
+      if (this.state.crewAssignments.get(d) !== crewId) return [];
+      return this.state.subtaskOutputs.get(d)?.tabIds ?? [];
+    });
     const uniqueTabIds = [...new Set(depTabIds)].filter(n => typeof n === 'number');
 
     const result = await this.crew.dispatch(
