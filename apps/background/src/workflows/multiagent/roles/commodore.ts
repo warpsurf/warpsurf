@@ -6,30 +6,118 @@ import { generalSettingsStore } from '@extension/storage';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
 import { commodoreSystemPrompt } from './commodore-prompt';
+import { IncrementalPlanParser } from '../incremental-plan-parser';
 import type { TaskPlan, Subtask, SubtaskId } from '../multiagent-types';
 
 const logger = createLogger('Commodore');
+
+interface CommodoreOptions {
+  historyBlock?: string;
+  sessionId?: string;
+  contextTabIds?: number[];
+}
 
 /**
  * The Commodore plans the workflow — decomposes a user query into a TaskPlan DAG.
  * Single LLM call, then done. No further involvement in execution.
  */
 export class Commodore {
+  /** Blocking plan creation (original path). */
   async createPlan(
     query: string,
     llm: any,
     maxWorkers: number,
     signal?: AbortSignal,
-    options?: {
-      historyBlock?: string;
-      sessionId?: string;
-      contextTabIds?: number[];
-    },
+    options?: CommodoreOptions,
   ): Promise<TaskPlan> {
     logger.info('Creating plan...');
     const timeoutMs = ((await generalSettingsStore.getSettings()).responseTimeoutSeconds ?? 120) * 1000;
     const { signal: combinedSignal, isTimeout, cleanup } = createTimeoutSignal(signal, timeoutMs);
+    const msgs = await this.buildMessages(query, llm, options);
 
+    let content: string;
+    try {
+      const res = await llm.invoke(msgs as any, { signal: combinedSignal } as any);
+      cleanup();
+      content = typeof res?.content === 'string' ? res.content : JSON.stringify(res?.content ?? '');
+      this.logUsage(res, llm, msgs, options);
+    } catch (e: any) {
+      cleanup();
+      if (isTimeout()) throw new Error(`Response timed out after ${timeoutMs / 1000} seconds`);
+      if (
+        String(e?.message || e)
+          .toLowerCase()
+          .includes('abort')
+      )
+        throw new Error('Cancelled by user');
+      throw e;
+    }
+
+    return this.finalizePlan(content);
+  }
+
+  /**
+   * Streaming plan creation with warm-start support.
+   * Calls onRootSubtask for each root subtask (dependencies: []) as soon as
+   * it is fully parseable in the stream, before the complete plan is available.
+   * Falls back to blocking createPlan if the LLM lacks invokeStreaming.
+   */
+  async createPlanStreaming(
+    query: string,
+    llm: any,
+    maxWorkers: number,
+    signal?: AbortSignal,
+    options?: CommodoreOptions,
+    onRootSubtask?: (subtask: Subtask) => void,
+  ): Promise<TaskPlan> {
+    if (typeof llm.invokeStreaming !== 'function') {
+      return this.createPlan(query, llm, maxWorkers, signal, options);
+    }
+
+    logger.info('Creating plan (streaming)...');
+    const timeoutMs = ((await generalSettingsStore.getSettings()).responseTimeoutSeconds ?? 120) * 1000;
+    const { signal: combinedSignal, isTimeout, cleanup } = createTimeoutSignal(signal, timeoutMs);
+    const msgs = await this.buildMessages(query, llm, options);
+
+    const parser = new IncrementalPlanParser();
+    let lastUsage: any;
+
+    try {
+      for await (const chunk of llm.invokeStreaming(msgs as any, combinedSignal)) {
+        if (chunk.usage) lastUsage = chunk.usage;
+        for (const subtask of parser.feed(chunk.text)) {
+          onRootSubtask?.(subtask);
+        }
+      }
+      cleanup();
+    } catch (e: any) {
+      cleanup();
+      if (isTimeout()) throw new Error(`Response timed out after ${timeoutMs / 1000} seconds`);
+      if (
+        String(e?.message || e)
+          .toLowerCase()
+          .includes('abort')
+      )
+        throw new Error('Cancelled by user');
+      throw e;
+    }
+
+    this.logUsage(
+      { content: parser.getFullContent(), response_metadata: { usage: lastUsage }, usage_metadata: lastUsage },
+      llm,
+      msgs,
+      options,
+    );
+    return this.finalizePlan(parser.getFullContent());
+  }
+
+  // --- Private helpers ---
+
+  private async buildMessages(
+    query: string,
+    llm: any,
+    options?: CommodoreOptions,
+  ): Promise<Array<SystemMessage | HumanMessage>> {
     const msgs: Array<SystemMessage | HumanMessage> = [new SystemMessage(commodoreSystemPrompt)];
 
     if (options?.contextTabIds?.length) {
@@ -57,37 +145,26 @@ export class Commodore {
     }
 
     msgs.push(new HumanMessage(`User query: ${query}\n\nReturn only the JSON object described above.`));
+    return msgs;
+  }
 
-    let content: string;
-    try {
-      const res = await llm.invoke(msgs as any, { signal: combinedSignal } as any);
-      cleanup();
-      content = typeof res?.content === 'string' ? res.content : JSON.stringify(res?.content ?? '');
-      const taskId = options?.sessionId || globalTokenTracker.getCurrentTaskId() || 'unknown';
-      logLLMUsage(res, {
-        taskId,
-        role: 'commodore',
-        modelName: llm?.modelName || llm?.model || 'unknown',
-        inputMessages: msgs,
-      });
-    } catch (e: any) {
-      cleanup();
-      if (isTimeout()) throw new Error(`Response timed out after ${timeoutMs / 1000} seconds`);
-      if (
-        String(e?.message || e)
-          .toLowerCase()
-          .includes('abort')
-      )
-        throw new Error('Cancelled by user');
-      throw e;
-    }
-
+  private finalizePlan(content: string): TaskPlan {
     const parsed = extractJsonFromModelOutput(content);
     let plan = normalizePlannerJson(parsed);
     plan = optimizePlan(plan);
     const finals = plan.subtasks.filter(s => s.isFinal);
     if (finals.length !== 1) throw new Error('Commodore must produce exactly one final subtask');
     return plan;
+  }
+
+  private logUsage(res: any, llm: any, msgs: any[], options?: CommodoreOptions): void {
+    const taskId = options?.sessionId || globalTokenTracker.getCurrentTaskId() || 'unknown';
+    logLLMUsage(res, {
+      taskId,
+      role: 'commodore',
+      modelName: llm?.modelName || llm?.model || 'unknown',
+      inputMessages: msgs,
+    });
   }
 }
 

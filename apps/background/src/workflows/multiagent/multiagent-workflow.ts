@@ -1,14 +1,16 @@
 import { createLogger } from '@src/log';
 import type { TaskManager } from '../../task/task-manager';
-import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId } from './multiagent-types';
+import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId, Subtask } from './multiagent-types';
 import { Commodore } from './roles/commodore';
 import { Quartermaster } from './roles/quartermaster';
-import { Captain, type CaptainConfig } from './roles/captain';
+import { Captain, type CaptainConfig, type WarmDispatch } from './roles/captain';
 import { Sailor } from './roles/sailor';
 import { LivePlan } from './live-plan';
 import { CaptainState } from './captain-state';
 import { buildMergedGraphAfterScheduleConsecutive, collapsePlanByConsecutiveMerges } from './multiagent-merging';
+import { remapSchedule } from './multiagent-scheduler';
 import { buildGraphData } from './multiagent-visualization';
+import { buildRootSubtaskPrompt } from './incremental-plan-parser';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import { buildChatHistoryBlock } from '@src/workflows/shared/utils/chat-history';
 import { errorLog } from '../../utils/error-log';
@@ -82,11 +84,18 @@ export class MultiAgentWorkflow {
       actor: 'multiagent',
       message: 'Commodore planning...',
     });
-    this.trace('planner', 'Planning workflow...');
 
     if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
 
-    // 1. Commodore creates the plan
+    // --- Phase 1: Stream plan from Commodore, warm-dispatch root tasks ---
+    // Session creation in the TaskManager is not safe under concurrent calls
+    // (tab groups, executors, color slots share state), so warm dispatches are
+    // chained sequentially while the LLM stream continues in parallel.
+    const sailor = new Sailor(this.taskManager, this.sessionId, query);
+    const warmDispatches: WarmDispatch[] = [];
+    let warmChain = Promise.resolve<void>(undefined);
+    let nextSailorId = 0;
+
     let plan: TaskPlan;
     const commodore = new Commodore();
     try {
@@ -103,30 +112,72 @@ export class MultiAgentWorkflow {
         if (block?.trim()) historyBlock = block;
       }
 
-      plan = await commodore.createPlan(query, plannerLLM, this.config.maxWorkers, undefined, {
-        historyBlock,
-        sessionId: this.sessionId,
-        contextTabIds: this.contextTabIds,
-      });
+      plan = await commodore.createPlanStreaming(
+        query,
+        plannerLLM,
+        this.config.maxWorkers,
+        undefined,
+        { historyBlock, sessionId: this.sessionId, contextTabIds: this.contextTabIds },
+        (subtask: Subtask) => {
+          if (this.cancelled || nextSailorId >= this.config.maxWorkers) return;
+          const sailorId = nextSailorId++;
+          logger.info(
+            `[warm-start] Root subtask #${subtask.id} "${subtask.title}" parsed from stream → queued for Sailor ${sailorId}`,
+          );
+          warmChain = warmChain.then(async () => {
+            if (this.cancelled) return;
+            try {
+              warmDispatches.push(await this.dispatchWarmTask(sailor, subtask, sailorId));
+            } catch (e) {
+              logger.error(`[warm-start] Dispatch failed for subtask #${subtask.id}:`, e);
+            }
+          });
+        },
+      );
+
+      // Wait for all queued warm dispatches to finish session creation
+      await warmChain;
+      if (warmDispatches.length > 0) {
+        logger.info(
+          `[warm-start] ${warmDispatches.length} root tasks dispatched during streaming: [${warmDispatches.map(d => `#${d.subtaskId}→S${d.sailorId}`).join(', ')}]`,
+        );
+      }
 
       (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
       (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
     } catch (e: any) {
       logger.error('Commodore planning failed:', e);
+      await warmChain.catch(() => {});
+      for (const d of warmDispatches) sailor.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, e?.message || 'Planning failed');
     }
 
-    if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
+    if (this.cancelled) {
+      for (const d of warmDispatches) sailor.cancel(d.sessionId).catch(() => {});
+      return this.emitEnded(false, 'Cancelled by user');
+    }
 
+    // Cancel any warm dispatches for tasks removed by optimizePlan
+    const planIds = new Set(plan.subtasks.map(s => s.id));
+    const validDispatches = warmDispatches.filter(d => {
+      if (planIds.has(d.subtaskId)) return true;
+      sailor.cancel(d.sessionId).catch(() => {});
+      return false;
+    });
+
+    const warmCount = validDispatches.length;
     const planSummary = plan.subtasks.map(s => `  ${s.id}. ${s.title}`).join('\n');
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      message: `Plan created: ${plan.subtasks.length} tasks`,
+      message: `Plan created: ${plan.subtasks.length} tasks` + (warmCount ? ` (${warmCount} warm-started)` : ''),
     });
-    this.trace('planner', `Plan created (${plan.subtasks.length} subtasks):\n${planSummary}`);
+    this.trace(
+      'planner',
+      `Plan created (${plan.subtasks.length} subtasks, ${warmCount} warm-started):\n${planSummary}`,
+    );
 
-    // 2. Quartermaster schedules (with consecutive merging)
+    // --- Phase 2: Quartermaster scheduling + consecutive merging ---
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
@@ -134,16 +185,24 @@ export class MultiAgentWorkflow {
     });
     const quartermaster = new Quartermaster();
 
-    // Collapse consecutive same-worker subtasks
     const initialSchedule = quartermaster.schedule(plan, this.config.maxWorkers);
     const { collapsedPlan } = collapsePlanByConsecutiveMerges(plan, initialSchedule.schedule);
     if (collapsedPlan?.subtasks?.length > 0) plan = collapsedPlan;
 
-    const { schedule, queues } = quartermaster.schedule(plan, this.config.maxWorkers);
+    let { schedule, queues } = quartermaster.schedule(plan, this.config.maxWorkers);
 
-    if (this.cancelled) return this.emitEnded(false, 'Cancelled by user');
+    // Remap QM worker IDs → actual sailor IDs for warm-dispatched root tasks
+    if (validDispatches.length > 0) {
+      const earlyMap = new Map(validDispatches.map(d => [d.subtaskId, d.sailorId]));
+      ({ schedule, queues } = remapSchedule(schedule, queues, earlyMap));
+    }
 
-    // Initialize status tracking and graph
+    if (this.cancelled) {
+      for (const d of validDispatches) sailor.cancel(d.sessionId).catch(() => {});
+      return this.emitEnded(false, 'Cancelled by user');
+    }
+
+    // --- Phase 3: Initialize state, graph, Captain ---
     const livePlan = new LivePlan(plan);
     this.captainState = new CaptainState(livePlan);
     this.statusMap = this.captainState.subtaskStatus;
@@ -151,7 +210,6 @@ export class MultiAgentWorkflow {
     this.lastSchedule = schedule;
     this.lastDeps = plan.dependencies;
 
-    // Emit plan dataset for UI
     const taskWorkerMap: Record<number, number> = {};
     for (const [wid, arr] of Object.entries(queues)) {
       for (const t of arr) taskWorkerMap[Number(t)] = Number(wid);
@@ -183,22 +241,27 @@ export class MultiAgentWorkflow {
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      message: `${activeWorkerCount} workers deployed`,
+      message: `${activeWorkerCount} Sailors deployed`,
     });
-    this.trace('scheduler', `Scheduled across ${activeWorkerCount} workers`);
 
-    // 3. Captain takes command
-    const sailor = new Sailor(this.taskManager, this.sessionId, plan.task);
     const captainLLM = this.refinerLLM || plannerLLM;
-
     const captainConfig: CaptainConfig = { maxWorkers: this.config.maxWorkers };
 
     this.captain = new Captain(this.captainState, sailor, captainLLM, this.sessionId, captainConfig, event =>
       this.handleWorkflowEvent(event),
     );
 
+    // Hand warm dispatches to the Captain before run() so completion handlers are wired
+    if (validDispatches.length > 0) {
+      this.captain.adoptWarmDispatches(validDispatches);
+    }
+
+    const graphRefreshTimer = setInterval(() => {
+      if (!this.cancelled && this.lastNodes.length > 0) this.updateGraph();
+    }, 3000);
+
     try {
-      const finalAnswer = await this.captain.run();
+      const finalAnswer = await this.captain.run(validDispatches.length > 0 ? { schedule, queues } : undefined);
       if (!this.cancelled) {
         this.trace('system', `Final answer: ${(finalAnswer || '').slice(0, 500)}`);
         this.emit('final_answer', { sessionId: this.sessionId, text: finalAnswer });
@@ -215,7 +278,28 @@ export class MultiAgentWorkflow {
       });
       (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
       this.emitEnded(false, e?.message || 'Workflow failed');
+    } finally {
+      clearInterval(graphRefreshTimer);
     }
+  }
+
+  // --- Warm-start helpers ---
+
+  private async dispatchWarmTask(sailor: Sailor, subtask: Subtask, sailorId: number): Promise<WarmDispatch> {
+    logger.info(`[warm-start] Creating session for Sailor ${sailorId} (subtask #${subtask.id} "${subtask.title}")`);
+    const sessionId = await sailor.createSession(sailorId);
+
+    logger.info(`[warm-start] Dispatching subtask #${subtask.id} → Sailor ${sailorId} (session=${sessionId})`);
+    const prompt = buildRootSubtaskPrompt(subtask);
+    const resultPromise = sailor.dispatch(sessionId, prompt, subtask.id);
+
+    this.emit('workflow_progress', {
+      sessionId: this.sessionId,
+      actor: 'multiagent',
+      workerId: sailorId + 1,
+      message: `Warm start: Sailor ${sailorId + 1} deployed early — ${subtask.title}`,
+    });
+    return { subtaskId: subtask.id, sailorId, sessionId, resultPromise };
   }
 
   async cancelAll(): Promise<void> {
@@ -239,9 +323,8 @@ export class MultiAgentWorkflow {
           sessionId: this.sessionId,
           actor: 'multiagent',
           workerId: event.sailorId + 1,
-          message: `Worker ${event.sailorId + 1} deployed: ${title}`,
+          message: `Sailor ${event.sailorId + 1} deployed: ${title}`,
         });
-        this.trace('overseer', `Dispatched subtask ${event.subtaskId} "${title}" to worker ${event.sailorId + 1}`);
 
         // Emit worker session creation if this is the first dispatch for this sailor
         const task = this.taskManager.getTask(this.captainState?.sailorSessionIds.get(event.sailorId) || '');
@@ -256,6 +339,10 @@ export class MultiAgentWorkflow {
         this.updateGraph();
         break;
       }
+
+      case 'subtask_running':
+        this.updateGraph();
+        break;
 
       case 'subtask_completed': {
         const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
@@ -274,20 +361,19 @@ export class MultiAgentWorkflow {
           workerId,
           message: `Completed: ${title}`,
         });
-        const outputSnippet = event.output.text ? ` — ${event.output.text.slice(0, 200)}` : '';
-        this.trace('worker', `Subtask ${event.subtaskId} "${title}" completed (worker ${workerId})${outputSnippet}`);
         this.updateGraph();
         break;
       }
 
       case 'subtask_failed': {
         const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
+        const failWorkerId = (this.captainState?.sailorAssignments.get(event.subtaskId) ?? 0) + 1;
         this.emit('workflow_progress', {
           sessionId: this.sessionId,
           actor: 'multiagent',
+          workerId: failWorkerId,
           message: `Failed: ${title} — ${event.error}`,
         });
-        this.trace('worker', `Subtask ${event.subtaskId} "${title}" failed: ${event.error}`);
         this.updateGraph();
         break;
       }
@@ -298,7 +384,6 @@ export class MultiAgentWorkflow {
           actor: 'multiagent',
           message: event.decision.status_message,
         });
-        this.trace('overseer', `Decision: ${event.decision.action} — ${event.decision.status_message}`);
         break;
 
       case 'speculative_launched':
@@ -352,11 +437,31 @@ export class MultiAgentWorkflow {
     } else if (import.meta.env.DEV) {
       logger.warning(`[emit] No port available for ${type} — message dropped`);
     }
+
+    if (type === 'workflow_progress' && data?.message) {
+      try {
+        const actor = data.actor || 'multiagent';
+        const wid = data.workerId;
+        trajectoryPersistence.addTraceItem(
+          this.sessionId,
+          actor,
+          data.message,
+          Date.now(),
+          wid != null ? { workerId: wid } : undefined,
+        );
+      } catch {}
+    }
   }
 
-  private trace(actor: string, content: string): void {
+  private trace(actor: string, content: string, workerId?: number): void {
     try {
-      trajectoryPersistence.addTraceItem(this.sessionId, actor, content, Date.now());
+      trajectoryPersistence.addTraceItem(
+        this.sessionId,
+        actor,
+        content,
+        Date.now(),
+        workerId != null ? { workerId } : undefined,
+      );
     } catch {}
   }
 

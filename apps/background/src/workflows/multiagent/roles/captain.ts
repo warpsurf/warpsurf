@@ -9,7 +9,7 @@ import { Sailor, type SailorResult } from './sailor';
 import { CaptainState } from '../captain-state';
 import { LivePlan } from '../live-plan';
 import { buildPriorOutputsSection } from '../multiagent-placeholders';
-import type { SubtaskId, PriorOutput } from '../multiagent-types';
+import type { SubtaskId, PriorOutput, WorkerSchedule, WorkerQueues } from '../multiagent-types';
 import type {
   CaptainDecision,
   CaptainActionType,
@@ -27,6 +27,18 @@ export interface CaptainConfig {
   maxWorkers: number;
   maxRetries?: number;
   checkpointInterval?: number;
+}
+
+export interface WarmDispatch {
+  subtaskId: SubtaskId;
+  sailorId: number;
+  sessionId: string;
+  resultPromise: Promise<SailorResult>;
+}
+
+export interface WarmStartSchedule {
+  schedule: WorkerSchedule;
+  queues: WorkerQueues;
 }
 
 type EventHandler = (event: WorkflowEvent) => void;
@@ -69,21 +81,57 @@ export class Captain {
     this.onEvent = onEvent;
   }
 
-  async run(): Promise<string> {
-    // Initial scheduling
-    const plan = this.state.plan.toTaskPlan();
-    const { schedule, queues } = this.quartermaster.schedule(plan, this.config.maxWorkers);
-    this.sailorQueues = queues;
-    this.onEvent({ type: 'schedule_ready', schedule, queues });
+  /**
+   * Wire up already-dispatched warm-start tasks so completion flows through
+   * the Captain's normal handleSubtaskCompleted / handleSubtaskFailed path.
+   * Must be called BEFORE run().
+   */
+  adoptWarmDispatches(dispatches: WarmDispatch[]): void {
+    for (const d of dispatches) {
+      this.state.sailorSessionIds.set(d.sailorId, d.sessionId);
+      this.state.sailorAssignments.set(d.subtaskId, d.sailorId);
+      this.state.busySailors.add(d.sailorId);
+      this.state.subtaskStatus.set(d.subtaskId, 'running');
 
-    // Dispatch root subtasks
-    await this.dispatchReady();
+      this.onEvent({ type: 'subtask_dispatched', subtaskId: d.subtaskId, sailorId: d.sailorId, prompt: '' });
+      this.onEvent({ type: 'subtask_running', subtaskId: d.subtaskId });
 
-    // Wait for all work to complete
-    return new Promise<string>((resolve, reject) => {
+      d.resultPromise.then(
+        result => {
+          if (this.cancelled) return;
+          if (result.ok && result.output) {
+            this.handleSubtaskCompleted(d.subtaskId, result.output);
+          } else {
+            this.handleSubtaskFailed(d.subtaskId, result.error || 'Unknown failure');
+          }
+        },
+        err => {
+          if (!this.cancelled) this.handleSubtaskFailed(d.subtaskId, err?.message || 'Warm dispatch failed');
+        },
+      );
+    }
+  }
+
+  async run(warmStart?: WarmStartSchedule): Promise<string> {
+    // Set up the result promise first so _resolve/_reject are available
+    // before any async work (including warm-dispatch completions) can fire.
+    const resultPromise = new Promise<string>((resolve, reject) => {
       this._resolve = resolve;
       this._reject = reject;
     });
+
+    if (warmStart) {
+      this.sailorQueues = warmStart.queues;
+      this.onEvent({ type: 'schedule_ready', schedule: warmStart.schedule, queues: warmStart.queues });
+    } else {
+      const plan = this.state.plan.toTaskPlan();
+      const { schedule, queues } = this.quartermaster.schedule(plan, this.config.maxWorkers);
+      this.sailorQueues = queues;
+      this.onEvent({ type: 'schedule_ready', schedule, queues });
+    }
+
+    await this.dispatchReady();
+    return resultPromise;
   }
 
   private _resolve!: (answer: string) => void;
@@ -196,7 +244,7 @@ export class Captain {
       if (sailorId === null) break; // No free sailors
 
       const subtask = this.state.plan.getSubtask(subtaskId)!;
-      const prompt = this.buildDispatchPrompt(subtaskId);
+      const prompt = await this.buildDispatchPrompt(subtaskId);
 
       // Ensure sailor session exists
       let sessionId = this.state.sailorSessionIds.get(sailorId);
@@ -231,6 +279,7 @@ export class Captain {
 
   private async runSubtask(subtaskId: SubtaskId, sessionId: string, prompt: string, sailorId: number): Promise<void> {
     this.state.subtaskStatus.set(subtaskId, 'running');
+    this.onEvent({ type: 'subtask_running', subtaskId });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
     if (import.meta.env.DEV)
       logger.info(`[runSubtask] START #${subtaskId} "${title}" on sailor ${sailorId} (session=${sessionId})`);
@@ -263,16 +312,25 @@ export class Captain {
 
   // --- Prompt building (absorbs refiner role) ---
 
-  private buildDispatchPrompt(subtaskId: SubtaskId): string {
+  private async buildDispatchPrompt(subtaskId: SubtaskId): Promise<string> {
     const s = this.state.plan.getSubtask(subtaskId)!;
     const priors: PriorOutput[] = [];
     for (const depId of this.state.plan.getDependencies(subtaskId)) {
       const output = this.state.subtaskOutputs.get(depId);
       if (output) {
+        // Resolve tab URLs so workers know what's in each tab
+        const tabUrls: Record<number, string> = {};
+        for (const tid of output.tabIds) {
+          try {
+            const tab = await chrome.tabs.get(tid);
+            if (tab?.url) tabUrls[tid] = tab.url;
+          } catch {}
+        }
         priors.push({
           title: this.state.plan.getSubtask(depId)?.title || `Task ${depId}`,
           output: output.text,
           tabIds: output.tabIds,
+          tabUrls,
           rawJson: output.raw,
         });
       }

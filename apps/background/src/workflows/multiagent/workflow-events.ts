@@ -40,6 +40,7 @@ export type WorkflowEvent =
   | { type: 'schedule_ready'; schedule: WorkerSchedule; queues: WorkerQueues }
   | { type: 'captain_decision'; decision: CaptainDecision }
   | { type: 'subtask_dispatched'; subtaskId: SubtaskId; sailorId: number; prompt: string }
+  | { type: 'subtask_running'; subtaskId: SubtaskId }
   | { type: 'subtask_completed'; subtaskId: SubtaskId; output: StructuredOutput }
   | { type: 'subtask_failed'; subtaskId: SubtaskId; error: string }
   | { type: 'speculative_launched'; goalId: string; candidates: SubtaskId[] }
