@@ -451,7 +451,11 @@ export function downloadErrors(
   } catch {}
 }
 
-export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, sessionIdRaw: string | null): void {
+export function downloadCombinedSessionLogs(
+  port: chrome.runtime.Port | null,
+  sessionIdRaw: string | null,
+  messageMetadata?: any,
+): void {
   try {
     if (!port || port.name !== 'side-panel-connection') return;
     const sessionId = String(sessionIdRaw || '');
@@ -583,6 +587,17 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
               runLogs.commodore.forEach((u, idx) => {
                 lines.push(...formatLogEntry(u, idx + 1, subHeadingLevel));
               });
+            }
+
+            // Output quartermaster (scheduling) logs — no API calls, structural data only
+            const qmLogs: any[] = (messageMetadata as any)?.__quartermasterLogs || [];
+            if (qmLogs.length > 0) {
+              lines.push('\n---');
+              lines.push(`\n${headingLevel} Quartermaster`);
+              lines.push(`\n_${qmLogs.length} scheduling event(s) — no API calls (pure computation)_`);
+              for (const qmLog of qmLogs) {
+                lines.push(...formatQmLogEntry(qmLog, subHeadingLevel));
+              }
             }
 
             // Output captain (overseer) logs
@@ -920,5 +935,71 @@ export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: 
       } catch {}
       console.warn('[Panel] Sailor logs download timed out after 10s');
     }, 10000);
+  } catch {}
+}
+
+// ---------- Quartermaster log helpers ----------
+
+function formatQmLogEntry(log: any, headingLevel: string = '##'): string[] {
+  const lines: string[] = [];
+  const ts = new Date(Number(log?.timestamp || Date.now())).toISOString();
+  const label = log?.isReschedule ? `Re-schedule (${log?.reason || 'plan modified'})` : 'Initial Schedule';
+  lines.push(`\n${headingLevel} ${label} • ${ts}`);
+  lines.push(`- workers used: ${log?.workersUsed ?? '?'} / ${log?.maxWorkers ?? '?'} max`);
+  lines.push(`- subtasks: ${log?.subtaskCount ?? '?'}`);
+
+  const m = log?.metrics;
+  if (m) {
+    lines.push(`- makespan: ${m.makespan}`);
+    lines.push(`- utilization: ${((m.avg_utilization ?? 0) * 100).toFixed(0)}% avg`);
+    lines.push(`- efficiency: ${(m.efficiency ?? 0).toFixed(2)}`);
+    lines.push(`- locality: ${(m.locality_score ?? 0).toFixed(0)}%`);
+  }
+
+  const assignments: any[] = Array.isArray(log?.assignments) ? log.assignments : [];
+  if (assignments.length > 0) {
+    lines.push('');
+    lines.push('Assignments');
+    for (const a of assignments) {
+      const tasks = (a.subtaskIds || [])
+        .map((id: number, i: number) => {
+          const title = a.subtaskTitles?.[i] || `Task ${id}`;
+          return `#${id} "${title}"`;
+        })
+        .join(' → ');
+      lines.push(`- Sailor ${a.sailorId}: ${tasks}`);
+    }
+  }
+  return lines;
+}
+
+export function downloadQuartermasterLogs(sessionId: string | null, messageMetadata: any): void {
+  try {
+    const sid = String(sessionId || '');
+    const logs: any[] = (messageMetadata as any)?.__quartermasterLogs || [];
+    const lines: string[] = [];
+    lines.push(`# Quartermaster Logs for session ${sid}`);
+    lines.push('');
+    lines.push(`Schedule events: ${logs.length}`);
+
+    if (logs.length === 0) {
+      lines.push('');
+      lines.push('_No Quartermaster scheduling data recorded._');
+    } else {
+      for (const log of logs) {
+        lines.push('\n---');
+        lines.push(...formatQmLogEntry(log));
+      }
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quartermaster-logs-${sid}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   } catch {}
 }

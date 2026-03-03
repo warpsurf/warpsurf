@@ -10,6 +10,7 @@ type BackgroundHandlers = {
   onLiveMessageQueued?: (message: any) => void;
   onWorkflowGraphUpdate?: (message: any) => void;
   onWorkflowPlanDataset?: (message: any) => void;
+  onWorkflowQuartermasterLog?: (message: any) => void;
   onWorkflowProgress?: (message: any) => void;
   onFinalAnswer?: (message: any) => void;
   onWorkflowEnded?: (message: any) => void;
@@ -260,6 +261,7 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
           message &&
           (message.type === 'workflow_graph_update' ||
             message.type === 'workflow_plan_dataset' ||
+            message.type === 'workflow_quartermaster_log' ||
             message.type === 'workflow_progress' ||
             message.type === 'final_answer' ||
             message.type === 'workflow_ended')
@@ -272,6 +274,8 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
 
           if (message.type === 'workflow_graph_update') handlersRef.current.onWorkflowGraphUpdate?.(message);
           else if (message.type === 'workflow_plan_dataset') handlersRef.current.onWorkflowPlanDataset?.(message);
+          else if (message.type === 'workflow_quartermaster_log')
+            handlersRef.current.onWorkflowQuartermasterLog?.(message);
           else if (message.type === 'workflow_progress') handlersRef.current.onWorkflowProgress?.(message);
           else if (message.type === 'final_answer') handlersRef.current.onFinalAnswer?.(message);
           else if (message.type === 'workflow_ended') handlersRef.current.onWorkflowEnded?.(message);
