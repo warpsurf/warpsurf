@@ -208,27 +208,32 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             // code that runs before that check (updateWorkerProgress, drainedMessages) can
             // corrupt the current session's state with data from other sessions.
             if (!sessionMatches) {
-              // Still track cancellation for non-matching sessions to drop stale mirror updates
               try {
                 if (isTerminalEvent) {
                   const d2: any = (message as any)?.data || {};
-                  const sid = String(d2?.parentSessionId || d2?.sessionId || d2?.taskId || '');
-                  if (sid) cancelledSessionsRef.current.add(sid);
+                  const isWorkerSubtask = d2?.workerId != null || typeof d2?.workerIndex === 'number';
+                  if (!isWorkerSubtask) {
+                    const sid = String(d2?.parentSessionId || d2?.sessionId || d2?.taskId || '');
+                    if (sid) cancelledSessionsRef.current.add(sid);
+                  }
                 }
               } catch {}
               return;
             }
           } catch {}
-          // Track cancellation to drop late mirror updates (for matching sessions)
+          // Track cancellation to drop late mirror updates (for matching sessions).
+          // Skip for multiagent worker subtask completions — the workflow is still active.
           try {
             const state = String((message as any)?.state || (message as any)?.data?.state || '').toLowerCase();
             if (state === 'task.cancel' || state === 'task.ok' || state === 'task.fail') {
               const d: any = (message as any)?.data || {};
-              const sid =
-                String(d?.parentSessionId || d?.sessionId || d?.taskId || '') || String(sessionIdRef.current || '');
-              if (sid) cancelledSessionsRef.current.add(sid);
+              const isWorkerSubtask = d?.workerId != null || typeof d?.workerIndex === 'number';
+              if (!isWorkerSubtask) {
+                const sid =
+                  String(d?.parentSessionId || d?.sessionId || d?.taskId || '') || String(sessionIdRef.current || '');
+                if (sid) cancelledSessionsRef.current.add(sid);
+              }
             }
-            // When a new v1 task starts (task.start) for the current session, clear cancel gate
             if (state === 'task.start') {
               const d: any = (message as any)?.data || {};
               const sid =
