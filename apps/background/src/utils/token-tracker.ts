@@ -160,27 +160,14 @@ class TokenUsageTracker {
     // due to race conditions, the sessionId will be correct for querying
     const parentSessionId = this.workerToParent.get(taskId) || this.currentParentSession || taskId;
 
-    // Try to get workerIndex from multiple sources (thorough lookup)
+    // Resolve workerIndex from explicit usage or the resolved taskId only.
+    // Do NOT fall back to this.currentTaskId — it is global mutable state that
+    // gets corrupted when concurrent warm-start dispatches overwrite it during
+    // the Commodore's streaming LLM call, causing non-worker logs to be stamped
+    // with a sailor's workerIndex.
     let workerIndex = usage.workerIndex;
     if (typeof workerIndex !== 'number') {
-      // Check if this taskId is a registered worker
       workerIndex = this.workerIds.get(taskId);
-    }
-    if (typeof workerIndex !== 'number' && this.currentTaskId) {
-      // Check if currentTaskId is a registered worker
-      workerIndex = this.workerIds.get(this.currentTaskId);
-    }
-    if (typeof workerIndex !== 'number') {
-      // Try to find any worker session that maps to this parent session
-      for (const [sid, parent] of this.workerToParent.entries()) {
-        if (String(parent) === String(parentSessionId)) {
-          const wid = this.workerIds.get(sid);
-          if (typeof wid === 'number' && (taskId === sid || this.currentTaskId === sid)) {
-            workerIndex = wid;
-            break;
-          }
-        }
-      }
     }
 
     // Get the workflow run index for this session
@@ -265,7 +252,7 @@ class TokenUsageTracker {
     for (const [sid, parent] of this.workerToParent.entries()) {
       if (String(parent) === String(parentSessionId)) {
         const wid = this.workerIds.get(sid);
-        if (typeof wid === 'number' && wid > 0) out.push({ sessionId: sid, workerIndex: wid });
+        if (typeof wid === 'number' && wid >= 0) out.push({ sessionId: sid, workerIndex: wid });
       }
     }
     return out;
@@ -297,11 +284,11 @@ class TokenUsageTracker {
     const allTokens = this.getTokensForTask(String(sessionId));
 
     // Split into main (no workerIndex) and workers (has workerIndex)
-    const main = allTokens.filter(u => !u.workerIndex);
+    const main = allTokens.filter(u => typeof u.workerIndex !== 'number');
     const workers: Record<number, TokenUsage[]> = {};
     for (const u of allTokens) {
       const idx = u.workerIndex;
-      if (typeof idx === 'number' && idx > 0) {
+      if (typeof idx === 'number' && idx >= 0) {
         if (!workers[idx]) workers[idx] = [];
         workers[idx].push(u);
       }
