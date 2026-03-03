@@ -8,7 +8,7 @@ export interface SessionLogsData {
   workers: Record<number, any[]>;
   totals?: {
     perWorker: Record<number, { inputTokens: number; outputTokens: number; totalTokens: number; cost: number }>;
-    overall: { inputTokens: number; outputTokens: number; totalTokens: number; cost: number };
+    overall: { inputTokens: number; outputTokens: number; totalTokens: number; cost: number; apiCalls?: number };
   };
 }
 
@@ -32,7 +32,8 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
   const workerArrays: any[] = Object.values(workersObj).flat();
 
   const usages: any[] = [...main, ...workerArrays];
-  if (usages.length === 0) return { summary: null, totalLatencyMs: 0 };
+  const overall = (data as any).totals?.overall;
+  if (usages.length === 0 && !overall) return { summary: null, totalLatencyMs: 0 };
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -56,10 +57,19 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
     const start = Number(u?.requestStartTime || u?.timestamp || 0);
     if (Number.isFinite(start) && start > 0) startTimes.push(start);
   }
-  // If no valid costs found, mark as unavailable (-1)
   if (!hasAnyCost) cost = -1;
 
-  // Calculate latency: latest completion - earliest start
+  // Prefer authoritative totals from background (computed from full deduplicated
+  // usage list before the main/worker split, avoiding client-side recombination
+  // issues with numeric-keyed objects or misattributed workerIndex entries).
+  if (overall) {
+    inputTokens = Math.max(0, Number(overall.inputTokens) || 0);
+    outputTokens = Math.max(0, Number(overall.outputTokens) || 0);
+    const overallCost = Number(overall.cost);
+    if (isFinite(overallCost) && overallCost >= 0) cost = overallCost;
+    if (typeof overall.apiCalls === 'number' && overall.apiCalls > 0) apiCalls = overall.apiCalls;
+  }
+
   let totalLatencyMs = 0;
   if (startTimes.length > 0 && completionTimes.length > 0) {
     totalLatencyMs = Math.max(0, Math.max(...completionTimes) - Math.min(...startTimes));
