@@ -55,6 +55,7 @@ export interface TaskEventHandlerDeps {
     totalOutputTokens: number;
     totalLatencyMs: number;
     totalCost: number;
+    requestCount?: number;
   }) => void;
   getCurrentTaskAgentType: () => string | null;
   getWorkerTabGroups: () => Array<any>;
