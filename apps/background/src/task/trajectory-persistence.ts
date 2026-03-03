@@ -22,6 +22,7 @@ export interface TraceItem {
   eventId?: string;
   pageUrl?: string;
   pageTitle?: string;
+  workerId?: string | number;
   [key: string]: any;
 }
 
@@ -274,7 +275,7 @@ export class TrajectoryPersistenceService {
     const trajectory = this.getOrCreateTrajectory(sessionId, actor, timestamp);
     const isFirstItem = trajectory.traceItems.length === 0;
 
-    const { pageUrl, pageTitle, ...rest } = additionalData || {};
+    const { pageUrl, pageTitle, workerId, ...rest } = additionalData || {};
     const eventId = (additionalData as any)?.eventId ? String((additionalData as any).eventId) : undefined;
     if (eventId && trajectory.traceItemIds?.has(eventId)) return;
     const newItem: TraceItem = {
@@ -284,6 +285,7 @@ export class TrajectoryPersistenceService {
       ...(eventId && { eventId }),
       ...(pageUrl && { pageUrl }),
       ...(pageTitle && { pageTitle }),
+      ...(workerId != null && { workerId }),
       ...rest,
     };
 
@@ -351,7 +353,13 @@ export class TrajectoryPersistenceService {
     const timestamp = event?.timestamp || Date.now();
     const content = data?.details || data?.message || '';
     const eventId = event?.eventId || data?.eventId;
-    const pageInfo = { pageUrl: data?.pageUrl || data?.url, pageTitle: data?.pageTitle || data?.title };
+    const workerIdRaw = data?.workerId ?? data?.workerIndex;
+    const workerIdField = workerIdRaw != null ? { workerId: workerIdRaw } : {};
+    const pageInfo = {
+      pageUrl: data?.pageUrl || data?.url,
+      pageTitle: data?.pageTitle || data?.title,
+      ...workerIdField,
+    };
     const actorLower = actor.toLowerCase();
     const isSystemActor = actorLower === String(Actors.SYSTEM).toLowerCase() || actorLower === 'system';
     const isTerminal = ['task.ok', 'task.fail', 'task.cancel'].includes(state);

@@ -421,7 +421,26 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             runningWorkflowSessionIds.add(sessionId);
             setCurrentWorkflow(orchestrator);
             workflowsBySession.set(sessionId, orchestrator);
-            safePostMessage(port, { type: 'workflow_started', data: { sessionId } }); // Start async; errors are posted back to UI
+
+            // Persist multiagent workflow as running in dashboard storage
+            const startTime = Date.now();
+            try {
+              const result = await chrome.storage.local.get('agent_dashboard_running');
+              const arr = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
+              const filtered = arr.filter((a: any) => String(a.sessionId) !== sessionId);
+              filtered.push({
+                sessionId,
+                sessionTitle: query.substring(0, 80),
+                taskDescription: `multiagent: ${query.substring(0, 120)}`,
+                startTime,
+                agentType: 'multiagent',
+                status: 'running',
+                lastUpdate: startTime,
+              });
+              await chrome.storage.local.set({ agent_dashboard_running: filtered });
+            } catch {}
+
+            safePostMessage(port, { type: 'workflow_started', data: { sessionId } });
             (async () => {
               try {
                 await orchestrator.start(query, plannerLLM);
@@ -437,6 +456,32 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 try {
                   workflowsBySession.delete(sessionId);
                 } catch {}
+
+                // Move from running to completed in dashboard storage
+                try {
+                  const r = await chrome.storage.local.get(['agent_dashboard_running', 'agent_dashboard_completed']);
+                  const running = Array.isArray(r.agent_dashboard_running) ? r.agent_dashboard_running : [];
+                  const completed = Array.isArray(r.agent_dashboard_completed) ? r.agent_dashboard_completed : [];
+                  const entry = running.find((a: any) => String(a.sessionId) === sessionId);
+                  const newRunning = running.filter((a: any) => String(a.sessionId) !== sessionId);
+                  completed.unshift({
+                    sessionId,
+                    sessionTitle: entry?.sessionTitle || query.substring(0, 80),
+                    taskDescription: entry?.taskDescription || `multiagent: ${query.substring(0, 120)}`,
+                    startTime: entry?.startTime || startTime,
+                    endTime: Date.now(),
+                    duration: Date.now() - (entry?.startTime || startTime),
+                    agentType: 'multiagent',
+                    status: 'completed',
+                    lastUpdate: Date.now(),
+                  });
+                  if (completed.length > 200) completed.length = 200;
+                  await chrome.storage.local.set({
+                    agent_dashboard_running: newRunning,
+                    agent_dashboard_completed: completed,
+                  });
+                } catch {}
+
                 // Freeze mirrors when the orchestrator ends so previews remain
                 try {
                   await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId));
