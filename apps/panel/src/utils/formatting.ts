@@ -93,9 +93,10 @@ export function hexToRgba(hex: string, alpha: number): string {
 }
 
 export function isTransientSystemMessage(actor: string, content: string): boolean {
-  if (actor.toLowerCase() !== 'system') return false;
   const c = content.toLowerCase();
-  return c.startsWith('processing as ') || c === 'estimating workflow...' || c === 'showing progress...';
+  if (c === 'showing progress...' || c === 'estimating workflow...') return true;
+  if (actor.toLowerCase() !== 'system') return false;
+  return c.startsWith('processing as ');
 }
 
 /**
@@ -134,12 +135,12 @@ export function sanitizeMessageContent(content: string): string | null {
 }
 
 /**
- * Strips "(Web Agent N)" and "[workerId]" suffixes from agent status text
+ * Strips "(Sailor N)" and "[workerId]" suffixes from agent status text
  * so user-visible labels stay clean.
  */
 export function stripWorkerSuffix(text: string): string {
   return text
-    .replace(/\s*\[[\w-]+\]\s*(?:\(Web Agent(?:\s+\d+)?\))?\s*$/i, '')
-    .replace(/\s*\(Web Agent(?:\s+\d+)?\)\s*$/i, '')
+    .replace(/\s*\[[\w-]+\]\s*(?:\(Sailor(?:\s+\d+)?\))?\s*$/i, '')
+    .replace(/\s*\(Sailor(?:\s+\d+)?\)\s*$/i, '')
     .trim();
 }
