@@ -3,7 +3,7 @@ import { Actors, chatHistoryStore } from '@extension/storage';
 import { ExecutionState } from '@extension/shared/lib/utils';
 import { computeRequestSummaryFromSessionLogs, isTransientSystemMessage } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
-import { createAggregateRoot, addTraceItem, updateAggregateRootContent } from './handlers/utils';
+import { createAggregateRoot, addTraceItem, updateAggregateRootContent, moveToCompleted } from './handlers/utils';
 import { createSystemHandler } from './handlers/system-event-handler';
 
 let lastErrorContent: string | null = null;
@@ -98,6 +98,15 @@ export function createPanelHandlers(deps: any): any {
             const curSid = String(deps.sessionIdRef?.current || '');
             if (!evtSid || !curSid || evtSid === curSid) {
               deps.setCurrentPlan?.(plan);
+              deps.setMessageMetadata((prev: any) => {
+                const next = { ...prev, __workflowPlanItems: plan } as any;
+                try {
+                  if (deps.sessionIdRef.current) {
+                    chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);
+                  }
+                } catch {}
+                return next;
+              });
             }
           }
         } catch {}
@@ -280,16 +289,16 @@ export function createPanelHandlers(deps: any): any {
           if (!deps.agentTraceRootIdRef.current) {
             createAggregateRoot(actorToUse, text, timestamp, deps);
           }
-          addTraceItem(traceActor, text, timestamp, deps);
+          addTraceItem(traceActor, text, timestamp, deps, workerId != null ? { workerId } : undefined);
         }
 
         // Update the main message content for phase lines
         try {
           const isPhaseLine =
-            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+workers?\s+(executing plan|deployed))\b/i.test(
+            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Sailors?)\s+(executing plan|deployed))\b/i.test(
               text,
             ) ||
-            (workerId && /^Worker\s+\d+\s+deployed:/i.test(text));
+            (workerId && /^(?:Worker|Sailor)\s+\d+\s+deployed:/i.test(text));
           if (isPhaseLine) {
             updateAggregateRootContent(text, deps);
           }
@@ -306,7 +315,7 @@ export function createPanelHandlers(deps: any): any {
             const item = {
               workerId: workerKey,
               text,
-              agentName: `Web Agent ${workerKey}`,
+              agentName: `Sailor ${workerKey}`,
               color: existing.agentColor || '#A78BFA',
               timestamp,
             };
@@ -330,11 +339,9 @@ export function createPanelHandlers(deps: any): any {
         const hasAggregate = !!deps.agentTraceRootIdRef.current;
         if (isAgentV2 && hasAggregate) {
           const rootId = deps.agentTraceRootIdRef.current as string;
-          // Update the existing Agent v2 aggregate message instead of appending a SYSTEM line
           deps.setMessages((prev: any) =>
             prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootId ? { ...m, content: text } : m)),
           );
-          // Add a trace item to the aggregate metadata for auditability
           deps.setMessageMetadata((prev: any) => {
             const existing: any = prev[rootId] || {};
             const traceItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
@@ -349,14 +356,19 @@ export function createPanelHandlers(deps: any): any {
               },
             } as any;
           });
-          // Persist as Agent v2 actor (OVERSEER aggregate) in history
+          // Update the existing aggregate root's content in storage (not addMessage which creates duplicates)
           try {
             const sid = deps.sessionIdRef.current;
-            const aggActor = (deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT) as any;
-            if (sid) chatHistoryStore.addMessage(sid, { actor: aggActor, content: text, timestamp: ts } as any);
+            if (sid) {
+              const sepIdx = rootId.indexOf('-');
+              const rootTs = Number(rootId.substring(0, sepIdx));
+              const rootActor = rootId.substring(sepIdx + 1);
+              if (rootTs && rootActor) {
+                chatHistoryStore.updateMessageContent(sid, rootActor, rootTs, text).catch(() => {});
+              }
+            }
           } catch {}
         } else {
-          // Fallback for non-v2 flows: append as SYSTEM
           deps.appendMessage({ actor: Actors.SYSTEM, content: text, timestamp: ts });
         }
       }
@@ -467,9 +479,20 @@ export function createPanelHandlers(deps: any): any {
           }
         }
       } catch {}
+      // Persist multiagent workflow completion to dashboard
+      try {
+        const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
+        if (sid && deps.getCurrentTaskAgentType?.() === 'multiagent') {
+          const ok = message?.data?.ok !== false;
+          moveToCompleted(sid, ok ? 'completed' : 'failed', deps);
+        }
+      } catch {}
+      deps.setIsJobActive(false);
+      deps.workflowEndedRef.current = true;
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
-      deps.setCurrentPlan?.(null);
+      deps.setIsReplaying(false);
+      deps.setIsAgentModeActive(false);
       // Restore any unconsumed queued messages to the input box
       try {
         const pending = deps.getQueuedMessages?.() || [];
@@ -501,6 +524,20 @@ export function createPanelHandlers(deps: any): any {
           deps.portRef.current?.name === 'side-panel-connection'
         ) {
           deps.portRef.current.postMessage({ type: 'get_session_logs', sessionId: sid });
+        }
+      } catch {}
+      // Persist workflow graph and plan items to storage so they survive panel reloads
+      try {
+        const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
+        if (sid) {
+          deps.setMessageMetadata((prev: any) => {
+            const graph = (prev as any)?.__workflowGraph;
+            const planItems = (prev as any)?.__workflowPlanItems;
+            if (graph || planItems) {
+              chatHistoryStore.storeMessageMetadata(sid, prev).catch(() => {});
+            }
+            return prev;
+          });
         }
       } catch {}
     },
@@ -697,9 +734,9 @@ export function createPanelHandlers(deps: any): any {
             });
           }
         } catch {}
-        deps.setMirrorPreviewBatch([]);
-        // Only set hasFirstPreview when job is actively running
-        // This prevents showing previews for completed sessions that receive stale mirror updates
+        if (deps.getCurrentTaskAgentType?.() !== 'multiagent') {
+          deps.setMirrorPreviewBatch([]);
+        }
         if ((data.screenshot || data.url || data.tabId) && deps.jobActiveRef.current) {
           deps.setHasFirstPreview(true);
         }
@@ -731,7 +768,8 @@ export function createPanelHandlers(deps: any): any {
         }
       } catch {}
 
-      if (filteredAll.length > 1) {
+      const hasWorkerMirrors = filteredAll.some((d: any) => typeof d?.workerIndex === 'number');
+      if (filteredAll.length > 1 || hasWorkerMirrors) {
         const latestByAgent = new Map<string, any>();
         for (const d of filteredAll as Array<any>) {
           const key = String((d as any)?.agentId || '');
@@ -744,15 +782,14 @@ export function createPanelHandlers(deps: any): any {
           []) as any;
         const batch = Array.from(latestByAgent.values()).map((d: any) => {
           const id = String(d?.agentId || '');
-          // Prefer authoritative workerIndex from backend over first-seen ordinal
           let ordinal =
             typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
-          let name = `Web Agent ${ordinal}`;
+          let name = `Sailor ${ordinal}`;
           try {
             const mapped = groups.find((g: any) => String(g.taskId) === id);
             if (mapped && mapped.name) {
               name = String(mapped.name);
-              const m = /Web Agent\s+(\d+)/i.exec(name);
+              const m = /Sailor\s+(\d+)/i.exec(name);
               if (m && m[1]) ordinal = Number(m[1]);
             }
           } catch {}
@@ -770,7 +807,6 @@ export function createPanelHandlers(deps: any): any {
 
         deps.logger.log('[Panel] Setting mirror preview batch:', batch.length, 'items');
         deps.setMirrorPreviewBatch(batch);
-        // Only enable preview when job is actively running
         if (deps.jobActiveRef.current) {
           deps.setHasFirstPreview(true);
           deps.setIsAgentModeActive(true);
@@ -782,8 +818,7 @@ export function createPanelHandlers(deps: any): any {
           batch.forEach((p: any, idx: number) => {
             const id = String(p.agentId || `agent-${idx + 1}`);
             const color = String(p.color || '#A78BFA');
-            const name =
-              String(p.agentName || '').trim() || `Web Agent ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
+            const name = String(p.agentName || '').trim() || `Sailor ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
             if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color });
           });
           const groupsNext = Array.from(groupsMap.values());
@@ -810,7 +845,6 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
         deps.setMirrorPreviewBatch([]);
-        // Only enable preview when job is actively running
         if (deps.jobActiveRef.current) {
           deps.setHasFirstPreview(true);
           deps.setIsAgentModeActive(true);
@@ -829,7 +863,7 @@ export function createPanelHandlers(deps: any): any {
           // Prefer authoritative workerIndex from backend
           const ordinal =
             typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
-          const name = `Web Agent ${ordinal}`;
+          const name = `Sailor ${ordinal}`;
           const color = String(d?.color || '#A78BFA');
           const groupId = typeof d?.groupId === 'number' ? d.groupId : undefined;
           if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color, groupId });
@@ -849,7 +883,7 @@ export function createPanelHandlers(deps: any): any {
           deps.setShowCloseTabs(true);
           const workerId = String(data.workerId || '1');
           const taskId = String(data.workerSessionId || data.sessionId || workerId);
-          const agentName = `Web Agent ${workerId}`;
+          const agentName = `Sailor ${workerId}`;
           const color = data.color || '#A78BFA';
           deps.setWorkerTabGroups((prev: Array<{ taskId: string; name: string; color: string }>) => {
             const exists = prev.some((g: { taskId: string }) => g.taskId === taskId);
@@ -1096,6 +1130,7 @@ export function createPanelHandlers(deps: any): any {
             Actors.AGENT_VALIDATOR,
             Actors.CHAT,
             Actors.SEARCH,
+            Actors.MULTIAGENT,
           ];
           const lastAgentMsg = [...session.messages].reverse().find((m: any) => agentActors.includes(m.actor));
           if (lastAgentMsg) {
@@ -1134,6 +1169,18 @@ export function createPanelHandlers(deps: any): any {
           (restoredMetadata as any).__workflowGraph = data.workflowGraph;
           deps.setShowInlineWorkflow(true);
         }
+        // Restore persisted workflow graph from storage if not provided live
+        if (data.agentType === 'multiagent' && !data.workflowGraph && (restoredMetadata as any).__workflowGraph) {
+          deps.setShowInlineWorkflow(true);
+        }
+
+        // Restore persisted plan items
+        try {
+          const planItems = (restoredMetadata as any)?.__workflowPlanItems;
+          if (Array.isArray(planItems) && planItems.length > 0) {
+            deps.setCurrentPlan?.(planItems);
+          }
+        } catch {}
 
         // Process buffered events - add trace items to restored metadata
         const bufferedEvents = data.bufferedEvents;
@@ -1157,6 +1204,7 @@ export function createPanelHandlers(deps: any): any {
               pageUrl?: string;
               pageTitle?: string;
               eventId?: string;
+              workerId?: string | number;
             }> = [];
             for (const evt of bufferedEvents) {
               try {
@@ -1164,6 +1212,7 @@ export function createPanelHandlers(deps: any): any {
                 const evtData = evt.data || {};
                 const content = evtData.details || '';
                 if (content && traceStates.includes(evt.state)) {
+                  const wid = evtData.workerId ?? evtData.workerIndex;
                   traceItemsToAdd.push({
                     actor: evt.actor || Actors.SYSTEM,
                     content,
@@ -1171,6 +1220,7 @@ export function createPanelHandlers(deps: any): any {
                     pageUrl: evtData.pageUrl,
                     pageTitle: evtData.pageTitle,
                     eventId: evt.eventId || evtData.eventId,
+                    ...(wid != null && { workerId: wid }),
                   });
                 }
               } catch {}
@@ -1324,6 +1374,19 @@ export function createPanelHandlers(deps: any): any {
             deps.setIsHistoricalSession(true);
             deps.setIsFollowUpMode(true); // Enable follow-up mode for restored sessions
           }
+        }
+      } catch {}
+    },
+    onWorkflowStarted: (message: any) => {
+      try {
+        const sid = String((message as any)?.data?.sessionId || '');
+        const currentSid = String(deps.sessionIdRef?.current || '');
+        if (sid && currentSid && sid === currentSid) {
+          deps.setIsJobActive?.(true);
+          if (deps.jobActiveRef) deps.jobActiveRef.current = true;
+          deps.setIsAgentModeActive(true);
+          deps.setShowStopButton(true);
+          deps.workflowEndedRef.current = false;
         }
       } catch {}
     },
