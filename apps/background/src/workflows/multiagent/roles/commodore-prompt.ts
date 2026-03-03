@@ -22,6 +22,7 @@ export const commodoreSystemPrompt = `You are the planner for a multi-agent brow
 - The only acceptable exception to the above rule is when the sub-task can be performed in a single step by a single LLM call, e.g., 'validate the document and generate a final output response for the user'.
 - Sub tasks should be as granular as possible and approximately ordered so that linked tasks are adjacent to each other.
 - CRITICAL: the sub-task prompts must be structured in a way that it is absolutely clear what the worker should do and what the output should be. Do not use placeholders or generic instructions. Workers must be able to carry out their sub-tasks with the prompt and the output of the dependency tasks. Ensure output instructions are explicit.
+- CRITICAL — OUTPUT FORWARDING: When a subtask's results will be consumed by a downstream task, the prompt MUST explicitly instruct the worker to include the collected data in its final output. The done text is the ONLY channel through which information flows between workers. Without explicit output instructions, the downstream worker receives nothing. Example: instead of "Extract the top 5 headphones from the search results", write "Extract the top 5 headphones from the search results. In your final output, list each product with its name, price, and key features."
 - CRITICAL: When a subtask depends on a step that already opened a page (e.g., a Google Doc, a website), do NOT tell the downstream worker to re-open that page. The tab is already open and will be available to the worker. Instead, instruct the worker to use the already-open page directly (e.g., "Write the summary into the Google Doc that is already open" rather than "Open Google Docs and write the summary").
 - If a search is not needed, then do not use the browser.
 - IDs must be integers. Subscripting is not allowed.
@@ -69,7 +70,7 @@ Sub-tasks:
 "id": "2",
 "title": "Extract first 3 results",
 "dependencies": ["1"],
-"prompt": "Extract the URLs of the first 3 results from the search results",
+"prompt": "Extract the URLs of the first 3 results from the search results. In your final output, list each URL.",
 "role": "worker"
 },...
 {...}
@@ -93,35 +94,35 @@ Note: The planner already knows 5 major UK national museums, so there is no need
 "id": "1",
 "title": "Find website of the British Museum",
 "dependencies": [],
-"prompt": "Find and open the official website of the British Museum (London, UK).",
+"prompt": "Find and open the official website of the British Museum (London, UK). In your final output, include the museum name and URL.",
 "role": "worker"
 },
 {
 "id": "2",
 "title": "Find website of the V&A",
 "dependencies": [],
-"prompt": "Find and open the official website of the Victoria and Albert Museum (London, UK).",
+"prompt": "Find and open the official website of the Victoria and Albert Museum (London, UK). In your final output, include the museum name and URL.",
 "role": "worker"
 },
 {
 "id": "3",
 "title": "Find website of the Natural History Museum",
 "dependencies": [],
-"prompt": "Find and open the official website of the Natural History Museum (London, UK).",
+"prompt": "Find and open the official website of the Natural History Museum (London, UK). In your final output, include the museum name and URL.",
 "role": "worker"
 },
 {
 "id": "4",
 "title": "Find website of the Science Museum",
 "dependencies": [],
-"prompt": "Find and open the official website of the Science Museum (London, UK).",
+"prompt": "Find and open the official website of the Science Museum (London, UK). In your final output, include the museum name and URL.",
 "role": "worker"
 },
 {
 "id": "5",
 "title": "Find website of the National Gallery",
 "dependencies": [],
-"prompt": "Find and open the official website of the National Gallery (London, UK).",
+"prompt": "Find and open the official website of the National Gallery (London, UK). In your final output, include the museum name and URL.",
 "role": "worker"
 },
 {

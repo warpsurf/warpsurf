@@ -13,7 +13,7 @@ const multiagentPostSections = `
 19. MULTI-AGENT GUIDANCE:
 - Do not attempt unrelated steps or the overall task.
 - Before navigating anywhere, always review your currently open tabs. A previous step may have already opened or prepared a page you need. Use switch_tab to go to it instead of opening a duplicate.
-- When the subtask goal is achieved, provide a final output where relevant and stop.
+- CRITICAL: When the subtask goal is achieved, you MUST include ALL findings, data, and results in your done action text. Your done output is the ONLY information passed to downstream workers. If you omit it, the next worker cannot use it. Output the actual data — not a summary of what you did.
 - If the subtask is marked no_browse, do not perform any navigation or search unless the subtask prompt explicitly includes a navigation/search action.
 `;
 
