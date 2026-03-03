@@ -7,6 +7,7 @@ import { Captain, type CaptainConfig, type WarmDispatch } from './roles/captain'
 import { Crew } from './roles/crew';
 import { LivePlan } from './live-plan';
 import { CaptainState } from './captain-state';
+import { SharedTabRegistry } from '../../task/shared-tab-registry';
 import { buildMergedGraphAfterScheduleConsecutive, collapsePlanByConsecutiveMerges } from './multiagent-merging';
 import { remapSchedule } from './multiagent-scheduler';
 import { buildGraphData } from './multiagent-visualization';
@@ -75,6 +76,7 @@ export class MultiAgentWorkflow {
 
   async start(query: string, plannerLLM: any): Promise<void> {
     this.cancelled = false;
+    trajectoryPersistence.markMultiagent(this.sessionId);
     (globalTokenTracker as any)?.clearTokensForTask?.(String(this.sessionId));
     const runIndex = (globalTokenTracker as any)?.incrementWorkflowRunIndex?.(String(this.sessionId)) || 1;
     logger.info(`Starting workflow run ${runIndex} for session ${this.sessionId}`);
@@ -210,6 +212,12 @@ export class MultiAgentWorkflow {
     const livePlan = new LivePlan(plan);
     this.captainState = new CaptainState(livePlan);
     this.statusMap = this.captainState.subtaskStatus;
+
+    const tabRegistry = new SharedTabRegistry(
+      id => livePlan.getTransitiveDependencies(id),
+      id => this.captainState!.subtaskStatus.get(id),
+    );
+    this.taskManager.setSharedTabRegistry(tabRegistry);
     this.lastNodes = plan.subtasks.map(s => ({ id: s.id, title: s.title }));
     this.lastSchedule = schedule;
     this.lastDeps = plan.dependencies;
@@ -314,6 +322,22 @@ export class MultiAgentWorkflow {
     (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
   }
 
+  async pauseAll(reason = 'Paused by user'): Promise<void> {
+    if (this.captain) await this.captain.pause(reason);
+  }
+
+  async resumeAll(userMessage?: string): Promise<void> {
+    if (this.captain) await this.captain.resume(userMessage);
+  }
+
+  injectUserMessage(text: string): void {
+    if (this.captain) this.captain.injectUserMessage(text);
+  }
+
+  cancelUserMessage(text: string): boolean {
+    return this.captain?.cancelUserMessage(text) ?? false;
+  }
+
   // --- Event routing: translate Captain events into panel messages ---
 
   private handleWorkflowEvent(event: WorkflowEvent): void {
@@ -385,8 +409,9 @@ export class MultiAgentWorkflow {
       case 'captain_decision':
         this.emit('workflow_progress', {
           sessionId: this.sessionId,
-          actor: 'multiagent',
+          actor: 'captain',
           message: event.decision.status_message,
+          drainedMessages: event.drainedMessages,
         });
         break;
 
@@ -419,6 +444,23 @@ export class MultiAgentWorkflow {
         this.updateGraph();
         break;
       }
+
+      case 'workflow_paused':
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'captain',
+          message: `Paused: ${event.reason}`,
+        });
+        this.emit('workflow_paused', { sessionId: this.sessionId, reason: event.reason });
+        break;
+
+      case 'workflow_resumed':
+        this.emit('workflow_progress', {
+          sessionId: this.sessionId,
+          actor: 'captain',
+          message: 'Workflow resumed',
+        });
+        break;
 
       case 'workflow_complete':
         this.trace('system', 'Workflow completed successfully');
