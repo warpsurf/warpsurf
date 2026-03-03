@@ -192,8 +192,11 @@ export function createMessageSender(deps: MessageSenderDeps) {
       setInputEnabled(false);
       setShowStopButton(true);
 
-      if (!isFollowUpMode()) {
-        // Use pre-assigned session ID (e.g. from agent manager) or generate a new one
+      // Ensure a session exists before appending the user message.
+      // Check sessionIdRef directly as well as isFollowUpMode — the latter can
+      // be stale when called via Agent Manager (closure captured before React
+      // re-renders after handleNewChat clears the session).
+      if (!isFollowUpMode() || !sessionIdRef.current) {
         const newId = overrideSessionId || deps.createTaskId();
         sessionIdRef.current = newId;
         setCurrentSessionId(newId);
@@ -201,7 +204,7 @@ export function createMessageSender(deps: MessageSenderDeps) {
         if (!incognitoMode()) {
           try {
             await chatHistoryStore.createSessionWithId(newId, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-            logger.log('newSession created with pre-generated ID:', newId);
+            logger.log('newSession created with ID:', newId);
           } catch (err) {
             logger.error('Failed to create session in storage:', err);
           }
@@ -221,22 +224,6 @@ export function createMessageSender(deps: MessageSenderDeps) {
       }
       if (!portRef.current || portRef.current.name !== 'side-panel-connection') {
         throw new Error('Connection not ready. Please try again.');
-      }
-
-      // CRITICAL: Ensure session ID exists before sending
-      // This handles race conditions where isFollowUpMode state hasn't updated yet
-      if (!sessionIdRef.current) {
-        logger.log('[MessageSender] No session ID found, creating new session');
-        const newId = createTaskId();
-        sessionIdRef.current = newId;
-        setCurrentSessionId(newId);
-        if (!incognitoMode()) {
-          try {
-            await chatHistoryStore.createSessionWithId(newId, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-          } catch (err) {
-            logger.error('Failed to create session:', err);
-          }
-        }
       }
 
       if (String(finalAgentType) === 'multiagent') {
