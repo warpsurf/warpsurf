@@ -37,6 +37,8 @@ export interface SessionTrajectory {
   totalWorkers?: number;
   finalPreview?: any;
   finalPreviewBatch?: any[];
+  /** When true, final output is captured in the aggregate root — skip standalone output messages */
+  isMultiagent?: boolean;
 }
 
 export interface WorkerProgressItem {
@@ -224,18 +226,22 @@ export class TrajectoryPersistenceService {
   ): Promise<void> {
     const trimmed = String(content || '').trim();
     if (!trimmed || this.isFallbackOutput(trimmed)) return;
+
+    // Multiagent workflows write the final answer directly to the aggregate root
+    // via onFinalAnswer — adding a standalone message here would create a duplicate.
+    const trajectory = this.trajectories.get(sessionId);
+    if (trajectory?.isMultiagent) return;
+
     let outputActor = actor;
     const actorLower = String(actor || '').toLowerCase();
     if (actorLower === String(Actors.SYSTEM).toLowerCase()) {
-      const lastNonSystem = this.trajectories
-        .get(sessionId)
-        ?.traceItems?.slice()
+      const lastNonSystem = trajectory?.traceItems
+        ?.slice()
         .reverse()
         .find(t => String(t.actor || '').toLowerCase() !== String(Actors.SYSTEM).toLowerCase());
       if (lastNonSystem?.actor === Actors.CHAT || lastNonSystem?.actor === Actors.SEARCH) {
         outputActor = lastNonSystem.actor;
       } else {
-        // For agent workflows, final output is already captured in aggregate details.
         return;
       }
     }
@@ -249,6 +255,15 @@ export class TrajectoryPersistenceService {
     } catch (e) {
       logger.error(`[Trajectory] Failed to persist output message for ${sessionId}:`, e);
     }
+  }
+
+  /**
+   * Mark a session as multiagent so ensureOutputMessage skips standalone messages
+   * (the final answer is written to the aggregate root by the panel's onFinalAnswer).
+   */
+  markMultiagent(sessionId: string): void {
+    const trajectory = this.getOrCreateTrajectory(sessionId, Actors.MULTIAGENT);
+    trajectory.isMultiagent = true;
   }
 
   /**
