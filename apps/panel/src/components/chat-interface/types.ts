@@ -18,6 +18,8 @@ export interface TraceItem {
   pageUrl?: string;
   /** Current page title when this trace was recorded */
   pageTitle?: string;
+  /** Worker/sailor ID for multi-agent workflows */
+  workerId?: string | number;
 }
 
 export interface WorkerItem {

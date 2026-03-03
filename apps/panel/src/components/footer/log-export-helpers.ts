@@ -549,7 +549,7 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
                 result.captain.push(u);
               } else if (role.includes('validator')) {
                 result.validator.push(u);
-              } else if (Number.isFinite(workerIndex) && workerIndex > 0) {
+              } else if (Number.isFinite(workerIndex) && workerIndex >= 0) {
                 if (!result.workers.has(workerIndex)) {
                   result.workers.set(workerIndex, []);
                 }
@@ -601,7 +601,7 @@ export function downloadCombinedSessionLogs(port: chrome.runtime.Port | null, se
             for (const workerId of sortedWorkerIds) {
               const workerUsages = runLogs.workers.get(workerId)!;
               lines.push('\n---');
-              lines.push(`\n${headingLevel} Web Agent ${workerId}`);
+              lines.push(`\n${headingLevel} Sailor ${workerId}`);
               lines.push(`\n_${workerUsages.length} API call(s)_`);
               workerUsages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
               workerUsages.forEach((u, idx) => {
@@ -820,14 +820,105 @@ export function downloadCaptainLogs(port: chrome.runtime.Port | null, sessionId:
 }
 
 export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
-  downloadRoleLogs(
-    port,
-    sessionId,
-    'Sailors',
-    u => {
-      const workerIndex = Number(u?.workerIndex);
-      return Number.isFinite(workerIndex) && workerIndex > 0;
-    },
-    'sailor-logs',
-  );
+  try {
+    if (!port || port.name !== 'side-panel-connection') return;
+    const sid = String(sessionId || '');
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const NON_WORKER_ROLES = /commodore|planner|captain|refiner|estimator/i;
+
+    const once = (ev: any) => {
+      try {
+        if (ev?.type === 'combined_session_logs' && String(ev?.sessionId || '') === sid) {
+          try {
+            port.onMessage.removeListener(once);
+          } catch {}
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
+
+          const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
+          const sailors = new Map<number, any[]>();
+
+          for (const u of usages) {
+            const wi = Number(u?.workerIndex);
+            if (!Number.isFinite(wi) || wi < 0) continue;
+            const role = String(u?.role || '').toLowerCase();
+            if (NON_WORKER_ROLES.test(role)) continue;
+            if (!sailors.has(wi)) sailors.set(wi, []);
+            sailors.get(wi)!.push(u);
+          }
+
+          const sortedIds = Array.from(sailors.keys()).sort((a, b) => a - b);
+          const totalCalls = sortedIds.reduce((n, id) => n + sailors.get(id)!.length, 0);
+
+          const lines: string[] = [];
+          lines.push(`# Sailors Logs for session ${sid}`);
+          lines.push('');
+          lines.push(`Total API calls: ${totalCalls} across ${sortedIds.length} sailor(s)`);
+
+          if (sortedIds.length === 0) {
+            lines.push('');
+            lines.push('_No sailor API calls recorded._');
+          } else {
+            for (const wi of sortedIds) {
+              const entries = sailors.get(wi)!;
+              entries.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+              lines.push('');
+              lines.push(`---`);
+              lines.push('');
+              lines.push(`## Sailor ${wi + 1} (${entries.length} API calls)`);
+              entries.forEach((u: any, idx: number) => {
+                const ts = new Date(Number(u?.timestamp || Date.now())).toISOString();
+                const provider = String(u?.provider || 'Unknown');
+                const model = String(u?.modelName || 'unknown');
+                const inTok = Number(u?.inputTokens || 0);
+                const outTok = Number(u?.outputTokens || 0);
+                const totalTok = Number(u?.totalTokens || inTok + outTok);
+                const cost = typeof u?.cost === 'number' ? u.cost.toFixed(6) : String(u?.cost || 0);
+                lines.push('');
+                lines.push(`### Step ${idx + 1} • ${ts}`);
+                lines.push(`- provider: ${provider}`);
+                lines.push(`- model: ${model}`);
+                lines.push(`- tokens: in ${inTok}, out ${outTok}, total ${totalTok}`);
+                lines.push(`- cost: $${cost}`);
+                lines.push('');
+                lines.push('Input');
+                lines.push('```text');
+                lines.push(clampText(extractRequestText((u as any)?.request, (u as any)?.role)) || '');
+                lines.push('```');
+                lines.push('');
+                lines.push('Output');
+                lines.push('```text');
+                lines.push(clampText(extractResponseText((u as any)?.response)) || '');
+                lines.push('```');
+              });
+            }
+          }
+
+          const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `sailor-logs-${sid}.md`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      } catch {}
+    };
+
+    try {
+      port.onMessage.addListener(once);
+    } catch {}
+    port.postMessage({ type: 'get_combined_session_logs', sessionId: sid });
+    timeoutId = setTimeout(() => {
+      try {
+        port.onMessage.removeListener(once);
+      } catch {}
+      console.warn('[Panel] Sailor logs download timed out after 10s');
+    }, 10000);
+  } catch {}
 }
