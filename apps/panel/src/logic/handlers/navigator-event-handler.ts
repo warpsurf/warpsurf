@@ -72,13 +72,13 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
           addTraceItem(Actors.AGENT_NAVIGATOR, `${tabContent}${workerSuffix}${nameSuffix}`, timestamp, deps, {
             pageUrl,
             pageTitle,
+            ...(workerId != null && { workerId }),
           });
         }
         break;
 
       case ExecutionState.STEP_START:
         setIsAgentModeActive(true);
-        // Always create aggregate root on first STEP_START, even without content
         if (!deps.agentTraceRootIdRef.current) {
           createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Initializing browser agent...', timestamp, deps, {
             statusHint: 'navigating',
@@ -90,7 +90,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Navigator started'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle },
+            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -101,6 +101,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
           addTraceItem(Actors.AGENT_NAVIGATOR, `${content}${workerSuffix}${nameSuffix}`, timestamp, deps, {
             pageUrl,
             pageTitle,
+            ...(workerId != null && { workerId }),
           });
           updateAggregateRootContent(content, deps);
         }
@@ -110,7 +111,11 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
         setIsAgentModeActive(true);
         if (deps.agentTraceRootIdRef.current) {
           const failContent = `Navigator failed: ${content || ''}${workerSuffix}${nameSuffix}`;
-          addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, { pageUrl, pageTitle });
+          addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, {
+            pageUrl,
+            pageTitle,
+            ...(workerId != null && { workerId }),
+          });
           if (content) updateAggregateRootContent(content, deps);
         }
         break;
@@ -127,7 +132,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Action started'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle },
+            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -141,7 +146,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Action completed'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle },
+            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -156,7 +161,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `Action failed: ${content || ''}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle },
+            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
           );
         }
         break;
