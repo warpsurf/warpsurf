@@ -512,8 +512,15 @@ export default class BrowserContext {
       throw new URLNotAllowedError(`Open tab failed. URL: ${url} is not allowed`);
     }
 
-    // Tab created in current window (user is always in a valid window via side panel)
-    const tab = await chrome.tabs.create({ url, active: false });
+    // Ensure the tab is created in a normal window (required for tab grouping).
+    // chrome.tabs.create() defaults to the last-focused window, which may be a
+    // popup, devtools, or other non-normal window where tab groups are not supported.
+    const createOpts: chrome.tabs.CreateProperties = { url, active: false };
+    try {
+      const normalWin = await chrome.windows.getLastFocused({ windowTypes: ['normal'] as any }).catch(() => null);
+      if (normalWin?.id) createOpts.windowId = normalWin.id;
+    } catch {}
+    const tab = await chrome.tabs.create(createOpts);
     if (!tab.id) throw new Error('No tab ID available');
 
     // Add to preferred/current group if known
