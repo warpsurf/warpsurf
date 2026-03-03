@@ -45,8 +45,14 @@ export interface MessageListProps {
   workflowLaneInfo?: Record<number, { label: string; color?: string }>;
   /** Callback to open full-screen workflow graph */
   onOpenWorkflowFullScreen?: () => void;
-  /** When true, preview space is reserved for the aggregate root even without a screenshot */
-  isAgentWorkflowActive?: boolean;
+}
+
+function hasPreviewContent(preview: InlinePreview | null | undefined): boolean {
+  return !!(preview?.screenshot || preview?.url);
+}
+
+function hasBatchContent(batch: InlinePreviewBatch | undefined): boolean {
+  return !!batch?.some(p => p.screenshot || p.url);
 }
 
 export default memo(function MessageList({
@@ -76,7 +82,6 @@ export default memo(function MessageList({
   workflowGraph,
   workflowLaneInfo,
   onOpenWorkflowFullScreen,
-  isAgentWorkflowActive = false,
 }: MessageListProps) {
   const lastAgentIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -106,20 +111,19 @@ export default memo(function MessageList({
           const messageId = `${message.timestamp}-${message.actor}`;
           const rootMeta = activeAggregateMessageId ? metadataByMessageId[activeAggregateMessageId] : undefined;
           const isCurrentRunRoot = activeAggregateMessageId === messageId;
-          const hasLivePreview = !!(inlinePreview || inlinePreviewBatch?.length);
+          const hasLivePreview = hasPreviewContent(inlinePreview) || hasBatchContent(inlinePreviewBatch);
           const isFallbackLastAgent =
             !activeAggregateMessageId &&
-            (hasLivePreview || isAgentWorkflowActive) &&
+            hasLivePreview &&
             (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
-          const showPreviewHere =
-            (hasLivePreview || isAgentWorkflowActive) && (isCurrentRunRoot || isFallbackLastAgent);
+          const showPreviewHere = hasLivePreview && (isCurrentRunRoot || isFallbackLastAgent);
           const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
 
-          // For completed sessions, show persisted final previews from metadata.
-          // Use rootMeta as fallback since the per-message metadata might not have
-          // finalPreview when activeAggregateMessageId is null.
+          // For completed sessions, show persisted final previews from metadata
+          // only when the preview has actual content (screenshot or URL).
           const effectiveMeta = metadata || rootMeta;
-          const hasFinalPreview = !!(effectiveMeta?.finalPreview || effectiveMeta?.finalPreviewBatch?.length);
+          const hasFinalPreview =
+            hasPreviewContent(effectiveMeta?.finalPreview) || hasBatchContent(effectiveMeta?.finalPreviewBatch);
           const showFinalPreviewHere =
             !showPreviewHere &&
             hasFinalPreview &&

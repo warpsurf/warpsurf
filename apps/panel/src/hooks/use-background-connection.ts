@@ -34,6 +34,7 @@ type BackgroundHandlers = {
   onRestoreViewState?: (data: { currentSessionId?: string; viewMode?: string }) => void;
   onSessionSubscribed?: (message: any) => void;
   onWorkflowStarted?: (message: any) => void;
+  onWorkflowPaused?: (message: any) => void;
   onDisconnect?: (error?: any) => void;
   onSpeechToTextResult?: (message: any) => void;
   onSpeechToTextError?: (message: any) => void;
@@ -288,6 +289,11 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             }
           } catch {}
           handlersRef.current.onWorkflowStarted?.(message);
+        } else if (message && message.type === 'workflow_paused') {
+          const wfSessionId = String(message?.data?.sessionId || '');
+          if (!wfSessionId || !sessionIdRef.current || wfSessionId === String(sessionIdRef.current)) {
+            handlersRef.current.onWorkflowPaused?.(message);
+          }
         } else if (message && message.type === 'shortcut') {
           try {
             const text = String((message as any)?.data?.text || '');
