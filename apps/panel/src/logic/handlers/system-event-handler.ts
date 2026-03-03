@@ -129,9 +129,9 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           agentTraceRootId: deps.agentTraceRootIdRef.current,
           agentType: deps.getCurrentTaskAgentType?.(),
         });
-        // Always update dashboard
+        // Update dashboard (skip for multiagent workers — workflow_ended handles it)
         try {
-          if (taskId) moveToCompleted(taskId, 'completed', deps);
+          if (taskId && deps.getCurrentTaskAgentType?.() !== 'multiagent') moveToCompleted(taskId, 'completed', deps);
         } catch {}
         // Clear pending terminal cache for this task
         try {
@@ -147,9 +147,10 @@ export const createSystemHandler: EventHandlerCreator = deps => {
         const isCurrentSession = isEventForCurrentSession(data);
 
         // Background persistence handles non-current sessions to prevent duplicates.
-
-        // Only update current session's UI
-        if (isCurrentSession) {
+        // For multiagent, worker TASK_OK events carry the parent sessionId as taskId,
+        // so isCurrentSession is true even for individual worker completions.
+        // Skip UI lifecycle here — workflow_ended handles multiagent finalization.
+        if (isCurrentSession && deps.getCurrentTaskAgentType?.() !== 'multiagent') {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
@@ -272,9 +273,9 @@ export const createSystemHandler: EventHandlerCreator = deps => {
 
       case ExecutionState.TASK_FAIL: {
         const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
-        // Always update dashboard
+        // Update dashboard (skip for multiagent workers — workflow_ended handles it)
         try {
-          if (taskId) moveToCompleted(taskId, 'failed', deps);
+          if (taskId && deps.getCurrentTaskAgentType?.() !== 'multiagent') moveToCompleted(taskId, 'failed', deps);
         } catch {}
         // Clear pending terminal cache for this task
         try {
@@ -304,8 +305,8 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           }
         }
 
-        // Only update current session's UI
-        if (isFailCurrentSession) {
+        // Only update current session's UI (skip for multiagent — workflow_ended handles lifecycle)
+        if (isFailCurrentSession && deps.getCurrentTaskAgentType?.() !== 'multiagent') {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
@@ -362,9 +363,9 @@ export const createSystemHandler: EventHandlerCreator = deps => {
 
       case ExecutionState.TASK_CANCEL: {
         const taskId = String(data?.taskId || deps.sessionIdRef.current || '');
-        // Always update dashboard
+        // Update dashboard (skip for multiagent workers — workflow_ended handles it)
         try {
-          if (taskId) moveToCompleted(taskId, 'cancelled', deps);
+          if (taskId && deps.getCurrentTaskAgentType?.() !== 'multiagent') moveToCompleted(taskId, 'cancelled', deps);
         } catch {}
         // Clear pending terminal cache for this task
         try {
@@ -393,8 +394,8 @@ export const createSystemHandler: EventHandlerCreator = deps => {
           }
         }
 
-        // Only update current session's UI
-        if (isCancelCurrentSession) {
+        // Only update current session's UI (skip for multiagent — workflow_ended handles lifecycle)
+        if (isCancelCurrentSession && deps.getCurrentTaskAgentType?.() !== 'multiagent') {
           deps.setIsJobActive(false);
           deps.workflowEndedRef.current = true;
           deps.setIsFollowUpMode(true);
