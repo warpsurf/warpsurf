@@ -691,9 +691,10 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
       const existing = await storage.get();
       const merged: Record<string, MessageMetadataValue> = { ...existing };
       for (const [msgId, msgMeta] of Object.entries(metadata)) {
-        if (msgId === '__sessionRootId') {
-          // Always update the session root ID
-          (merged as any).__sessionRootId = msgMeta;
+        if (msgId.startsWith('__')) {
+          // System keys (e.g. __sessionRootId, __workflowPlanItems, __workflowGraph)
+          // are stored as-is to preserve arrays and complex structures.
+          (merged as any)[msgId] = msgMeta;
         } else if (typeof msgMeta === 'object' && msgMeta !== null) {
           // For message metadata, merge trace items arrays
           const existingMeta = (existing as any)?.[msgId] || {};
