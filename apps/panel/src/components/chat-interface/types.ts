@@ -60,6 +60,7 @@ export interface MessageMetadata {
   workflowEndTime?: number;
   isCompleted?: boolean;
   totalWorkers?: number;
+  workerColorMap?: Record<string, string>;
   controlRequest?: { type: string; tabId?: number; reason?: string };
   finalPreview?: InlinePreview;
   finalPreviewBatch?: InlinePreviewBatch;
