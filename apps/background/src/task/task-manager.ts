@@ -58,6 +58,19 @@ interface TaskManagerOptions {
   dashboardPort?: chrome.runtime.Port;
 }
 
+function mirrorToPreview(m: any) {
+  return { screenshot: m?.screenshot, url: m?.url, title: m?.title, tabId: m?.tabId, color: m?.color };
+}
+
+function mirrorsToPreviewBatch(mirrors: any[]) {
+  return mirrors.map((m: any) => ({
+    ...mirrorToPreview(m),
+    agentId: m.agentId,
+    agentOrdinal: typeof m.workerIndex === 'number' ? m.workerIndex : undefined,
+    agentName: typeof m.workerIndex === 'number' ? `Sailor ${m.workerIndex}` : undefined,
+  }));
+}
+
 export class TaskManager extends EventEmitter {
   private tasks = new Map<string, Task>();
   private dashboardPort?: chrome.runtime.Port;
@@ -416,27 +429,15 @@ export class TaskManager extends EventEmitter {
 
       this.mirrors.freezeSession(sessionId);
 
-      // Mark trajectory as completed with captured mirrors
+      // Mark trajectory as completed with formatted preview data for panel display
       try {
-        let finalPreview = sessionMirrors[0];
+        let finalPreview = sessionMirrors[0] ? mirrorToPreview(sessionMirrors[0]) : undefined;
         if (!finalPreview) {
           const cached = this.tabMirrorService.getCachedScreenshot(sessionId);
-          if (cached?.screenshot) {
-            finalPreview = {
-              sessionId,
-              tabId: 0,
-              url: cached.url || '',
-              title: cached.title || '',
-              screenshot: cached.screenshot,
-              lastUpdated: (cached as any).timestamp,
-            } as any;
-          }
+          if (cached?.screenshot) finalPreview = mirrorToPreview(cached);
         }
-        trajectoryPersistence.markCompleted(
-          sessionId,
-          finalPreview,
-          sessionMirrors.length > 1 ? sessionMirrors : undefined,
-        );
+        const finalBatch = sessionMirrors.length > 1 ? mirrorsToPreviewBatch(sessionMirrors) : undefined;
+        trajectoryPersistence.markCompleted(sessionId, finalPreview, finalBatch);
       } catch {}
 
       this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'completed' });
@@ -1069,16 +1070,17 @@ export class TaskManager extends EventEmitter {
 
     this.mirrors.freezeSession(sessionId);
 
-    // Mark trajectory as completed with captured mirrors
+    // Mark trajectory as completed with captured mirrors (formatted for panel display)
     try {
-      trajectoryPersistence.markCompleted(
-        sessionId,
-        sessionMirrors[0],
-        sessionMirrors.length > 1 ? sessionMirrors : undefined,
-      );
+      let finalPreview = sessionMirrors[0] ? mirrorToPreview(sessionMirrors[0]) : undefined;
+      if (!finalPreview) {
+        const cached = this.tabMirrorService.getCachedScreenshot(sessionId);
+        if (cached?.screenshot) finalPreview = mirrorToPreview(cached);
+      }
+      const finalBatch = sessionMirrors.length > 1 ? mirrorsToPreviewBatch(sessionMirrors) : undefined;
+      trajectoryPersistence.markCompleted(sessionId, finalPreview, finalBatch);
     } catch {}
 
-    // Generate smart title after task completes (success, failure, or cancellation)
     if (this.isPrimarySession(task)) {
       this.generateSmartTitle(sessionId, task);
     }
