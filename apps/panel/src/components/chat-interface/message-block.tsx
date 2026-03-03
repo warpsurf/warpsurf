@@ -2,8 +2,18 @@ import type { Message } from '@extension/storage';
 import { useMemo, useState, useRef, useEffect, lazy, Suspense, CSSProperties } from 'react';
 import { Actors } from '@extension/storage';
 import { FiCopy, FiClock, FiUser } from 'react-icons/fi';
-import { FaBrain, FaSearch, FaRobot, FaRandom, FaMagic, FaCog, FaChessKing, FaWrench } from 'react-icons/fa';
-import { FaFileAlt } from 'react-icons/fa';
+import {
+  FaBrain,
+  FaSearch,
+  FaRobot,
+  FaRandom,
+  FaWrench,
+  FaAnchor,
+  FaCompass,
+  FaClipboardList,
+  FaFileAlt,
+  FaShip,
+} from 'react-icons/fa';
 import { ACTOR_PROFILES } from '../../types/message';
 import { formatUsd, formatTimestamp, formatDuration, hexToRgba, stripWorkerSuffix } from '../../utils';
 import type { JobSummary, MessageMetadata, TraceItem, WorkerItem, ContextTabInfo } from './types';
@@ -188,7 +198,8 @@ export default function MessageBlock({
   }, [content, message.actor, message.timestamp, metadata]);
   const currentPhase = useMemo((): 'planner' | 'processing' | 'refiner' | 'workers' | null => {
     const lower = content.toLowerCase();
-    if (lower.startsWith('creating plan') || lower.startsWith('commodore planning')) return 'planner';
+    if (lower.startsWith('creating plan') || lower.startsWith('commodore planning') || lower.startsWith('plan created'))
+      return 'planner';
     if (lower.startsWith('processing plan') || lower.startsWith('quartermaster')) return 'processing';
     if (lower.startsWith('refining plan') || lower.includes('refinement complete')) return 'refiner';
     if (
@@ -231,7 +242,6 @@ export default function MessageBlock({
       }).length,
     [workerItems],
   );
-  const showMultiAvatar = (workerItems?.length || totalWorkers) && (isProgress || isAgentAggregate);
   const isActiveWorkflow = !!(
     !metadata?.isCompleted &&
     (isProgress || currentPhase || (isAgentAggregate && (isAgentWorking || statusHint)))
@@ -257,9 +267,7 @@ export default function MessageBlock({
 
   const getAvatarBackground = () => {
     if (isUser) return isDarkMode ? '#22c55e' : '#4ade80';
-    if (currentPhase === 'planner' || currentPhase === 'refiner') return isDarkMode ? '#fb923c' : '#fdba74';
-    if (currentPhase === 'processing') return isDarkMode ? '#0369a1' : '#38bdf8';
-    if (currentPhase === 'workers') return isDarkMode ? '#f59e0b' : '#fbbf24';
+    if (message.actor === Actors.MULTIAGENT || currentPhase) return isDarkMode ? '#1e40af' : '#3b82f6';
     if (isEstimatorActive) return isDarkMode ? '#fbbf24' : '#fcd34d';
     if (message.actor === Actors.CHAT) return isDarkMode ? '#8b5cf6' : '#a78bfa';
     if (message.actor === Actors.SEARCH) return isDarkMode ? '#14b8a6' : '#5eead4';
@@ -271,27 +279,12 @@ export default function MessageBlock({
   const getAvatarIcon = () => {
     const ic = 'h-2.5 w-2.5 text-white';
     if (isUser) return <FiUser className={ic} />;
-    if (currentPhase === 'planner') return <FaChessKing className={ic} />;
-    if (currentPhase === 'processing') return <FaCog className={`${ic} phase-spin`} />;
-    if (currentPhase === 'refiner') return <FaMagic className={ic} />;
-    if (currentPhase === 'workers') {
-      const count = Math.max(1, Math.min(4, activeWorkers ?? totalWorkers ?? 1));
-      return showMultiAvatar ? (
-        <span className="inline-flex items-center gap-0">
-          {Array.from({ length: count }).map((_, i) => (
-            <FaRobot key={i} className={`${ic} phase-bob`} />
-          ))}
-        </span>
-      ) : (
-        <FaRobot className={`${ic} phase-bob`} />
-      );
-    }
+    if (message.actor === Actors.MULTIAGENT || currentPhase) return <FaShip className={ic} />;
     if (isEstimatorActive) return <FiClock className={ic} />;
     if (message.actor === Actors.CHAT) return <FaBrain className={ic} />;
     if (message.actor === Actors.SEARCH) return <FaSearch className={ic} />;
     if (message.actor === Actors.AUTO) return <FaRandom className={ic} />;
     if (message.actor === Actors.TOOL) return <FaWrench className={ic} />;
-    if (message.actor === Actors.MULTIAGENT) return <FaChessKing className={ic} />;
     if (isProgress || (isAgentAggregate && !isEstimator)) return <FaRobot className={ic} />;
     if (actor?.icon)
       return <img src={actor.icon} alt={actor.name} className="h-2.5 w-2.5 opacity-100 drop-shadow invert" />;
@@ -493,29 +486,53 @@ export default function MessageBlock({
       <div className={`${bubbleClass} ${actorTint} liquid-bubble`} style={dynamicStyles}>
         {/* Floating avatar */}
         <div
-          className={`float-left mr-1.5 flex h-4 ${showMultiAvatar ? 'min-w-[24px] px-0.5' : 'w-4'} items-center justify-center rounded-full`}
+          className="float-left mr-1.5 flex h-4 w-4 items-center justify-center rounded-full"
           style={{ backgroundColor: getAvatarBackground() }}>
           {getAvatarIcon()}
         </div>
         {/* Secondary role indicator for agent aggregate */}
         {(isProgress || isAgentAggregate) &&
           lastTrace?.actor &&
-          [
-            'agent_navigator',
-            'agent_planner',
-            'agent_validator',
-            'planner',
-            'refiner',
-            'overseer',
-            'scheduler',
-          ].includes(lastTrace.actor) &&
           (() => {
+            if (lastTrace.workerId != null) {
+              const num = String(lastTrace.workerId).replace(/\D/g, '') || '';
+              const worker = workerItems?.find(w => String(w.workerId) === String(lastTrace.workerId));
+              return (
+                <span
+                  className="float-left mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+                  style={{
+                    backgroundColor: worker?.color || (isDarkMode ? '#7c3aed' : '#a78bfa'),
+                    color: '#fff',
+                  }}>
+                  {num || '•'}
+                </span>
+              );
+            }
+            const ROLE_ACTORS = [
+              'planner',
+              'refiner',
+              'overseer',
+              'scheduler',
+              'commodore',
+              'captain',
+              'quartermaster',
+            ];
+            if (!ROLE_ACTORS.includes(lastTrace.actor)) return null;
             const role = ACTOR_PROFILES[lastTrace.actor as keyof typeof ACTOR_PROFILES];
-            return role?.icon ? (
+            const ROLE_ICONS: Record<string, JSX.Element> = {
+              commodore: <FaAnchor className="h-2.5 w-2.5 text-white" />,
+              planner: <FaAnchor className="h-2.5 w-2.5 text-white" />,
+              captain: <FaCompass className="h-2.5 w-2.5 text-white" />,
+              quartermaster: <FaClipboardList className="h-2.5 w-2.5 text-white" />,
+            };
+            const iconElement =
+              ROLE_ICONS[lastTrace.actor] ||
+              (role?.icon ? <img src={role.icon} alt="" className="h-2.5 w-2.5 opacity-100 invert" /> : null);
+            return iconElement ? (
               <span
                 className="float-left mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full"
-                style={{ backgroundColor: isDarkMode ? '#f59e0b' : '#fbbf24' }}>
-                <img src={role.icon} alt="" className="h-2.5 w-2.5 opacity-100 invert" />
+                style={{ backgroundColor: role?.iconBackground || (isDarkMode ? '#f59e0b' : '#fbbf24') }}>
+                {iconElement}
               </span>
             ) : null;
           })()}
@@ -614,9 +631,12 @@ export default function MessageBlock({
                       agent_navigator: 'Navigating',
                       agent_planner: 'Planning',
                       planner: 'Planning',
+                      commodore: 'Planning',
                       agent_validator: 'Validating',
                       refiner: 'Refining',
+                      captain: 'Overseeing',
                       overseer: 'Commanding',
+                      quartermaster: 'Scheduling',
                       scheduler: 'Scheduling',
                       worker: 'Executing',
                     };
@@ -631,7 +651,7 @@ export default function MessageBlock({
                     };
                     const phaseLabelMap: Record<string, string> = {
                       planner: 'Planning',
-                      processing: 'Processing',
+                      processing: 'Scheduling',
                       refiner: 'Refining',
                       workers: 'Executing',
                     };
@@ -782,29 +802,86 @@ export default function MessageBlock({
             !collapsed &&
             expandedTab === 'details' &&
             (() => {
-              const captainTrace = traceItems.filter(t => t.actor === 'captain');
-              if (captainTrace.length === 0) return null;
+              const latest = traceItems.filter(t => t.actor === 'planner' || t.actor === 'commodore').at(-1);
+              if (!latest) return null;
+              const brief = (latest.content || 'Planning...').split('\n')[0];
+              return (
+                <div
+                  className="mt-2 rounded-md border p-2 text-xs clear-both"
+                  style={{ borderColor: isDarkMode ? '#1e40af' : '#93c5fd' }}>
+                  <div className={`mb-1 font-medium ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>Commodore</div>
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full shrink-0"
+                      style={{ backgroundColor: isDarkMode ? '#1e40af' : '#3b82f6' }}>
+                      <FaAnchor className="h-2 w-2 text-white" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className={`${isDarkMode ? 'text-blue-400' : 'text-blue-700'} truncate`}>{brief}</div>
+                      <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        {formatTimestamp(latest.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          {isAgentAggregate &&
+            !collapsed &&
+            expandedTab === 'details' &&
+            (() => {
+              const latest = traceItems.filter(t => t.actor === 'quartermaster').at(-1);
+              if (!latest) return null;
+              return (
+                <div
+                  className="mt-2 rounded-md border p-2 text-xs clear-both"
+                  style={{ borderColor: isDarkMode ? '#0369a1' : '#7dd3fc' }}>
+                  <div className={`mb-1 font-medium ${isDarkMode ? 'text-sky-400' : 'text-sky-700'}`}>
+                    Quartermaster
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full shrink-0 mt-0.5"
+                      style={{ backgroundColor: isDarkMode ? '#0369a1' : '#38bdf8' }}>
+                      <FaClipboardList className="h-2 w-2 text-white" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className={`${isDarkMode ? 'text-sky-400' : 'text-sky-700'} whitespace-pre-wrap`}>
+                        {latest.content || 'Scheduling...'}
+                      </div>
+                      <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        {formatTimestamp(latest.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          {isAgentAggregate &&
+            !collapsed &&
+            expandedTab === 'details' &&
+            (() => {
+              const latest = traceItems.filter(t => t.actor === 'captain').at(-1);
+              if (!latest) return null;
               return (
                 <div
                   className="mt-2 rounded-md border p-2 text-xs clear-both"
                   style={{ borderColor: isDarkMode ? '#92400e' : '#fbbf24' }}>
-                  <div
-                    className={`mb-1 font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                    <FaChessKing className="h-2.5 w-2.5" /> Captain
-                  </div>
-                  <div className="space-y-1">
-                    {captainTrace.map((item, i) => (
-                      <div key={`cpt-${item.timestamp}-${i}`} className="flex items-start gap-2">
-                        <span className={`shrink-0 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                          {new Date(item.timestamp).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                          })}
-                        </span>
-                        <span className={isDarkMode ? 'text-slate-300' : 'text-gray-600'}>{item.content}</span>
+                  <div className={`mb-1 font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>Captain</div>
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full shrink-0"
+                      style={{ backgroundColor: isDarkMode ? '#d97706' : '#f59e0b' }}>
+                      <FaCompass className="h-2 w-2 text-white" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className={`${isDarkMode ? 'text-amber-400' : 'text-amber-700'} truncate`}>
+                        {latest.content || 'Monitoring...'}
                       </div>
-                    ))}
+                      <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        {formatTimestamp(latest.timestamp)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );

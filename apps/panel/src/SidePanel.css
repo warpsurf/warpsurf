@@ -298,6 +298,15 @@ code {
 }
 .phase-spin { animation: phase-spin 2.4s linear infinite; }
 
+@keyframes phase-schedule {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.15) rotate(-5deg); }
+  50% { transform: scale(1) rotate(5deg); }
+  75% { transform: scale(1.1) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.phase-schedule { animation: phase-schedule 0.8s ease-in-out infinite; }
+
 @keyframes phase-twinkle {
   0%, 100% { opacity: 0.9; filter: drop-shadow(0 0 0 rgba(255,255,255,0)); transform: translateY(0) scale(1); }
   50% { opacity: 1; filter: drop-shadow(0 0 2px rgba(255,255,255,0.6)); transform: translateY(-1px) scale(1.05); }
@@ -311,7 +320,7 @@ code {
 .phase-bob { animation: phase-bob 1.8s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .phase-pulse, .phase-spin, .phase-twinkle, .phase-bob { animation: none !important; }
+  .phase-pulse, .phase-spin, .phase-schedule, .phase-twinkle, .phase-bob { animation: none !important; }
 }
 
 /* Minimal top-down fish that swim across the panel */
