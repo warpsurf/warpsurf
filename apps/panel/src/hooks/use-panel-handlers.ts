@@ -376,21 +376,21 @@ export function usePanelHandlers(params: {
 
   const handlePauseTask = useCallback(async () => {
     try {
-      portRef.current?.postMessage({ type: 'pause_task' });
+      portRef.current?.postMessage({ type: 'pause_task', sessionId: sessionIdRef.current });
       setIsPaused(true);
     } catch (e) {
       logger.error('pause_task error', e);
     }
-  }, [portRef, setIsPaused, logger]);
+  }, [portRef, sessionIdRef, setIsPaused, logger]);
 
   const handleResumeTask = useCallback(async () => {
     try {
-      portRef.current?.postMessage({ type: 'resume_task' });
+      portRef.current?.postMessage({ type: 'resume_task', sessionId: sessionIdRef.current });
       setIsPaused(false);
     } catch (e) {
       logger.error('resume_task error', e);
     }
-  }, [portRef, setIsPaused, logger]);
+  }, [portRef, sessionIdRef, setIsPaused, logger]);
 
   const handleLoadHistory = useCallback(async () => {
     await loadChatSessions();

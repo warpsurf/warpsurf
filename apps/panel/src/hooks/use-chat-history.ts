@@ -188,22 +188,34 @@ export function useChatHistory({
             const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
             const storedContent = String((rootMsg as any)?.content ?? '').trim();
             if (isStaleContent(storedContent)) {
-              const traceItems = rootMeta.traceItems as Array<{ actor: string; content: string; timestamp: number }>;
-              const STATUS_ONLY_RE = /^(Workflow completed|Task cancelled)$/i;
-              const lastSubstantial = [...traceItems].reverse().find(t => {
-                const c = t.content?.trim();
-                return c && !isStaleContent(c) && !STATUS_ONLY_RE.test(c);
-              });
-              const lastSystem = [...traceItems]
-                .reverse()
-                .find(t => t.actor === Actors.SYSTEM || t.actor?.toLowerCase?.() === 'system');
-              const bestContent =
-                lastSubstantial?.content || lastSystem?.content || traceItems[traceItems.length - 1]?.content;
-              if (bestContent) {
-                reconstructedContent = bestContent;
+              // Prefer explicitly stored final answer (set by onFinalAnswer)
+              const storedFinal = rootMeta.finalAnswerContent;
+              if (storedFinal && typeof storedFinal === 'string' && storedFinal.trim()) {
+                reconstructedContent = storedFinal.trim();
+              } else {
+                const traceItems = rootMeta.traceItems as Array<{
+                  actor: string;
+                  content: string;
+                  timestamp: number;
+                }>;
+                const STATUS_ONLY_RE = /^(Workflow completed|Task cancelled)$/i;
+                const FINAL_ANSWER_PREFIX_RE = /^Final answer:\s*/i;
+                const stripFinalPrefix = (c: string) => c.replace(FINAL_ANSWER_PREFIX_RE, '');
+                const lastSubstantial = [...traceItems].reverse().find(t => {
+                  const c = t.content?.trim();
+                  return c && !isStaleContent(c) && !STATUS_ONLY_RE.test(c);
+                });
+                const lastSystem = [...traceItems]
+                  .reverse()
+                  .find(t => t.actor === Actors.SYSTEM || t.actor?.toLowerCase?.() === 'system');
+                const raw =
+                  lastSubstantial?.content || lastSystem?.content || traceItems[traceItems.length - 1]?.content;
+                reconstructedContent = raw ? stripFinalPrefix(raw) : undefined;
+              }
+              if (reconstructedContent) {
                 finalMessages = finalMessages.map((m: any) => {
                   const msgId = `${m.timestamp}-${m.actor}`;
-                  if (msgId === restoredRootId) return { ...m, content: bestContent };
+                  if (msgId === restoredRootId) return { ...m, content: reconstructedContent };
                   return m;
                 });
               }

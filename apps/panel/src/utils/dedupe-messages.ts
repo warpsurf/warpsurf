@@ -51,6 +51,9 @@ export function dedupeMessages(messages: any[] | undefined | null): any[] {
   const seenContent = new Set<string>();
   const seenActorTimestamp = new Set<string>();
   const settingChanges = new Map<string, { index: number; ts: number }>();
+  // Cross-actor dedup: track non-user normalized content to catch duplicates
+  // created by race conditions between background and panel persistence paths.
+  const seenAssistantContent = new Set<string>();
 
   for (let msg of list) {
     const actor = String((msg as any)?.actor || '');
@@ -72,6 +75,7 @@ export function dedupeMessages(messages: any[] | undefined | null): any[] {
       if (seenEventIds.has(eventId)) continue;
       seenEventIds.add(eventId);
     }
+    const isUser = actor === Actors.USER || actor.toLowerCase() === 'user';
     const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
     const ts = Number((msg as any)?.timestamp || 0);
     if (!content) {
@@ -91,6 +95,14 @@ export function dedupeMessages(messages: any[] | undefined | null): any[] {
       continue;
     }
     seenContent.add(contentKey);
+
+    // Cross-actor dedup for assistant messages: within the same session,
+    // identical substantive content from different actors is always a duplicate
+    // (caused by race between panel and background persistence).
+    if (!isUser && !isSystem && normalizedContent.length > 20) {
+      if (seenAssistantContent.has(normalizedContent)) continue;
+      seenAssistantContent.add(normalizedContent);
+    }
 
     const key = `${actor}|${content}`;
     const last = lastByActorContent.get(key);
