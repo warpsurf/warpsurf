@@ -227,6 +227,21 @@ export function createPanelHandlers(deps: any): any {
           });
         }
 
+        // Remove drained user messages from the queued strip
+        try {
+          const drained = (message as any)?.data?.drainedMessages;
+          if (Array.isArray(drained) && drained.length > 0) {
+            deps.setQueuedMessages?.((prev: string[]) => {
+              const remaining = [...prev];
+              for (const msg of drained) {
+                const idx = remaining.indexOf(msg);
+                if (idx >= 0) remaining.splice(idx, 1);
+              }
+              return remaining;
+            });
+          }
+        } catch {}
+
         // Handle explicit cancel messages (not substring matches like "noise cancellation")
         try {
           const lowered = String(text).toLowerCase().trim();
@@ -293,7 +308,8 @@ export function createPanelHandlers(deps: any): any {
         if (!isAppropriateWorkflow) return;
 
         // Use the SAME utilities as single-agent workflow for consistency
-        const actorToUse = actorHint === 'multiagent' ? Actors.MULTIAGENT : Actors.AGENT_NAVIGATOR;
+        const actorToUse =
+          actorHint === 'multiagent' || actorHint === 'captain' ? Actors.MULTIAGENT : Actors.AGENT_NAVIGATOR;
         const traceActor = actorHint || Actors.SYSTEM;
 
         if (text) {
@@ -303,15 +319,17 @@ export function createPanelHandlers(deps: any): any {
           addTraceItem(traceActor, text, timestamp, deps, workerId != null ? { workerId } : undefined);
         }
 
-        // Update the main message content for phase lines
+        // Update the main message content for phase lines (skip captain status messages)
         try {
-          const isPhaseLine =
-            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Crew)\s+(executing plan|deployed))\b/i.test(
-              text,
-            ) ||
-            (workerId && /^(?:Worker|Crew)\s+\d+\s+deployed:/i.test(text));
-          if (isPhaseLine) {
-            updateAggregateRootContent(text, deps);
+          if (actorHint !== 'captain') {
+            const isPhaseLine =
+              /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Crew)\s+(executing plan|deployed))\b/i.test(
+                text,
+              ) ||
+              (workerId && /^(?:Worker|Crew)\s+\d+\s+deployed:/i.test(text));
+            if (isPhaseLine) {
+              updateAggregateRootContent(text, deps);
+            }
           }
         } catch {}
 
@@ -356,16 +374,21 @@ export function createPanelHandlers(deps: any): any {
           deps.setMessageMetadata((prev: any) => {
             const existing: any = prev[rootId] || {};
             const traceItems = Array.isArray(existing.traceItems) ? existing.traceItems : [];
-            return {
+            const updated = {
               ...prev,
               [rootId]: {
                 ...existing,
+                finalAnswerContent: text,
                 traceItems: [
                   ...traceItems,
                   { actor: deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT, content: text, timestamp: ts },
                 ],
               },
             } as any;
+            try {
+              if (deps.sessionIdRef.current) chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, updated);
+            } catch {}
+            return updated;
           });
           // Update the existing aggregate root's content in storage (not addMessage which creates duplicates)
           try {
@@ -794,7 +817,7 @@ export function createPanelHandlers(deps: any): any {
         const batch = Array.from(latestByAgent.values()).map((d: any) => {
           const id = String(d?.agentId || '');
           let ordinal =
-            typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
+            typeof d?.workerIndex === 'number' ? d.workerIndex + 1 : deps.ensureAgentOrdinal(id, d?.workerIndex);
           let name = `Crew ${ordinal}`;
           try {
             const mapped = groups.find((g: any) => String(g.taskId) === id);
@@ -871,9 +894,8 @@ export function createPanelHandlers(deps: any): any {
           if (currentSession && String((d as any)?.sessionId || (d as any)?.agentId || '') !== currentSession) continue;
           const id = String(d?.agentId || '').trim();
           if (!id) continue;
-          // Prefer authoritative workerIndex from backend
           const ordinal =
-            typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
+            typeof d?.workerIndex === 'number' ? d.workerIndex + 1 : deps.ensureAgentOrdinal(id, d?.workerIndex);
           const name = `Crew ${ordinal}`;
           const color = String(d?.color || '#A78BFA');
           const groupId = typeof d?.groupId === 'number' ? d.groupId : undefined;
@@ -1297,6 +1319,11 @@ export function createPanelHandlers(deps: any): any {
           deps.setShowStopButton(true);
           deps.workflowEndedRef.current = false;
         }
+      } catch {}
+    },
+    onWorkflowPaused: (_message: any) => {
+      try {
+        deps.setIsPaused?.(true);
       } catch {}
     },
     onDisconnect: () => {
