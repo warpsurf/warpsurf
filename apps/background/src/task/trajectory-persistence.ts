@@ -312,7 +312,9 @@ export class TrajectoryPersistenceService {
     if (eventId && trajectory.traceItemIds) trajectory.traceItemIds.add(eventId);
     if (isFirstItem && !trajectory.rootMessagePersisted) {
       trajectory.rootMessagePersisted = true;
-      void this.ensureRootMessage(sessionId, actor, timestamp, content);
+      if (!trajectory.isMultiagent) {
+        void this.ensureRootMessage(sessionId, actor, timestamp, content);
+      }
     }
     this.schedulePersist(sessionId);
   }
