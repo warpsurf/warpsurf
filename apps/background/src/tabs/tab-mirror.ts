@@ -452,6 +452,24 @@ export class TabMirrorService {
       this.cacheSessionScreenshot(sessionId, bestMirror.screenshot, bestMirror.url, bestMirror.title);
     }
 
+    // Cache per-worker screenshots so the Agent Manager can display them after completion
+    const allSessionMirrors =
+      set && set.size > 0
+        ? (Array.from(set)
+            .map(tabId => this.currentMirrors.get(tabId))
+            .filter(Boolean) as TabMirrorData[])
+        : Array.from(this.currentMirrors.values()).filter(m => m.sessionId === sessionId);
+    for (const mirror of allSessionMirrors) {
+      if (mirror.screenshot && mirror.agentId) {
+        this.cachedSessionScreenshots.set(mirror.agentId, {
+          screenshot: mirror.screenshot,
+          url: mirror.url,
+          title: mirror.title,
+          timestamp: Date.now(),
+        });
+      }
+    }
+
     // Freeze mirrors from sessionToTabs if available
     if (set && set.size > 0) {
       for (const tabId of Array.from(set)) {
