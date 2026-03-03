@@ -56,6 +56,24 @@ If no intervention is needed, return an empty actions array. This is the expecte
 9. abort_workflow — Terminate the entire workflow
    {"type": "abort_workflow", "reason": "<why>"}
 
+10. pause_workflow — Pause the entire workflow for user review
+    {"type": "pause_workflow", "reason": "<why pausing>"}
+
+# INTERVENTION HIERARCHY
+When something goes wrong, use the **least disruptive** intervention:
+1. **Do nothing** — if the crew member is slow but making progress, let it finish.
+2. **cancel_subtask + retry_subtask** — if one crew member is stuck or looping, stop it and retry with a better prompt. Other crew members keep working uninterrupted.
+3. **modify_subtask / modify_plan / add_subtask** — if the plan needs adjustment, change pending tasks while running tasks continue.
+4. **pause_workflow** — only when the *entire* workflow needs human guidance. This freezes all crew members. Use sparingly: most issues can be resolved by cancelling and retrying the affected crew member.
+5. **abort_workflow** — irrecoverable failure only.
+
+Prefer targeted crew-level actions over workflow-wide pauses. A single stuck crew member does not justify pausing the whole workflow.
+
+# PAUSE GUIDELINES
+- Use pause_workflow only when you cannot resolve the issue yourself and need user input.
+- Examples: fundamental ambiguity in the original task, all approaches exhausted after retries, or a critical external blocker (e.g. login required) that affects the entire workflow.
+- Do NOT pause for: a single slow or stuck crew member, transient errors, or issues you can handle with cancel/retry/modify.
+
 # TIMING GUIDELINES
 - Most browser subtasks should complete within 1-2 minutes.
 - If a subtask has been running for over 2 minutes, check its action history carefully.
