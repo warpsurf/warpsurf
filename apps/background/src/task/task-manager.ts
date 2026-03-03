@@ -21,6 +21,7 @@ import { TaskQueue } from './task-queue';
 import { TabGroupService } from './tab-group-service';
 import { MirrorCoordinator } from './mirror-coordinator';
 import { WorkerSessionManager } from './worker-session-manager';
+import type { SharedTabRegistry } from './shared-tab-registry';
 import { tabExists } from '../utils';
 import { trajectoryPersistence } from './trajectory-persistence';
 import { globalTokenTracker } from '../utils/token-tracker';
@@ -66,8 +67,8 @@ function mirrorsToPreviewBatch(mirrors: any[]) {
   return mirrors.map((m: any) => ({
     ...mirrorToPreview(m),
     agentId: m.agentId,
-    agentOrdinal: typeof m.workerIndex === 'number' ? m.workerIndex : undefined,
-    agentName: typeof m.workerIndex === 'number' ? `Crew ${m.workerIndex}` : undefined,
+    agentOrdinal: typeof m.workerIndex === 'number' ? m.workerIndex + 1 : undefined,
+    agentName: typeof m.workerIndex === 'number' ? `Crew ${m.workerIndex + 1}` : undefined,
   }));
 }
 
@@ -288,7 +289,7 @@ export class TaskManager extends EventEmitter {
   ): Promise<string> {
     const taskId = explicitId || `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const { name: taskName, worker_num } = name
-      ? { name, worker_num: workerIndex || 0 }
+      ? { name, worker_num: workerIndex ?? 0 }
       : this.tabGroups.getNextCrewName(this.tasks);
 
     const used = await this.tabGroups.getUsedColors(this.tasks);
@@ -769,6 +770,10 @@ export class TaskManager extends EventEmitter {
         safePostMessage(port, { type: 'tab-mirror-update', data: latestMirror });
       }
     }
+  }
+
+  setSharedTabRegistry(registry: SharedTabRegistry): void {
+    this.workers.setSharedTabRegistry(registry);
   }
 
   async createWorkerSession(
