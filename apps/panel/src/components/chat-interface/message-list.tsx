@@ -106,31 +106,41 @@ export default memo(function MessageList({
           const messageId = `${message.timestamp}-${message.actor}`;
           const rootMeta = activeAggregateMessageId ? metadataByMessageId[activeAggregateMessageId] : undefined;
           const isCurrentRunRoot = activeAggregateMessageId === messageId;
-          // Only consider LIVE previews, not final preview from metadata
           const hasLivePreview = !!(inlinePreview || inlinePreviewBatch?.length);
           const isFallbackLastAgent =
             !activeAggregateMessageId &&
             (hasLivePreview || isAgentWorkflowActive) &&
             (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
-          // Reserve preview space when workflow is active (even without a screenshot yet)
           const showPreviewHere =
             (hasLivePreview || isAgentWorkflowActive) && (isCurrentRunRoot || isFallbackLastAgent);
           const metadata = metadataByMessageId[messageId] || (showPreviewHere ? rootMeta : undefined);
+
+          // For completed sessions, show persisted final previews from metadata.
+          // Use rootMeta as fallback since the per-message metadata might not have
+          // finalPreview when activeAggregateMessageId is null.
+          const effectiveMeta = metadata || rootMeta;
+          const hasFinalPreview = !!(effectiveMeta?.finalPreview || effectiveMeta?.finalPreviewBatch?.length);
+          const showFinalPreviewHere =
+            !showPreviewHere &&
+            hasFinalPreview &&
+            effectiveMeta?.isCompleted &&
+            (isCurrentRunRoot || index === lastAgentIndex);
+
           const agentColorHex =
             metadata?.agentColor || (activeAggregateMessageId === messageId ? inlinePreview?.color : undefined);
           const showDivider = shouldShowDateDivider(
             message.timestamp,
             index > 0 ? messages[index - 1].timestamp : undefined,
           );
-          // Resolve attachments for this message from session-level map
           const attachmentIds = metadata?.attachmentIds || [];
           const resolvedAttachments = attachmentIds.map((id: string) => sessionAttachments[id]).filter(Boolean);
 
+          const showAnyPreview = showPreviewHere || showFinalPreviewHere;
           const messageBlockProps = {
             message,
             isSameActor: index > 0 && messages[index - 1].actor === message.actor,
             isDarkMode,
-            compactMode: showPreviewHere ? false : compactMode,
+            compactMode: showAnyPreview ? false : compactMode,
             jobSummary: jobSummaries[messageId],
             metadata,
             isAgentAggregate: !!metadata?.traceItems,
@@ -157,29 +167,61 @@ export default memo(function MessageList({
           const prevIsUser = index > 0 && messages[index - 1].actor === Actors.USER;
           const needsExtraSpace = index > 0 && isUserMessage !== prevIsUser;
 
-          return showPreviewHere ? (
-            <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
-              {showDivider && <DateDivider timestamp={message.timestamp} />}
-              <div className="flex gap-2">
-                <div className="flex-1 min-w-0">
-                  <MessageBlock {...messageBlockProps} hasPreviewPanel />
-                </div>
-                <div className="w-1/3 flex-shrink-0">
-                  <PreviewPanel
-                    inlinePreview={inlinePreview ?? null}
-                    inlinePreviewBatch={inlinePreviewBatch || []}
-                    agentColorHex={agentColorHex}
-                    isPaused={isPaused}
-                    isPreviewCollapsed={isPreviewCollapsed}
-                    isDarkMode={isDarkMode}
-                    onTogglePreviewCollapsed={onTogglePreviewCollapsed}
-                    onOpenPreviewTab={onOpenPreviewTab}
-                    onTakeControl={onTakeControl}
-                  />
+          if (showPreviewHere) {
+            return (
+              <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                {showDivider && <DateDivider timestamp={message.timestamp} />}
+                <div className="flex gap-2">
+                  <div className="flex-1 min-w-0">
+                    <MessageBlock {...messageBlockProps} hasPreviewPanel />
+                  </div>
+                  <div className="w-1/3 flex-shrink-0">
+                    <PreviewPanel
+                      inlinePreview={inlinePreview ?? null}
+                      inlinePreviewBatch={inlinePreviewBatch || []}
+                      agentColorHex={agentColorHex}
+                      isPaused={isPaused}
+                      isPreviewCollapsed={isPreviewCollapsed}
+                      isDarkMode={isDarkMode}
+                      onTogglePreviewCollapsed={onTogglePreviewCollapsed}
+                      onOpenPreviewTab={onOpenPreviewTab}
+                      onTakeControl={onTakeControl}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
+            );
+          }
+
+          if (showFinalPreviewHere) {
+            const finalMeta = metadata || rootMeta;
+            const finalBatch = finalMeta?.finalPreviewBatch || [];
+            const finalSingle = finalMeta?.finalPreview || null;
+            return (
+              <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                {showDivider && <DateDivider timestamp={message.timestamp} />}
+                <div className="flex gap-2">
+                  <div className="flex-1 min-w-0">
+                    <MessageBlock {...messageBlockProps} hasPreviewPanel />
+                  </div>
+                  <div className="w-1/3 flex-shrink-0">
+                    <PreviewPanel
+                      inlinePreview={finalSingle}
+                      inlinePreviewBatch={finalBatch}
+                      agentColorHex={agentColorHex}
+                      isPaused={false}
+                      isPreviewCollapsed={isPreviewCollapsed}
+                      isDarkMode={isDarkMode}
+                      onTogglePreviewCollapsed={onTogglePreviewCollapsed}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
             <div className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
               {showDivider && <DateDivider timestamp={message.timestamp} />}
               <MessageBlock {...messageBlockProps} />
