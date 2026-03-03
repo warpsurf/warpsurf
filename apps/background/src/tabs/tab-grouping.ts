@@ -1,7 +1,16 @@
 // Shared tab grouping helpers to reduce duplication in TaskManager
 
 export const TAB_GROUP_COLORS = [
-  'grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange', 'black',
+  'grey',
+  'blue',
+  'red',
+  'yellow',
+  'green',
+  'pink',
+  'purple',
+  'cyan',
+  'orange',
+  'black',
 ] as unknown as Array<chrome.tabGroups.Color>;
 
 export const TAB_GROUP_COLOR_HEX: Record<string, string> = {
@@ -28,17 +37,15 @@ export function chooseAvailableGroupColor(
   return { name, hex };
 }
 
-export function computeWebAgentGroupTitle(rawName: string, explicitIndex?: number): string {
+export function computeSailorGroupTitle(rawName: string, explicitIndex?: number): string {
   let index: number | null = null;
   if (typeof explicitIndex === 'number' && explicitIndex > 0) index = explicitIndex;
   if (index == null) {
-    const m = String(rawName || '').match(/Web Agent\s+(\d+)/i);
+    const m = String(rawName || '').match(/Sailor\s+(\d+)/i);
     if (m) {
       const n = parseInt(m[1], 10);
       if (!isNaN(n) && n > 0) index = n;
     }
   }
-  return `Web Agent ${index ?? 1}`;
+  return `Sailor ${index ?? 1}`;
 }
-
-

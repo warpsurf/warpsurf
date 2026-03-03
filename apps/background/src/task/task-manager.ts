@@ -94,7 +94,7 @@ export class TaskManager extends EventEmitter {
 
   private inferAgentType(task: Task, detail?: string): 'chat' | 'search' | 'agent' | 'multiagent' {
     if (task.agentType && task.agentType !== 'auto') return task.agentType;
-    if (typeof task.workerIndex === 'number' && task.workerIndex > 0) return 'multiagent';
+    if (typeof task.workerIndex === 'number' && task.workerIndex >= 0) return 'multiagent';
     const text = String(detail || '').toLowerCase();
     if (text.includes('web search')) return 'search';
     if (text.includes('simple question')) return 'chat';
@@ -206,13 +206,15 @@ export class TaskManager extends EventEmitter {
     this.tabGroups = new TabGroupService();
     this.mirrors = new MirrorCoordinator(this.tabMirrorService);
     this.workers = new WorkerSessionManager(() => this.tasks, this.mirrors, this.tabGroups);
+    this.workers.setForwardEventHandler((task, event) => this.forwardEventToPanel(task, event));
 
     chrome.tabs.onCreated.addListener(async tab => {
       if (!tab?.id || typeof tab.openerTabId !== 'number') return;
       const parentTask = Array.from(this.tasks.values()).find(t => t.tabId === tab.openerTabId);
-      if (parentTask) {
-        await this.tabGroups.applyTabColor(tab.id, parentTask, this.tasks);
-      }
+      if (!parentTask) return;
+      // Skip worker-managed tabs — the executor's TAB_CREATED handler is authoritative
+      if (parentTask.workerIndex !== undefined && parentTask.executor) return;
+      await this.tabGroups.applyTabColor(tab.id, parentTask, this.tasks);
     });
   }
 
@@ -274,7 +276,7 @@ export class TaskManager extends EventEmitter {
     const taskId = explicitId || `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const { name: taskName, worker_num } = name
       ? { name, worker_num: workerIndex || 0 }
-      : this.tabGroups.getNextWebAgentName(this.tasks);
+      : this.tabGroups.getNextSailorName(this.tasks);
 
     const used = await this.tabGroups.getUsedColors(this.tasks);
     const chosen = this.tabGroups.chooseColor(used, worker_num);
@@ -384,7 +386,7 @@ export class TaskManager extends EventEmitter {
       this.queue.markRunning(task.id);
       this.persistDashboardRunning(task);
 
-      const browserContext = new BrowserContext({ forceNewTab: task.name?.includes('Web Agent') || forceNewTab });
+      const browserContext = new BrowserContext({ forceNewTab: task.name?.includes('Sailor') || forceNewTab });
       const executor = await this.createExecutor(task, browserContext);
       task.executor = executor;
 
@@ -662,13 +664,13 @@ export class TaskManager extends EventEmitter {
 
   private async forwardEventToPanel(task: Task, event: any): Promise<void> {
     const sessionId = task.parentSessionId || task.id;
-    const hasWorkerIndex = typeof task.workerIndex === 'number' && task.workerIndex > 0;
+    const hasWorkerIndex = typeof task.workerIndex === 'number' && task.workerIndex >= 0;
     const incomingWorkerId = event?.data?.workerId;
     const workerFields =
       incomingWorkerId != null
         ? {}
         : hasWorkerIndex
-          ? { workerId: task.workerIndex, ...(hasWorkerIndex ? { workerIndex: task.workerIndex } : {}) }
+          ? { workerId: (task.workerIndex ?? 0) + 1, workerIndex: task.workerIndex }
           : {};
     const enrichedData = {
       ...event.data,
@@ -758,7 +760,6 @@ export class TaskManager extends EventEmitter {
   setSidePanelPort(port: chrome.runtime.Port | undefined): void {
     this.sidePanelPort = port;
     this.mirrors.setSidePanelPort(port);
-    this.workers.setSidePanelPort(port);
     this.tabGroups.setSidePanelPort(port);
 
     if (port) {

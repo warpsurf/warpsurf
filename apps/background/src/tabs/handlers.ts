@@ -11,7 +11,8 @@ export function setPreviewVisibility(taskManager: any, sessionId: string, visibl
 export function sendTabMirror(taskManager: any, port: chrome.runtime.Port): void {
   const active: any[] = typeof taskManager.getActiveMirrors === 'function' ? taskManager.getActiveMirrors() : [];
   if (Array.isArray(active) && active.length > 0) {
-    if (active.length === 1) {
+    const hasWorkers = active.some((m: any) => typeof m?.workerIndex === 'number');
+    if (active.length === 1 && !hasWorkers) {
       safePostMessage(port, { type: 'tab-mirror-update', data: active[0] });
     } else {
       safePostMessage(port, { type: 'tab-mirror-batch', data: active });
@@ -33,7 +34,7 @@ export async function sendAllMirrorsForCleanup(taskManager: any, port: chrome.ru
     const enriched = mirrors.map((m: any) => {
       const t = taskById.get(String(m?.agentId));
       const groupId = t && typeof (t as any).groupId === 'number' ? (t as any).groupId : undefined;
-      const sessionId = t ? ((t as any).parentSessionId || (t as any).id) : undefined;
+      const sessionId = t ? (t as any).parentSessionId || (t as any).id : undefined;
       return { ...m, groupId, sessionId };
     });
     safePostMessage(port, { type: 'tab-mirror-batch-for-cleanup', data: enriched });

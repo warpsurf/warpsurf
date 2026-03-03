@@ -34,9 +34,39 @@ export class TabGroupService {
     this.sidePanelPort = port;
   }
 
-  async applyTabColor(tabId: number, task: Task, tasks: Map<string, Task>): Promise<void> {
-    await new Promise(r => setTimeout(r, 200));
+  async createGroupForWorker(task: Task, tasks: Map<string, Task>): Promise<void> {
+    try {
+      const used = await this.getUsedColors(tasks);
+      const workerNum = task.workerIndex ?? this.getNextWorkerNum(tasks);
+      const chosen = this.chooseColor(used, workerNum);
+      task.groupColorName = chosen.name;
+      task.color = chosen.hex;
+      task.name = `Sailor ${workerNum}`;
+    } catch (e) {
+      this.logger.error('Failed to pre-configure worker group:', e);
+    }
+  }
 
+  async assignTabToWorkerGroup(tabId: number, task: Task, tasks: Map<string, Task>): Promise<void> {
+    try {
+      const currentTab = await chrome.tabs.get(tabId).catch(() => null);
+      if (!currentTab?.windowId) return;
+
+      const win = await chrome.windows.get(currentTab.windowId).catch(() => null);
+      if (!win || win.type !== 'normal') return;
+
+      const groupId = await chrome.tabs.group({ tabIds: [tabId] });
+      task.groupId = groupId;
+
+      await this.propagateGroupToContext(task, groupId);
+      await this.updateGroupProperties(groupId, task, tasks);
+      this.notifyGroupUpdate(task, tabId, groupId);
+    } catch (e) {
+      this.logger.warn('Tab grouping skipped (non-normal window or unavailable):', (e as any)?.message || e);
+    }
+  }
+
+  async applyTabColor(tabId: number, task: Task, tasks: Map<string, Task>): Promise<void> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const groupId = await this.getOrCreateGroup(tabId, task, tasks);
@@ -49,11 +79,10 @@ export class TabGroupService {
         return;
       } catch (e: any) {
         if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 150));
           continue;
         }
         this.logger.error('Tab grouping failed after 3 attempts:', e);
-        throw new Error(`Tab grouping failed: ${e?.message || 'Unknown error'}`);
       }
     }
   }
@@ -81,7 +110,7 @@ export class TabGroupService {
     let index = task.workerIndex;
 
     if (!index) {
-      const match = (task.name || '').match(/Web Agent\s+(\d+)/i);
+      const match = (task.name || '').match(/Sailor\s+(\d+)/i);
       if (match) index = parseInt(match[1], 10);
     }
 
@@ -89,12 +118,12 @@ export class TabGroupService {
       index = this.getNextWorkerNum(tasks);
     }
 
-    return `Web Agent ${index}`;
+    return `Sailor ${index}`;
   }
 
-  getNextWebAgentName(tasks: Map<string, Task>): { name: string; worker_num: number } {
+  getNextSailorName(tasks: Map<string, Task>): { name: string; worker_num: number } {
     const num = this.getNextWorkerNum(tasks);
-    return { name: `Web Agent ${num}`, worker_num: num };
+    return { name: `Sailor ${num}`, worker_num: num };
   }
 
   async getUsedColors(tasks: Map<string, Task>): Promise<Set<chrome.tabGroups.Color>> {
@@ -103,7 +132,7 @@ export class TabGroupService {
     try {
       const groups = await chrome.tabGroups.query({});
       groups.forEach(g => {
-        if ((g.title || '').toLowerCase().startsWith('web agent') && g.color) {
+        if ((g.title || '').toLowerCase().startsWith('sailor') && g.color) {
           used.add(g.color as chrome.tabGroups.Color);
         }
       });
@@ -127,10 +156,10 @@ export class TabGroupService {
     const currentTab = await chrome.tabs.get(tabId).catch(() => null);
     if (!currentTab?.windowId) return undefined;
 
-    // Window type validation removed - side panel only works in normal windows,
-    // so we're guaranteed to be in a valid window for tab grouping
+    const win = await chrome.windows.get(currentTab.windowId).catch(() => null);
+    if (!win || win.type !== 'normal') return undefined;
 
-    if (!task.name?.includes('Web Agent')) return undefined;
+    if (!task.name?.includes('Sailor')) return undefined;
 
     if (typeof task.groupId === 'number' && task.groupId >= 0) {
       try {
@@ -159,7 +188,7 @@ export class TabGroupService {
     let colorName = task.groupColorName;
     if (!colorName) {
       const used = await this.getUsedColors(tasks);
-      const workerNum = task.workerIndex || this.getNextWorkerNum(tasks);
+      const workerNum = task.workerIndex ?? this.getNextWorkerNum(tasks);
       const chosen = this.chooseColor(used, workerNum);
       colorName = chosen.name;
       task.groupColorName = colorName as chrome.tabGroups.Color;
@@ -204,7 +233,7 @@ export class TabGroupService {
   private getNextWorkerNum(tasks: Map<string, Task>): number {
     let max = 0;
     tasks.forEach(t => {
-      const match = /^web agent\s+(\d+)/i.exec(t.name);
+      const match = /^Sailor\s+(\d+)/i.exec(t.name);
       if (match) {
         const n = parseInt(match[1], 10);
         if (!isNaN(n) && n > max) max = n;
