@@ -37,11 +37,11 @@ export class TabGroupService {
   async createGroupForWorker(task: Task, tasks: Map<string, Task>): Promise<void> {
     try {
       const used = await this.getUsedColors(tasks);
-      const workerNum = task.workerIndex ?? this.getNextWorkerNum(tasks);
-      const chosen = this.chooseColor(used, workerNum);
+      const workerIdx = task.workerIndex ?? this.inferWorkerIndex(tasks);
+      const chosen = this.chooseColor(used, workerIdx);
       task.groupColorName = chosen.name;
       task.color = chosen.hex;
-      task.name = `Crew ${workerNum}`;
+      task.name = `Crew ${workerIdx + 1}`;
     } catch (e) {
       this.logger.error('Failed to pre-configure worker group:', e);
     }
@@ -107,23 +107,13 @@ export class TabGroupService {
   }
 
   computeGroupTitle(task: Task, tasks: Map<string, Task>): string {
-    let index = task.workerIndex;
-
-    if (!index) {
-      const match = (task.name || '').match(/Crew\s+(\d+)/i);
-      if (match) index = parseInt(match[1], 10);
-    }
-
-    if (!index) {
-      index = this.getNextWorkerNum(tasks);
-    }
-
-    return `Crew ${index}`;
+    const index = task.workerIndex ?? this.inferWorkerIndex(tasks);
+    return `Crew ${index + 1}`;
   }
 
   getNextCrewName(tasks: Map<string, Task>): { name: string; worker_num: number } {
-    const num = this.getNextWorkerNum(tasks);
-    return { name: `Crew ${num}`, worker_num: num };
+    const num = this.inferWorkerIndex(tasks);
+    return { name: `Crew ${num + 1}`, worker_num: num };
   }
 
   async getUsedColors(tasks: Map<string, Task>): Promise<Set<chrome.tabGroups.Color>> {
@@ -188,8 +178,8 @@ export class TabGroupService {
     let colorName = task.groupColorName;
     if (!colorName) {
       const used = await this.getUsedColors(tasks);
-      const workerNum = task.workerIndex ?? this.getNextWorkerNum(tasks);
-      const chosen = this.chooseColor(used, workerNum);
+      const workerIdx = task.workerIndex ?? this.inferWorkerIndex(tasks);
+      const chosen = this.chooseColor(used, workerIdx);
       colorName = chosen.name;
       task.groupColorName = colorName as chrome.tabGroups.Color;
       task.color = chosen.hex;
@@ -230,15 +220,24 @@ export class TabGroupService {
     } catch {}
   }
 
-  private getNextWorkerNum(tasks: Map<string, Task>): number {
-    let max = 0;
+  /** Returns the next available 0-based worker index by examining existing tasks. */
+  private inferWorkerIndex(tasks: Map<string, Task>): number {
+    let maxIndex = -1;
+    tasks.forEach(t => {
+      if (typeof t.workerIndex === 'number' && t.workerIndex > maxIndex) {
+        maxIndex = t.workerIndex;
+      }
+    });
+    if (maxIndex >= 0) return maxIndex + 1;
+
+    // Fallback: parse display names (1-based "Crew N") and convert back
     tasks.forEach(t => {
       const match = /^Crew\s+(\d+)/i.exec(t.name);
       if (match) {
-        const n = parseInt(match[1], 10);
-        if (!isNaN(n) && n > max) max = n;
+        const idx = parseInt(match[1], 10) - 1;
+        if (!isNaN(idx) && idx > maxIndex) maxIndex = idx;
       }
     });
-    return max + 1;
+    return maxIndex + 1;
   }
 }
