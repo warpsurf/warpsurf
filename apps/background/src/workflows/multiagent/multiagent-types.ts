@@ -50,6 +50,7 @@ export interface PriorOutput {
   title: string;
   output: string;
   tabIds: number[];
+  tabUrls?: Record<number, string>;
   rawJson?: any;
 }
 
