@@ -96,6 +96,9 @@ export function useChatHistory({
     // Track seen content to detect duplicates regardless of timestamp
     const seenContent = new Set<string>();
 
+    // Track actor+timestamp pairs to dedupe race-condition duplicates
+    const seenActorTimestamp = new Set<string>();
+
     // Track setting changes to keep only the last value for each setting
     const settingChanges = new Map<string, { index: number; ts: number }>();
 
@@ -126,6 +129,13 @@ export function useChatHistory({
       if (!content) {
         out.push(msg);
         continue;
+      }
+
+      // Dedupe messages with same actor+timestamp (race-condition duplicates from addMessage/updateMessageContent)
+      if (!isSystem && ts) {
+        const atKey = `${actor}|${ts}`;
+        if (seenActorTimestamp.has(atKey)) continue;
+        seenActorTimestamp.add(atKey);
       }
 
       // Skip duplicate content from the same actor (normalize to handle ✓/✗ prefix variations)
@@ -266,6 +276,14 @@ export function useChatHistory({
         if (agentTraceRootIdRef) agentTraceRootIdRef.current = restoredRootId;
         if (setAgentTraceRootId) setAgentTraceRootId(restoredRootId);
 
+        // Restore persisted plan items from metadata
+        try {
+          const planItems = (savedMetadata as any)?.__workflowPlanItems;
+          if (Array.isArray(planItems) && planItems.length > 0) {
+            setCurrentPlan?.(planItems);
+          }
+        } catch {}
+
         // Reconstruct stale aggregate root message content from metadata.
         // Older sessions may have persisted the initial transient status (e.g.
         // "Starting browser automation...") because updateAggregateRootContent
@@ -284,6 +302,12 @@ export function useChatHistory({
           /^Estimating workflow\.\.\.$/i,
           /^\d+\s+workers executing plan\b/i,
           /^Cancelling workflow$/i,
+          /^Commodore planning/i,
+          /^Quartermaster assigning/i,
+          /^Mission planned/i,
+          /^Plan created/i,
+          /^\d+\s+Sailors?\s+deployed\b/i,
+          /^Sailor\s+\d+\s+deployed:/i,
         ];
         const isStaleContent = (c: string) => {
           const t = c.trim();
