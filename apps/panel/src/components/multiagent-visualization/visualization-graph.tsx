@@ -133,8 +133,8 @@ export default function WorkflowGraph({
           {/* Lane labels */}
           {sortedLanes.map(yVal => {
             const y = yVal * scaleY + marginY;
-            const info = laneInfo[yVal] || { label: `Sailor ${yVal + 1}` };
-            const label = String(info.label || `Sailor ${yVal + 1}`);
+            const info = laneInfo[yVal] || { label: `Crew ${yVal + 1}` };
+            const label = String(info.label || `Crew ${yVal + 1}`);
             return (
               <g key={`lane-${yVal}`}>
                 <rect

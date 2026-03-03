@@ -16,8 +16,8 @@ interface PreviewPanelProps {
 
 function getAgentLabel(preview: InlinePreviewBatch[number], index: number): string {
   if (preview.agentName?.trim()) return preview.agentName;
-  if (preview.agentOrdinal != null) return `Sailor ${preview.agentOrdinal}`;
-  return `Sailor ${String(preview.agentId || '').replace(/\D/g, '') || index + 1}`;
+  if (preview.agentOrdinal != null) return `Crew ${preview.agentOrdinal}`;
+  return `Crew ${String(preview.agentId || '').replace(/\D/g, '') || index + 1}`;
 }
 
 export default function PreviewPanel({

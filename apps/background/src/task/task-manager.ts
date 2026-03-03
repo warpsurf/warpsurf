@@ -67,7 +67,7 @@ function mirrorsToPreviewBatch(mirrors: any[]) {
     ...mirrorToPreview(m),
     agentId: m.agentId,
     agentOrdinal: typeof m.workerIndex === 'number' ? m.workerIndex : undefined,
-    agentName: typeof m.workerIndex === 'number' ? `Sailor ${m.workerIndex}` : undefined,
+    agentName: typeof m.workerIndex === 'number' ? `Crew ${m.workerIndex}` : undefined,
   }));
 }
 
@@ -289,7 +289,7 @@ export class TaskManager extends EventEmitter {
     const taskId = explicitId || `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const { name: taskName, worker_num } = name
       ? { name, worker_num: workerIndex || 0 }
-      : this.tabGroups.getNextSailorName(this.tasks);
+      : this.tabGroups.getNextCrewName(this.tasks);
 
     const used = await this.tabGroups.getUsedColors(this.tasks);
     const chosen = this.tabGroups.chooseColor(used, worker_num);
@@ -399,7 +399,7 @@ export class TaskManager extends EventEmitter {
       this.queue.markRunning(task.id);
       this.persistDashboardRunning(task);
 
-      const browserContext = new BrowserContext({ forceNewTab: task.name?.includes('Sailor') || forceNewTab });
+      const browserContext = new BrowserContext({ forceNewTab: task.name?.includes('Crew') || forceNewTab });
       const executor = await this.createExecutor(task, browserContext);
       task.executor = executor;
 

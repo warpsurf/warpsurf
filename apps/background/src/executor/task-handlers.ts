@@ -335,7 +335,7 @@ export async function handleNewTask(message: any, deps: Deps) {
   const isWebAgent = agentTypeNorm === 'agent';
 
   // Ensure TaskManager knows about the session (but do not queue)
-  const taskName = isWebAgent ? 'Sailor' : undefined;
+  const taskName = isWebAgent ? 'Crew' : undefined;
   try {
     await taskManager.createTask(task, taskName, true, sessionId, sessionId);
     try {
@@ -387,7 +387,7 @@ export async function handleNewTask(message: any, deps: Deps) {
     // Create a tab group for context tabs immediately with appropriate styling
     try {
       const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-      const groupTitle = isWebAgent ? 'Sailor' : 'Reference';
+      const groupTitle = isWebAgent ? 'Crew' : 'Reference';
       const groupColor = isWebAgent ? 'blue' : 'grey';
       await chrome.tabGroups.update(groupId, { title: groupTitle, color: groupColor });
       if (isWebAgent) {
@@ -663,7 +663,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
           } else {
             // No existing group, create one
             const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-            await chrome.tabGroups.update(groupId, { title: 'Sailor', color: 'blue' });
+            await chrome.tabGroups.update(groupId, { title: 'Crew', color: 'blue' });
             // Set preferred group directly to avoid redundant moveContextTabsToGroup call
             (browserContext as any)._preferredGroupId = groupId;
             logger.info(`[handleFollowUpTask] Created new tab group ${groupId} for context tabs`);

@@ -616,7 +616,7 @@ export function downloadCombinedSessionLogs(
             for (const workerId of sortedWorkerIds) {
               const workerUsages = runLogs.workers.get(workerId)!;
               lines.push('\n---');
-              lines.push(`\n${headingLevel} Sailor ${workerId}`);
+              lines.push(`\n${headingLevel} Crew ${workerId}`);
               lines.push(`\n_${workerUsages.length} API call(s)_`);
               workerUsages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
               workerUsages.forEach((u, idx) => {
@@ -834,7 +834,7 @@ export function downloadCaptainLogs(port: chrome.runtime.Port | null, sessionId:
   );
 }
 
-export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
+export function downloadCrewLogs(port: chrome.runtime.Port | null, sessionId: string | null): void {
   try {
     if (!port || port.name !== 'side-panel-connection') return;
     const sid = String(sessionId || '');
@@ -854,36 +854,36 @@ export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: 
           }
 
           const usages: any[] = Array.isArray(ev?.data) ? ev.data : [];
-          const sailors = new Map<number, any[]>();
+          const crewMembers = new Map<number, any[]>();
 
           for (const u of usages) {
             const wi = Number(u?.workerIndex);
             if (!Number.isFinite(wi) || wi < 0) continue;
             const role = String(u?.role || '').toLowerCase();
             if (NON_WORKER_ROLES.test(role)) continue;
-            if (!sailors.has(wi)) sailors.set(wi, []);
-            sailors.get(wi)!.push(u);
+            if (!crewMembers.has(wi)) crewMembers.set(wi, []);
+            crewMembers.get(wi)!.push(u);
           }
 
-          const sortedIds = Array.from(sailors.keys()).sort((a, b) => a - b);
-          const totalCalls = sortedIds.reduce((n, id) => n + sailors.get(id)!.length, 0);
+          const sortedIds = Array.from(crewMembers.keys()).sort((a, b) => a - b);
+          const totalCalls = sortedIds.reduce((n, id) => n + crewMembers.get(id)!.length, 0);
 
           const lines: string[] = [];
-          lines.push(`# Sailors Logs for session ${sid}`);
+          lines.push(`# Crew Logs for session ${sid}`);
           lines.push('');
-          lines.push(`Total API calls: ${totalCalls} across ${sortedIds.length} sailor(s)`);
+          lines.push(`Total API calls: ${totalCalls} across ${sortedIds.length} crew member(s)`);
 
           if (sortedIds.length === 0) {
             lines.push('');
-            lines.push('_No sailor API calls recorded._');
+            lines.push('_No crew API calls recorded._');
           } else {
             for (const wi of sortedIds) {
-              const entries = sailors.get(wi)!;
+              const entries = crewMembers.get(wi)!;
               entries.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
               lines.push('');
               lines.push(`---`);
               lines.push('');
-              lines.push(`## Sailor ${wi + 1} (${entries.length} API calls)`);
+              lines.push(`## Crew ${wi + 1} (${entries.length} API calls)`);
               entries.forEach((u: any, idx: number) => {
                 const ts = new Date(Number(u?.timestamp || Date.now())).toISOString();
                 const provider = String(u?.provider || 'Unknown');
@@ -916,7 +916,7 @@ export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: 
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `sailor-logs-${sid}.md`;
+          a.download = `crew-logs-${sid}.md`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -933,7 +933,7 @@ export function downloadSailorLogs(port: chrome.runtime.Port | null, sessionId: 
       try {
         port.onMessage.removeListener(once);
       } catch {}
-      console.warn('[Panel] Sailor logs download timed out after 10s');
+      console.warn('[Panel] Crew logs download timed out after 10s');
     }, 10000);
   } catch {}
 }
@@ -967,7 +967,7 @@ function formatQmLogEntry(log: any, headingLevel: string = '##'): string[] {
           return `#${id} "${title}"`;
         })
         .join(' → ');
-      lines.push(`- Sailor ${a.sailorId}: ${tasks}`);
+      lines.push(`- Crew ${a.crewId}: ${tasks}`);
     }
   }
   return lines;

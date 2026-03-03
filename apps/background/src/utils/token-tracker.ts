@@ -164,7 +164,7 @@ class TokenUsageTracker {
     // Do NOT fall back to this.currentTaskId — it is global mutable state that
     // gets corrupted when concurrent warm-start dispatches overwrite it during
     // the Commodore's streaming LLM call, causing non-worker logs to be stamped
-    // with a sailor's workerIndex.
+    // with a crew member's workerIndex.
     let workerIndex = usage.workerIndex;
     if (typeof workerIndex !== 'number') {
       workerIndex = this.workerIds.get(taskId);

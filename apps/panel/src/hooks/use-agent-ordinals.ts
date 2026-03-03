@@ -1,11 +1,11 @@
 import { useRef, useCallback } from 'react';
 
 /**
- * Hook for managing stable ordinal mapping for agent/task IDs → Sailor N labels
+ * Hook for managing stable ordinal mapping for agent/task IDs → Crew N labels
  * @returns Function to ensure an agent gets a consistent ordinal number
  */
 export const useAgentOrdinals = () => {
-  // Stable ordinal mapping for agent/task IDs → Sailor N labels
+  // Stable ordinal mapping for agent/task IDs → Crew N labels
   const agentOrdinalRef = useRef<Map<string, number>>(new Map());
 
   /**

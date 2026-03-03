@@ -2,30 +2,30 @@ import type { SubtaskId } from './multiagent-types';
 import type { LivePlan } from './live-plan';
 import type { StructuredOutput, SubtaskStatus } from './workflow-events';
 
-export interface SailorLogEntry {
+export interface CrewLogEntry {
   timestamp: number;
   message: string;
   type: 'info' | 'action' | 'error';
 }
 
-export type SailorLogProvider = (sessionId: string) => SailorLogEntry[];
+export type CrewLogProvider = (sessionId: string) => CrewLogEntry[];
 
 export class CaptainState {
   readonly plan: LivePlan;
   readonly subtaskStatus = new Map<SubtaskId, SubtaskStatus>();
   readonly subtaskOutputs = new Map<SubtaskId, StructuredOutput>();
-  readonly sailorAssignments = new Map<SubtaskId, number>();
+  readonly crewAssignments = new Map<SubtaskId, number>();
   readonly failureCounts = new Map<SubtaskId, number>();
   readonly failureReasons = new Map<SubtaskId, string>();
   readonly speculativeRaces = new Map<string, { candidates: SubtaskId[]; winner?: SubtaskId }>();
-  readonly busySailors = new Set<number>();
-  readonly sailorSessionIds = new Map<number, string>();
+  readonly busyCrew = new Set<number>();
+  readonly crewSessionIds = new Map<number, string>();
   readonly startTime: number;
 
   readonly subtaskStartTimes = new Map<SubtaskId, number>();
   readonly subtaskCompletionTimes = new Map<SubtaskId, number>();
 
-  private sailorLogProvider?: SailorLogProvider;
+  private crewLogProvider?: CrewLogProvider;
 
   constructor(plan: LivePlan) {
     this.plan = plan;
@@ -35,8 +35,8 @@ export class CaptainState {
     }
   }
 
-  setSailorLogProvider(provider: SailorLogProvider): void {
-    this.sailorLogProvider = provider;
+  setCrewLogProvider(provider: CrewLogProvider): void {
+    this.crewLogProvider = provider;
   }
 
   markRunning(id: SubtaskId): void {
@@ -110,7 +110,6 @@ export class CaptainState {
       const status = this.subtaskStatus.get(s.id) ?? 'pending';
       const parts: string[] = [`[${status.toUpperCase()}] #${s.id} ${s.title}`];
 
-      // Timing info
       const startTime = this.subtaskStartTimes.get(s.id);
       if (status === 'running' && startTime) {
         parts.push(`(running for ${formatDuration(now - startTime)})`);
@@ -119,7 +118,6 @@ export class CaptainState {
         parts.push(`(took ${formatDuration(endTime - startTime)})`);
       }
 
-      // Blocked-by info for pending tasks
       if (status === 'pending') {
         const deps = this.plan.getDependencies(s.id);
         const blocking = deps.filter(d => this.subtaskStatus.get(d) !== 'completed');
@@ -128,13 +126,11 @@ export class CaptainState {
         }
       }
 
-      // Output snippet for completed
       const output = this.subtaskOutputs.get(s.id);
       if (output?.text) {
         parts.push(`— Output: ${output.text.slice(0, 150)}`);
       }
 
-      // Failure info
       const failReason = this.failureReasons.get(s.id);
       if (failReason) {
         const failCount = this.failureCounts.get(s.id) ?? 0;
@@ -143,9 +139,8 @@ export class CaptainState {
 
       lines.push(parts.join(' '));
 
-      // Action history for running subtasks
       if (status === 'running') {
-        const actionSummary = this.getSailorActionSummary(s.id);
+        const actionSummary = this.getCrewActionSummary(s.id);
         if (actionSummary) {
           lines.push(actionSummary);
         }
@@ -156,18 +151,17 @@ export class CaptainState {
     return lines.join('\n');
   }
 
-  private getSailorActionSummary(subtaskId: SubtaskId): string | undefined {
-    if (!this.sailorLogProvider) return undefined;
+  private getCrewActionSummary(subtaskId: SubtaskId): string | undefined {
+    if (!this.crewLogProvider) return undefined;
 
-    const sailorId = this.sailorAssignments.get(subtaskId);
-    if (sailorId === undefined) return undefined;
-    const sessionId = this.sailorSessionIds.get(sailorId);
+    const crewId = this.crewAssignments.get(subtaskId);
+    if (crewId === undefined) return undefined;
+    const sessionId = this.crewSessionIds.get(crewId);
     if (!sessionId) return undefined;
 
-    const logs = this.sailorLogProvider(sessionId);
+    const logs = this.crewLogProvider(sessionId);
     if (logs.length === 0) return undefined;
 
-    // Take the last N action entries to keep the summary compact
     const MAX_ACTIONS = 8;
     const recent = logs.slice(-MAX_ACTIONS);
     const actionLines = recent.map(l => {

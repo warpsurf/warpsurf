@@ -9,7 +9,7 @@ class WorkflowLogger {
     if (workflowType && workflowType !== 'auto') {
       workflowInfo =
         workflowType === 'agent' && workerIndex != null
-          ? ` [Sailor ${workerIndex}]`
+          ? ` [Crew ${workerIndex}]`
           : ` [${this.formatWorkflow(workflowType)}]`;
     }
     console.info(`[Task #${this.taskNumber}]${workflowInfo}: "${this.truncate(task, 60)}"`);
@@ -29,7 +29,7 @@ class WorkflowLogger {
     const progress = brief ? `: ${this.truncate(brief, 40)}` : '';
     const context =
       workerIndex != null
-        ? ` [Task #${this.taskNumber}, Sailor ${workerIndex}]`
+        ? ` [Task #${this.taskNumber}, Crew ${workerIndex}]`
         : this.taskNumber > 0
           ? ` [Task #${this.taskNumber}]`
           : '';

@@ -1,21 +1,21 @@
 import { createLogger } from '@src/log';
 import type { TaskManager } from '@src/task/task-manager';
 import type { StructuredOutput } from '../workflow-events';
-import type { SailorLogEntry } from '../captain-state';
+import type { CrewLogEntry } from '../captain-state';
 
-const logger = createLogger('Sailor');
+const logger = createLogger('Crew');
 
-export interface SailorResult {
+export interface CrewResult {
   ok: boolean;
   error?: string;
   output?: StructuredOutput;
 }
 
 /**
- * A Sailor executes individual subtasks using a browser agent.
+ * A Crew member executes individual subtasks using a browser agent.
  * Thin wrapper around TaskManager's worker session API.
  */
-export class Sailor {
+export class Crew {
   private taskManager: TaskManager;
   private parentSessionId: string;
   private taskContext: string;
@@ -26,19 +26,19 @@ export class Sailor {
     this.taskContext = taskContext;
   }
 
-  getSessionLogs(sessionId: string): SailorLogEntry[] {
+  getSessionLogs(sessionId: string): CrewLogEntry[] {
     const task = this.taskManager.getTask(sessionId);
     if (!task) return [];
     return task.logs;
   }
 
-  async createSession(sailorId: number): Promise<string> {
-    const label = `Sailor ${sailorId}`;
+  async createSession(crewId: number): Promise<string> {
+    const label = `Crew ${crewId}`;
     logger.info(`Creating session for ${label}`);
-    return this.taskManager.createWorkerSession('', label, this.parentSessionId, this.taskContext, sailorId);
+    return this.taskManager.createWorkerSession('', label, this.parentSessionId, this.taskContext, crewId);
   }
 
-  async dispatch(sessionId: string, prompt: string, subtaskId: number, targetTabIds?: number[]): Promise<SailorResult> {
+  async dispatch(sessionId: string, prompt: string, subtaskId: number, targetTabIds?: number[]): Promise<CrewResult> {
     const startTime = Date.now();
     const res = await this.taskManager.runWorkerSubtask(
       sessionId,
@@ -51,7 +51,6 @@ export class Sailor {
       return { ok: false, error: res.error || 'Subtask failed' };
     }
 
-    // Parse structured output
     let raw: any;
     if (res.outputText) {
       const trimmed = res.outputText.trim();

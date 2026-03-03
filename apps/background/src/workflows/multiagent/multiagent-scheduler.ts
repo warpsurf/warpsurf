@@ -195,7 +195,7 @@ export function allocateTasks(
 }
 
 /**
- * Remap worker IDs in a schedule/queues to match warm-start sailor assignments.
+ * Remap worker IDs in a schedule/queues to match warm-start crew assignments.
  * Builds a full bijective permutation so no key collisions occur when the
  * QM ordering differs from the warm-start stream ordering.
  */
@@ -216,11 +216,11 @@ export function remapSchedule(
     }
   }
 
-  // Build anchored mappings: QM worker → target sailor
+  // Build anchored mappings: QM worker → target crew member
   const anchored = new Map<number, number>();
-  for (const [taskId, sailorId] of earlyDispatched) {
+  for (const [taskId, crewId] of earlyDispatched) {
     const qmWorker = qmTaskToWorker.get(taskId);
-    if (qmWorker !== undefined) anchored.set(qmWorker, sailorId);
+    if (qmWorker !== undefined) anchored.set(qmWorker, crewId);
   }
   if (anchored.size === 0) return { schedule, queues };
 

@@ -20,7 +20,7 @@ export interface NewSubtaskSpec {
 export type CaptainActionType =
   | { type: 'dispatch_subtask'; subtask_id: SubtaskId; refined_prompt?: string }
   | { type: 'cancel_subtask'; subtask_id: SubtaskId; reason: string }
-  | { type: 'retry_subtask'; subtask_id: SubtaskId; modified_prompt?: string; reassign_to_sailor?: number }
+  | { type: 'retry_subtask'; subtask_id: SubtaskId; modified_prompt?: string; reassign_to_crew?: number }
   | { type: 'add_subtask'; subtask: NewSubtaskSpec; after_dependencies: SubtaskId[] }
   | { type: 'modify_subtask'; subtask_id: SubtaskId; new_prompt?: string; new_title?: string; no_browse?: boolean }
   | { type: 'modify_plan'; revised_subtasks: NewSubtaskSpec[]; reason: string }
@@ -39,7 +39,7 @@ export type WorkflowEvent =
   | { type: 'plan_created'; plan: TaskPlan }
   | { type: 'schedule_ready'; schedule: WorkerSchedule; queues: WorkerQueues }
   | { type: 'captain_decision'; decision: CaptainDecision }
-  | { type: 'subtask_dispatched'; subtaskId: SubtaskId; sailorId: number; prompt: string }
+  | { type: 'subtask_dispatched'; subtaskId: SubtaskId; crewId: number; prompt: string }
   | { type: 'subtask_running'; subtaskId: SubtaskId }
   | { type: 'subtask_completed'; subtaskId: SubtaskId; output: StructuredOutput }
   | { type: 'subtask_failed'; subtaskId: SubtaskId; error: string }

@@ -172,8 +172,8 @@ export function useChatHistory({
           /^Quartermaster assigning/i,
           /^Mission planned/i,
           /^Plan created/i,
-          /^\d+\s+Sailors?\s+deployed\b/i,
-          /^Sailor\s+\d+\s+deployed:/i,
+          /^\d+\s+Crew\s+deployed\b/i,
+          /^Crew\s+\d+\s+deployed:/i,
         ];
         const isStaleContent = (c: string) => {
           const t = c.trim();

@@ -5,7 +5,7 @@ import type { MirrorCoordinator } from './mirror-coordinator';
 import type { TabGroupService } from './tab-group-service';
 import { createWorkerExecutor } from './executor-factory';
 import { generalSettingsStore, AgentNameEnum } from '@extension/storage';
-import { SailorPrompt } from '@src/workflows/multiagent/roles/sailor-prompt';
+import { CrewPrompt } from '@src/workflows/multiagent/roles/crew-prompt';
 import { ExecutionState } from '../workflows/shared/event/types';
 import { globalTokenTracker } from '../utils/token-tracker';
 
@@ -48,7 +48,7 @@ export class WorkerSessionManager {
     },
   ): Promise<void> {
     const settings = await generalSettingsStore.getSettings();
-    const workerPrompt = new SailorPrompt(settings.maxActionsPerStep);
+    const workerPrompt = new CrewPrompt(settings.maxActionsPerStep);
     const executor = await createWorkerExecutor({
       prompt: initialPrompt,
       sessionId: task.id,

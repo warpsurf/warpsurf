@@ -1,4 +1,4 @@
-/** @deprecated Superseded by roles/sailor-prompt.ts. */
+/** @deprecated Superseded by roles/crew-prompt.ts. */
 import { commonSecurityRules, noPageContextGuidance } from '@src/workflows/shared/prompts/common';
 
 const isApiMode = process.env.__API__ === 'true';

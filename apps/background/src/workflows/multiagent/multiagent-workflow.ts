@@ -4,7 +4,7 @@ import type { PortGetter, WorkflowConfig, TaskPlan, SubtaskId, Subtask } from '.
 import { Commodore } from './roles/commodore';
 import { Quartermaster } from './roles/quartermaster';
 import { Captain, type CaptainConfig, type WarmDispatch } from './roles/captain';
-import { Sailor } from './roles/sailor';
+import { Crew } from './roles/crew';
 import { LivePlan } from './live-plan';
 import { CaptainState } from './captain-state';
 import { buildMergedGraphAfterScheduleConsecutive, collapsePlanByConsecutiveMerges } from './multiagent-merging';
@@ -23,7 +23,7 @@ const logger = createLogger('workflow:multiagent');
 
 /**
  * Orchestrates multiple parallel browser agents for complex tasks.
- * Wires together the four roles: Commodore, Quartermaster, Captain, Sailors.
+ * Wires together the four roles: Commodore, Quartermaster, Captain, Crew.
  */
 export class MultiAgentWorkflow {
   private taskManager: TaskManager;
@@ -91,10 +91,10 @@ export class MultiAgentWorkflow {
     // Session creation in the TaskManager is not safe under concurrent calls
     // (tab groups, executors, color slots share state), so warm dispatches are
     // chained sequentially while the LLM stream continues in parallel.
-    const sailor = new Sailor(this.taskManager, this.sessionId, query);
+    const crew = new Crew(this.taskManager, this.sessionId, query);
     const warmDispatches: WarmDispatch[] = [];
     let warmChain = Promise.resolve<void>(undefined);
-    let nextSailorId = 0;
+    let nextCrewId = 0;
 
     let plan: TaskPlan;
     const commodore = new Commodore();
@@ -119,15 +119,15 @@ export class MultiAgentWorkflow {
         undefined,
         { historyBlock, sessionId: this.sessionId, contextTabIds: this.contextTabIds },
         (subtask: Subtask) => {
-          if (this.cancelled || nextSailorId >= this.config.maxWorkers) return;
-          const sailorId = nextSailorId++;
+          if (this.cancelled || nextCrewId >= this.config.maxWorkers) return;
+          const crewId = nextCrewId++;
           logger.info(
-            `[warm-start] Root subtask #${subtask.id} "${subtask.title}" parsed from stream → queued for Sailor ${sailorId}`,
+            `[warm-start] Root subtask #${subtask.id} "${subtask.title}" parsed from stream → queued for Crew ${crewId}`,
           );
           warmChain = warmChain.then(async () => {
             if (this.cancelled) return;
             try {
-              warmDispatches.push(await this.dispatchWarmTask(sailor, subtask, sailorId));
+              warmDispatches.push(await this.dispatchWarmTask(crew, subtask, crewId));
             } catch (e) {
               logger.error(`[warm-start] Dispatch failed for subtask #${subtask.id}:`, e);
             }
@@ -139,7 +139,7 @@ export class MultiAgentWorkflow {
       await warmChain;
       if (warmDispatches.length > 0) {
         logger.info(
-          `[warm-start] ${warmDispatches.length} root tasks dispatched during streaming: [${warmDispatches.map(d => `#${d.subtaskId}→S${d.sailorId}`).join(', ')}]`,
+          `[warm-start] ${warmDispatches.length} root tasks dispatched during streaming: [${warmDispatches.map(d => `#${d.subtaskId}→C${d.crewId}`).join(', ')}]`,
         );
       }
 
@@ -148,12 +148,12 @@ export class MultiAgentWorkflow {
     } catch (e: any) {
       logger.error('Commodore planning failed:', e);
       await warmChain.catch(() => {});
-      for (const d of warmDispatches) sailor.cancel(d.sessionId).catch(() => {});
+      for (const d of warmDispatches) crew.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, e?.message || 'Planning failed');
     }
 
     if (this.cancelled) {
-      for (const d of warmDispatches) sailor.cancel(d.sessionId).catch(() => {});
+      for (const d of warmDispatches) crew.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, 'Cancelled by user');
     }
 
@@ -161,7 +161,7 @@ export class MultiAgentWorkflow {
     const planIds = new Set(plan.subtasks.map(s => s.id));
     const validDispatches = warmDispatches.filter(d => {
       if (planIds.has(d.subtaskId)) return true;
-      sailor.cancel(d.sessionId).catch(() => {});
+      crew.cancel(d.sessionId).catch(() => {});
       return false;
     });
 
@@ -191,9 +191,9 @@ export class MultiAgentWorkflow {
 
     let { schedule, queues } = quartermaster.schedule(plan, this.config.maxWorkers);
 
-    // Remap QM worker IDs → actual sailor IDs for warm-dispatched root tasks
+    // Remap QM worker IDs → actual crew IDs for warm-dispatched root tasks
     if (validDispatches.length > 0) {
-      const earlyMap = new Map(validDispatches.map(d => [d.subtaskId, d.sailorId]));
+      const earlyMap = new Map(validDispatches.map(d => [d.subtaskId, d.crewId]));
       ({ schedule, queues } = remapSchedule(schedule, queues, earlyMap));
     }
 
@@ -202,7 +202,7 @@ export class MultiAgentWorkflow {
     this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log: qmLog });
 
     if (this.cancelled) {
-      for (const d of validDispatches) sailor.cancel(d.sessionId).catch(() => {});
+      for (const d of validDispatches) crew.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, 'Cancelled by user');
     }
 
@@ -245,13 +245,13 @@ export class MultiAgentWorkflow {
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      message: `${activeWorkerCount} Sailors deployed`,
+      message: `${activeWorkerCount} Crew deployed`,
     });
 
     const captainLLM = this.refinerLLM || plannerLLM;
     const captainConfig: CaptainConfig = { maxWorkers: this.config.maxWorkers };
 
-    this.captain = new Captain(this.captainState, sailor, captainLLM, this.sessionId, captainConfig, event =>
+    this.captain = new Captain(this.captainState, crew, captainLLM, this.sessionId, captainConfig, event =>
       this.handleWorkflowEvent(event),
     );
 
@@ -289,21 +289,21 @@ export class MultiAgentWorkflow {
 
   // --- Warm-start helpers ---
 
-  private async dispatchWarmTask(sailor: Sailor, subtask: Subtask, sailorId: number): Promise<WarmDispatch> {
-    logger.info(`[warm-start] Creating session for Sailor ${sailorId} (subtask #${subtask.id} "${subtask.title}")`);
-    const sessionId = await sailor.createSession(sailorId);
+  private async dispatchWarmTask(crew: Crew, subtask: Subtask, crewId: number): Promise<WarmDispatch> {
+    logger.info(`[warm-start] Creating session for Crew ${crewId} (subtask #${subtask.id} "${subtask.title}")`);
+    const sessionId = await crew.createSession(crewId);
 
-    logger.info(`[warm-start] Dispatching subtask #${subtask.id} → Sailor ${sailorId} (session=${sessionId})`);
+    logger.info(`[warm-start] Dispatching subtask #${subtask.id} → Crew ${crewId} (session=${sessionId})`);
     const prompt = buildRootSubtaskPrompt(subtask);
-    const resultPromise = sailor.dispatch(sessionId, prompt, subtask.id);
+    const resultPromise = crew.dispatch(sessionId, prompt, subtask.id);
 
     this.emit('workflow_progress', {
       sessionId: this.sessionId,
       actor: 'multiagent',
-      workerId: sailorId + 1,
-      message: `Warm start: Sailor ${sailorId + 1} deployed early — ${subtask.title}`,
+      workerId: crewId + 1,
+      message: `Warm start: Crew ${crewId + 1} deployed early — ${subtask.title}`,
     });
-    return { subtaskId: subtask.id, sailorId, sessionId, resultPromise };
+    return { subtaskId: subtask.id, crewId, sessionId, resultPromise };
   }
 
   async cancelAll(): Promise<void> {
@@ -326,17 +326,17 @@ export class MultiAgentWorkflow {
         this.emit('workflow_progress', {
           sessionId: this.sessionId,
           actor: 'multiagent',
-          workerId: event.sailorId + 1,
-          message: `Sailor ${event.sailorId + 1} deployed: ${title}`,
+          workerId: event.crewId + 1,
+          message: `Crew ${event.crewId + 1} deployed: ${title}`,
         });
 
-        // Emit worker session creation if this is the first dispatch for this sailor
-        const task = this.taskManager.getTask(this.captainState?.sailorSessionIds.get(event.sailorId) || '');
+        // Emit worker session creation if this is the first dispatch for this crew member
+        const task = this.taskManager.getTask(this.captainState?.crewSessionIds.get(event.crewId) || '');
         if (task) {
           this.emit('worker_session_created', {
             sessionId: this.sessionId,
-            workerId: event.sailorId + 1,
-            workerSessionId: this.captainState?.sailorSessionIds.get(event.sailorId),
+            workerId: event.crewId + 1,
+            workerSessionId: this.captainState?.crewSessionIds.get(event.crewId),
             color: task.color,
           });
         }
@@ -350,7 +350,7 @@ export class MultiAgentWorkflow {
 
       case 'subtask_completed': {
         const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
-        const workerId = (this.captainState?.sailorAssignments.get(event.subtaskId) ?? 0) + 1;
+        const workerId = (this.captainState?.crewAssignments.get(event.subtaskId) ?? 0) + 1;
         if (event.output.text) {
           this.emit('workflow_progress', {
             sessionId: this.sessionId,
@@ -371,7 +371,7 @@ export class MultiAgentWorkflow {
 
       case 'subtask_failed': {
         const title = this.captainState?.plan.getSubtask(event.subtaskId)?.title ?? '';
-        const failWorkerId = (this.captainState?.sailorAssignments.get(event.subtaskId) ?? 0) + 1;
+        const failWorkerId = (this.captainState?.crewAssignments.get(event.subtaskId) ?? 0) + 1;
         this.emit('workflow_progress', {
           sessionId: this.sessionId,
           actor: 'multiagent',

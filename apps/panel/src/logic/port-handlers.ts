@@ -306,10 +306,10 @@ export function createPanelHandlers(deps: any): any {
         // Update the main message content for phase lines
         try {
           const isPhaseLine =
-            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Sailors?)\s+(executing plan|deployed))\b/i.test(
+            /^(Creating plan|Processing plan|Refining plan|Cancelling workflow|Commodore planning|Plan created|Quartermaster assigning|Completed:|Failed:|\d+\s+(?:workers?|Crew)\s+(executing plan|deployed))\b/i.test(
               text,
             ) ||
-            (workerId && /^(?:Worker|Sailor)\s+\d+\s+deployed:/i.test(text));
+            (workerId && /^(?:Worker|Crew)\s+\d+\s+deployed:/i.test(text));
           if (isPhaseLine) {
             updateAggregateRootContent(text, deps);
           }
@@ -326,7 +326,7 @@ export function createPanelHandlers(deps: any): any {
             const item = {
               workerId: workerKey,
               text,
-              agentName: `Sailor ${workerKey}`,
+              agentName: `Crew ${workerKey}`,
               color: existing.agentColor || '#A78BFA',
               timestamp,
             };
@@ -795,12 +795,12 @@ export function createPanelHandlers(deps: any): any {
           const id = String(d?.agentId || '');
           let ordinal =
             typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
-          let name = `Sailor ${ordinal}`;
+          let name = `Crew ${ordinal}`;
           try {
             const mapped = groups.find((g: any) => String(g.taskId) === id);
             if (mapped && mapped.name) {
               name = String(mapped.name);
-              const m = /Sailor\s+(\d+)/i.exec(name);
+              const m = /Crew\s+(\d+)/i.exec(name);
               if (m && m[1]) ordinal = Number(m[1]);
             }
           } catch {}
@@ -829,7 +829,7 @@ export function createPanelHandlers(deps: any): any {
           batch.forEach((p: any, idx: number) => {
             const id = String(p.agentId || `agent-${idx + 1}`);
             const color = String(p.color || '#A78BFA');
-            const name = String(p.agentName || '').trim() || `Sailor ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
+            const name = String(p.agentName || '').trim() || `Crew ${p.agentOrdinal || deps.ensureAgentOrdinal(id)}`;
             if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color });
           });
           const groupsNext = Array.from(groupsMap.values());
@@ -874,7 +874,7 @@ export function createPanelHandlers(deps: any): any {
           // Prefer authoritative workerIndex from backend
           const ordinal =
             typeof d?.workerIndex === 'number' ? d.workerIndex : deps.ensureAgentOrdinal(id, d?.workerIndex);
-          const name = `Sailor ${ordinal}`;
+          const name = `Crew ${ordinal}`;
           const color = String(d?.color || '#A78BFA');
           const groupId = typeof d?.groupId === 'number' ? d.groupId : undefined;
           if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color, groupId });
@@ -894,7 +894,7 @@ export function createPanelHandlers(deps: any): any {
           deps.setShowCloseTabs(true);
           const workerId = String(data.workerId || '1');
           const taskId = String(data.workerSessionId || data.sessionId || workerId);
-          const agentName = `Sailor ${workerId}`;
+          const agentName = `Crew ${workerId}`;
           const color = data.color || '#A78BFA';
           deps.setWorkerTabGroups((prev: Array<{ taskId: string; name: string; color: string }>) => {
             const exists = prev.some((g: { taskId: string }) => g.taskId === taskId);

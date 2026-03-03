@@ -1,5 +1,5 @@
 /**
- * @deprecated Superseded by roles/sailor-prompt.ts — SailorPrompt replaces WorkerPrompt.
+ * @deprecated Superseded by roles/crew-prompt.ts — CrewPrompt replaces WorkerPrompt.
  * Retained for backward compatibility. Do not add new features.
  */
 import { SystemMessage } from '@langchain/core/messages';

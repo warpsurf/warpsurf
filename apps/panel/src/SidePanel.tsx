@@ -752,7 +752,7 @@ const SidePanel = () => {
       for (const [, pos] of Object.entries(positions as any)) {
         const lane = (pos as any)?.y || 0;
         if (!(lane in lanes)) {
-          const label = `Sailor ${lane + 1}`;
+          const label = `Crew ${lane + 1}`;
           const mapped = groupByWorkerId.get(String(lane + 1));
           const groupColor =
             mapped?.color ||

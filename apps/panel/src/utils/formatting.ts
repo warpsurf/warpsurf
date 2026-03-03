@@ -135,12 +135,12 @@ export function sanitizeMessageContent(content: string): string | null {
 }
 
 /**
- * Strips "(Sailor N)" and "[workerId]" suffixes from agent status text
+ * Strips "(Crew N)" and "[workerId]" suffixes from agent status text
  * so user-visible labels stay clean.
  */
 export function stripWorkerSuffix(text: string): string {
   return text
-    .replace(/\s*\[[\w-]+\]\s*(?:\(Sailor(?:\s+\d+)?\))?\s*$/i, '')
-    .replace(/\s*\(Sailor(?:\s+\d+)?\)\s*$/i, '')
+    .replace(/\s*\[[\w-]+\]\s*(?:\(Crew(?:\s+\d+)?\))?\s*$/i, '')
+    .replace(/\s*\(Crew(?:\s+\d+)?\)\s*$/i, '')
     .trim();
 }

@@ -37,15 +37,15 @@ export function chooseAvailableGroupColor(
   return { name, hex };
 }
 
-export function computeSailorGroupTitle(rawName: string, explicitIndex?: number): string {
+export function computeCrewGroupTitle(rawName: string, explicitIndex?: number): string {
   let index: number | null = null;
   if (typeof explicitIndex === 'number' && explicitIndex > 0) index = explicitIndex;
   if (index == null) {
-    const m = String(rawName || '').match(/Sailor\s+(\d+)/i);
+    const m = String(rawName || '').match(/Crew\s+(\d+)/i);
     if (m) {
       const n = parseInt(m[1], 10);
       if (!isNaN(n) && n > 0) index = n;
     }
   }
-  return `Sailor ${index ?? 1}`;
+  return `Crew ${index ?? 1}`;
 }

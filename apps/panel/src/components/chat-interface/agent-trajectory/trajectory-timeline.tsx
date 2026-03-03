@@ -29,7 +29,7 @@ function WorkerSection({
   if (flatActions.length === 0) return null;
 
   const num = workerId.replace(/\D/g, '') || '';
-  const label = workerItem?.agentName || (num ? `Sailor ${num}` : `Sailor ${workerId}`);
+  const label = workerItem?.agentName || (num ? `Crew ${num}` : `Crew ${workerId}`);
   const color = workerItem?.color;
 
   return (

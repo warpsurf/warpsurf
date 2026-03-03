@@ -3,8 +3,8 @@ import type { ParsedAction, DisplayAction, SiteGroup } from './types';
 import { getActionMapping } from './action-mappings';
 import { extractDomain, getFaviconUrl, generateId } from './utils';
 
-/** Strip "(Sailor X)" suffix from content */
-const stripWorkerSuffix = (content: string): string => content.replace(/\s*\(Sailor(?:\s+\d+)?\)\s*$/i, '').trim();
+/** Strip "(Crew X)" suffix from content */
+const stripWorkerSuffix = (content: string): string => content.replace(/\s*\(Crew(?:\s+\d+)?\)\s*$/i, '').trim();
 
 /** Extract URL from content */
 const extractUrl = (content: string): string | undefined => {

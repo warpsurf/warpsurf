@@ -13,13 +13,13 @@ export interface QuartermasterLog {
   workersUsed: number;
   subtaskCount: number;
   metrics: SchedulingMetrics;
-  assignments: Array<{ sailorId: number; subtaskIds: number[]; subtaskTitles: string[] }>;
+  assignments: Array<{ crewId: number; subtaskIds: number[]; subtaskTitles: string[] }>;
   isReschedule?: boolean;
   reason?: string;
 }
 
 /**
- * The Quartermaster assigns subtasks to sailors and optimises the schedule.
+ * The Quartermaster assigns subtasks to crew members and optimises the schedule.
  * Pure computation — no LLM calls.
  */
 export class Quartermaster {
@@ -41,7 +41,7 @@ export class Quartermaster {
     const assignments = Object.entries(result.queues)
       .filter(([, ids]) => ids.length > 0)
       .map(([wid, ids]) => ({
-        sailorId: Number(wid),
+        crewId: Number(wid),
         subtaskIds: ids,
         subtaskTitles: ids.map(id => titleMap.get(id) || `Task ${id}`),
       }));
@@ -61,11 +61,11 @@ export class Quartermaster {
   static formatSummary(log: QuartermasterLog): string {
     const header = log.isReschedule ? `Re-scheduled (${log.reason || 'plan modified'})` : `Schedule assigned`;
     const lines = [
-      `${header}: ${log.workersUsed} sailors, ${log.subtaskCount} subtasks, makespan ${log.metrics.makespan}`,
+      `${header}: ${log.workersUsed} crew, ${log.subtaskCount} subtasks, makespan ${log.metrics.makespan}`,
     ];
     for (const a of log.assignments) {
       const tasks = a.subtaskIds.map((id, i) => `#${id} "${a.subtaskTitles[i]}"`).join(' → ');
-      lines.push(`  Sailor ${a.sailorId}: ${tasks}`);
+      lines.push(`  Crew ${a.crewId}: ${tasks}`);
     }
     const m = log.metrics;
     lines.push(

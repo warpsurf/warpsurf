@@ -5,7 +5,7 @@ import {
   downloadCommodoreLogs,
   downloadQuartermasterLogs,
   downloadCaptainLogs,
-  downloadSailorLogs,
+  downloadCrewLogs,
   downloadErrors,
   downloadCombinedSessionLogs,
 } from './log-export-helpers';
@@ -111,8 +111,8 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
                 <button
                   type="button"
                   className={buttonClass}
-                  onClick={() => handleDownload(() => downloadSailorLogs(portRef.current, currentSessionId))}>
-                  <FiDownload size={12} /> Sailors
+                  onClick={() => handleDownload(() => downloadCrewLogs(portRef.current, currentSessionId))}>
+                  <FiDownload size={12} /> Crew
                 </button>
                 <div className={dividerClass} />
               </>

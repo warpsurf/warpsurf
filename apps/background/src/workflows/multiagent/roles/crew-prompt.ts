@@ -26,7 +26,7 @@ export const workerSystemPromptTemplate = workerBaseSystemPromptTemplate
   .replace('{{region_preference_section}}', '')
   .replace('{{post_sections}}', multiagentPostSections);
 
-export class SailorPrompt {
+export class CrewPrompt {
   private readonly systemMessage: SystemMessage;
 
   constructor(maxActionsPerStep: number) {

@@ -41,7 +41,7 @@ export class TabGroupService {
       const chosen = this.chooseColor(used, workerNum);
       task.groupColorName = chosen.name;
       task.color = chosen.hex;
-      task.name = `Sailor ${workerNum}`;
+      task.name = `Crew ${workerNum}`;
     } catch (e) {
       this.logger.error('Failed to pre-configure worker group:', e);
     }
@@ -110,7 +110,7 @@ export class TabGroupService {
     let index = task.workerIndex;
 
     if (!index) {
-      const match = (task.name || '').match(/Sailor\s+(\d+)/i);
+      const match = (task.name || '').match(/Crew\s+(\d+)/i);
       if (match) index = parseInt(match[1], 10);
     }
 
@@ -118,12 +118,12 @@ export class TabGroupService {
       index = this.getNextWorkerNum(tasks);
     }
 
-    return `Sailor ${index}`;
+    return `Crew ${index}`;
   }
 
-  getNextSailorName(tasks: Map<string, Task>): { name: string; worker_num: number } {
+  getNextCrewName(tasks: Map<string, Task>): { name: string; worker_num: number } {
     const num = this.getNextWorkerNum(tasks);
-    return { name: `Sailor ${num}`, worker_num: num };
+    return { name: `Crew ${num}`, worker_num: num };
   }
 
   async getUsedColors(tasks: Map<string, Task>): Promise<Set<chrome.tabGroups.Color>> {
@@ -132,7 +132,7 @@ export class TabGroupService {
     try {
       const groups = await chrome.tabGroups.query({});
       groups.forEach(g => {
-        if ((g.title || '').toLowerCase().startsWith('sailor') && g.color) {
+        if ((g.title || '').toLowerCase().startsWith('crew') && g.color) {
           used.add(g.color as chrome.tabGroups.Color);
         }
       });
@@ -159,7 +159,7 @@ export class TabGroupService {
     const win = await chrome.windows.get(currentTab.windowId).catch(() => null);
     if (!win || win.type !== 'normal') return undefined;
 
-    if (!task.name?.includes('Sailor')) return undefined;
+    if (!task.name?.includes('Crew')) return undefined;
 
     if (typeof task.groupId === 'number' && task.groupId >= 0) {
       try {
@@ -233,7 +233,7 @@ export class TabGroupService {
   private getNextWorkerNum(tasks: Map<string, Task>): number {
     let max = 0;
     tasks.forEach(t => {
-      const match = /^Sailor\s+(\d+)/i.exec(t.name);
+      const match = /^Crew\s+(\d+)/i.exec(t.name);
       if (match) {
         const n = parseInt(match[1], 10);
         if (!isNaN(n) && n > max) max = n;

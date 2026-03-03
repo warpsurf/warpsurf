@@ -5,7 +5,7 @@ import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
 import { generalSettingsStore } from '@extension/storage';
 import { captainSystemPrompt } from './captain-prompt';
 import { Quartermaster } from './quartermaster';
-import { Sailor, type SailorResult } from './sailor';
+import { Crew, type CrewResult } from './crew';
 import { CaptainState } from '../captain-state';
 import { buildPriorOutputsSection } from '../multiagent-placeholders';
 import type { SubtaskId, PriorOutput, WorkerSchedule, WorkerQueues } from '../multiagent-types';
@@ -27,9 +27,9 @@ export interface CaptainConfig {
 
 export interface WarmDispatch {
   subtaskId: SubtaskId;
-  sailorId: number;
+  crewId: number;
   sessionId: string;
-  resultPromise: Promise<SailorResult>;
+  resultPromise: Promise<CrewResult>;
 }
 
 export interface WarmStartSchedule {
@@ -52,14 +52,14 @@ type EventHandler = (event: WorkflowEvent) => void;
 export class Captain {
   private state: CaptainState;
   private quartermaster = new Quartermaster();
-  private sailor: Sailor;
+  private crew: Crew;
   private config: Required<Pick<CaptainConfig, 'maxWorkers' | 'maxRetries'>>;
   private llm: any;
   private sessionId: string;
   private cancelled = false;
   private abortController = new AbortController();
   private onEvent: EventHandler;
-  private sailorQueues: Record<number, number[]> = {};
+  private crewQueues: Record<number, number[]> = {};
 
   private pollingTimer: ReturnType<typeof setInterval> | null = null;
   private currentPollIntervalMs = POLL_INTERVAL_BASE_MS;
@@ -68,14 +68,14 @@ export class Captain {
 
   constructor(
     state: CaptainState,
-    sailor: Sailor,
+    crew: Crew,
     llm: any,
     sessionId: string,
     config: CaptainConfig,
     onEvent: EventHandler,
   ) {
     this.state = state;
-    this.sailor = sailor;
+    this.crew = crew;
     this.llm = llm;
     this.sessionId = sessionId;
     this.config = {
@@ -84,7 +84,7 @@ export class Captain {
     };
     this.onEvent = onEvent;
 
-    this.state.setSailorLogProvider(sid => this.sailor.getSessionLogs(sid));
+    this.state.setCrewLogProvider(sid => this.crew.getSessionLogs(sid));
   }
 
   /**
@@ -94,12 +94,12 @@ export class Captain {
    */
   adoptWarmDispatches(dispatches: WarmDispatch[]): void {
     for (const d of dispatches) {
-      this.state.sailorSessionIds.set(d.sailorId, d.sessionId);
-      this.state.sailorAssignments.set(d.subtaskId, d.sailorId);
-      this.state.busySailors.add(d.sailorId);
+      this.state.crewSessionIds.set(d.crewId, d.sessionId);
+      this.state.crewAssignments.set(d.subtaskId, d.crewId);
+      this.state.busyCrew.add(d.crewId);
       this.state.markRunning(d.subtaskId);
 
-      this.onEvent({ type: 'subtask_dispatched', subtaskId: d.subtaskId, sailorId: d.sailorId, prompt: '' });
+      this.onEvent({ type: 'subtask_dispatched', subtaskId: d.subtaskId, crewId: d.crewId, prompt: '' });
       this.onEvent({ type: 'subtask_running', subtaskId: d.subtaskId });
 
       d.resultPromise.then(
@@ -125,12 +125,12 @@ export class Captain {
     });
 
     if (warmStart) {
-      this.sailorQueues = warmStart.queues;
+      this.crewQueues = warmStart.queues;
       this.onEvent({ type: 'schedule_ready', schedule: warmStart.schedule, queues: warmStart.queues });
     } else {
       const plan = this.state.plan.toTaskPlan();
       const { schedule, queues } = this.quartermaster.schedule(plan, this.config.maxWorkers);
-      this.sailorQueues = queues;
+      this.crewQueues = queues;
       this.onEvent({ type: 'schedule_ready', schedule, queues });
     }
 
@@ -164,10 +164,9 @@ export class Captain {
 
   private async runProactiveCheck(): Promise<void> {
     if (this.cancelled || this.state.isAllDone()) return;
-    if (this.state.busySailors.size === 0) return;
+    if (this.state.busyCrew.size === 0) return;
     if (this.captainCallInFlight) return;
 
-    // Skip if an event-driven captain call happened recently
     if (Date.now() - this.lastCaptainCallTime < EVENT_DEDUP_WINDOW_MS) return;
 
     const overdue = this.state.getOverdueSubtasks(OVERDUE_THRESHOLD_MS);
@@ -178,7 +177,7 @@ export class Captain {
     let trigger: string;
     if (overdue.length > 0) {
       const overdueDesc = overdue.map(o => `"${o.title}" running for ${formatMs(o.elapsedMs)}`).join('; ');
-      trigger = `Proactive check — OVERDUE SUBTASKS: ${overdueDesc}. ${this.state.completedCount}/${this.state.totalCount} complete, ${runningCount} running. Review the action history below and intervene if any sailor appears stuck or looping.`;
+      trigger = `Proactive check — OVERDUE SUBTASKS: ${overdueDesc}. ${this.state.completedCount}/${this.state.totalCount} complete, ${runningCount} running. Review the action history below and intervene if any crew member appears stuck or looping.`;
     } else {
       trigger = `Proactive check: ${this.state.completedCount}/${this.state.totalCount} complete, ${runningCount} running. Review progress and intervene if needed, or return empty actions if all is well.`;
     }
@@ -193,8 +192,8 @@ export class Captain {
 
     this.state.subtaskOutputs.set(subtaskId, output);
     this.state.markCompleted(subtaskId);
-    const sailorId = this.state.sailorAssignments.get(subtaskId);
-    if (sailorId !== undefined) this.state.busySailors.delete(sailorId);
+    const crewId = this.state.crewAssignments.get(subtaskId);
+    if (crewId !== undefined) this.state.busyCrew.delete(crewId);
 
     this.onEvent({ type: 'subtask_completed', subtaskId, output });
 
@@ -209,8 +208,6 @@ export class Captain {
       return this.finalize(this.buildFinalAnswer());
     }
 
-    // Dispatch newly-ready subtasks immediately — don't block on the captain LLM call.
-    // The captain can still modify dispatched-but-not-yet-running tasks, or cancel+retry.
     await this.dispatchReady();
 
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
@@ -224,8 +221,8 @@ export class Captain {
     if (this.cancelled) return;
 
     const failCount = this.state.recordFailure(subtaskId, error);
-    const sailorId = this.state.sailorAssignments.get(subtaskId);
-    if (sailorId !== undefined) this.state.busySailors.delete(sailorId);
+    const crewId = this.state.crewAssignments.get(subtaskId);
+    if (crewId !== undefined) this.state.busyCrew.delete(crewId);
 
     this.onEvent({ type: 'subtask_failed', subtaskId, error });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
@@ -237,7 +234,6 @@ export class Captain {
 
     const decision = await this.consultAndExecute(trigger);
 
-    // Check if captain explicitly handled this subtask (retry, cancel, or abort)
     const captainHandledThis =
       decision?.actions.some(
         a =>
@@ -252,7 +248,6 @@ export class Captain {
       this.state.subtaskStatus.set(subtaskId, 'pending');
       await this.dispatchReady();
     } else if (!canAutoRetry && !captainHandledThis) {
-      // Max retries exhausted and captain didn't act — check if workflow is stuck
       await this.dispatchReady();
     }
   }
@@ -266,10 +261,10 @@ export class Captain {
       if (st !== 'completed') this.state.subtaskStatus.set(id, 'cancelled');
     }
 
-    const sessionIds = Array.from(this.state.sailorSessionIds.values());
-    await Promise.allSettled(sessionIds.map(sid => this.sailor.cancel(sid)));
-    this.state.sailorSessionIds.clear();
-    this.state.busySailors.clear();
+    const sessionIds = Array.from(this.state.crewSessionIds.values());
+    await Promise.allSettled(sessionIds.map(sid => this.crew.cancel(sid)));
+    this.state.crewSessionIds.clear();
+    this.state.busyCrew.clear();
 
     this.onEvent({ type: 'workflow_aborted', reason: 'Cancelled by user' });
     this._resolve?.('Workflow cancelled.');
@@ -288,7 +283,7 @@ export class Captain {
     if (import.meta.env.DEV) {
       const statuses = Object.fromEntries([...this.state.subtaskStatus]);
       logger.info(
-        `[dispatchReady] completed=${completed.length} ready=${ready.length} busy=${this.state.busySailors.size}`,
+        `[dispatchReady] completed=${completed.length} ready=${ready.length} busy=${this.state.busyCrew.size}`,
         statuses,
       );
     }
@@ -296,32 +291,32 @@ export class Captain {
     for (const subtaskId of ready) {
       if (this.cancelled) return;
 
-      const sailorId = this.pickSailor(subtaskId);
-      if (sailorId === null) break;
+      const crewId = this.pickCrew(subtaskId);
+      if (crewId === null) break;
 
       const prompt = await this.buildDispatchPrompt(subtaskId);
 
-      let sessionId = this.state.sailorSessionIds.get(sailorId);
+      let sessionId = this.state.crewSessionIds.get(crewId);
       if (!sessionId) {
         try {
-          sessionId = await this.sailor.createSession(sailorId);
-          this.state.sailorSessionIds.set(sailorId, sessionId);
+          sessionId = await this.crew.createSession(crewId);
+          this.state.crewSessionIds.set(crewId, sessionId);
         } catch (e) {
-          logger.error(`Failed to create session for Sailor ${sailorId}:`, e);
+          logger.error(`Failed to create session for Crew ${crewId}:`, e);
           continue;
         }
       }
 
       this.state.subtaskStatus.set(subtaskId, 'dispatched');
-      this.state.sailorAssignments.set(subtaskId, sailorId);
-      this.state.busySailors.add(sailorId);
+      this.state.crewAssignments.set(subtaskId, crewId);
+      this.state.busyCrew.add(crewId);
 
-      this.onEvent({ type: 'subtask_dispatched', subtaskId, sailorId, prompt });
+      this.onEvent({ type: 'subtask_dispatched', subtaskId, crewId, prompt });
 
-      this.runSubtask(subtaskId, sessionId, prompt, sailorId);
+      this.runSubtask(subtaskId, sessionId, prompt, crewId);
     }
 
-    if (this.state.busySailors.size === 0 && !this.state.isAllDone() && !this.cancelled) {
+    if (this.state.busyCrew.size === 0 && !this.state.isAllDone() && !this.cancelled) {
       const pendingCount = [...this.state.subtaskStatus.values()].filter(s => s === 'pending').length;
       if (pendingCount === 0 && !this.state.isAllDone()) {
         this.finalize(this.buildFinalAnswer());
@@ -329,18 +324,18 @@ export class Captain {
     }
   }
 
-  private async runSubtask(subtaskId: SubtaskId, sessionId: string, prompt: string, sailorId: number): Promise<void> {
+  private async runSubtask(subtaskId: SubtaskId, sessionId: string, prompt: string, crewId: number): Promise<void> {
     this.state.markRunning(subtaskId);
     this.onEvent({ type: 'subtask_running', subtaskId });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
     if (import.meta.env.DEV)
-      logger.info(`[runSubtask] START #${subtaskId} "${title}" on sailor ${sailorId} (session=${sessionId})`);
+      logger.info(`[runSubtask] START #${subtaskId} "${title}" on crew ${crewId} (session=${sessionId})`);
 
     const deps = this.state.plan.getDependencies(subtaskId);
     const depTabIds = deps.flatMap(d => this.state.subtaskOutputs.get(d)?.tabIds ?? []);
     const uniqueTabIds = [...new Set(depTabIds)].filter(n => typeof n === 'number');
 
-    const result = await this.sailor.dispatch(
+    const result = await this.crew.dispatch(
       sessionId,
       prompt,
       subtaskId,
@@ -406,16 +401,16 @@ export class Captain {
     return `${header}${suggestionText}${priorText}${outputReminder}`;
   }
 
-  // --- Sailor assignment ---
+  // --- Crew assignment ---
 
-  private pickSailor(subtaskId: SubtaskId): number | null {
-    for (const [sailorId, queue] of Object.entries(this.sailorQueues)) {
-      if (queue.includes(subtaskId) && !this.state.busySailors.has(Number(sailorId))) {
-        return Number(sailorId);
+  private pickCrew(subtaskId: SubtaskId): number | null {
+    for (const [crewId, queue] of Object.entries(this.crewQueues)) {
+      if (queue.includes(subtaskId) && !this.state.busyCrew.has(Number(crewId))) {
+        return Number(crewId);
       }
     }
-    for (const sailorId of Object.keys(this.sailorQueues).map(Number)) {
-      if (!this.state.busySailors.has(sailorId)) return sailorId;
+    for (const crewId of Object.keys(this.crewQueues).map(Number)) {
+      if (!this.state.busyCrew.has(crewId)) return crewId;
     }
     return null;
   }
@@ -425,7 +420,6 @@ export class Captain {
   /**
    * Consult the captain LLM and execute any resulting actions.
    * Returns the decision (or undefined if skipped/failed).
-   * Includes dedup guard and in-flight protection.
    */
   private async consultAndExecute(trigger: string): Promise<CaptainDecision | undefined> {
     if (this.cancelled || this.captainCallInFlight) return undefined;
@@ -533,11 +527,11 @@ export class Captain {
           break;
         }
         case 'cancel_subtask': {
-          const sessionId = this.findSailorSession(action.subtask_id);
-          if (sessionId) await this.sailor.cancel(sessionId);
+          const sessionId = this.findCrewSession(action.subtask_id);
+          if (sessionId) await this.crew.cancel(sessionId);
           this.state.subtaskStatus.set(action.subtask_id, 'cancelled');
-          const sid = this.state.sailorAssignments.get(action.subtask_id);
-          if (sid !== undefined) this.state.busySailors.delete(sid);
+          const sid = this.state.crewAssignments.get(action.subtask_id);
+          if (sid !== undefined) this.state.busyCrew.delete(sid);
           break;
         }
         case 'retry_subtask': {
@@ -585,8 +579,8 @@ export class Captain {
         case 'resolve_speculative': {
           const losers = this.state.plan.resolveSpeculation(action.goal_id, action.winner_id);
           for (const lid of losers) {
-            const sid = this.findSailorSession(lid);
-            if (sid) await this.sailor.cancel(sid);
+            const sid = this.findCrewSession(lid);
+            if (sid) await this.crew.cancel(sid);
             this.state.subtaskStatus.set(lid, 'cancelled');
           }
           const race = this.state.speculativeRaces.get(action.goal_id);
@@ -610,7 +604,7 @@ export class Captain {
     if (planModified) {
       const updatedPlan = this.state.plan.toTaskPlan();
       const { queues } = this.quartermaster.schedule(updatedPlan, this.config.maxWorkers);
-      this.sailorQueues = queues;
+      this.crewQueues = queues;
     }
 
     await this.dispatchReady();
@@ -625,8 +619,8 @@ export class Captain {
         const losers = this.state.plan.resolveSpeculation(goalId, completedId);
         race.winner = completedId;
         for (const lid of losers) {
-          const sid = this.findSailorSession(lid);
-          if (sid) this.sailor.cancel(sid).catch(() => {});
+          const sid = this.findCrewSession(lid);
+          if (sid) this.crew.cancel(sid).catch(() => {});
           this.state.subtaskStatus.set(lid, 'cancelled');
         }
         this.onEvent({ type: 'speculative_resolved', goalId, winnerId: completedId, cancelledIds: losers });
@@ -641,8 +635,8 @@ export class Captain {
     this.stopPollingLoop();
     if (import.meta.env.DEV) logger.info(`[finalize] answer length=${answer.length}`);
 
-    for (const sid of this.state.sailorSessionIds.values()) {
-      this.sailor.endSession(sid, 'completed').catch(() => {});
+    for (const sid of this.state.crewSessionIds.values()) {
+      this.crew.endSession(sid, 'completed').catch(() => {});
     }
 
     this.onEvent({ type: 'workflow_complete', finalAnswer: answer });
@@ -680,18 +674,18 @@ export class Captain {
     for (const [id, st] of this.state.subtaskStatus) {
       if (st !== 'completed') this.state.subtaskStatus.set(id, 'cancelled');
     }
-    for (const sid of this.state.sailorSessionIds.values()) {
-      this.sailor.cancel(sid).catch(() => {});
+    for (const sid of this.state.crewSessionIds.values()) {
+      this.crew.cancel(sid).catch(() => {});
     }
 
     this.onEvent({ type: 'workflow_aborted', reason });
     this._resolve?.(reason);
   }
 
-  private findSailorSession(subtaskId: SubtaskId): string | undefined {
-    const sailorId = this.state.sailorAssignments.get(subtaskId);
-    if (sailorId === undefined) return undefined;
-    return this.state.sailorSessionIds.get(sailorId);
+  private findCrewSession(subtaskId: SubtaskId): string | undefined {
+    const crewId = this.state.crewAssignments.get(subtaskId);
+    if (crewId === undefined) return undefined;
+    return this.state.crewSessionIds.get(crewId);
   }
 }
 

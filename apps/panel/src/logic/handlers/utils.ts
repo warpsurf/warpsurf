@@ -76,7 +76,7 @@ export function handleWorkerTabCreated(event: AgentEvent, deps: TaskEventHandler
     if (!taskId) return;
     const workerIndex = (data as any)?.workerIndex;
     const ordinal = deps.ensureAgentOrdinal(taskId, workerIndex);
-    const agentName = `Sailor ${ordinal}`;
+    const agentName = `Crew ${ordinal}`;
     const color = (data as any)?.agentColor || '#A78BFA';
     const groupId = (data as any)?.groupId;
     if (deps.getCurrentTaskAgentType() === 'multiagent') deps.setShowCloseTabs(true);
@@ -108,7 +108,7 @@ export function handleSingleAgentTabCreated(event: AgentEvent, deps: TaskEventHa
     if (!taskId) return;
     const workerIndex = (data as any)?.workerIndex;
     const ordinal = deps.ensureAgentOrdinal(taskId, workerIndex);
-    const agentName = `Sailor ${ordinal}`;
+    const agentName = `Crew ${ordinal}`;
     const color = (data as any)?.agentColor || '#A78BFA';
     const groupId = (data as any)?.groupId;
     deps.setWorkerTabGroups((prev: WorkerTabGroup[]) => {
@@ -148,7 +148,7 @@ export function updateTabGroupColor(event: AgentEvent, deps: TaskEventHandlerDep
         return updated;
       } else {
         const ordinal = deps.ensureAgentOrdinal(taskId, workerIndex);
-        const name = title || `Sailor ${ordinal}`;
+        const name = title || `Crew ${ordinal}`;
         try {
           deps.laneColorByLaneRef.current.clear();
         } catch {}
@@ -168,7 +168,7 @@ export function reconstructWorkerTabGroupsFromPreview(deps: TaskEventHandlerDeps
     (mirrorPreviewBatch as any[]).forEach((p: any, idx: number) => {
       const id = String(p?.agentId || `agent-${idx + 1}`);
       const ordinal = typeof p?.agentOrdinal === 'number' ? p.agentOrdinal : deps.ensureAgentOrdinal(id);
-      const name = p?.agentName || `Sailor ${ordinal}`;
+      const name = p?.agentName || `Crew ${ordinal}`;
       const color = String(p?.color || '#A78BFA');
       if (!groupsMap.has(id)) groupsMap.set(id, { taskId: id, name, color });
     });
