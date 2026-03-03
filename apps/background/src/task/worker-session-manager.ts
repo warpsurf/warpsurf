@@ -138,7 +138,7 @@ export class WorkerSessionManager {
     } catch (e: any) {
       return { ok: false, error: e?.message || String(e) };
     } finally {
-      this.releaseSubtaskTabs(taskId, task);
+      await this.releaseSubtaskTabs(taskId, task);
     }
   }
 
@@ -167,7 +167,7 @@ export class WorkerSessionManager {
 
     this.endCapture(taskId);
     this.mirrors.freezeTab(task.tabId);
-    this.mirrors.freezeSession(String(task.parentSessionId || task.id));
+    this.mirrors.freezeSession(String(task.id));
   }
 
   private setupTokenTracking(taskId: string, workerIndex?: number, parentSessionId?: string): void {
@@ -196,42 +196,30 @@ export class WorkerSessionManager {
     } catch {}
   }
 
+  /**
+   * Best-effort adoption of dependency tabs. Tabs are NOT pre-registered as owned;
+   * the SharedTabRegistry gate (canAccess) must pass first. If the tab is held by
+   * another crew or unavailable, we skip immediately — never block or force-detach.
+   */
   private async adoptTargetTabs(executor: Executor, targetTabIds?: number[]): Promise<void> {
     if (!Array.isArray(targetTabIds) || targetTabIds.length === 0) return;
 
     const ctx = (executor as any).getBrowserContext?.();
-    if (!ctx) {
-      this.logger.warn('[adoptTargetTabs] No browser context available — cannot adopt tabs');
-      return;
-    }
+    if (!ctx) return;
 
-    // Register all target tabs as owned first
-    for (const tid of targetTabIds) {
-      const id = Number(tid);
-      try {
-        ctx.registerOwnedTab(id);
-      } catch (e) {
-        this.logger.warn(`[adoptTargetTabs] Failed to register tab ${id} as owned:`, e);
-      }
-    }
-
-    // Try switching to the first valid target tab
-    for (const tid of targetTabIds) {
-      const id = Number(tid);
+    for (let i = targetTabIds.length - 1; i >= 0; i--) {
+      const id = Number(targetTabIds[i]);
       try {
         const tab = await chrome.tabs.get(id).catch(() => null);
-        if (!tab) {
-          this.logger.warn(`[adoptTargetTabs] Tab ${id} no longer exists, skipping`);
-          continue;
-        }
+        if (!tab) continue;
         await ctx.switchTab(id);
-        this.logger.info(`[adoptTargetTabs] Successfully switched to dependency tab ${id} (url=${tab.url})`);
+        this.logger.info(`[adoptTargetTabs] Switched to dependency tab ${id} (url=${tab.url})`);
         return;
-      } catch (e) {
-        this.logger.warn(`[adoptTargetTabs] Failed to switch to tab ${id}:`, e);
+      } catch {
+        this.logger.info(`[adoptTargetTabs] Tab ${id} unavailable, skipping`);
       }
     }
-    this.logger.warn('[adoptTargetTabs] Could not switch to any dependency tab — worker will use default tab');
+    this.logger.info('[adoptTargetTabs] No dependency tabs available — worker will use own tab');
   }
 
   private setupEventHandlers(task: Task, settings: any): void {
@@ -254,6 +242,10 @@ export class WorkerSessionManager {
       if (task.status === 'running') {
         this.captureEvent(task.id, event);
       }
+
+      // Don't forward TASK_START boilerplate from worker executors — crew
+      // deployment is handled by multiagent workflow progress events.
+      if (event.state === ExecutionState.TASK_START) return;
 
       try {
         await this.onForwardEvent?.(task, event);
@@ -298,16 +290,18 @@ export class WorkerSessionManager {
     );
   }
 
-  private releaseSubtaskTabs(taskId: string, task: Task): void {
+  private async releaseSubtaskTabs(taskId: string, task: Task): Promise<void> {
     const subtaskId = this.activeSubtaskBySession.get(taskId);
     const crewId = task.workerIndex;
     if (this.tabRegistry && typeof subtaskId === 'number' && typeof crewId === 'number') {
       this.tabRegistry.releaseCrewTabs(crewId, subtaskId);
     }
     this.activeSubtaskBySession.delete(taskId);
-    // Clear stale callbacks so the next subtask on this executor gets fresh ones
+    const ctx = (task.executor as any)?.getBrowserContext?.();
     try {
-      const ctx = (task.executor as any)?.getBrowserContext?.();
+      await ctx?.releaseAllDebuggers?.();
+    } catch {}
+    try {
       ctx?.setTabRegistryCallbacks?.(undefined, undefined);
     } catch {}
   }
