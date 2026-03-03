@@ -495,7 +495,7 @@ export class Executor {
     this._hasReachedTerminalState = false;
     const task = this.tasks[this.tasks.length - 1];
     const jobStartTime = Date.now();
-    const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType);
+    const currentTaskNum = workflowLogger.taskReceived(task, this.manualAgentType, (this as any).__workerIndex);
 
     // Bail out immediately if already cancelled before execution began
     if (this.context.stopped) {
@@ -834,7 +834,7 @@ export class Executor {
         };
 
         if (step > 0) {
-          workflowLogger.workflowStep(step + 1, allowedMaxSteps);
+          workflowLogger.workflowStep(step + 1, allowedMaxSteps, undefined, (this as any).__workerIndex);
         }
 
         if (await this.shouldStop()) {
