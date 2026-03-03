@@ -3,6 +3,7 @@ import type { Task } from './task-manager';
 import type { Executor } from '../executor/executor';
 import type { MirrorCoordinator } from './mirror-coordinator';
 import type { TabGroupService } from './tab-group-service';
+import type { SharedTabRegistry } from './shared-tab-registry';
 import { createWorkerExecutor } from './executor-factory';
 import { generalSettingsStore, AgentNameEnum } from '@extension/storage';
 import { CrewPrompt } from '@src/workflows/multiagent/roles/crew-prompt';
@@ -27,6 +28,8 @@ export class WorkerSessionManager {
   private sessions = new Map<string, WorkerSession>();
   private captures = new Map<string, CaptureWindow>();
   private onForwardEvent?: (task: Task, event: any) => Promise<void>;
+  private tabRegistry?: SharedTabRegistry;
+  private activeSubtaskBySession = new Map<string, number>();
 
   constructor(
     private getTasks: () => Map<string, Task>,
@@ -36,6 +39,23 @@ export class WorkerSessionManager {
 
   setForwardEventHandler(handler: (task: Task, event: any) => Promise<void>): void {
     this.onForwardEvent = handler;
+  }
+
+  setSharedTabRegistry(registry: SharedTabRegistry): void {
+    this.tabRegistry = registry;
+    // Retroactively register tabs from warm-started sessions that were
+    // already running before the registry existed.
+    for (const [taskId, subtaskId] of this.activeSubtaskBySession) {
+      const task = this.getTasks().get(taskId);
+      if (!task || typeof task.workerIndex !== 'number') continue;
+      const ctx = (task.executor as any)?.getBrowserContext?.();
+      const owned: ReadonlySet<number> | undefined = ctx?.getOwnedTabIds?.();
+      if (owned) {
+        for (const tabId of owned) {
+          registry.register(tabId, subtaskId, task.workerIndex);
+        }
+      }
+    }
   }
 
   async createSession(
@@ -101,6 +121,12 @@ export class WorkerSessionManager {
     const session = this.sessions.get(taskId);
     if (!session) return { ok: false, error: 'Session missing' };
 
+    if (typeof options.subtaskId === 'number') {
+      this.activeSubtaskBySession.set(taskId, options.subtaskId);
+    }
+
+    this.bindTabRegistryToContext(task);
+
     try {
       this.startCapture(taskId);
       this.setupSubtaskTracking(taskId, options.subtaskId);
@@ -111,6 +137,8 @@ export class WorkerSessionManager {
       return this.extractOutput(taskId, task);
     } catch (e: any) {
       return { ok: false, error: e?.message || String(e) };
+    } finally {
+      this.releaseSubtaskTabs(taskId, task);
     }
   }
 
@@ -213,6 +241,7 @@ export class WorkerSessionManager {
     task.executor!.subscribeExecutionEvents(async event => {
       if (event.state === ExecutionState.TAB_CREATED && event.data?.tabId) {
         const tabId = Number(event.data.tabId);
+        this.registerTabInRegistry(task, tabId);
         const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
         if (typeof task.groupId !== 'number' || task.groupId < 0) {
           await this.tabGroups.assignTabToWorkerGroup(tabId, task, this.getTasks());
@@ -251,6 +280,45 @@ export class WorkerSessionManager {
         ctx?.setPreferredGroupId?.(task.groupId);
       }
     } catch {}
+  }
+
+  private bindTabRegistryToContext(task: Task): void {
+    if (!this.tabRegistry) return;
+    const ctx = (task.executor as any)?.getBrowserContext?.();
+    if (!ctx?.setTabRegistryCallbacks) return;
+
+    const registry = this.tabRegistry;
+    const subtaskId = this.activeSubtaskBySession.get(task.id);
+    const crewId = task.workerIndex ?? -1;
+    if (subtaskId == null || crewId < 0) return;
+
+    ctx.setTabRegistryCallbacks(
+      (tabId: number) => registry.canAccess(tabId, subtaskId, crewId),
+      (tabId: number) => registry.markHolder(tabId, crewId),
+    );
+  }
+
+  private releaseSubtaskTabs(taskId: string, task: Task): void {
+    const subtaskId = this.activeSubtaskBySession.get(taskId);
+    const crewId = task.workerIndex;
+    if (this.tabRegistry && typeof subtaskId === 'number' && typeof crewId === 'number') {
+      this.tabRegistry.releaseCrewTabs(crewId, subtaskId);
+    }
+    this.activeSubtaskBySession.delete(taskId);
+    // Clear stale callbacks so the next subtask on this executor gets fresh ones
+    try {
+      const ctx = (task.executor as any)?.getBrowserContext?.();
+      ctx?.setTabRegistryCallbacks?.(undefined, undefined);
+    } catch {}
+  }
+
+  private registerTabInRegistry(task: Task, tabId: number): void {
+    if (!this.tabRegistry) return;
+    const subtaskId = this.activeSubtaskBySession.get(task.id);
+    const crewId = task.workerIndex;
+    if (typeof subtaskId === 'number' && typeof crewId === 'number') {
+      this.tabRegistry.register(tabId, subtaskId, crewId);
+    }
   }
 
   private startCapture(taskId: string): void {
