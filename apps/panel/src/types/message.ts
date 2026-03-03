@@ -58,13 +58,33 @@ export const ACTOR_PROFILES = {
   },
   // Multiagent workflow sub-roles (used in trace items)
   planner: {
-    name: 'Planner',
-    icon: 'icons/planner.svg',
-    iconBackground: '#fb923c',
+    name: 'Commodore',
+    icon: '',
+    iconBackground: '#1e40af',
   },
   refiner: {
     name: 'Refiner',
     icon: '',
     iconBackground: '#fb923c',
+  },
+  commodore: {
+    name: 'Commodore',
+    icon: '',
+    iconBackground: '#1e40af',
+  },
+  captain: {
+    name: 'Captain',
+    icon: '',
+    iconBackground: '#d97706',
+  },
+  quartermaster: {
+    name: 'Quartermaster',
+    icon: '',
+    iconBackground: '#0369a1',
+  },
+  crew: {
+    name: 'Crew',
+    icon: '',
+    iconBackground: '#7c3aed',
   },
 } as const;
