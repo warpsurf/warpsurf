@@ -778,6 +778,37 @@ export default function MessageBlock({
               ) : null}
             </>
           )}
+          {isAgentAggregate &&
+            !collapsed &&
+            expandedTab === 'details' &&
+            (() => {
+              const captainTrace = traceItems.filter(t => t.actor === 'captain');
+              if (captainTrace.length === 0) return null;
+              return (
+                <div
+                  className="mt-2 rounded-md border p-2 text-xs clear-both"
+                  style={{ borderColor: isDarkMode ? '#92400e' : '#fbbf24' }}>
+                  <div
+                    className={`mb-1 font-medium flex items-center gap-1.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
+                    <FaChessKing className="h-2.5 w-2.5" /> Captain
+                  </div>
+                  <div className="space-y-1">
+                    {captainTrace.map((item, i) => (
+                      <div key={`cpt-${item.timestamp}-${i}`} className="flex items-start gap-2">
+                        <span className={`shrink-0 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                          {new Date(item.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </span>
+                        <span className={isDarkMode ? 'text-slate-300' : 'text-gray-600'}>{item.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           {isAgentAggregate && !collapsed && expandedTab === 'details' && workerItems?.length && (
             <div
               className="mt-2 rounded-md border p-2 text-xs clear-both"
@@ -786,7 +817,7 @@ export default function MessageBlock({
               <div className="space-y-1">
                 {workerItems
                   .slice()
-                  .sort((a, b) => a.workerId.localeCompare(b.workerId))
+                  .sort((a, b) => (parseInt(a.workerId) || 0) - (parseInt(b.workerId) || 0))
                   .map(worker => {
                     const num = worker.workerId.replace(/\D/g, '') || '';
                     return (
