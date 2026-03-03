@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { FiDownload, FiChevronUp, FiTerminal } from 'react-icons/fi';
 import {
   downloadCommodoreLogs,
+  downloadQuartermasterLogs,
   downloadCaptainLogs,
   downloadSailorLogs,
   downloadErrors,
@@ -98,6 +99,12 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
                 <button
                   type="button"
                   className={buttonClass}
+                  onClick={() => handleDownload(() => downloadQuartermasterLogs(currentSessionId, messageMetadata))}>
+                  <FiDownload size={12} /> Quartermaster
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass}
                   onClick={() => handleDownload(() => downloadCaptainLogs(portRef.current, currentSessionId))}>
                   <FiDownload size={12} /> Captain
                 </button>
@@ -113,7 +120,9 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
             <button
               type="button"
               className={buttonClass}
-              onClick={() => handleDownload(() => downloadCombinedSessionLogs(portRef.current, currentSessionId))}>
+              onClick={() =>
+                handleDownload(() => downloadCombinedSessionLogs(portRef.current, currentSessionId, messageMetadata))
+              }>
               <FiDownload size={12} /> Session Log
             </button>
             <button
