@@ -1,4 +1,4 @@
-type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | undefined;
+type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | undefined;
 
 const STATUS_COLORS = {
   light: {
@@ -7,6 +7,7 @@ const STATUS_COLORS = {
     completed: { bg: '#daf0ef', text: '#1a6b66', border: '#5bbfb6' },
     failed: { bg: '#fce4e4', text: '#9b2c2c', border: '#e88888' },
     cancelled: { bg: '#e8e3f0', text: '#5b4a7a', border: '#b0a0c8' },
+    skipped: { bg: '#f0ebe0', text: '#7a6a40', border: '#c4b080' },
   },
   dark: {
     not_started: { bg: '#1a2535', text: '#8da4be', border: '#2d4054' },
@@ -14,6 +15,7 @@ const STATUS_COLORS = {
     completed: { bg: '#0e2e2b', text: '#5ec4b8', border: '#1a7a6e' },
     failed: { bg: '#3a1515', text: '#e88888', border: '#a03030' },
     cancelled: { bg: '#261e38', text: '#b0a0c8', border: '#6a508a' },
+    skipped: { bg: '#2e2a1a', text: '#c4b080', border: '#8a7a50' },
   },
 } as const;
 
