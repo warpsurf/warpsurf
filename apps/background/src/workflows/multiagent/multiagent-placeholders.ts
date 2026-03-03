@@ -44,9 +44,8 @@ export function buildPriorOutputsSection(
     if (tabs.length > 0) {
       body.push('');
       body.push(
-        `IMPORTANT: This task was carried out in tab(s): ${mk('TabIDs')}. These tabs are already open and available to you. You should use switch_tab to navigate to these existing tabs rather than opening new ones.`,
+        `This task used tab(s): ${mk('TabIDs')}. If immediately available you may switch_tab to reuse them. If unavailable or your task requires a different URL, open your target in a new tab — do not wait or retry.`,
       );
-      // Include URLs so the worker knows what each tab contains
       if (p.tabUrls) {
         const urlEntries = Object.entries(p.tabUrls).filter(([, url]) => url);
         if (urlEntries.length > 0) {
