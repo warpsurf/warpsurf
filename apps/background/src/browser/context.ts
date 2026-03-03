@@ -27,6 +27,10 @@ export default class BrowserContext {
   // Context tabs provided by user to be added to agent's tab group
   private _contextTabIds: number[] = [];
 
+  // Shared tab registry callbacks for cross-crew tab access (multi-agent only)
+  private _tabRegistryCanAccess?: (tabId: number) => Promise<boolean>;
+  private _tabRegistryMarkHolder?: (tabId: number) => void;
+
   constructor(config: Partial<BrowserContextConfig> & { forceNewTab?: boolean } = {}) {
     const { forceNewTab, ...browserConfig } = config;
     this._config = { ...DEFAULT_BROWSER_CONTEXT_CONFIG, ...browserConfig };
@@ -68,6 +72,23 @@ export default class BrowserContext {
     } else {
       this._preferredGroupId = null;
     }
+  }
+
+  /** Get tab IDs owned by this context (worker mode only). */
+  public getOwnedTabIds(): ReadonlySet<number> {
+    return this._ownedTabIds;
+  }
+
+  /**
+   * Bind shared tab registry callbacks for cross-crew tab access.
+   * The canAccess callback should already have subtaskId/crewId bound.
+   */
+  public setTabRegistryCallbacks(
+    canAccess?: (tabId: number) => Promise<boolean>,
+    markHolder?: (tabId: number) => void,
+  ): void {
+    this._tabRegistryCanAccess = canAccess;
+    this._tabRegistryMarkHolder = markHolder;
   }
 
   /**
@@ -415,10 +436,14 @@ export default class BrowserContext {
 
   public async switchTab(tabId: number): Promise<Page> {
     logger.debug('switchTab', tabId);
-    // DO NOT switch tabs - removed to prevent forced tab switching
     // Enforce ownership in worker mode: a worker can only interact with tabs it owns
-    if (this._forceNewTab) {
-      if (!this._ownedTabIds.has(tabId)) {
+    // or tabs granted via the shared tab registry (cross-crew gated access).
+    if (this._forceNewTab && !this._ownedTabIds.has(tabId)) {
+      if (this._tabRegistryCanAccess && (await this._tabRegistryCanAccess(tabId))) {
+        this.registerOwnedTab(tabId);
+        this._tabRegistryMarkHolder?.(tabId);
+        logger.info(`switchTab: adopted tab ${tabId} via shared registry`);
+      } else {
         throw new Error(`Tab ${tabId} is not owned by this worker context`);
       }
     }
