@@ -24,6 +24,7 @@ export class CaptainState {
 
   readonly subtaskStartTimes = new Map<SubtaskId, number>();
   readonly subtaskCompletionTimes = new Map<SubtaskId, number>();
+  readonly dispatchAttempts = new Map<SubtaskId, number>();
 
   private crewLogProvider?: CrewLogProvider;
 
@@ -63,7 +64,7 @@ export class CaptainState {
 
   isAllDone(): boolean {
     for (const st of this.subtaskStatus.values()) {
-      if (st !== 'completed' && st !== 'cancelled' && st !== 'failed') return false;
+      if (st !== 'completed' && st !== 'cancelled' && st !== 'failed' && st !== 'skipped') return false;
     }
     return true;
   }
@@ -74,6 +75,35 @@ export class CaptainState {
       if (st === 'completed') set.add(id);
     }
     return set;
+  }
+
+  /** IDs that count as resolved for dependency gating: completed or explicitly skipped. */
+  getResolvedIds(): Set<SubtaskId> {
+    const set = new Set<SubtaskId>();
+    for (const [id, st] of this.subtaskStatus) {
+      if (st === 'completed' || st === 'skipped') set.add(id);
+    }
+    return set;
+  }
+
+  markSkipped(id: SubtaskId): void {
+    this.subtaskStatus.set(id, 'skipped');
+  }
+
+  /** True if pending subtasks exist whose dependencies include a permanently failed task. */
+  hasBlockedSubtasks(): boolean {
+    for (const [id, st] of this.subtaskStatus) {
+      if (st !== 'pending') continue;
+      const deps = this.plan.getDependencies(id);
+      if (deps.some(d => this.subtaskStatus.get(d) === 'failed')) return true;
+    }
+    return false;
+  }
+
+  incrementDispatchAttempts(id: SubtaskId): number {
+    const count = (this.dispatchAttempts.get(id) ?? 0) + 1;
+    this.dispatchAttempts.set(id, count);
+    return count;
   }
 
   recordFailure(id: SubtaskId, error: string): number {
@@ -120,7 +150,10 @@ export class CaptainState {
 
       if (status === 'pending') {
         const deps = this.plan.getDependencies(s.id);
-        const blocking = deps.filter(d => this.subtaskStatus.get(d) !== 'completed');
+        const blocking = deps.filter(d => {
+          const ds = this.subtaskStatus.get(d);
+          return ds !== 'completed' && ds !== 'skipped';
+        });
         if (blocking.length > 0) {
           parts.push(`(blocked by: ${blocking.map(d => `#${d}`).join(', ')})`);
         }
@@ -128,7 +161,13 @@ export class CaptainState {
 
       const output = this.subtaskOutputs.get(s.id);
       if (output?.text) {
-        parts.push(`— Output: ${output.text.slice(0, 150)}`);
+        const hasPendingDependents = subtasks.some(
+          other =>
+            (this.subtaskStatus.get(other.id) === 'pending' || this.subtaskStatus.get(other.id) === 'dispatched') &&
+            this.plan.getDependencies(other.id).includes(s.id),
+        );
+        const limit = hasPendingDependents ? 600 : 150;
+        parts.push(`— Output: ${output.text.slice(0, limit)}`);
       }
 
       const failReason = this.failureReasons.get(s.id);
