@@ -57,9 +57,11 @@ export class Captain {
   private llm: any;
   private sessionId: string;
   private cancelled = false;
+  private paused = false;
   private abortController = new AbortController();
   private onEvent: EventHandler;
   private crewQueues: Record<number, number[]> = {};
+  private pendingUserMessages: string[] = [];
 
   private pollingTimer: ReturnType<typeof setInterval> | null = null;
   private currentPollIntervalMs = POLL_INTERVAL_BASE_MS;
@@ -163,7 +165,7 @@ export class Captain {
   }
 
   private async runProactiveCheck(): Promise<void> {
-    if (this.cancelled || this.state.isAllDone()) return;
+    if (this.cancelled || this.paused || this.state.isAllDone()) return;
     if (this.state.busyCrew.size === 0) return;
     if (this.captainCallInFlight) return;
 
@@ -240,6 +242,7 @@ export class Captain {
           (a.type === 'retry_subtask' && a.subtask_id === subtaskId) ||
           (a.type === 'cancel_subtask' && a.subtask_id === subtaskId) ||
           a.type === 'abort_workflow' ||
+          a.type === 'pause_workflow' ||
           a.type === 'modify_plan',
       ) ?? false;
 
@@ -270,10 +273,49 @@ export class Captain {
     this._resolve?.('Workflow cancelled.');
   }
 
+  async pause(reason: string): Promise<void> {
+    this.paused = true;
+    this.stopPollingLoop();
+    const sessionIds = Array.from(this.state.crewSessionIds.values());
+    await Promise.allSettled(sessionIds.map(sid => this.crew.pause(sid)));
+    this.onEvent({ type: 'workflow_paused', reason });
+  }
+
+  async resume(userMessage?: string): Promise<void> {
+    this.paused = false;
+    const sessionIds = Array.from(this.state.crewSessionIds.values());
+    await Promise.allSettled(sessionIds.map(sid => this.crew.resume(sid)));
+    this.onEvent({ type: 'workflow_resumed' });
+    this.startPollingLoop();
+    if (userMessage) {
+      await this.consultAndExecute(
+        `Workflow resumed by user with message: "${userMessage}". Review the current state and decide if any changes are needed.`,
+      );
+    } else {
+      await this.dispatchReady();
+    }
+  }
+
+  injectUserMessage(text: string): void {
+    this.pendingUserMessages.push(text);
+    if (!this.paused && !this.captainCallInFlight && !this.cancelled) {
+      this.consultAndExecute('User sent a live message. Review and act if needed.');
+    }
+  }
+
+  cancelUserMessage(text: string): boolean {
+    const idx = this.pendingUserMessages.indexOf(text);
+    if (idx >= 0) {
+      this.pendingUserMessages.splice(idx, 1);
+      return true;
+    }
+    return false;
+  }
+
   // --- Core dispatch logic (programmatic, no LLM) ---
 
   private async dispatchReady(): Promise<void> {
-    if (this.cancelled) return;
+    if (this.cancelled || this.paused) return;
 
     const completed = this.state.getCompletedIds();
     const ready = this.state.plan.getReadySubtasks(completed).filter(id => {
@@ -422,14 +464,22 @@ export class Captain {
    * Returns the decision (or undefined if skipped/failed).
    */
   private async consultAndExecute(trigger: string): Promise<CaptainDecision | undefined> {
-    if (this.cancelled || this.captainCallInFlight) return undefined;
+    if (this.cancelled || this.paused || this.captainCallInFlight) return undefined;
 
     this.captainCallInFlight = true;
     try {
-      const decision = await this.consultLLM(trigger);
+      const drained = this.pendingUserMessages.splice(0);
+      const fullTrigger =
+        drained.length > 0
+          ? `${trigger}\n\nUser messages received:\n${drained.map(m => `- "${m}"`).join('\n')}`
+          : trigger;
+
+      const decision = await this.consultLLM(fullTrigger);
       this.lastCaptainCallTime = Date.now();
       if (decision.actions.length > 0) {
-        await this.executeDecision(decision);
+        await this.executeDecision(decision, drained);
+      } else {
+        this.onEvent({ type: 'captain_decision', decision, drainedMessages: drained.length > 0 ? drained : undefined });
       }
       return decision;
     } catch (e) {
@@ -488,6 +538,7 @@ export class Captain {
         case 'retry_subtask':
         case 'modify_subtask':
         case 'abort_workflow':
+        case 'pause_workflow':
           actions.push(a);
           break;
         case 'add_subtask':
@@ -510,8 +561,12 @@ export class Captain {
 
   // --- Action execution ---
 
-  private async executeDecision(decision: CaptainDecision): Promise<void> {
-    this.onEvent({ type: 'captain_decision', decision });
+  private async executeDecision(decision: CaptainDecision, drainedMessages?: string[]): Promise<void> {
+    this.onEvent({
+      type: 'captain_decision',
+      decision,
+      drainedMessages: drainedMessages?.length ? drainedMessages : undefined,
+    });
     let planModified = false;
 
     for (const action of decision.actions) {
@@ -596,6 +651,10 @@ export class Captain {
         }
         case 'abort_workflow': {
           this.abort(action.reason);
+          return;
+        }
+        case 'pause_workflow': {
+          await this.pause(action.reason);
           return;
         }
       }
