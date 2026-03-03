@@ -92,7 +92,7 @@ function taskToAgentData(task: Task, mirrors: any[]): AgentData {
 
 function detectAgentType(task: Task): string {
   // Check if this is part of a multi-agent workflow
-  if (task.workerIndex !== undefined && task.workerIndex > 0) {
+  if (task.workerIndex !== undefined && task.workerIndex >= 0) {
     return 'multiagent';
   }
   // Default to agent for now; could enhance with actual workflow type tracking

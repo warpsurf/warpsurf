@@ -98,7 +98,7 @@ export function handleGetCombinedTokenLog(port: chrome.runtime.Port, taskManager
         try {
           const wid = Number((t as any).workerIndex);
           const id = String((t as any).id);
-          if (Number.isFinite(wid) && wid > 0 && id) {
+          if (Number.isFinite(wid) && wid >= 0 && id) {
             workerSessions.push({ sessionId: id, workerIndex: wid });
           }
         } catch {}
@@ -143,11 +143,11 @@ export function handleGetSessionLogs(port: chrome.runtime.Port, taskManager: any
       .sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
 
     // Group into main and workers
-    const mainUsages: any[] = usages.filter((u: any) => !u?.workerIndex);
+    const mainUsages: any[] = usages.filter((u: any) => typeof u?.workerIndex !== 'number');
     const workers: Record<number, any[]> = {};
     for (const u of usages) {
       const idx = Number(u?.workerIndex);
-      if (Number.isFinite(idx) && idx > 0) {
+      if (Number.isFinite(idx) && idx >= 0) {
         if (!workers[idx]) workers[idx] = [];
         workers[idx].push(u);
       }
@@ -218,7 +218,7 @@ export function handleGetCombinedSessionLogs(port: chrome.runtime.Port, taskMana
       try {
         const wid = Number((t as any).workerIndex);
         const tid = String((t as any).id);
-        if (Number.isFinite(wid) && wid > 0 && tid) {
+        if (Number.isFinite(wid) && wid >= 0 && tid) {
           taskToWorkerIndex.set(tid, wid);
         }
       } catch {}
@@ -253,10 +253,10 @@ export function handleGetCombinedSessionLogs(port: chrome.runtime.Port, taskMana
       let enrichedLog = u;
 
       // Enrich workerIndex if missing
-      if (typeof enrichedLog?.workerIndex !== 'number' || enrichedLog.workerIndex <= 0) {
+      if (typeof enrichedLog?.workerIndex !== 'number') {
         const tid = String(enrichedLog?.taskId || '');
         const wid = taskToWorkerIndex.get(tid);
-        if (typeof wid === 'number' && wid > 0) {
+        if (typeof wid === 'number' && wid >= 0) {
           enrichedLog = { ...enrichedLog, workerIndex: wid };
         }
       }
