@@ -7,26 +7,22 @@ import { captainSystemPrompt } from './captain-prompt';
 import { Quartermaster } from './quartermaster';
 import { Sailor, type SailorResult } from './sailor';
 import { CaptainState } from '../captain-state';
-import { LivePlan } from '../live-plan';
 import { buildPriorOutputsSection } from '../multiagent-placeholders';
 import type { SubtaskId, PriorOutput, WorkerSchedule, WorkerQueues } from '../multiagent-types';
-import type {
-  CaptainDecision,
-  CaptainActionType,
-  StructuredOutput,
-  SubtaskStatus,
-  WorkflowEvent,
-} from '../workflow-events';
+import type { CaptainDecision, CaptainActionType, StructuredOutput, WorkflowEvent } from '../workflow-events';
 
 const logger = createLogger('Captain');
 
 const DEFAULT_MAX_RETRIES = 1;
-const CHECKPOINT_INTERVAL = 3;
+
+const POLL_INTERVAL_BASE_MS = 30_000;
+const POLL_INTERVAL_FAST_MS = 15_000;
+const OVERDUE_THRESHOLD_MS = 120_000;
+const EVENT_DEDUP_WINDOW_MS = 10_000;
 
 export interface CaptainConfig {
   maxWorkers: number;
   maxRetries?: number;
-  checkpointInterval?: number;
 }
 
 export interface WarmDispatch {
@@ -44,22 +40,31 @@ export interface WarmStartSchedule {
 type EventHandler = (event: WorkflowEvent) => void;
 
 /**
- * The Captain oversees workflow execution in real-time.
- * Event-driven: responds to sailor completions/failures, makes LLM-powered decisions when needed.
+ * The Captain proactively oversees workflow execution in real-time.
+ *
+ * Consulted via LLM on three triggers:
+ * 1. Periodic polling (30s base, 15s when subtasks are overdue)
+ * 2. Every subtask completion (to review output and adjust downstream tasks)
+ * 3. Every subtask failure (to decide on retry strategy before blind retry)
+ *
+ * A dedup guard prevents redundant calls when events fire close together.
  */
 export class Captain {
   private state: CaptainState;
   private quartermaster = new Quartermaster();
   private sailor: Sailor;
-  private config: Required<CaptainConfig>;
+  private config: Required<Pick<CaptainConfig, 'maxWorkers' | 'maxRetries'>>;
   private llm: any;
   private sessionId: string;
   private cancelled = false;
   private abortController = new AbortController();
   private onEvent: EventHandler;
-  private completionsSinceCheckpoint = 0;
-  // Sailor session tracking
   private sailorQueues: Record<number, number[]> = {};
+
+  private pollingTimer: ReturnType<typeof setInterval> | null = null;
+  private currentPollIntervalMs = POLL_INTERVAL_BASE_MS;
+  private lastCaptainCallTime = 0;
+  private captainCallInFlight = false;
 
   constructor(
     state: CaptainState,
@@ -76,9 +81,10 @@ export class Captain {
     this.config = {
       maxWorkers: config.maxWorkers,
       maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
-      checkpointInterval: config.checkpointInterval ?? CHECKPOINT_INTERVAL,
     };
     this.onEvent = onEvent;
+
+    this.state.setSailorLogProvider(sid => this.sailor.getSessionLogs(sid));
   }
 
   /**
@@ -91,7 +97,7 @@ export class Captain {
       this.state.sailorSessionIds.set(d.sailorId, d.sessionId);
       this.state.sailorAssignments.set(d.subtaskId, d.sailorId);
       this.state.busySailors.add(d.sailorId);
-      this.state.subtaskStatus.set(d.subtaskId, 'running');
+      this.state.markRunning(d.subtaskId);
 
       this.onEvent({ type: 'subtask_dispatched', subtaskId: d.subtaskId, sailorId: d.sailorId, prompt: '' });
       this.onEvent({ type: 'subtask_running', subtaskId: d.subtaskId });
@@ -113,8 +119,6 @@ export class Captain {
   }
 
   async run(warmStart?: WarmStartSchedule): Promise<string> {
-    // Set up the result promise first so _resolve/_reject are available
-    // before any async work (including warm-dispatch completions) can fire.
     const resultPromise = new Promise<string>((resolve, reject) => {
       this._resolve = resolve;
       this._reject = reject;
@@ -130,6 +134,7 @@ export class Captain {
       this.onEvent({ type: 'schedule_ready', schedule, queues });
     }
 
+    this.startPollingLoop();
     await this.dispatchReady();
     return resultPromise;
   }
@@ -137,41 +142,82 @@ export class Captain {
   private _resolve!: (answer: string) => void;
   private _reject!: (error: Error) => void;
 
-  // --- Event handlers called by the orchestrator ---
+  // --- Proactive polling loop ---
+
+  private startPollingLoop(): void {
+    this.pollingTimer = setInterval(() => this.runProactiveCheck(), POLL_INTERVAL_BASE_MS);
+  }
+
+  private stopPollingLoop(): void {
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+  }
+
+  private setPollingInterval(intervalMs: number): void {
+    if (intervalMs === this.currentPollIntervalMs && this.pollingTimer) return;
+    this.stopPollingLoop();
+    this.currentPollIntervalMs = intervalMs;
+    this.pollingTimer = setInterval(() => this.runProactiveCheck(), intervalMs);
+  }
+
+  private async runProactiveCheck(): Promise<void> {
+    if (this.cancelled || this.state.isAllDone()) return;
+    if (this.state.busySailors.size === 0) return;
+    if (this.captainCallInFlight) return;
+
+    // Skip if an event-driven captain call happened recently
+    if (Date.now() - this.lastCaptainCallTime < EVENT_DEDUP_WINDOW_MS) return;
+
+    const overdue = this.state.getOverdueSubtasks(OVERDUE_THRESHOLD_MS);
+
+    this.setPollingInterval(overdue.length > 0 ? POLL_INTERVAL_FAST_MS : POLL_INTERVAL_BASE_MS);
+
+    const runningCount = [...this.state.subtaskStatus.values()].filter(s => s === 'running').length;
+    let trigger: string;
+    if (overdue.length > 0) {
+      const overdueDesc = overdue.map(o => `"${o.title}" running for ${formatMs(o.elapsedMs)}`).join('; ');
+      trigger = `Proactive check — OVERDUE SUBTASKS: ${overdueDesc}. ${this.state.completedCount}/${this.state.totalCount} complete, ${runningCount} running. Review the action history below and intervene if any sailor appears stuck or looping.`;
+    } else {
+      trigger = `Proactive check: ${this.state.completedCount}/${this.state.totalCount} complete, ${runningCount} running. Review progress and intervene if needed, or return empty actions if all is well.`;
+    }
+
+    await this.consultAndExecute(trigger);
+  }
+
+  // --- Event handlers ---
 
   async handleSubtaskCompleted(subtaskId: SubtaskId, output: StructuredOutput): Promise<void> {
     if (this.cancelled) return;
 
     this.state.subtaskOutputs.set(subtaskId, output);
-    this.state.subtaskStatus.set(subtaskId, 'completed');
+    this.state.markCompleted(subtaskId);
     const sailorId = this.state.sailorAssignments.get(subtaskId);
     if (sailorId !== undefined) this.state.busySailors.delete(sailorId);
 
     this.onEvent({ type: 'subtask_completed', subtaskId, output });
-    this.completionsSinceCheckpoint++;
 
-    // Check speculative race resolution
     this.checkSpeculativeResolution(subtaskId);
 
-    // Check if final subtask completed
     const final = this.state.plan.getFinalSubtask();
     if (final && subtaskId === final.id) {
       return this.finalize(output.text);
     }
 
-    // Check if all done
     if (this.state.isAllDone()) {
       return this.finalize(this.buildFinalAnswer());
     }
 
-    // Checkpoint LLM call if threshold reached
-    if (this.completionsSinceCheckpoint >= this.config.checkpointInterval) {
-      await this.runCheckpoint();
-      this.completionsSinceCheckpoint = 0;
-    }
-
-    // Dispatch newly-ready subtasks
+    // Dispatch newly-ready subtasks immediately — don't block on the captain LLM call.
+    // The captain can still modify dispatched-but-not-yet-running tasks, or cancel+retry.
     await this.dispatchReady();
+
+    const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
+    const outputSnippet = output.text?.slice(0, 200) || '(no output)';
+    await this.consultAndExecute(
+      `Subtask "${title}" completed. Output: ${outputSnippet}\n\nReview: Is this output sufficient for downstream tasks? Should any pending subtask prompts be refined with this context? Return empty actions if all looks good.`,
+    );
   }
 
   async handleSubtaskFailed(subtaskId: SubtaskId, error: string): Promise<void> {
@@ -184,26 +230,36 @@ export class Captain {
     this.onEvent({ type: 'subtask_failed', subtaskId, error });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
 
-    if (failCount <= this.config.maxRetries) {
-      // Simple retry — no LLM call
-      logger.info(`Retrying ${title} (attempt ${failCount + 1})`);
+    const canAutoRetry = failCount <= this.config.maxRetries;
+    const trigger = canAutoRetry
+      ? `Subtask "${title}" failed (attempt ${failCount}/${this.config.maxRetries + 1}). Error: ${error}\n\nAn automatic retry is available. You may modify_subtask to refine the prompt before the retry fires, or take other action. Return empty actions to allow the default retry.`
+      : `Subtask "${title}" failed after ${failCount} attempts (max retries exhausted). Error: ${error}\n\nAutomatic retry is no longer available. You must decide: retry_subtask with a modified prompt, add alternative subtasks, restructure the plan, or abort.`;
+
+    const decision = await this.consultAndExecute(trigger);
+
+    // Check if captain explicitly handled this subtask (retry, cancel, or abort)
+    const captainHandledThis =
+      decision?.actions.some(
+        a =>
+          (a.type === 'retry_subtask' && a.subtask_id === subtaskId) ||
+          (a.type === 'cancel_subtask' && a.subtask_id === subtaskId) ||
+          a.type === 'abort_workflow' ||
+          a.type === 'modify_plan',
+      ) ?? false;
+
+    if (canAutoRetry && !captainHandledThis) {
+      logger.info(`Default retry for ${title} (attempt ${failCount + 1})`);
       this.state.subtaskStatus.set(subtaskId, 'pending');
       await this.dispatchReady();
-      return;
-    }
-
-    // Consult LLM for re-planning
-    try {
-      const decision = await this.consultLLM(`Subtask "${title}" failed after ${failCount} attempts. Error: ${error}`);
-      await this.executeDecision(decision);
-    } catch (e) {
-      logger.error('Captain LLM call failed, aborting workflow:', e);
-      this.abort(`Captain decision failed: ${e}`);
+    } else if (!canAutoRetry && !captainHandledThis) {
+      // Max retries exhausted and captain didn't act — check if workflow is stuck
+      await this.dispatchReady();
     }
   }
 
   async cancel(): Promise<void> {
     this.cancelled = true;
+    this.stopPollingLoop();
     this.abortController.abort();
 
     for (const [id, st] of this.state.subtaskStatus) {
@@ -241,12 +297,10 @@ export class Captain {
       if (this.cancelled) return;
 
       const sailorId = this.pickSailor(subtaskId);
-      if (sailorId === null) break; // No free sailors
+      if (sailorId === null) break;
 
-      const subtask = this.state.plan.getSubtask(subtaskId)!;
       const prompt = await this.buildDispatchPrompt(subtaskId);
 
-      // Ensure sailor session exists
       let sessionId = this.state.sailorSessionIds.get(sailorId);
       if (!sessionId) {
         try {
@@ -264,11 +318,9 @@ export class Captain {
 
       this.onEvent({ type: 'subtask_dispatched', subtaskId, sailorId, prompt });
 
-      // Run async — don't await, so we dispatch in parallel
       this.runSubtask(subtaskId, sessionId, prompt, sailorId);
     }
 
-    // If nothing is running and nothing is ready, check if we're stuck
     if (this.state.busySailors.size === 0 && !this.state.isAllDone() && !this.cancelled) {
       const pendingCount = [...this.state.subtaskStatus.values()].filter(s => s === 'pending').length;
       if (pendingCount === 0 && !this.state.isAllDone()) {
@@ -278,13 +330,12 @@ export class Captain {
   }
 
   private async runSubtask(subtaskId: SubtaskId, sessionId: string, prompt: string, sailorId: number): Promise<void> {
-    this.state.subtaskStatus.set(subtaskId, 'running');
+    this.state.markRunning(subtaskId);
     this.onEvent({ type: 'subtask_running', subtaskId });
     const title = this.state.plan.getSubtask(subtaskId)?.title ?? `Subtask ${subtaskId}`;
     if (import.meta.env.DEV)
       logger.info(`[runSubtask] START #${subtaskId} "${title}" on sailor ${sailorId} (session=${sessionId})`);
 
-    // Collect tab IDs from dependencies for reuse
     const deps = this.state.plan.getDependencies(subtaskId);
     const depTabIds = deps.flatMap(d => this.state.subtaskOutputs.get(d)?.tabIds ?? []);
     const uniqueTabIds = [...new Set(depTabIds)].filter(n => typeof n === 'number');
@@ -310,7 +361,7 @@ export class Captain {
     }
   }
 
-  // --- Prompt building (absorbs refiner role) ---
+  // --- Prompt building ---
 
   private async buildDispatchPrompt(subtaskId: SubtaskId): Promise<string> {
     const s = this.state.plan.getSubtask(subtaskId)!;
@@ -318,7 +369,6 @@ export class Captain {
     for (const depId of this.state.plan.getDependencies(subtaskId)) {
       const output = this.state.subtaskOutputs.get(depId);
       if (output) {
-        // Resolve tab URLs so workers know what's in each tab
         const tabUrls: Record<number, string> = {};
         for (const tid of output.tabIds) {
           try {
@@ -347,19 +397,23 @@ export class Captain {
     }
     const suggestionText = suggestions.length ? `\n\n${suggestions.join('\n')}` : '';
 
-    return `${header}${suggestionText}${priorText}`;
+    const hasDependents =
+      !s.isFinal && this.state.plan.getAllSubtasks().some(other => other.startCriteria.includes(subtaskId));
+    const outputReminder = hasDependents
+      ? '\n\nIMPORTANT: Your output will be passed to a downstream worker. Include ALL findings, data, and results in your done action text.'
+      : '';
+
+    return `${header}${suggestionText}${priorText}${outputReminder}`;
   }
 
   // --- Sailor assignment ---
 
   private pickSailor(subtaskId: SubtaskId): number | null {
-    // Try the scheduled sailor first
     for (const [sailorId, queue] of Object.entries(this.sailorQueues)) {
       if (queue.includes(subtaskId) && !this.state.busySailors.has(Number(sailorId))) {
         return Number(sailorId);
       }
     }
-    // Fall back to any free sailor
     for (const sailorId of Object.keys(this.sailorQueues).map(Number)) {
       if (!this.state.busySailors.has(sailorId)) return sailorId;
     }
@@ -368,9 +422,33 @@ export class Captain {
 
   // --- LLM-powered decisions ---
 
+  /**
+   * Consult the captain LLM and execute any resulting actions.
+   * Returns the decision (or undefined if skipped/failed).
+   * Includes dedup guard and in-flight protection.
+   */
+  private async consultAndExecute(trigger: string): Promise<CaptainDecision | undefined> {
+    if (this.cancelled || this.captainCallInFlight) return undefined;
+
+    this.captainCallInFlight = true;
+    try {
+      const decision = await this.consultLLM(trigger);
+      this.lastCaptainCallTime = Date.now();
+      if (decision.actions.length > 0) {
+        await this.executeDecision(decision);
+      }
+      return decision;
+    } catch (e) {
+      logger.error('Captain LLM call failed:', e);
+      return undefined;
+    } finally {
+      this.captainCallInFlight = false;
+    }
+  }
+
   private async consultLLM(trigger: string): Promise<CaptainDecision> {
     const context = this.state.buildContextSummary();
-    const userMessage = `${trigger}\n\nCurrent workflow state:\n${context}\n\nWhat should we do? Return a JSON object with status_message and actions.`;
+    const userMessage = `${trigger}\n\nCurrent workflow state:\n${context}\n\nRespond with a JSON object containing status_message and actions. Return empty actions array if no intervention is needed.`;
 
     const timeoutMs = ((await generalSettingsStore.getSettings()).responseTimeoutSeconds ?? 120) * 1000;
     const controller = new AbortController();
@@ -529,7 +607,6 @@ export class Captain {
       }
     }
 
-    // Re-schedule and dispatch if plan was modified
     if (planModified) {
       const updatedPlan = this.state.plan.toTaskPlan();
       const { queues } = this.quartermaster.schedule(updatedPlan, this.config.maxWorkers);
@@ -545,7 +622,6 @@ export class Captain {
     for (const [goalId, race] of this.state.speculativeRaces) {
       if (race.winner) continue;
       if (race.candidates.includes(completedId)) {
-        // Auto-resolve: first to complete wins
         const losers = this.state.plan.resolveSpeculation(goalId, completedId);
         race.winner = completedId;
         for (const lid of losers) {
@@ -558,29 +634,13 @@ export class Captain {
     }
   }
 
-  // --- Checkpoint ---
-
-  private async runCheckpoint(): Promise<void> {
-    if (this.cancelled || !this.llm) return;
-    try {
-      const decision = await this.consultLLM(
-        `Checkpoint: ${this.state.completedCount} of ${this.state.totalCount} subtasks complete. Any adjustments needed?`,
-      );
-      if (decision.actions.length > 0) {
-        await this.executeDecision(decision);
-      }
-    } catch (e) {
-      logger.error('Checkpoint LLM call failed, continuing:', e);
-    }
-  }
-
   // --- Finalization ---
 
   private finalize(answer: string): void {
     if (this.cancelled) return;
+    this.stopPollingLoop();
     if (import.meta.env.DEV) logger.info(`[finalize] answer length=${answer.length}`);
 
-    // End all sailor sessions
     for (const sid of this.state.sailorSessionIds.values()) {
       this.sailor.endSession(sid, 'completed').catch(() => {});
     }
@@ -590,12 +650,10 @@ export class Captain {
   }
 
   private buildFinalAnswer(): string {
-    // Check if final subtask has output
     const final = this.state.plan.getFinalSubtask();
     if (final) {
       const output = this.state.subtaskOutputs.get(final.id);
       if (output?.text?.trim()) {
-        // Try to extract from structured done output
         if (output.raw?.done?.text || output.raw?.text) {
           const s = String(output.raw.done?.text || output.raw.text).trim();
           if (s.length > 0) return s;
@@ -604,7 +662,6 @@ export class Captain {
       }
     }
 
-    // Concatenate all outputs in order
     const parts: string[] = [];
     for (const s of this.state.plan.getAllSubtasks().sort((a, b) => a.id - b.id)) {
       const out = this.state.subtaskOutputs.get(s.id)?.text?.trim();
@@ -617,6 +674,7 @@ export class Captain {
   private abort(reason: string): void {
     if (import.meta.env.DEV) logger.info(`[abort] reason="${reason}"`);
     this.cancelled = true;
+    this.stopPollingLoop();
     this.abortController.abort();
 
     for (const [id, st] of this.state.subtaskStatus) {
@@ -635,4 +693,13 @@ export class Captain {
     if (sailorId === undefined) return undefined;
     return this.state.sailorSessionIds.get(sailorId);
   }
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSec = seconds % 60;
+  return remainingSec > 0 ? `${minutes}m ${remainingSec}s` : `${minutes}m`;
 }
