@@ -50,6 +50,19 @@ export class LivePlan {
     return Array.from(this.subtasks.values()).find(s => s.isFinal);
   }
 
+  /** Return all transitive dependencies of a subtask (BFS over the DAG). */
+  getTransitiveDependencies(id: SubtaskId): Set<SubtaskId> {
+    const result = new Set<SubtaskId>();
+    const queue = Array.from(this.deps.get(id) ?? []);
+    while (queue.length > 0) {
+      const dep = queue.pop()!;
+      if (result.has(dep)) continue;
+      result.add(dep);
+      for (const upstream of this.deps.get(dep) ?? []) queue.push(upstream);
+    }
+    return result;
+  }
+
   getSpeculativeGroup(goalId: string): SubtaskId[] {
     return Array.from(this.speculativeGroups.get(goalId) ?? []);
   }
