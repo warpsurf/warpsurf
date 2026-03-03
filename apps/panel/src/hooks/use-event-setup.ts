@@ -275,10 +275,11 @@ export function useEventSetup(params: {
       totalOutputTokens: number;
       totalLatencyMs: number;
       totalCost: number;
+      requestCount?: number;
     }) => {
       setSessionStats((prev: any) => {
         const newStats = {
-          totalRequests: prev.totalRequests + 1,
+          totalRequests: prev.totalRequests + (requestData.requestCount || 1),
           totalInputTokens: prev.totalInputTokens + requestData.totalInputTokens,
           totalOutputTokens: prev.totalOutputTokens + requestData.totalOutputTokens,
           totalLatency: prev.totalLatency + requestData.totalLatencyMs,
