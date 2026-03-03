@@ -756,7 +756,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
     try {
       (existing as any).clearExecutionEvents?.();
     } catch {}
-    delete (existing as any).__backgroundSubscribed;
+    delete (existing as any).__taskManagerSubscribed;
     // Re-bind executor to TaskManager so TAB_CREATED triggers mirroring for new tabs
     try {
       (taskManager as any).setSingleAgentExecutor?.(sessionId, existing, -1, undefined, () => setCurrentExecutor(null));
