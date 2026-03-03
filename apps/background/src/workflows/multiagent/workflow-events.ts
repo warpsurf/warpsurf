@@ -26,7 +26,8 @@ export type CaptainActionType =
   | { type: 'modify_plan'; revised_subtasks: NewSubtaskSpec[]; reason: string }
   | { type: 'launch_speculative'; goal_id: string; alternatives: NewSubtaskSpec[] }
   | { type: 'resolve_speculative'; goal_id: string; winner_id: SubtaskId }
-  | { type: 'abort_workflow'; reason: string };
+  | { type: 'abort_workflow'; reason: string }
+  | { type: 'pause_workflow'; reason: string };
 
 export interface CaptainDecision {
   status_message: string;
@@ -38,7 +39,7 @@ export type SubtaskStatus = 'pending' | 'dispatched' | 'running' | 'completed' |
 export type WorkflowEvent =
   | { type: 'plan_created'; plan: TaskPlan }
   | { type: 'schedule_ready'; schedule: WorkerSchedule; queues: WorkerQueues }
-  | { type: 'captain_decision'; decision: CaptainDecision }
+  | { type: 'captain_decision'; decision: CaptainDecision; drainedMessages?: string[] }
   | { type: 'subtask_dispatched'; subtaskId: SubtaskId; crewId: number; prompt: string }
   | { type: 'subtask_running'; subtaskId: SubtaskId }
   | { type: 'subtask_completed'; subtaskId: SubtaskId; output: StructuredOutput }
@@ -47,4 +48,6 @@ export type WorkflowEvent =
   | { type: 'speculative_resolved'; goalId: string; winnerId: SubtaskId; cancelledIds: SubtaskId[] }
   | { type: 'plan_modified'; reason: string; addedIds: SubtaskId[]; removedIds: SubtaskId[] }
   | { type: 'workflow_complete'; finalAnswer: string }
-  | { type: 'workflow_aborted'; reason: string };
+  | { type: 'workflow_aborted'; reason: string }
+  | { type: 'workflow_paused'; reason: string }
+  | { type: 'workflow_resumed' };
