@@ -9,7 +9,6 @@ import { ExecutionState, Actors, EventType } from '../workflows/shared/event/typ
 export const ENABLE_TAB_GROUP_TITLES = false;
 
 const TAB_GROUP_COLORS = [
-  'grey',
   'blue',
   'red',
   'yellow',
@@ -18,6 +17,7 @@ const TAB_GROUP_COLORS = [
   'purple',
   'cyan',
   'orange',
+  'grey',
 ] as unknown as Array<chrome.tabGroups.Color>;
 
 const TAB_GROUP_COLOR_HEX: Record<string, string> = {
@@ -42,6 +42,7 @@ export class TabGroupService {
 
   async createGroupForWorker(task: Task, tasks: Map<string, Task>): Promise<void> {
     try {
+      if (task.groupColorName) return;
       const used = await this.getUsedColors(tasks);
       const workerIdx = task.workerIndex ?? this.inferWorkerIndex(tasks);
       const chosen = this.chooseColor(used, workerIdx);
@@ -68,7 +69,7 @@ export class TabGroupService {
       await this.updateGroupProperties(groupId, task, tasks);
       this.notifyGroupUpdate(task, tabId, groupId);
     } catch (e) {
-      this.logger.warn('Tab grouping skipped (non-normal window or unavailable):', (e as any)?.message || e);
+      this.logger.warning('Tab grouping skipped (non-normal window or unavailable):', (e as any)?.message || e);
     }
   }
 
@@ -144,9 +145,12 @@ export class TabGroupService {
   }
 
   chooseColor(used: Set<chrome.tabGroups.Color>, workerNum: number): { name: chrome.tabGroups.Color; hex: string } {
-    const available = TAB_GROUP_COLORS.filter(c => !used.has(c));
-    const pool = available.length > 0 ? available : TAB_GROUP_COLORS;
-    const name = pool[workerNum % pool.length];
+    const primary = TAB_GROUP_COLORS[workerNum % TAB_GROUP_COLORS.length];
+    if (!used.has(primary)) {
+      return { name: primary, hex: TAB_GROUP_COLOR_HEX[primary] };
+    }
+    const fallback = TAB_GROUP_COLORS.find(c => !used.has(c));
+    const name = fallback ?? primary;
     return { name, hex: TAB_GROUP_COLOR_HEX[name] };
   }
 
@@ -198,7 +202,6 @@ export class TabGroupService {
 
     const updatedGroup = await chrome.tabGroups.update(groupId, {
       color: colorName as chrome.tabGroups.Color,
-      ...(ENABLE_TAB_GROUP_TITLES && { title }),
     });
 
     const finalColorName = (updatedGroup?.color || colorName) as unknown as string;
