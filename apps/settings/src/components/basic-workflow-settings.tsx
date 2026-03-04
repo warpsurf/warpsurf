@@ -7,7 +7,7 @@ import {
   type ProviderConfig,
   type ThinkingLevel,
 } from '@extension/storage';
-import { isThinkingCapableModel, SaveIndicator, useSaveIndicator } from './primitives';
+import { SaveIndicator, useSaveIndicator } from './primitives';
 
 interface BasicWorkflowSettingsProps {
   isDarkMode?: boolean;
@@ -79,21 +79,18 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     if (!provider || !modelName) return;
     setIsApplying(true);
     try {
-      const isThinkingModel = isThinkingCapableModel(globalModel);
       await Promise.all(
         ALL_AGENTS.map(async agent => {
-          // Preserve existing parameters from storage
           const existing = await agentModelStore.getAgentModel(agent);
           const maxOutputTokens = (existing?.parameters?.maxOutputTokens as number) || 8192;
           const temperature = existing?.parameters?.temperature as number | undefined;
-          // Preserve webSearch for Search agent, default false for others
           const webSearch = agent === AgentNameEnum.Search ? true : (existing?.webSearch ?? false);
 
           await agentModelStore.setAgentModel(agent, {
             provider,
             modelName,
             parameters: { maxOutputTokens, ...(temperature !== undefined && { temperature }) },
-            thinkingLevel: isThinkingModel ? globalThinkingLevel : undefined,
+            thinkingLevel: globalThinkingLevel,
             webSearch,
           });
         }),
@@ -103,9 +100,6 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
       setIsApplying(false);
     }
   };
-
-  // Check if current model supports thinking
-  const showThinkingLevel = globalModel && isThinkingCapableModel(globalModel);
 
   return (
     <section
@@ -139,8 +133,8 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
         <SaveIndicator show={saveIndicator.show} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
 
-      {/* Thinking Level Selector - only shown for thinking-capable models */}
-      {showThinkingLevel && (
+      {/* Thinking Level Selector */}
+      {globalModel && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
             <span className="group relative inline-flex items-center gap-1">
@@ -151,7 +145,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
               </span>
               <span
                 className={`pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded px-2 py-1 text-[10px] shadow-lg group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'}`}>
-                Controls how much reasoning the model performs before responding
+                Controls reasoning depth for supported models. Set to Default if unsupported.
               </span>
             </span>
           </label>
