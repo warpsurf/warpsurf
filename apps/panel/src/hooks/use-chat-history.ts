@@ -94,14 +94,16 @@ export function useChatHistory({
         // Load persisted metadata
         let restoredRootId: string | null = null;
         let savedMetadata: any = null;
+        let savedSummaries: any = null;
         try {
-          const [savedSummaries, loadedMetadata, savedStats, savedAttachments] = await Promise.all([
+          const [loadedSummaries, loadedMetadata, savedStats, savedAttachments] = await Promise.all([
             chatHistoryStore.loadRequestSummaries(sessionId).catch(() => ({})),
             chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({})),
             chatHistoryStore.loadSessionStats(sessionId).catch(() => null),
             chatHistoryStore.loadAttachments(sessionId).catch(() => ({})),
           ]);
           savedMetadata = loadedMetadata;
+          savedSummaries = loadedSummaries;
           if (setSessionAttachments) setSessionAttachments(savedAttachments || {});
 
           // Get stored rootId for restoration
@@ -138,9 +140,55 @@ export function useChatHistory({
           setMessageMetadata({});
         }
 
+        // Reconcile rootId: if the stored __sessionRootId doesn't match any
+        // loaded message (rootId mismatch between panel and background), fall
+        // back to the last agent message's messageId so plan/graph data is
+        // correctly attached on reload.
+        let effectiveRootId = restoredRootId;
+        const loadedMessages: any[] = hasMessages ? (fullSession.messages as any[]) : [];
+        if (effectiveRootId && loadedMessages.length > 0) {
+          const matchesMessage = loadedMessages.some((m: any) => `${m.timestamp}-${m.actor}` === effectiveRootId);
+          if (!matchesMessage) {
+            const agentActors = [
+              Actors.AGENT_NAVIGATOR,
+              Actors.AGENT_PLANNER,
+              Actors.AGENT_VALIDATOR,
+              Actors.CHAT,
+              Actors.SEARCH,
+              Actors.MULTIAGENT,
+            ];
+            const lastAgent = [...loadedMessages].reverse().find((m: any) => agentActors.includes(m.actor));
+            if (lastAgent) {
+              const corrected = `${lastAgent.timestamp}-${lastAgent.actor}`;
+              logger.log('[handleSessionSelect] rootId mismatch — corrected', {
+                stored: effectiveRootId,
+                corrected,
+              });
+              // Merge metadata from the mismatched rootId into the corrected one
+              // so trace items, isCompleted, etc. from background persist are available.
+              if (savedMetadata) {
+                const bgMeta = (savedMetadata as any)[effectiveRootId];
+                const panelMeta = (savedMetadata as any)[corrected];
+                if (bgMeta && typeof bgMeta === 'object') {
+                  const merged = { ...(panelMeta || {}), ...bgMeta };
+                  (savedMetadata as any)[corrected] = merged;
+                  (savedMetadata as any).__sessionRootId = corrected;
+                  setMessageMetadata({ ...savedMetadata });
+                }
+              }
+              // Also reconcile request summaries keyed by the old rootId
+              if (savedSummaries && (savedSummaries as any)[effectiveRootId] && !(savedSummaries as any)[corrected]) {
+                (savedSummaries as any)[corrected] = (savedSummaries as any)[effectiveRootId];
+                setRequestSummaries({ ...savedSummaries });
+              }
+              effectiveRootId = corrected;
+            }
+          }
+        }
+
         // Set trajectory refs
-        if (agentTraceRootIdRef) agentTraceRootIdRef.current = restoredRootId;
-        if (setAgentTraceRootId) setAgentTraceRootId(restoredRootId);
+        if (agentTraceRootIdRef) agentTraceRootIdRef.current = effectiveRootId;
+        if (setAgentTraceRootId) setAgentTraceRootId(effectiveRootId);
 
         // Restore persisted plan items from metadata
         try {
@@ -185,10 +233,10 @@ export function useChatHistory({
         // content and get caught by the deduplication pass.
         let rawMessages = hasMessages ? (fullSession.messages as any[]) : [];
         let reconstructedContent: string | undefined;
-        if (restoredRootId && savedMetadata) {
-          const rootMeta = (savedMetadata as any)?.[restoredRootId];
+        if (effectiveRootId && savedMetadata) {
+          const rootMeta = (savedMetadata as any)?.[effectiveRootId];
           if (rootMeta?.isCompleted && Array.isArray(rootMeta.traceItems) && rootMeta.traceItems.length > 0) {
-            const rootMsg = rawMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
+            const rootMsg = rawMessages.find((m: any) => `${m.timestamp}-${m.actor}` === effectiveRootId);
             const storedContent = String((rootMsg as any)?.content ?? '').trim();
             if (isStaleContent(storedContent)) {
               const storedFinal = rootMeta.finalAnswerContent;
@@ -217,7 +265,7 @@ export function useChatHistory({
               if (reconstructedContent) {
                 rawMessages = rawMessages.map((m: any) => {
                   const msgId = `${m.timestamp}-${m.actor}`;
-                  if (msgId === restoredRootId) return { ...m, content: reconstructedContent };
+                  if (msgId === effectiveRootId) return { ...m, content: reconstructedContent };
                   return m;
                 });
               }
@@ -229,8 +277,8 @@ export function useChatHistory({
         // Remove standalone SYSTEM messages that duplicate the aggregate root content
         // (e.g. a separate "Task cancelled" SYSTEM message when the aggregate root
         // already shows "Task cancelled").
-        if (restoredRootId) {
-          const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === restoredRootId);
+        if (effectiveRootId) {
+          const rootMsg = finalMessages.find((m: any) => `${m.timestamp}-${m.actor}` === effectiveRootId);
           const rootContent = reconstructedContent || String((rootMsg as any)?.content ?? '').trim();
           if (rootContent) {
             const rootTs = Number((rootMsg as any)?.timestamp || 0);
