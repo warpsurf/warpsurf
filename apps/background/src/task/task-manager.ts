@@ -93,10 +93,15 @@ export class TaskManager extends EventEmitter {
   private lastStreamMessageBySession = new Map<string, { actor: string; timestamp: number }>();
   private pendingStreamSummaries = new Map<string, any>();
 
-  /** Update extension badge to show running task count */
+  /** Force a badge refresh (e.g. after multiagent workflow ends). */
+  refreshBadge(): void {
+    this.updateBadge();
+  }
+
   private updateBadge(): void {
-    const running = this.getRunningTasks().length;
-    this.logger.info(`Updating badge: ${running} running tasks`);
+    const sessions = new Set(this.getRunningTasks().map(t => t.parentSessionId || t.id));
+    const running = sessions.size;
+    this.logger.info(`Updating badge: ${running} running sessions`);
     chrome.action.setBadgeText({ text: running > 0 ? String(running) : '' });
     chrome.action.setBadgeBackgroundColor({ color: running > 0 ? '#22c55e' : '#666' });
   }
@@ -798,6 +803,7 @@ export class TaskManager extends EventEmitter {
 
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running' });
     this.emit('task-started', task);
+    this.updateBadge();
     return taskId;
   }
 
@@ -825,6 +831,7 @@ export class TaskManager extends EventEmitter {
       } else {
         this.emit('task-completed', task, {});
       }
+      this.updateBadge();
     }
   }
 
