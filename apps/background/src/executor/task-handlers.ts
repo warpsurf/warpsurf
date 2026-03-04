@@ -9,7 +9,6 @@ import { globalTokenTracker } from '../utils/token-tracker';
 import { toUIErrorPayload } from '@src/workflows/models/model-error';
 import { toStorableAttachment } from '@extension/shared/lib/utils/file-processor';
 import type { Attachment } from '@extension/storage/lib/chat/types';
-import { ENABLE_TAB_GROUP_TITLES } from '@src/task/tab-group-service';
 // Triage resolution happens via Auto; no direct provider/model imports needed here
 
 type Deps = {
@@ -390,10 +389,7 @@ export async function handleNewTask(message: any, deps: Deps) {
       const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
       const groupTitle = isWebAgent ? 'Crew' : 'Reference';
       const groupColor = isWebAgent ? 'blue' : 'grey';
-      await chrome.tabGroups.update(groupId, {
-        ...(ENABLE_TAB_GROUP_TITLES && { title: groupTitle }),
-        color: groupColor,
-      });
+      await chrome.tabGroups.update(groupId, { color: groupColor });
       if (isWebAgent) {
         (browserContext as any)._preferredGroupId = groupId;
       }
@@ -667,10 +663,7 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
           } else {
             // No existing group, create one
             const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-            await chrome.tabGroups.update(groupId, {
-              ...(ENABLE_TAB_GROUP_TITLES && { title: 'Crew' }),
-              color: 'blue',
-            });
+            await chrome.tabGroups.update(groupId, { color: 'blue' });
             // Set preferred group directly to avoid redundant moveContextTabsToGroup call
             (browserContext as any)._preferredGroupId = groupId;
             logger.info(`[handleFollowUpTask] Created new tab group ${groupId} for context tabs`);
