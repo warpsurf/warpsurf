@@ -37,27 +37,30 @@ export class NativeGeminiChatModel {
     this.thinkingLevel = args.thinkingLevel;
   }
 
-  /** Build thinkingConfig for the generation request based on model family. */
+  /** Build thinkingConfig for the generation request using version-aware detection. */
   private getThinkingConfig(): Record<string, unknown> {
     if (!this.thinkingLevel || this.thinkingLevel === 'default') return {};
     const name = this.modelName.toLowerCase();
 
-    // Gemini 3 models: use thinkingLevel parameter
-    if (name.startsWith('gemini-3')) {
-      const levelMap: Record<string, string> = { off: 'minimal', low: 'low', medium: 'medium', high: 'high' };
-      return { thinkingConfig: { thinkingLevel: levelMap[this.thinkingLevel] || 'high' } };
-    }
+    const versionMatch = name.match(/^gemini-(\d+)(?:\.(\d+))?/);
+    if (!versionMatch) return {};
 
-    // Gemini 2.5 models: use thinkingBudget parameter
-    if (name.startsWith('gemini-2.5')) {
+    const major = parseInt(versionMatch[1], 10);
+    const minor = parseInt(versionMatch[2] || '0', 10);
+
+    if (major < 2 || (major === 2 && minor < 5)) return {};
+
+    // Gemini 2.5: uses thinkingBudget parameter
+    if (major === 2) {
       const budgetMap: Record<string, number> = { off: 0, low: 2048, medium: 8192, high: 24576 };
       let budget = budgetMap[this.thinkingLevel] ?? -1;
-      // gemini-2.5-pro cannot disable thinking (min 128)
       if (name.includes('pro') && budget < 128) budget = 128;
       return { thinkingConfig: { thinkingBudget: budget } };
     }
 
-    return {};
+    // Gemini 3+: uses thinkingLevel parameter (assumed for all future versions)
+    const levelMap: Record<string, string> = { off: 'minimal', low: 'low', medium: 'medium', high: 'high' };
+    return { thinkingConfig: { thinkingLevel: levelMap[this.thinkingLevel] || 'high' } };
   }
 
   withStructuredOutput(schema: any, _opts?: { includeRaw?: boolean; name?: string }) {
