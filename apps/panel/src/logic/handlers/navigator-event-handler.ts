@@ -46,12 +46,18 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
     const rawContent: string = data?.details ?? (event as any)?.content ?? '';
     const workerId = data?.workerId;
     const agentName = data?.agentName;
+    const eventId = data?.eventId;
     const workerSuffix = workerId ? ` [${workerId}]` : '';
     const nameSuffix = agentName ? ` (${agentName})` : '';
     const content = stripWorkerSuffix(rawContent);
-    // Extract page URL/title from event data for trajectory tracking
     const pageUrl = typeof data?.pageUrl === 'string' ? data.pageUrl : undefined;
     const pageTitle = typeof data?.pageTitle === 'string' ? data.pageTitle : undefined;
+    const traceExtra = {
+      pageUrl,
+      pageTitle,
+      ...(workerId != null && { workerId }),
+      ...(eventId && { eventId }),
+    };
 
     switch (state) {
       case ExecutionState.TAB_CREATED:
@@ -69,11 +75,13 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
         // Add to trace for trajectory display
         if (deps.agentTraceRootIdRef.current) {
           const tabContent = pageUrl ? `Opened ${pageUrl}` : content || 'Opened new tab';
-          addTraceItem(Actors.AGENT_NAVIGATOR, `${tabContent}${workerSuffix}${nameSuffix}`, timestamp, deps, {
-            pageUrl,
-            pageTitle,
-            ...(workerId != null && { workerId }),
-          });
+          addTraceItem(
+            Actors.AGENT_NAVIGATOR,
+            `${tabContent}${workerSuffix}${nameSuffix}`,
+            timestamp,
+            deps,
+            traceExtra,
+          );
         }
         break;
 
@@ -90,7 +98,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Navigator started'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
+            traceExtra,
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -98,11 +106,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
 
       case ExecutionState.STEP_OK:
         if (deps.agentTraceRootIdRef.current && content) {
-          addTraceItem(Actors.AGENT_NAVIGATOR, `${content}${workerSuffix}${nameSuffix}`, timestamp, deps, {
-            pageUrl,
-            pageTitle,
-            ...(workerId != null && { workerId }),
-          });
+          addTraceItem(Actors.AGENT_NAVIGATOR, `${content}${workerSuffix}${nameSuffix}`, timestamp, deps, traceExtra);
           updateAggregateRootContent(content, deps);
         }
         break;
@@ -111,11 +115,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
         setIsAgentModeActive(true);
         if (deps.agentTraceRootIdRef.current) {
           const failContent = `Navigator failed: ${content || ''}${workerSuffix}${nameSuffix}`;
-          addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, {
-            pageUrl,
-            pageTitle,
-            ...(workerId != null && { workerId }),
-          });
+          addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, traceExtra);
           if (content) updateAggregateRootContent(content, deps);
         }
         break;
@@ -132,7 +132,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Action started'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
+            traceExtra,
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -146,7 +146,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `${content || 'Action completed'}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
+            traceExtra,
           );
           if (content) updateAggregateRootContent(content, deps);
         }
@@ -161,7 +161,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             `Action failed: ${content || ''}${workerSuffix}${nameSuffix}`,
             timestamp,
             deps,
-            { pageUrl, pageTitle, ...(workerId != null && { workerId }) },
+            traceExtra,
           );
         }
         break;
