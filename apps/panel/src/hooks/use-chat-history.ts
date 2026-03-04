@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
-import { dedupeMessages } from '../utils';
+import { dedupeMessages, reorderLiveInjected } from '../utils';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
 
@@ -272,6 +272,8 @@ export function useChatHistory({
             }
           }
         }
+        if (effectiveRootId) rawMessages = reorderLiveInjected(rawMessages, effectiveRootId);
+
         let finalMessages = dedupeMessages(rawMessages);
 
         // Remove standalone SYSTEM messages that duplicate the aggregate root content
