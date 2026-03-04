@@ -47,10 +47,23 @@ export class NativeAnthropicChatModel {
     this.maxTokens = Math.max(minTokens, Math.min(65536, requestedMax));
   }
 
-  /** Whether this model supports extended thinking */
+  /** Whether this model supports extended thinking (version-aware). */
   private isThinkingCapable(): boolean {
     const l = this.modelName.toLowerCase();
-    return /^claude-(opus-4|sonnet-4|sonnet-3-7|3-7-sonnet|haiku-4-5)/.test(l);
+
+    // New naming: claude-{variant}-{major}[-{minor}] (e.g. claude-sonnet-4-5, claude-opus-5)
+    const newFmt = l.match(/^claude-(?:opus|sonnet|haiku)-(\d+)/);
+    if (newFmt && parseInt(newFmt[1], 10) >= 4) return true;
+
+    // Old naming: claude-{major}-{minor}-{variant} (e.g. claude-3-7-sonnet)
+    const oldFmt = l.match(/^claude-(\d+)-(\d+)-/);
+    if (oldFmt) {
+      const maj = parseInt(oldFmt[1], 10);
+      const min = parseInt(oldFmt[2], 10);
+      if (maj > 3 || (maj === 3 && min >= 7)) return true;
+    }
+
+    return false;
   }
 
   /** Get the thinking budget tokens for the configured level. 0 = thinking disabled. */
