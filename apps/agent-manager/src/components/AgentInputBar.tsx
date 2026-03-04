@@ -30,7 +30,7 @@ const AGENT_OPTIONS: AgentOption[] = [
     icon: (
       <span className="inline-flex">
         <FaRobot className="w-3.5 h-3.5" />
-        <FaRobot className="w-3.5 h-3.5 -ml-1.5" />
+        <FaRobot className="w-3.5 h-3.5 -ml-0.5" />
       </span>
     ),
   },
