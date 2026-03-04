@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actors, chatHistoryStore } from '@extension/storage';
 import { ExecutionState } from '@extension/shared/lib/utils';
-import { computeRequestSummaryFromSessionLogs, dedupeMessages } from '../utils/index';
+import { computeRequestSummaryFromSessionLogs, dedupeMessages, reorderLiveInjected } from '../utils/index';
 import { handleTokenLogForCancel } from './request-summaries';
 import {
   createAggregateRoot,
@@ -48,6 +48,7 @@ function processDrainedMessages(drained: string[], deps: any): void {
       actor: 'user',
       content: text,
       timestamp: now + i,
+      eventId: `live-inject-${now + i}`,
     }));
     deps.setMessages?.((prev: any[]) => {
       const rootIdx = prev.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
@@ -238,6 +239,7 @@ export function createPanelHandlers(deps: any): any {
         const text = (message as any)?.data?.message || '';
         const workerId = (message as any)?.data?.workerId;
         const actorHint = (message as any)?.data?.actor;
+        const eventId = (message as any)?.data?.eventId;
         const timestamp = Date.now();
         if (import.meta.env.DEV) {
           console.debug('[onWorkflowProgress]', {
@@ -324,7 +326,16 @@ export function createPanelHandlers(deps: any): any {
           if (!deps.agentTraceRootIdRef.current) {
             createAggregateRoot(actorToUse, text, timestamp, deps);
           }
-          addTraceItem(traceActor, text, timestamp, deps, workerId != null ? { workerId } : undefined);
+          // Only persist role-specific or crew items as trace entries; generic
+          // 'multiagent' without workerId are ephemeral status updates that
+          // drive the aggregate root content only (not the trajectory detail).
+          const isEphemeralStatus = actorHint === 'multiagent' && workerId == null;
+          if (!isEphemeralStatus) {
+            const extra: Record<string, any> = {};
+            if (workerId != null) extra.workerId = workerId;
+            if (eventId) extra.eventId = eventId;
+            addTraceItem(traceActor, text, timestamp, deps, Object.keys(extra).length > 0 ? extra : undefined);
+          }
         }
 
         // Update the main message content for phase lines
@@ -543,6 +554,9 @@ export function createPanelHandlers(deps: any): any {
       try {
         if (deps.getCurrentTaskAgentType?.() === 'multiagent') {
           markAggregateComplete(deps);
+          deps.setMirrorPreview(null);
+          deps.setMirrorPreviewBatch([]);
+          deps.setHasFirstPreview(false);
         }
       } catch {}
       // Apply multiagent summary directly from workflow_ended (avoids reliance on async get_session_logs)
@@ -1184,8 +1198,6 @@ export function createPanelHandlers(deps: any): any {
 
         // Restore messages if available
         if (session?.messages && Array.isArray(session.messages)) {
-          deps.setMessages(dedupeMessages(session.messages));
-
           // Find the last aggregate root message (agent message) to restore trajectory state
           const agentActors = [
             Actors.AGENT_NAVIGATOR,
@@ -1203,6 +1215,12 @@ export function createPanelHandlers(deps: any): any {
             deps.setAgentTraceRootId(rootId);
             deps.lastAgentMessageRef.current = { timestamp: lastAgentMsg.timestamp, actor: lastAgentMsg.actor };
           }
+
+          let msgs: any[] = session.messages;
+          if (lastAgentMsg) {
+            msgs = reorderLiveInjected(msgs, `${lastAgentMsg.timestamp}-${lastAgentMsg.actor}`);
+          }
+          deps.setMessages(dedupeMessages(msgs));
         }
 
         // Restore the PERSISTED metadata (including trajectory trace items from before panel closed)
@@ -1382,7 +1400,18 @@ export function createPanelHandlers(deps: any): any {
           deps.setCurrentSessionId(data.currentSessionId);
           const session = await chatHistoryStore.getSession(data.currentSessionId);
           if (session?.messages) {
-            deps.setMessages(dedupeMessages(session.messages));
+            let msgs: any[] = session.messages;
+            const agentActors = [
+              Actors.AGENT_NAVIGATOR,
+              Actors.AGENT_PLANNER,
+              Actors.AGENT_VALIDATOR,
+              Actors.CHAT,
+              Actors.SEARCH,
+              Actors.MULTIAGENT,
+            ];
+            const lastAgent = [...msgs].reverse().find((m: any) => agentActors.includes(m.actor));
+            if (lastAgent) msgs = reorderLiveInjected(msgs, `${lastAgent.timestamp}-${lastAgent.actor}`);
+            deps.setMessages(dedupeMessages(msgs));
             deps.setIsHistoricalSession(true);
             deps.setIsFollowUpMode(true);
           }
