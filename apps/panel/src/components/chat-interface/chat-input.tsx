@@ -241,6 +241,7 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
 
+  const activeStopButton = showStopButton && isJobActive;
   const canInjectLive = isJobActive && isAgentModeActive && !!onInjectLiveMessage;
   const isSendButtonDisabled = useMemo(() => {
     const hasContent = text.trim() !== '' || pendingAttachments.filter(a => a.status === 'ready').length > 0;
@@ -678,7 +679,7 @@ export default function ChatInput({
         <div className={`flex items-center justify-between px-3 py-1.5`}>
           <div className="flex gap-1.5 text-gray-500 items-center">
             {/* Plus menu - Tabs + File attachments */}
-            {!showStopButton && !historicalSessionId && (
+            {!activeStopButton && !historicalSessionId && (
               <div ref={plusMenuRef} className="relative">
                 <button
                   type="button"
@@ -736,7 +737,7 @@ export default function ChatInput({
               </div>
             )}
             {/* Microphone button for voice input */}
-            {onMicClick && !showStopButton && (
+            {onMicClick && !activeStopButton && (
               <MicrophoneButton
                 isRecording={isRecording}
                 isProcessing={isProcessingSpeech}
@@ -793,7 +794,7 @@ export default function ChatInput({
             )}
           </div>
 
-          {showStopButton ? (
+          {activeStopButton ? (
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
