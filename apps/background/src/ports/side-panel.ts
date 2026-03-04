@@ -487,6 +487,16 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 try {
                   await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId));
                 } catch {}
+                // Safety-net: force-detach Chrome debugger from all worker tabs
+                try {
+                  for (const t of taskManager.getAllTasks()) {
+                    if (String(t.parentSessionId || t.id) === sessionId && typeof t.tabId === 'number') {
+                      try {
+                        await chrome.debugger.detach({ tabId: t.tabId });
+                      } catch {}
+                    }
+                  }
+                } catch {}
                 // Ensure badge reflects true running count after workflow ends
                 try {
                   taskManager.refreshBadge();
