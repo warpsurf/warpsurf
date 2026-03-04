@@ -30,9 +30,45 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
   setErrorLogEntries,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logsAvailable, setLogsAvailable] = useState<boolean | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Reset availability when session changes
+  useEffect(() => {
+    setLogsAvailable(null);
+  }, [currentSessionId]);
+
+  // Probe background for log availability when the menu opens
+  useEffect(() => {
+    if (!menuOpen || !currentSessionId || !portRef.current) return;
+    const port = portRef.current;
+    const sid = currentSessionId;
+    const onMessage = (ev: any) => {
+      if (ev?.type === 'logs_available' && String(ev?.sessionId || '') === sid) {
+        setLogsAvailable(!!ev.available);
+        try {
+          port.onMessage.removeListener(onMessage);
+        } catch {}
+      }
+    };
+    try {
+      port.onMessage.addListener(onMessage);
+    } catch {}
+    port.postMessage({ type: 'check_logs_available', sessionId: sid });
+    const timeout = setTimeout(() => {
+      try {
+        port.onMessage.removeListener(onMessage);
+      } catch {}
+    }, 3000);
+    return () => {
+      clearTimeout(timeout);
+      try {
+        port.onMessage.removeListener(onMessage);
+      } catch {}
+    };
+  }, [menuOpen, currentSessionId, portRef]);
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
@@ -73,9 +109,18 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
     setMenuOpen(false);
   };
 
-  const buttonClass = `w-full text-left flex items-center gap-2 px-3 py-1.5 text-[11px] ${
-    isDarkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-gray-100 text-gray-700'
-  }`;
+  const logsDisabled = logsAvailable === false;
+
+  const buttonClass = (disabled: boolean) =>
+    `w-full text-left flex items-center gap-2 px-3 py-1.5 text-[11px] ${
+      disabled
+        ? isDarkMode
+          ? 'text-slate-500 cursor-not-allowed'
+          : 'text-gray-400 cursor-not-allowed'
+        : isDarkMode
+          ? 'hover:bg-slate-700 text-slate-200'
+          : 'hover:bg-gray-100 text-gray-700'
+    }`;
 
   const dividerClass = `border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`;
 
@@ -88,30 +133,50 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
             className={`z-[9999] min-w-[160px] rounded border shadow-lg ${
               isDarkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'
             }`}>
+            {logsDisabled && (
+              <div
+                className={`px-3 py-2 text-[10px] leading-tight ${
+                  isDarkMode ? 'text-slate-400 bg-slate-800/50' : 'text-gray-500 bg-gray-50'
+                }`}>
+                Logs are only available for the current session
+              </div>
+            )}
             {hasMultiAgentInSession && (
               <>
                 <button
                   type="button"
-                  className={buttonClass}
-                  onClick={() => handleDownload(() => downloadCommodoreLogs(portRef.current, currentSessionId))}>
+                  disabled={logsDisabled}
+                  className={buttonClass(logsDisabled)}
+                  onClick={() =>
+                    !logsDisabled && handleDownload(() => downloadCommodoreLogs(portRef.current, currentSessionId))
+                  }>
                   <FiDownload size={12} /> Commodore
                 </button>
                 <button
                   type="button"
-                  className={buttonClass}
-                  onClick={() => handleDownload(() => downloadQuartermasterLogs(currentSessionId, messageMetadata))}>
+                  disabled={logsDisabled}
+                  className={buttonClass(logsDisabled)}
+                  onClick={() =>
+                    !logsDisabled && handleDownload(() => downloadQuartermasterLogs(currentSessionId, messageMetadata))
+                  }>
                   <FiDownload size={12} /> Quartermaster
                 </button>
                 <button
                   type="button"
-                  className={buttonClass}
-                  onClick={() => handleDownload(() => downloadCaptainLogs(portRef.current, currentSessionId))}>
+                  disabled={logsDisabled}
+                  className={buttonClass(logsDisabled)}
+                  onClick={() =>
+                    !logsDisabled && handleDownload(() => downloadCaptainLogs(portRef.current, currentSessionId))
+                  }>
                   <FiDownload size={12} /> Captain
                 </button>
                 <button
                   type="button"
-                  className={buttonClass}
-                  onClick={() => handleDownload(() => downloadCrewLogs(portRef.current, currentSessionId))}>
+                  disabled={logsDisabled}
+                  className={buttonClass(logsDisabled)}
+                  onClick={() =>
+                    !logsDisabled && handleDownload(() => downloadCrewLogs(portRef.current, currentSessionId))
+                  }>
                   <FiDownload size={12} /> Crew
                 </button>
                 <div className={dividerClass} />
@@ -119,16 +184,20 @@ export const DebugButtons: React.FC<DebugButtonsProps> = ({
             )}
             <button
               type="button"
-              className={buttonClass}
+              disabled={logsDisabled}
+              className={buttonClass(logsDisabled)}
               onClick={() =>
+                !logsDisabled &&
                 handleDownload(() => downloadCombinedSessionLogs(portRef.current, currentSessionId, messageMetadata))
               }>
               <FiDownload size={12} /> Session Log
             </button>
             <button
               type="button"
-              className={buttonClass}
+              disabled={logsDisabled}
+              className={buttonClass(logsDisabled)}
               onClick={() =>
+                !logsDisabled &&
                 handleDownload(() => downloadErrors(portRef.current, currentSessionId, setErrorLogEntries))
               }>
               <FiDownload size={12} /> Debug
