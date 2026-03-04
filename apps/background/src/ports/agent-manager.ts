@@ -127,7 +127,7 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
 
     // If multiple workers, it's a multi-agent task
     if (tasks.length > 1 || tasks.some(t => t.workerIndex !== undefined)) {
-      const primary = tasks.find(t => !t.workerIndex) || tasks[0];
+      const primary = tasks.find(t => t.workerIndex == null) || tasks[0];
 
       // Only include worker previews if the session has running tasks
       const workers = tasks
@@ -148,7 +148,7 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
           }
           return {
             workerId: t.id,
-            workerIndex: t.workerIndex || 0,
+            workerIndex: t.workerIndex ?? 0,
             color: t.color,
             tabId: m?.tabId,
             url: m?.url,
@@ -156,6 +156,14 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
             screenshot: m?.screenshot,
           };
         });
+
+      // Derive overall session status: individual worker cancellations (e.g. from
+      // plan modifications) don't mean the workflow itself was cancelled.
+      let sessionStatus: string = primary.status;
+      if (!hasRunningTask) {
+        if (tasks.some(t => t.status === 'completed')) sessionStatus = 'completed';
+        else if (tasks.some(t => t.status === 'error')) sessionStatus = 'failed';
+      }
 
       const multiPromptTitle = primary.prompt
         ? primary.prompt.substring(0, 60) + (primary.prompt.length > 60 ? '...' : '')
@@ -168,7 +176,7 @@ function groupBySession(tasks: Task[], mirrors: any[]): AgentData[] {
         startTime: primary.startedAt || primary.createdAt,
         endTime: primary.completedAt,
         agentType: 'multiagent',
-        status: primary.status,
+        status: sessionStatus,
         workers,
         metrics: (primary as any).metrics,
       });
