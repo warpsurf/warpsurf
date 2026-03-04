@@ -1,4 +1,4 @@
-import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn, isThinkingCapableModel } from './primitives';
+import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn } from './primitives';
 import { AgentNameEnum, type ThinkingLevel } from '@extension/storage';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 
@@ -129,13 +129,13 @@ export function ModelSelect(props: ModelSelectProps) {
           </div>
         </div>
 
-        {selectedValue && isThinkingCapableModel(selectedValue) && (
+        {selectedValue && (
           <div className="flex items-center">
             <LabelWithTooltip
               isDarkMode={isDarkMode}
               htmlFor={`${agentName}-thinking-level`}
               label="Thinking"
-              tooltip="Controls how much reasoning the model performs before responding"
+              tooltip="Controls reasoning depth for supported models. Set to Default if unsupported."
             />
             <div className="flex flex-1 items-center space-x-2">
               <select
