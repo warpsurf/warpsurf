@@ -116,13 +116,40 @@ export function buildCaptainActions(ctx: CaptainActionContext): CaptainAction[] 
       if (args.new_title) changes.title = args.new_title;
       if (args.no_browse !== undefined) changes.noBrowse = args.no_browse;
       state.plan.modifySubtask(args.subtask_id, changes);
+      if (Array.isArray(args.new_dependencies)) {
+        state.plan.setDependencies(args.subtask_id, args.new_dependencies);
+        return { planModified: true };
+      }
       return {};
     },
 
     async modify_plan(args) {
-      const newIds = state.plan.replacePendingSubtasks(args.revised_subtasks, state.getCompletedIds());
+      const completedIds = state.getCompletedIds();
+      const removedIds: SubtaskId[] = [];
+
+      for (const [id, st] of state.subtaskStatus) {
+        if (completedIds.has(id)) continue;
+        removedIds.push(id);
+        if (st === 'running' || st === 'dispatched') {
+          await cancelCrewForSubtask(id);
+        }
+        state.subtaskStatus.set(id, 'cancelled');
+      }
+
+      const newIds = state.plan.replacePendingSubtasks(args.revised_subtasks, completedIds);
       for (const id of newIds) state.subtaskStatus.set(id, 'pending');
-      ctx.emit({ type: 'plan_modified', reason: args.reason, addedIds: newIds, removedIds: [] });
+
+      // Identify completed subtasks no longer referenced by any new subtask
+      const referencedByNew = new Set<SubtaskId>();
+      for (const nid of newIds) {
+        for (const dep of state.plan.getTransitiveDependencies(nid)) {
+          if (completedIds.has(dep)) referencedByNew.add(dep);
+        }
+      }
+      const obsoleteIds = [...completedIds].filter(id => !referencedByNew.has(id));
+      state.obsoleteCompletedIds = new Set(obsoleteIds);
+
+      ctx.emit({ type: 'plan_modified', reason: args.reason, addedIds: newIds, removedIds, obsoleteIds });
       return { planModified: true };
     },
 
