@@ -1,7 +1,6 @@
 // Shared tab grouping helpers to reduce duplication in TaskManager
 
 export const TAB_GROUP_COLORS = [
-  'grey',
   'blue',
   'red',
   'yellow',
@@ -10,6 +9,7 @@ export const TAB_GROUP_COLORS = [
   'purple',
   'cyan',
   'orange',
+  'grey',
   'black',
 ] as unknown as Array<chrome.tabGroups.Color>;
 
@@ -30,11 +30,13 @@ export function chooseAvailableGroupColor(
   used: Set<chrome.tabGroups.Color>,
   workerNum: number,
 ): { name: chrome.tabGroups.Color; hex: string } {
-  const available = TAB_GROUP_COLORS.filter(c => !used.has(c));
-  const pool = available.length > 0 ? available : TAB_GROUP_COLORS;
-  const name = pool[workerNum % pool.length];
-  const hex = TAB_GROUP_COLOR_HEX[name];
-  return { name, hex };
+  const primary = TAB_GROUP_COLORS[workerNum % TAB_GROUP_COLORS.length];
+  if (!used.has(primary)) {
+    return { name: primary, hex: TAB_GROUP_COLOR_HEX[primary] };
+  }
+  const fallback = TAB_GROUP_COLORS.find(c => !used.has(c));
+  const name = fallback ?? primary;
+  return { name, hex: TAB_GROUP_COLOR_HEX[name] };
 }
 
 export function computeCrewGroupTitle(rawName: string, explicitIndex?: number): string {
