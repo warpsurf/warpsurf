@@ -421,6 +421,11 @@ export class Captain {
       const crewId = this.pickCrew(subtaskId);
       if (crewId === null) break;
 
+      // Claim immediately to prevent double-dispatch across await points
+      this.state.subtaskStatus.set(subtaskId, 'dispatched');
+      this.state.crewAssignments.set(subtaskId, crewId);
+      this.state.busyCrew.add(crewId);
+
       const prompt = await this.buildDispatchPrompt(subtaskId);
 
       let sessionId = this.state.crewSessionIds.get(crewId);
@@ -430,17 +435,18 @@ export class Captain {
           this.state.crewSessionIds.set(crewId, sessionId);
         } catch (e) {
           logger.error(`Failed to create session for Crew ${crewId}:`, e);
+          this.state.subtaskStatus.set(subtaskId, 'pending');
+          this.state.crewAssignments.delete(subtaskId);
+          this.state.busyCrew.delete(crewId);
           continue;
         }
       }
 
-      this.state.subtaskStatus.set(subtaskId, 'dispatched');
-      this.state.crewAssignments.set(subtaskId, crewId);
-      this.state.busyCrew.add(crewId);
-
       this.onEvent({ type: 'subtask_dispatched', subtaskId, crewId, prompt });
 
-      this.runSubtask(subtaskId, sessionId, prompt, crewId);
+      this.runSubtask(subtaskId, sessionId, prompt, crewId).catch(err => {
+        if (!this.cancelled) this.handleSubtaskFailed(subtaskId, err?.message || 'Unexpected dispatch error');
+      });
     }
 
     if (this.state.busyCrew.size === 0 && !this.state.isAllDone() && !this.cancelled) {
