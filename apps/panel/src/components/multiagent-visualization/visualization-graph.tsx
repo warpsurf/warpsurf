@@ -1,4 +1,4 @@
-type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | undefined;
+type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | 'obsolete' | undefined;
 
 const STATUS_COLORS = {
   light: {
@@ -8,6 +8,7 @@ const STATUS_COLORS = {
     failed: { bg: '#fce4e4', text: '#9b2c2c', border: '#e88888' },
     cancelled: { bg: '#e8e3f0', text: '#5b4a7a', border: '#b0a0c8' },
     skipped: { bg: '#f0ebe0', text: '#7a6a40', border: '#c4b080' },
+    obsolete: { bg: '#edecea', text: '#8a8a82', border: '#c4c2b8' },
   },
   dark: {
     not_started: { bg: '#1a2535', text: '#8da4be', border: '#2d4054' },
@@ -16,6 +17,7 @@ const STATUS_COLORS = {
     failed: { bg: '#3a1515', text: '#e88888', border: '#a03030' },
     cancelled: { bg: '#261e38', text: '#b0a0c8', border: '#6a508a' },
     skipped: { bg: '#2e2a1a', text: '#c4b080', border: '#8a7a50' },
+    obsolete: { bg: '#1e1e1a', text: '#7a7a70', border: '#3a3a30' },
   },
 } as const;
 
@@ -103,7 +105,7 @@ export default function WorkflowGraph({
           {'\u2693'} Plan
         </span>
         <div className="flex items-center gap-3 text-[9px]" style={{ color: isDarkMode ? '#5a7a94' : '#7a9ab5' }}>
-          {(['completed', 'running', 'failed', 'not_started', 'cancelled'] as const).map(status => (
+          {(['completed', 'running', 'failed', 'not_started', 'cancelled', 'obsolete'] as const).map(status => (
             <span key={status} className="inline-flex items-center gap-1">
               <span
                 className="rounded-sm"
