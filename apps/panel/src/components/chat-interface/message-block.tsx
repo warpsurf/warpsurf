@@ -697,7 +697,26 @@ export default function MessageBlock({
                   </MarkdownRenderer>
                 </Suspense>
               )}
-              {isAgentAggregate && collapsed && <span>{content || lastTrace?.content}</span>}
+              {isAgentAggregate && collapsed && (
+                <Suspense
+                  fallback={
+                    <span
+                      className={`${isDarkMode ? 'bg-slate-800/60' : 'bg-gray-100/70'} inline-block h-4 w-32 animate-pulse rounded`}
+                    />
+                  }>
+                  <MarkdownRenderer
+                    components={{
+                      a: LinkComponent,
+                      code: ({ className, children }: any) => (
+                        <CodeBlock isDarkMode={isDarkMode} className={className}>
+                          {String(children)}
+                        </CodeBlock>
+                      ),
+                    }}>
+                    {content || lastTrace?.content || ''}
+                  </MarkdownRenderer>
+                </Suspense>
+              )}
             </span>
           )}
           {/* Always-visible metadata: timestamps, chips, summaries */}
