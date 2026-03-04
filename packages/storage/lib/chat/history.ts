@@ -701,10 +701,26 @@ export function createChatHistoryStorage(): ChatHistoryStorage {
           const newMeta = msgMeta as any;
           const existingTraceItems = Array.isArray(existingMeta.traceItems) ? existingMeta.traceItems : [];
           const newTraceItems = Array.isArray(newMeta.traceItems) ? newMeta.traceItems : [];
-          // Deduplicate trace items by timestamp+actor+content
+          const seenEventIds = new Set<string>();
           const seen = new Set<string>();
+          const seenWorkerContent = new Set<string>();
+          const stripSuffix = (s: string) => s.replace(/\s*\[\d+](?:\s*\([^)]*\))?$/, '').trim();
           const mergedTraceItems: any[] = [];
           for (const item of [...existingTraceItems, ...newTraceItems]) {
+            const eid = String(item?.eventId || '');
+            if (eid) {
+              if (seenEventIds.has(eid)) continue;
+              seenEventIds.add(eid);
+            }
+            const wid = item?.workerId;
+            if (wid != null) {
+              const norm = stripSuffix(String(item?.content || ''));
+              if (norm.length > 20) {
+                const wcKey = `${wid}|${norm}`;
+                if (seenWorkerContent.has(wcKey)) continue;
+                seenWorkerContent.add(wcKey);
+              }
+            }
             const key = `${item.timestamp}-${item.actor}-${item.content}`;
             if (!seen.has(key)) {
               seen.add(key);
