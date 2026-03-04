@@ -599,7 +599,7 @@ export class TaskManager extends EventEmitter {
       await this.handleFlashing(task, event);
       this.logTaskEvent(task, event);
       await this.forwardEventToPanel(task, event);
-      this.handleTaskCompletion(task, event);
+      await this.handleTaskCompletion(task, event);
     });
   }
 
@@ -954,6 +954,7 @@ export class TaskManager extends EventEmitter {
 
   private setupSingleAgentMirroring(task: Task, executor: Executor, tabId: number): void {
     this.tabMirrorService.registerScreenshotProvider(tabId, async () => {
+      if (task.status !== 'running') return undefined;
       try {
         const data = await executor.captureCurrentPageScreenshot();
         return data ? `data:image/jpeg;base64,${data}` : undefined;
@@ -1009,8 +1010,8 @@ export class TaskManager extends EventEmitter {
 
       await this.handleFlashing(task, event);
       this.logTaskEvent(task, event);
-      await this.forwardEventToPanel(task, event); // Added: persist trajectory events
-      this.handleTaskCompletion(task, event);
+      await this.forwardEventToPanel(task, event);
+      await this.handleTaskCompletion(task, event);
     });
   }
 
@@ -1026,6 +1027,7 @@ export class TaskManager extends EventEmitter {
     await this.tabGroups.applyTabColor(newTabId, task, this.tasks);
 
     this.tabMirrorService.registerScreenshotProvider(newTabId, async () => {
+      if (task.status !== 'running') return undefined;
       try {
         const data = await executor.captureTabScreenshot(newTabId);
         return data ? `data:image/jpeg;base64,${data}` : undefined;
@@ -1058,7 +1060,7 @@ export class TaskManager extends EventEmitter {
     }
   }
 
-  private handleTaskCompletion(task: Task, event: any): void {
+  private async handleTaskCompletion(task: Task, event: any): Promise<void> {
     if (![ExecutionState.TASK_OK, ExecutionState.TASK_FAIL, ExecutionState.TASK_CANCEL].includes(event.state)) {
       return;
     }
@@ -1100,11 +1102,30 @@ export class TaskManager extends EventEmitter {
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: task.status });
     this.updateBadge();
     try {
-      task.executor?.cleanup?.();
+      await task.executor?.cleanup?.();
     } catch {}
+    await this.forceDetachSessionDebuggers(sessionId);
     try {
       task.onExecutorFinished?.();
     } catch {}
+  }
+
+  /**
+   * Safety-net: force-detach Chrome debugger from all tabs owned by a session.
+   * Ensures the yellow debugging banner is removed even if normal cleanup missed a tab.
+   */
+  private async forceDetachSessionDebuggers(sessionId: string): Promise<void> {
+    const tabIds = new Set<number>();
+    for (const t of this.tasks.values()) {
+      if (String(t.parentSessionId || t.id) === sessionId && typeof t.tabId === 'number') {
+        tabIds.add(t.tabId);
+      }
+    }
+    for (const tabId of tabIds) {
+      try {
+        await chrome.debugger.detach({ tabId });
+      } catch {}
+    }
   }
 
   private prepareTokenTracking(event: any): void {
