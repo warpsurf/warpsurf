@@ -82,6 +82,8 @@ export const llmProviderFallbackModelNames = {
     'claude-3-haiku-20240307',
   ],
   [ProviderTypeEnum.Gemini]: [
+    'gemini-3.1-pro-preview',
+    'gemini-3.1-flash-lite-preview',
     'gemini-3-pro-preview',
     'gemini-3-flash-preview',
     'gemini-2.5-flash',
