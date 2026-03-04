@@ -291,7 +291,6 @@ export class MultiAgentWorkflow {
     try {
       const finalAnswer = await this.captain.run(validDispatches.length > 0 ? { schedule, queues } : undefined);
       if (!this.cancelled) {
-        this.trace('system', `Final answer: ${(finalAnswer || '').slice(0, 500)}`);
         this.emit('final_answer', { sessionId: this.sessionId, text: finalAnswer });
         (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
         this.emitEnded(true);
@@ -465,7 +464,6 @@ export class MultiAgentWorkflow {
           });
           this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log });
         }
-        this.trace('overseer', `Plan modified: ${event.reason}`);
         this.updateGraph();
         break;
       }
@@ -488,7 +486,6 @@ export class MultiAgentWorkflow {
         break;
 
       case 'workflow_complete':
-        this.trace('system', 'Workflow completed successfully');
         break;
 
       case 'workflow_aborted':
@@ -513,14 +510,19 @@ export class MultiAgentWorkflow {
     if (type === 'workflow_progress' && data?.message) {
       const eventId = `ma-${this.sessionId}-${++this.emitSeq}`;
       data = { ...data, eventId };
-      try {
-        const actor = data.actor || 'multiagent';
-        const wid = data.workerId;
-        trajectoryPersistence.addTraceItem(this.sessionId, actor, data.message, Date.now(), {
-          ...(wid != null && { workerId: wid }),
-          eventId,
-        });
-      } catch {}
+      const actor = data.actor || 'multiagent';
+      const wid = data.workerId;
+      // Only persist role-specific or crew items; generic 'multiagent' without
+      // workerId are ephemeral status updates (e.g. "Commodore planning...",
+      // "Plan created: N tasks") that drive the aggregate root content only.
+      if (actor !== 'multiagent' || wid != null) {
+        try {
+          trajectoryPersistence.addTraceItem(this.sessionId, actor, data.message, Date.now(), {
+            ...(wid != null && { workerId: wid }),
+            eventId,
+          });
+        } catch {}
+      }
     }
 
     if (port) {
