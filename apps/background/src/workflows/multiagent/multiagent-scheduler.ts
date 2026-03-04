@@ -147,8 +147,9 @@ export function allocateTasks(
         assignments.push([task, wid]);
         usedWorkers.add(wid);
       } else if (freeWorkers.length > 0) {
-        const wid = freeWorkers.shift()!;
-        if (!usedWorkers.has(wid) && isWorkerFree(wid)) {
+        const idx = freeWorkers.findIndex(w => !usedWorkers.has(w) && isWorkerFree(w));
+        if (idx !== -1) {
+          const wid = freeWorkers.splice(idx, 1)[0];
           assignments.push([task, wid]);
           usedWorkers.add(wid);
         }
