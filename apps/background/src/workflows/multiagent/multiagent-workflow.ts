@@ -302,6 +302,12 @@ export class MultiAgentWorkflow {
         source: 'captain_failure',
         message: e?.message || 'Workflow failed',
       });
+      // End orphaned crew sessions so their tasks don't stay stuck as 'running'
+      if (this.captainState) {
+        await Promise.allSettled(
+          Array.from(this.captainState.crewSessionIds.values()).map(sid => crew.endSession(sid, 'error')),
+        );
+      }
       (this.taskManager as any)?.tabMirrorService?.freezeMirrorsForSession?.(String(this.sessionId));
       this.emitEnded(false, e?.message || 'Workflow failed');
     } finally {
@@ -577,11 +583,8 @@ export class MultiAgentWorkflow {
     this.emit('workflow_ended', { sessionId: this.sessionId, ok, error, summary });
     try {
       if (!ok && error) this.trace('system', `Workflow failed: ${error}`);
-      trajectoryPersistence.markCompleted(this.sessionId);
-    } catch {}
-    // Persist workflow graph + plan items from the background so they survive
-    // even when the panel is closed (e.g. workflows initiated from Agent Manager).
-    try {
+      // Attach graph + plan items to the trajectory BEFORE markCompleted so they
+      // are included in the same persistNow write (avoids race with a separate call).
       const patch: Record<string, any> = {};
       const graph = this.getCurrentGraph();
       if (graph) {
@@ -598,8 +601,9 @@ export class MultiAgentWorkflow {
         }
       }
       if (Object.keys(patch).length > 0) {
-        chatHistoryStore.storeMessageMetadata(this.sessionId, patch as any).catch(() => {});
+        trajectoryPersistence.setExtraMetadata(this.sessionId, patch);
       }
+      trajectoryPersistence.markCompleted(this.sessionId);
     } catch {}
   }
 
