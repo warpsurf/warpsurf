@@ -27,6 +27,8 @@ const POLL_INTERVAL_BASE_MS = 30_000;
 const POLL_INTERVAL_FAST_MS = 15_000;
 const OVERDUE_THRESHOLD_MS = 120_000;
 const EVENT_DEDUP_WINDOW_MS = 10_000;
+const MAX_CAPTAIN_STEPS = 25;
+const STALE_THRESHOLD = 5;
 
 export interface CaptainConfig {
   maxWorkers: number;
@@ -70,11 +72,15 @@ export class Captain {
   private onEvent: EventHandler;
   private crewQueues: Record<number, number[]> = {};
   private pendingUserMessages: string[] = [];
+  private holdDispatchForUserMessage = false;
 
   private pollingTimer: ReturnType<typeof setInterval> | null = null;
   private currentPollIntervalMs = POLL_INTERVAL_BASE_MS;
   private lastCaptainCallTime = 0;
   private captainCallInFlight = false;
+  private captainStepCount = 0;
+  private lastStateFingerprint = '';
+  private staleCount = 0;
 
   private captainActions: CaptainAction[];
   private actionNames: Set<string>;
@@ -191,7 +197,6 @@ export class Captain {
 
   private async runProactiveCheck(): Promise<void> {
     if (this.cancelled || this.paused || this.state.isAllDone()) return;
-    if (this.state.busyCrew.size === 0) return;
     if (this.captainCallInFlight) return;
 
     if (Date.now() - this.lastCaptainCallTime < EVENT_DEDUP_WINDOW_MS) return;
@@ -216,6 +221,7 @@ export class Captain {
 
   async handleSubtaskCompleted(subtaskId: SubtaskId, output: StructuredOutput): Promise<void> {
     if (this.cancelled) return;
+    if (!this.state.plan.getSubtask(subtaskId)) return;
 
     this.state.subtaskOutputs.set(subtaskId, output);
     this.state.markCompleted(subtaskId);
@@ -264,6 +270,7 @@ export class Captain {
 
   async handleSubtaskFailed(subtaskId: SubtaskId, error: string): Promise<void> {
     if (this.cancelled) return;
+    if (!this.state.plan.getSubtask(subtaskId)) return;
 
     const failCount = this.state.recordFailure(subtaskId, error);
     const totalAttempts = this.state.dispatchAttempts.get(subtaskId) ?? 0;
@@ -352,6 +359,8 @@ export class Captain {
 
   injectUserMessage(text: string): void {
     this.pendingUserMessages.push(text);
+    this.holdDispatchForUserMessage = true;
+    this.pauseRunningCrews();
     if (!this.paused && !this.captainCallInFlight && !this.cancelled) {
       this.consultAndExecute('User sent a live message. Review and act if needed.');
     }
@@ -361,15 +370,37 @@ export class Captain {
     const idx = this.pendingUserMessages.indexOf(text);
     if (idx >= 0) {
       this.pendingUserMessages.splice(idx, 1);
+      if (this.pendingUserMessages.length === 0) {
+        this.holdDispatchForUserMessage = false;
+        this.resumeRunningCrews();
+      }
       return true;
     }
     return false;
   }
 
+  private pauseRunningCrews(): void {
+    for (const [crewId, sessionId] of this.state.crewSessionIds) {
+      if (this.state.busyCrew.has(crewId)) {
+        this.crew.pause(sessionId).catch(() => {});
+      }
+    }
+  }
+
+  private async resumeRunningCrews(): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [crewId, sessionId] of this.state.crewSessionIds) {
+      if (this.state.busyCrew.has(crewId)) {
+        promises.push(this.crew.resume(sessionId).catch(() => {}));
+      }
+    }
+    if (promises.length) await Promise.allSettled(promises);
+  }
+
   // --- Core dispatch logic (programmatic, no LLM) ---
 
   private async dispatchReady(): Promise<void> {
-    if (this.cancelled || this.paused) return;
+    if (this.cancelled || this.paused || this.holdDispatchForUserMessage) return;
 
     const resolved = this.state.getResolvedIds();
     const ready = this.state.plan.getReadySubtasks(resolved).filter(id => {
@@ -418,7 +449,7 @@ export class Captain {
         this.finalize(this.buildFinalAnswer());
       } else if (this.state.hasBlockedSubtasks()) {
         await this.consultAndExecute(
-          `Workflow is blocked: ${pendingCount} subtask(s) are waiting on failed dependencies that will never complete. Use skip_subtask on the failed dependencies to unblock downstream work, or finalize with available results.`,
+          `Workflow is BLOCKED: ${pendingCount} subtask(s) are waiting on failed or cancelled dependencies that will never complete. Use skip_subtask on the blocked dependencies to unblock downstream work, or use complete_workflow to finalize with available results.`,
         );
       }
     }
@@ -539,7 +570,15 @@ export class Captain {
   private async consultAndExecute(trigger: string): Promise<CaptainDecision | undefined> {
     if (this.cancelled || this.paused || this.captainCallInFlight) return undefined;
 
+    this.captainStepCount++;
+    if (this.captainStepCount > MAX_CAPTAIN_STEPS) {
+      logger.warning(`Captain step limit (${MAX_CAPTAIN_STEPS}) reached — finalizing`);
+      this.finalize(this.buildFinalAnswer());
+      return undefined;
+    }
+
     this.captainCallInFlight = true;
+    const hadUserMessages = this.pendingUserMessages.length > 0;
     try {
       const drained = this.pendingUserMessages.splice(0);
       const fullTrigger =
@@ -549,18 +588,49 @@ export class Captain {
 
       const decision = await this.consultLLM(fullTrigger);
       this.lastCaptainCallTime = Date.now();
+
+      if (drained.length > 0) this.holdDispatchForUserMessage = false;
+
       if (decision.actions.length > 0) {
         await this.executeDecision(decision, drained);
       } else {
         this.onEvent({ type: 'captain_decision', decision, drainedMessages: drained.length > 0 ? drained : undefined });
+        if (drained.length > 0) await this.dispatchReady();
       }
+
+      if (hadUserMessages) await this.resumeRunningCrews();
+
+      // Stale state detection: finalize if no progress across consecutive calls
+      const fp = this.buildStateFingerprint();
+      if (fp === this.lastStateFingerprint) {
+        this.staleCount++;
+        if (this.staleCount >= STALE_THRESHOLD) {
+          logger.warning(`No state change after ${STALE_THRESHOLD} captain steps — finalizing`);
+          this.finalize(this.buildFinalAnswer());
+          return decision;
+        }
+      } else {
+        this.staleCount = 0;
+        this.lastStateFingerprint = fp;
+      }
+
       return decision;
     } catch (e) {
       logger.error('Captain LLM call failed:', e);
+      this.holdDispatchForUserMessage = false;
+      if (hadUserMessages) this.resumeRunningCrews().catch(() => {});
       return undefined;
     } finally {
       this.captainCallInFlight = false;
     }
+  }
+
+  private buildStateFingerprint(): string {
+    const parts: string[] = [];
+    for (const [id, st] of [...this.state.subtaskStatus].sort((a, b) => a[0] - b[0])) {
+      parts.push(`${id}:${st}`);
+    }
+    return parts.join(',');
   }
 
   private async consultLLM(trigger: string): Promise<CaptainDecision> {
