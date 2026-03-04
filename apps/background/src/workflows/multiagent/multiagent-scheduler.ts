@@ -14,10 +14,16 @@ export function allocateTasks(
     if (!Number.isInteger(maxWorkers) || maxWorkers < 1)
       throw new Error('maxWorkers must be a positive integer when provided');
   }
-  // Collect all tasks mentioned anywhere
-  const allTasks = new Set<number>(Object.keys(dependencies).map(k => Number.parseInt(k, 10)));
-  for (const deps of Object.values(dependencies)) {
-    for (const d of deps) allTasks.add(Number(d));
+  // Collect tasks that are actual plan entries (keys). Dependency-only refs that
+  // aren't plan entries are dangling references from plan modifications — ignore them.
+  const planTaskIds = new Set<number>(Object.keys(dependencies).map(k => Number.parseInt(k, 10)));
+  const allTasks = new Set(planTaskIds);
+
+  // Strip dangling dependency references so the scheduler never creates ghost tasks
+  for (const [taskStr, deps] of Object.entries(dependencies)) {
+    const task = Number.parseInt(taskStr, 10);
+    const valid = (deps || []).filter(d => planTaskIds.has(Number(d)));
+    dependencies[task] = valid;
   }
 
   // Successors and predecessors
