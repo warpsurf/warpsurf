@@ -12,6 +12,19 @@ export interface NewSubtaskSpec {
   title: string;
   prompt: string;
   dependencies: SubtaskId[];
+  is_final?: boolean;
+  no_browse?: boolean;
+  suggested_urls?: string[];
+  suggested_search_queries?: string[];
+}
+
+/** Extended spec for modify_plan: allows string temp_id references in dependencies. */
+export interface RevisedSubtaskSpec {
+  temp_id?: string;
+  title: string;
+  prompt: string;
+  dependencies: (SubtaskId | string)[];
+  is_final?: boolean;
   no_browse?: boolean;
   suggested_urls?: string[];
   suggested_search_queries?: string[];
@@ -23,7 +36,14 @@ export type CaptainActionType =
   | { type: 'retry_subtask'; subtask_id: SubtaskId; modified_prompt?: string; reassign_to_crew?: number }
   | { type: 'skip_subtask'; subtask_id: SubtaskId; reason: string }
   | { type: 'add_subtask'; subtask: NewSubtaskSpec; after_dependencies: SubtaskId[] }
-  | { type: 'modify_subtask'; subtask_id: SubtaskId; new_prompt?: string; new_title?: string; no_browse?: boolean }
+  | {
+      type: 'modify_subtask';
+      subtask_id: SubtaskId;
+      new_prompt?: string;
+      new_title?: string;
+      no_browse?: boolean;
+      new_dependencies?: SubtaskId[];
+    }
   | { type: 'modify_plan'; revised_subtasks: NewSubtaskSpec[]; reason: string }
   | { type: 'launch_speculative'; goal_id: string; alternatives: NewSubtaskSpec[] }
   | { type: 'resolve_speculative'; goal_id: string; winner_id: SubtaskId }
@@ -48,7 +68,7 @@ export type WorkflowEvent =
   | { type: 'subtask_failed'; subtaskId: SubtaskId; error: string }
   | { type: 'speculative_launched'; goalId: string; candidates: SubtaskId[] }
   | { type: 'speculative_resolved'; goalId: string; winnerId: SubtaskId; cancelledIds: SubtaskId[] }
-  | { type: 'plan_modified'; reason: string; addedIds: SubtaskId[]; removedIds: SubtaskId[] }
+  | { type: 'plan_modified'; reason: string; addedIds: SubtaskId[]; removedIds: SubtaskId[]; obsoleteIds?: SubtaskId[] }
   | { type: 'workflow_complete'; finalAnswer: string }
   | { type: 'workflow_aborted'; reason: string }
   | { type: 'workflow_paused'; reason: string }
