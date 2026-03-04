@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const releaseNotes =
-    'Added file and image attachments, explain-image context menu, vision mode with coordinate clicking, loop detection, plan tracking, and agent reliability improvements.';
+    'Added role-based multi-agent architecture (Commodore, Captain, Quartermaster, Crew), captain oversight with pause/resume and deadlock detection, live plan visualization, shared cross-crew tab registry, universal thinking-level controls, and session persistence and deduplication improvements.';
 
   useEffect(() => {
     try {
