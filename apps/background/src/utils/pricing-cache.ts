@@ -32,7 +32,7 @@ export interface CachedPricingData {
 
 // Cache generated on 2026-03-04 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-04T17:29:29.114Z',
+  generatedAt: '2026-03-04T23:43:57.815Z',
   version: 1,
   helicone: {
     openai: {
@@ -2161,8 +2161,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00012,
       },
       'z-ai/glm-4.6': {
-        inputPerToken: 3.5e-7,
-        outputPerToken: 0.00000171,
+        inputPerToken: 3.9e-7,
+        outputPerToken: 0.0000019,
       },
       'z-ai/glm-4.6:exacto': {
         inputPerToken: 4.4e-7,
@@ -3140,7 +3140,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'qwen/qwen3-vl-30b-a3b-thinking': 131072,
       'qwen/qwen3-vl-30b-a3b-instruct': 131072,
       'openai/gpt-5-pro': 400000,
-      'z-ai/glm-4.6': 202752,
+      'z-ai/glm-4.6': 204800,
       'z-ai/glm-4.6:exacto': 204800,
       'anthropic/claude-sonnet-4.5': 1000000,
       'deepseek/deepseek-v3.2-exp': 163840,
