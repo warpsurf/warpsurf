@@ -26,7 +26,7 @@ const AGENT_OPTIONS: AgentOption[] = [
   { type: 'agent', name: 'Agent', icon: <FaRobot className="w-3.5 h-3.5" /> },
   {
     type: 'multiagent',
-    name: 'Multi-Agent (exp.)',
+    name: 'Multi-Agent',
     icon: (
       <span className="inline-flex">
         <FaRobot className="w-3.5 h-3.5" />
