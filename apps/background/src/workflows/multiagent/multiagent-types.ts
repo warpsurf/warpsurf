@@ -22,7 +22,7 @@ export interface TaskPlan {
 export type WorkerSchedule = Record<number, number[]>;
 export type WorkerQueues = Record<number, number[]>;
 
-export type WorkflowNodeStatus = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type WorkflowNodeStatus = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'obsolete';
 
 export interface GraphNode {
   id: SubtaskId;
