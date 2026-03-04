@@ -2,6 +2,25 @@ import { globalTokenTracker } from '../utils/token-tracker';
 import { errorLog } from '../utils/error-log';
 import { sessionLogArchive } from '../utils/session-log-archive';
 
+/**
+ * Lightweight check: does the background have any API call logs for this session?
+ * Returns a boolean so the panel can disable download buttons for stale sessions.
+ */
+export function handleCheckLogsAvailable(port: chrome.runtime.Port, taskManager: any, sessionId: string) {
+  if (!sessionId) return port.postMessage({ type: 'logs_available', sessionId: '', available: false });
+  try {
+    const sid = String(sessionId);
+    const live = (globalTokenTracker as any)?.getTokensForTask?.(sid) || [];
+    if (live.length > 0) {
+      return port.postMessage({ type: 'logs_available', sessionId: sid, available: true });
+    }
+    const archived = sessionLogArchive.get(sid);
+    return port.postMessage({ type: 'logs_available', sessionId: sid, available: archived.length > 0 });
+  } catch {
+    return port.postMessage({ type: 'logs_available', sessionId: String(sessionId), available: false });
+  }
+}
+
 export function handleGetTokenLog(port: chrome.runtime.Port, taskId: string) {
   if (!taskId) return port.postMessage({ type: 'token_log', error: 'No taskId provided' });
   const usages = globalTokenTracker.getTokensForTask(String(taskId)) || [];
