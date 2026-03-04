@@ -12,6 +12,7 @@ export {
   isTransientSystemMessage,
   sanitizeMessageContent,
   stripWorkerSuffix,
+  hasMarkdownSyntax,
 } from './formatting';
 export { createLogger } from './logger';
 export { downloadTokenLogCsv } from './download-token-log-csv';

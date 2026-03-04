@@ -135,6 +135,25 @@ export function sanitizeMessageContent(content: string): string | null {
 }
 
 /**
+ * Heuristic check for whether a string contains markdown formatting.
+ * Used to decide whether final agent output should be rendered via
+ * MarkdownRenderer or as plain text.
+ */
+export function hasMarkdownSyntax(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  return (
+    /(?:^|\n)#{1,6}\s/.test(text) || // headings
+    /\*\*[^*]+\*\*/.test(text) || // bold
+    /(?:^|\n)\s*[-*+]\s+\S/.test(text) || // unordered list
+    /(?:^|\n)\s*\d+\.\s+\S/.test(text) || // ordered list
+    /\[[^\]]+\]\([^)]+\)/.test(text) || // links
+    /(?:^|\n)```/.test(text) || // fenced code blocks
+    /(?:^|\n)>\s+\S/.test(text) || // blockquotes
+    /(?:^|\n)\|.+\|/.test(text)
+  ); // tables
+}
+
+/**
  * Strips "(Crew N)" and "[workerId]" suffixes from agent status text
  * so user-visible labels stay clean.
  */
