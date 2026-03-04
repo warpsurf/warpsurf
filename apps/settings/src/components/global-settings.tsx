@@ -1,12 +1,5 @@
 import { Button } from '@extension/ui';
-import {
-  LabelWithTooltip,
-  cn,
-  ModelComboBox,
-  TemperatureControl,
-  isThinkingCapableModel,
-  SaveIndicator,
-} from './primitives';
+import { LabelWithTooltip, cn, ModelComboBox, TemperatureControl, SaveIndicator } from './primitives';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 import type { ThinkingLevel } from '@extension/storage';
 
@@ -56,8 +49,6 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeTimeout,
     showSaveIndicator = false,
   } = props;
-
-  const showThinkingLevel = globalModelValue && isThinkingCapableModel(globalModelValue);
 
   const options = availableModels.map(({ provider, providerName, model }) => {
     const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
@@ -118,14 +109,14 @@ export function GlobalSettings(props: GlobalSettingsProps) {
         </div>
       )}
 
-      {/* Thinking Level - only shown for thinking-capable models */}
-      {showThinkingLevel && (
+      {/* Thinking Level */}
+      {globalModelValue && (
         <div className="mt-4 flex items-center gap-3">
           <LabelWithTooltip
             isDarkMode={isDarkMode}
             htmlFor="global-thinking-level"
             label="Thinking Level"
-            tooltip="Controls how much reasoning the model performs before responding"
+            tooltip="Controls reasoning depth for supported models. Set to Default if unsupported."
             width="w-28"
           />
           <select
