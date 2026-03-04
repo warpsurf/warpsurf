@@ -1,11 +1,9 @@
 /**
  * Tab group colors for multi-agent visualization
  */
-export const TAB_GROUP_COLORS = [
-  'grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'
-] as const;
+export const TAB_GROUP_COLORS = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange', 'grey'] as const;
 
-export type TabGroupColor = typeof TAB_GROUP_COLORS[number];
+export type TabGroupColor = (typeof TAB_GROUP_COLORS)[number];
 
 /**
  * Hex color codes for tab groups
@@ -26,4 +24,3 @@ export const TAB_GROUP_COLOR_HEX: Record<TabGroupColor, string> = {
  * Default color for workflow graph lanes
  */
 export const DEFAULT_LANE_COLOR = '#A78BFA'; // purple
-
