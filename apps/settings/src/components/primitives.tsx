@@ -4,27 +4,12 @@ import { createPortal } from 'react-dom';
 export const cn = (...args: Array<string | false | null | undefined>) => args.filter(Boolean).join(' ');
 
 /**
- * Determine whether a model supports configurable thinking/reasoning.
- * Returns true for any model where a thinking level dropdown is useful.
- * The value passed may be "provider>model" from the UI selector.
+ * @deprecated Thinking level is now always shown in the UI regardless of model.
+ * The backend handles unsupported models by ignoring the thinking param.
+ * Users can set thinking to "Default" for models that don't support it.
  */
-export function isThinkingCapableModel(modelName: string): boolean {
-  // Strip "provider>" prefix used in the settings UI value format
-  const raw = modelName.includes('>') ? modelName.split('>')[1] : modelName;
-  // Strip OpenRouter provider prefix (e.g. "openai/gpt-5" -> "gpt-5")
-  const name = raw.includes('/') ? raw.split('/').pop()! : raw;
-  const l = name.toLowerCase();
-
-  // OpenAI reasoning models
-  if (/^(o1|o3|o4|gpt-5)/.test(l)) return true;
-  // Anthropic thinking-capable models (Opus 4+, Sonnet 4+, Sonnet 3.7, Haiku 4.5)
-  if (/^claude-(opus-4|sonnet-4|sonnet-3-7|3-7-sonnet|haiku-4-5)/.test(l)) return true;
-  // Gemini 2.5+ and 3 models
-  if (/^gemini-(2\.5|3-)/.test(l)) return true;
-  // Grok reasoning models
-  if (/^grok-(4|3-mini)/.test(l)) return true;
-
-  return false;
+export function isThinkingCapableModel(_modelName: string): boolean {
+  return true;
 }
 
 /** @deprecated Use isThinkingCapableModel instead */
