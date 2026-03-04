@@ -151,3 +151,22 @@ export function dedupeMessages(messages: any[] | undefined | null): any[] {
   }
   return out;
 }
+
+/**
+ * Move live-injected user messages to just before the aggregate root.
+ * During a live workflow processDrainedMessages splices them correctly in
+ * React state, but addMessage appends to storage — so on reload the order
+ * is wrong. This restores the intended visual order.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function reorderLiveInjected(messages: any[], rootId: string): any[] {
+  const rootIdx = messages.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
+  if (rootIdx < 0) return messages;
+  const liveInject: any[] = [];
+  const rest: any[] = [];
+  for (let i = rootIdx + 1; i < messages.length; i++) {
+    if (String((messages[i] as any)?.eventId || '').startsWith('live-inject-')) liveInject.push(messages[i]);
+    else rest.push(messages[i]);
+  }
+  return liveInject.length > 0 ? [...messages.slice(0, rootIdx), ...liveInject, messages[rootIdx], ...rest] : messages;
+}

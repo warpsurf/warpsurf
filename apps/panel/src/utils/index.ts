@@ -19,4 +19,4 @@ export { downloadTokenLogCsv } from './download-token-log-csv';
 export type { TokenLogEntry } from './download-token-log-csv';
 export { computeRequestSummaryFromSessionLogs } from './session-logs';
 export type { SessionLogsData, RequestSummaryLike } from './session-logs';
-export { dedupeMessages } from './dedupe-messages';
+export { dedupeMessages, reorderLiveInjected } from './dedupe-messages';
