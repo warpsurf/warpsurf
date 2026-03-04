@@ -38,6 +38,39 @@ function persistCancelledContent(deps: any): void {
   } catch {}
 }
 
+/** Insert drained live messages into the chat as user messages, persist them, and clear the queue strip. */
+function processDrainedMessages(drained: string[], deps: any): void {
+  if (!Array.isArray(drained) || drained.length === 0) return;
+  const rootId = deps.agentTraceRootIdRef?.current;
+  if (rootId) {
+    const now = Date.now();
+    const newMsgs = drained.map((text: string, i: number) => ({
+      actor: 'user',
+      content: text,
+      timestamp: now + i,
+    }));
+    deps.setMessages?.((prev: any[]) => {
+      const rootIdx = prev.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
+      if (rootIdx >= 0) return [...prev.slice(0, rootIdx), ...newMsgs, ...prev.slice(rootIdx)];
+      return [...prev, ...newMsgs];
+    });
+    const sid = deps.sessionIdRef?.current;
+    if (sid) {
+      for (const msg of newMsgs) {
+        chatHistoryStore.addMessage(sid, msg as any).catch(() => {});
+      }
+    }
+  }
+  deps.setQueuedMessages?.((prev: string[]) => {
+    const remaining = [...prev];
+    for (const msg of drained) {
+      const idx = remaining.indexOf(msg);
+      if (idx >= 0) remaining.splice(idx, 1);
+    }
+    return remaining;
+  });
+}
+
 export function createPanelHandlers(deps: any): any {
   return {
     onSessionSubscribed: (message: any) => {
@@ -119,42 +152,8 @@ export function createPanelHandlers(deps: any): any {
           }
         } catch {}
 
-        // When the agent consumes queued messages: insert them into chat
-        // before the agent aggregate root, persist, and remove from the queue strip
         try {
-          const drained = event?.data?.drainedMessages;
-          if (Array.isArray(drained) && drained.length > 0) {
-            const rootId = deps.agentTraceRootIdRef?.current;
-            if (rootId) {
-              const now = Date.now();
-              const newMsgs = drained.map((text: string, i: number) => ({
-                actor: 'user',
-                content: text,
-                timestamp: now + i,
-              }));
-              deps.setMessages?.((prev: any[]) => {
-                const rootIdx = prev.findIndex((m: any) => `${m.timestamp}-${m.actor}` === rootId);
-                if (rootIdx >= 0) {
-                  return [...prev.slice(0, rootIdx), ...newMsgs, ...prev.slice(rootIdx)];
-                }
-                return [...prev, ...newMsgs];
-              });
-              const sid = deps.sessionIdRef?.current;
-              if (sid) {
-                for (const msg of newMsgs) {
-                  chatHistoryStore.addMessage(sid, msg as any).catch(() => {});
-                }
-              }
-            }
-            deps.setQueuedMessages?.((prev: string[]) => {
-              const remaining = [...prev];
-              for (const msg of drained) {
-                const idx = remaining.indexOf(msg);
-                if (idx >= 0) remaining.splice(idx, 1);
-              }
-              return remaining;
-            });
-          }
+          processDrainedMessages(event?.data?.drainedMessages, deps);
         } catch {}
 
         (deps.taskEventHandler as any)(event);
@@ -249,19 +248,8 @@ export function createPanelHandlers(deps: any): any {
           });
         }
 
-        // Remove drained user messages from the queued strip
         try {
-          const drained = (message as any)?.data?.drainedMessages;
-          if (Array.isArray(drained) && drained.length > 0) {
-            deps.setQueuedMessages?.((prev: string[]) => {
-              const remaining = [...prev];
-              for (const msg of drained) {
-                const idx = remaining.indexOf(msg);
-                if (idx >= 0) remaining.splice(idx, 1);
-              }
-              return remaining;
-            });
-          }
+          processDrainedMessages((message as any)?.data?.drainedMessages, deps);
         } catch {}
 
         // Handle explicit cancel messages (not substring matches like "noise cancellation")
@@ -596,6 +584,7 @@ export function createPanelHandlers(deps: any): any {
         }
       } catch {}
       deps.setIsJobActive(false);
+      if (deps.jobActiveRef) deps.jobActiveRef.current = false;
       deps.workflowEndedRef.current = true;
       deps.setInputEnabled(true);
       deps.setShowStopButton(false);
