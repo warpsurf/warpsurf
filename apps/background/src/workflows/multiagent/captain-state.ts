@@ -51,6 +51,8 @@ export class CaptainState {
   markCompleted(id: SubtaskId): void {
     this.subtaskStatus.set(id, 'completed');
     this.subtaskCompletionTimes.set(id, Date.now());
+    this.failureReasons.delete(id);
+    this.failureCounts.delete(id);
   }
 
   get completedCount(): number {
