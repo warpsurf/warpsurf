@@ -1,5 +1,5 @@
 import type { Subtask, SubtaskId, TaskPlan } from './multiagent-types';
-import type { NewSubtaskSpec } from './workflow-events';
+import type { NewSubtaskSpec, RevisedSubtaskSpec } from './workflow-events';
 
 /**
  * Mutable DAG that the Captain can modify at runtime.
@@ -84,6 +84,7 @@ export class LivePlan {
       title: spec.title,
       prompt: spec.prompt,
       startCriteria: spec.dependencies,
+      isFinal: spec.is_final,
       noBrowse: spec.no_browse,
       suggestedUrls: spec.suggested_urls,
       suggestedSearchQueries: spec.suggested_search_queries,
@@ -117,6 +118,15 @@ export class LivePlan {
     if (changes.title !== undefined) s.title = changes.title;
     if (changes.prompt !== undefined) s.prompt = changes.prompt;
     if (changes.noBrowse !== undefined) s.noBrowse = changes.noBrowse;
+  }
+
+  setDependencies(id: SubtaskId, deps: SubtaskId[]): void {
+    const depSet = this.deps.get(id);
+    if (!depSet) return;
+    depSet.clear();
+    for (const d of deps) depSet.add(d);
+    const s = this.subtasks.get(id);
+    if (s) s.startCriteria = deps;
   }
 
   addDependency(subtaskId: SubtaskId, dependsOn: SubtaskId): void {
@@ -155,20 +165,77 @@ export class LivePlan {
 
   // --- Bulk ---
 
-  /** Replace all pending (not completed/running) subtasks with a revised set. */
-  replacePendingSubtasks(revised: NewSubtaskSpec[], completed: Set<SubtaskId>): SubtaskId[] {
-    // Remove pending subtasks
+  /**
+   * Replace all pending (not completed) subtasks with a revised set.
+   * Dependencies in revised specs use:
+   *  - String → temp_id of another revised subtask (preferred)
+   *  - Positive integer → existing subtask ID
+   *  - Negative integer → 1-indexed position fallback (-1 = first, -2 = second, …)
+   *  - Positive integer not matching any existing subtask → 1-indexed position fallback
+   */
+  replacePendingSubtasks(revised: RevisedSubtaskSpec[], completed: Set<SubtaskId>): SubtaskId[] {
     for (const id of [...this.subtasks.keys()]) {
       if (!completed.has(id)) {
         this.subtasks.delete(id);
         this.deps.delete(id);
       }
     }
-    // Add revised subtasks
+
+    // First pass: create subtasks with empty deps, build temp_id→realId map
     const newIds: SubtaskId[] = [];
+    const tempIdMap = new Map<string, SubtaskId>();
     for (const spec of revised) {
-      newIds.push(this.addSubtask(spec));
+      const id = this._nextId++;
+      this.subtasks.set(id, {
+        id,
+        title: spec.title,
+        prompt: spec.prompt,
+        startCriteria: [],
+        isFinal: spec.is_final,
+        noBrowse: spec.no_browse,
+        suggestedUrls: spec.suggested_urls,
+        suggestedSearchQueries: spec.suggested_search_queries,
+      });
+      this.deps.set(id, new Set());
+      newIds.push(id);
+      if (spec.temp_id) tempIdMap.set(spec.temp_id, id);
     }
+
+    // Second pass: resolve dependency references to real IDs
+    const planIds = new Set(this.subtasks.keys());
+    for (let i = 0; i < revised.length; i++) {
+      const resolved = new Set<SubtaskId>();
+      for (const dep of revised[i].dependencies) {
+        if (typeof dep === 'string') {
+          const mapped = tempIdMap.get(dep);
+          if (mapped !== undefined) resolved.add(mapped);
+        } else if (dep < 0) {
+          const idx = Math.abs(dep) - 1;
+          if (idx >= 0 && idx < newIds.length) resolved.add(newIds[idx]);
+        } else if (planIds.has(dep)) {
+          resolved.add(dep);
+        } else if (dep >= 1 && dep <= newIds.length) {
+          resolved.add(newIds[dep - 1]);
+        }
+      }
+      this.deps.set(newIds[i], resolved);
+      const s = this.subtasks.get(newIds[i]);
+      if (s) s.startCriteria = [...resolved];
+    }
+
+    // Auto-mark terminal subtask as final if none explicitly marked
+    if (!newIds.some(id => this.subtasks.get(id)?.isFinal)) {
+      const dependedUpon = new Set<SubtaskId>();
+      for (const nid of newIds) {
+        for (const dep of this.deps.get(nid) ?? []) dependedUpon.add(dep);
+      }
+      const terminal = newIds.filter(id => !dependedUpon.has(id));
+      if (terminal.length === 1) {
+        const s = this.subtasks.get(terminal[0]);
+        if (s) s.isFinal = true;
+      }
+    }
+
     return newIds;
   }
 
