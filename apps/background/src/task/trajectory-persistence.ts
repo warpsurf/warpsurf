@@ -440,16 +440,15 @@ export class TrajectoryPersistenceService {
         break;
 
       case 'task.ok':
-        // Add the final trace item with the completion content
-        if (content && !this.isFallbackOutput(content)) {
+        // Multiagent root gets trace items from the workflow's emit(); adding
+        // one here would duplicate the content without a workerId.
+        if (content && !this.isFallbackOutput(content) && !trajectory?.isMultiagent) {
           const lastTrace = trajectory?.traceItems?.[trajectory.traceItems.length - 1];
           const isDuplicate = lastTrace && lastTrace.actor === actor && String(lastTrace.content) === String(content);
-          if (!isDuplicate) this.addTraceItem(sessionId, actor, content, timestamp, { eventId });
+          if (!isDuplicate) this.addTraceItem(sessionId, actor, content, timestamp, { ...pageInfo, eventId });
         }
         void this.ensureOutputMessage(sessionId, actor, timestamp, content);
         void this.persistSessionSummary(sessionId, data?.summary);
-        // NOTE: markCompleted is called by handleTaskCompletion in task-manager.ts
-        // which has access to the finalPreview mirrors
         break;
 
       case 'task.fail':
