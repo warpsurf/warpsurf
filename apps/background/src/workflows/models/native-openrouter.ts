@@ -54,7 +54,7 @@ export class NativeOpenRouterChatModel {
   }
 
   /**
-   * Build provider-specific thinking params based on the model prefix.
+   * Build provider-specific thinking params using version-aware detection.
    * OpenRouter passes these through to the underlying provider.
    */
   private getThinkingConfig(): Record<string, unknown> {
@@ -62,16 +62,25 @@ export class NativeOpenRouterChatModel {
     const prefix = this.modelName.split('/')[0];
     const model = this.modelName.split('/').slice(1).join('/');
 
-    if (prefix === 'openai' && /^(o1|o3|o4|gpt-5)/.test(model)) {
-      const effort = this.thinkingLevel === 'off' ? 'low' : this.thinkingLevel;
-      return { reasoning: { effort } };
+    if (prefix === 'openai') {
+      const isReasoning =
+        /^o\d|^o-/.test(model) || (model.match(/^gpt-(\d+)/) && parseInt(model.match(/^gpt-(\d+)/)![1], 10) >= 5);
+      if (isReasoning) {
+        const effort = this.thinkingLevel === 'off' ? 'low' : this.thinkingLevel;
+        return { reasoning: { effort } };
+      }
     }
-    if (prefix === 'google' && /^gemini-(2\.5|3-)/.test(model)) {
-      const budgetMap: Record<string, number> = { off: 0, low: 2048, medium: 8192, high: 24576 };
-      return { reasoning: { thinking_budget: budgetMap[this.thinkingLevel] ?? -1 } };
+    if (prefix === 'google') {
+      const vm = model.match(/^gemini-(\d+)(?:\.(\d+))?/);
+      if (vm) {
+        const major = parseInt(vm[1], 10);
+        const minor = parseInt(vm[2] || '0', 10);
+        if (major > 2 || (major === 2 && minor >= 5)) {
+          const budgetMap: Record<string, number> = { off: 0, low: 2048, medium: 8192, high: 24576 };
+          return { reasoning: { thinking_budget: budgetMap[this.thinkingLevel] ?? -1 } };
+        }
+      }
     }
-    // For anthropic and other providers on OpenRouter, the thinking param
-    // is typically handled via provider-specific headers or not supported.
     return {};
   }
 
