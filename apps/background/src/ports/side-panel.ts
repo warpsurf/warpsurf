@@ -18,6 +18,7 @@ import {
   handleGetAgentLog,
   handleGetSessionLogs,
   handleGetCombinedSessionLogs,
+  handleCheckLogsAvailable,
 } from '../logs/handlers';
 import { focusTab, takeControl, handBackControl } from '../tabs/control-handlers';
 import {
@@ -486,6 +487,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                 try {
                   await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(String(sessionId));
                 } catch {}
+                // Ensure badge reflects true running count after workflow ends
+                try {
+                  taskManager.refreshBadge();
+                } catch {}
                 // Generate smart title for the session after workflow ends
                 try {
                   titleGenerator.generateTitle(sessionId, query).catch(() => {});
@@ -767,6 +772,18 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               error: e instanceof Error ? e.message : 'Failed to get combined session logs',
             });
             return;
+          }
+          break;
+        }
+        case 'check_logs_available': {
+          try {
+            handleCheckLogsAvailable(port, taskManager as any, String(message.sessionId || ''));
+          } catch {
+            safePostMessage(port, {
+              type: 'logs_available',
+              sessionId: String(message.sessionId || ''),
+              available: false,
+            });
           }
           break;
         }
