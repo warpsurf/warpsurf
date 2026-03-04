@@ -284,7 +284,13 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
             handlersRef.current.onWorkflowQuartermasterLog?.(message);
           else if (message.type === 'workflow_progress') handlersRef.current.onWorkflowProgress?.(message);
           else if (message.type === 'final_answer') handlersRef.current.onFinalAnswer?.(message);
-          else if (message.type === 'workflow_ended') handlersRef.current.onWorkflowEnded?.(message);
+          else if (message.type === 'workflow_ended') {
+            try {
+              const endSid = String(message?.data?.sessionId || '');
+              if (endSid) cancelledSessionsRef.current.add(endSid);
+            } catch {}
+            handlersRef.current.onWorkflowEnded?.(message);
+          }
         } else if (message && message.type === 'workflow_started') {
           // New run for a session: unmark it from cancelled so mirrors/progress show again
           try {
@@ -420,10 +426,14 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
               const { rootId, traceItems, workerItems, isCompleted, finalPreview, finalPreviewBatch } = data;
               if (rootId) {
                 logger.log('[Panel] Applying trajectory_state', { rootId, traceItemCount: traceItems?.length });
-                (handlersRef.current as any)?.setAgentTraceRootId?.(rootId);
                 (handlersRef.current as any)?.setMessageMetadata?.((prev: any) => {
+                  // If handleSessionSelect already corrected the rootId to match the
+                  // actual message, keep using that instead of the background's rootId.
+                  const panelRootId = prev?.__sessionRootId;
+                  const effectiveId = panelRootId && panelRootId !== rootId ? panelRootId : rootId;
+
+                  // Always store bg data under the bg's rootId key
                   const existing = prev?.[rootId] || {};
-                  // Merge trace items with deduplication by timestamp
                   const existingItems = existing?.traceItems || [];
                   const existingIds = new Set(
                     existingItems.map((t: any) => String((t as any)?.eventId || '')).filter(Boolean),
@@ -440,26 +450,35 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
                     existingCount: existingItems.length,
                     newCount: newItems.length,
                     mergedCount: merged.length,
+                    effectiveId,
                   });
 
-                  return {
-                    ...prev,
-                    __sessionRootId: rootId,
-                    [rootId]: {
-                      ...existing,
-                      traceItems: merged,
-                      // Only update workerItems if we have new data
-                      ...(workerItems?.length ? { workerItems } : {}),
-                      // Only set isCompleted to true, never back to false
-                      isCompleted: existing.isCompleted || isCompleted || false,
-                      // Preserve existing final preview data, only add if not present
-                      ...(finalPreview && !existing.finalPreview ? { finalPreview } : {}),
-                      ...(finalPreviewBatch?.length && !existing.finalPreviewBatch?.length
-                        ? { finalPreviewBatch }
-                        : {}),
-                    },
+                  const bgEntry = {
+                    ...existing,
+                    traceItems: merged,
+                    ...(workerItems?.length ? { workerItems } : {}),
+                    isCompleted: existing.isCompleted || isCompleted || false,
+                    ...(finalPreview && !existing.finalPreview ? { finalPreview } : {}),
+                    ...(finalPreviewBatch?.length && !existing.finalPreviewBatch?.length ? { finalPreviewBatch } : {}),
                   };
+
+                  const result: any = {
+                    ...prev,
+                    __sessionRootId: effectiveId,
+                    [rootId]: bgEntry,
+                  };
+                  // If rootIds differ, also merge into the panel's rootId entry
+                  if (effectiveId !== rootId) {
+                    const panelEntry = prev?.[effectiveId] || {};
+                    result[effectiveId] = { ...panelEntry, ...bgEntry };
+                  }
+                  return result;
                 });
+                // Don't call setAgentTraceRootId here — the active rootId is
+                // already set by handleSessionSelect (which may have corrected a
+                // rootId mismatch) or by createAggregateRoot when the first
+                // progress event creates the message. Overwriting it with the
+                // background's rootId would break isCurrentRunRoot/plan tab.
               }
             } catch (e) {
               logger.error('[Panel] Failed to apply trajectory_state:', e);
