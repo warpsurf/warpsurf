@@ -2,6 +2,12 @@ import { createLogger } from '../log';
 import type { Task } from './task-manager';
 import { ExecutionState, Actors, EventType } from '../workflows/shared/event/types';
 
+/**
+ * Set to `true` once the Chrome bug that renders an empty grey box
+ * for tab-group titles is fixed upstream.
+ */
+export const ENABLE_TAB_GROUP_TITLES = false;
+
 const TAB_GROUP_COLORS = [
   'grey',
   'blue',
@@ -122,7 +128,9 @@ export class TabGroupService {
     try {
       const groups = await chrome.tabGroups.query({});
       groups.forEach(g => {
-        if ((g.title || '').toLowerCase().startsWith('crew') && g.color) {
+        const title = (g.title || '').toLowerCase();
+        const isOurs = ENABLE_TAB_GROUP_TITLES ? title.startsWith('crew') : !title;
+        if (isOurs && g.color) {
           used.add(g.color as chrome.tabGroups.Color);
         }
       });
@@ -190,7 +198,7 @@ export class TabGroupService {
 
     const updatedGroup = await chrome.tabGroups.update(groupId, {
       color: colorName as chrome.tabGroups.Color,
-      title,
+      ...(ENABLE_TAB_GROUP_TITLES && { title }),
     });
 
     const finalColorName = (updatedGroup?.color || colorName) as unknown as string;
