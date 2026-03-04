@@ -39,6 +39,8 @@ export interface SessionTrajectory {
   finalPreviewBatch?: any[];
   /** When true, final output is captured in the aggregate root — skip standalone output messages */
   isMultiagent?: boolean;
+  /** Extra __ metadata keys (e.g. __workflowGraph) to include in the next persist */
+  extraMetadata?: Record<string, any>;
 }
 
 export interface WorkerProgressItem {
@@ -264,6 +266,16 @@ export class TrajectoryPersistenceService {
   markMultiagent(sessionId: string): void {
     const trajectory = this.getOrCreateTrajectory(sessionId, Actors.MULTIAGENT);
     trajectory.isMultiagent = true;
+  }
+
+  /**
+   * Attach extra __ metadata (e.g. workflow graph, plan items) to the trajectory
+   * so the next persistNow includes them in a single write, avoiding race conditions.
+   */
+  setExtraMetadata(sessionId: string, data: Record<string, any>): void {
+    const trajectory = this.trajectories.get(sessionId);
+    if (!trajectory) return;
+    trajectory.extraMetadata = { ...(trajectory.extraMetadata || {}), ...data };
   }
 
   /**
@@ -495,6 +507,15 @@ export class TrajectoryPersistenceService {
       // Load existing metadata to MERGE with (don't replace)
       const existingMetadata = await chatHistoryStore.loadMessageMetadata(sessionId).catch(() => ({}));
 
+      // Adopt existing rootId from storage if the panel wrote one first.
+      // The panel's rootId matches the actual message; overwriting it would
+      // break isCurrentRunRoot checks on reload (plan tab, etc.).
+      const existingRootId = (existingMetadata as any)?.__sessionRootId;
+      if (existingRootId && existingRootId !== trajectory.rootId) {
+        trajectory.rootId = existingRootId;
+        this.rootIdCache.set(sessionId, existingRootId);
+      }
+
       // Build new metadata in the format expected by the panel
       const newData = {
         traceItems: trajectory.traceItems,
@@ -508,12 +529,12 @@ export class TrajectoryPersistenceService {
       // Merge with existing metadata, preserving other rootId entries
       const metadata: Record<string, any> = {
         ...existingMetadata,
-        // Store rootId at top level for panel to find
         __sessionRootId: trajectory.rootId,
         [trajectory.rootId]: {
           ...((existingMetadata as any)?.[trajectory.rootId] || {}),
           ...newData,
         },
+        ...(trajectory.extraMetadata || {}),
       };
 
       await chatHistoryStore.storeMessageMetadata(sessionId, metadata);
