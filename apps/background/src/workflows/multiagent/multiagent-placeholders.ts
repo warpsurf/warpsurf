@@ -38,7 +38,7 @@ export function buildPriorOutputsSection(
       body.push(mk('output_json'));
     } else {
       const out = (p.output || '').trim();
-      const compact = out.length > 600 ? `${out.slice(0, 600)}…` : out;
+      const compact = out.length > 5000 ? `${out.slice(0, 5000)}…` : out;
       body.push(compact || 'null');
     }
     if (tabs.length > 0) {
