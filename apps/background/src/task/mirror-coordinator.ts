@@ -20,7 +20,7 @@ export class MirrorCoordinator {
     task.tabId = tabId;
 
     if (visionEnabled) {
-      this.registerScreenshotProvider(tabId, executor);
+      this.registerScreenshotProvider(tabId, executor, task);
       try {
         this.tabMirrorService.reserveDebuggerForPuppeteer(tabId, true);
       } catch {}
@@ -92,8 +92,9 @@ export class MirrorCoordinator {
     return this.tabMirrorService.getLatestMirror();
   }
 
-  private registerScreenshotProvider(tabId: number, executor: Executor): void {
+  private registerScreenshotProvider(tabId: number, executor: Executor, task?: Task): void {
     this.tabMirrorService.registerScreenshotProvider(tabId, async () => {
+      if (task && task.status !== 'running') return undefined;
       try {
         const data = await executor.captureTabScreenshot(tabId);
         return data ? `data:image/jpeg;base64,${data}` : undefined;
