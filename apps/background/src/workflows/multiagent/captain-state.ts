@@ -21,6 +21,7 @@ export class CaptainState {
   readonly busyCrew = new Set<number>();
   readonly crewSessionIds = new Map<number, string>();
   readonly startTime: number;
+  obsoleteCompletedIds = new Set<SubtaskId>();
 
   readonly subtaskStartTimes = new Map<SubtaskId, number>();
   readonly subtaskCompletionTimes = new Map<SubtaskId, number>();
@@ -59,7 +60,7 @@ export class CaptainState {
   }
 
   get totalCount(): number {
-    return this.subtaskStatus.size;
+    return this.plan.size;
   }
 
   isAllDone(): boolean {
@@ -90,12 +91,18 @@ export class CaptainState {
     this.subtaskStatus.set(id, 'skipped');
   }
 
-  /** True if pending subtasks exist whose dependencies include a permanently failed task. */
+  /** True if pending subtasks exist whose dependencies include a failed or cancelled task. */
   hasBlockedSubtasks(): boolean {
     for (const [id, st] of this.subtaskStatus) {
       if (st !== 'pending') continue;
       const deps = this.plan.getDependencies(id);
-      if (deps.some(d => this.subtaskStatus.get(d) === 'failed')) return true;
+      if (
+        deps.some(d => {
+          const ds = this.subtaskStatus.get(d);
+          return ds === 'failed' || ds === 'cancelled';
+        })
+      )
+        return true;
     }
     return false;
   }
@@ -129,65 +136,87 @@ export class CaptainState {
     return overdue;
   }
 
-  /** Build a rich state summary for the Captain's LLM context, including timings and action history. */
+  /** Build a rich state summary for the Captain's LLM context. */
   buildContextSummary(): string {
     const now = Date.now();
-    const workflowElapsed = formatDuration(now - this.startTime);
-    const lines: string[] = [`Task: ${this.plan.task}`, `Workflow elapsed: ${workflowElapsed}`, ''];
-
     const subtasks = this.plan.getAllSubtasks().sort((a, b) => a.id - b.id);
+    const lines: string[] = [
+      `Task: ${this.plan.task}`,
+      `Elapsed: ${formatDuration(now - this.startTime)} | Progress: ${this.completedCount}/${this.totalCount}`,
+      '',
+      '═══ PLAN ═══',
+    ];
+
     for (const s of subtasks) {
       const status = this.subtaskStatus.get(s.id) ?? 'pending';
-      const parts: string[] = [`[${status.toUpperCase()}] #${s.id} ${s.title}`];
+      const crewId = this.crewAssignments.get(s.id);
+      const deps = this.plan.getDependencies(s.id);
 
-      const startTime = this.subtaskStartTimes.get(s.id);
-      if (status === 'running' && startTime) {
-        parts.push(`(running for ${formatDuration(now - startTime)})`);
-      } else if (status === 'completed' && startTime) {
-        const endTime = this.subtaskCompletionTimes.get(s.id) ?? now;
-        parts.push(`(took ${formatDuration(endTime - startTime)})`);
+      lines.push('', `[${status.toUpperCase()}] #${s.id} "${s.title}"`);
+
+      if (status === 'pending' || status === 'running' || status === 'dispatched' || status === 'failed') {
+        lines.push(`  Prompt: ${s.prompt}`);
+      } else if (status === 'completed') {
+        lines.push(`  Prompt: ${truncate(s.prompt, 120)}`);
       }
 
-      if (status === 'pending') {
-        const deps = this.plan.getDependencies(s.id);
-        const blocking = deps.filter(d => {
-          const ds = this.subtaskStatus.get(d);
-          return ds !== 'completed' && ds !== 'skipped';
-        });
-        if (blocking.length > 0) {
-          parts.push(`(blocked by: ${blocking.map(d => `#${d}`).join(', ')})`);
-        }
-      }
+      lines.push(`  Deps: ${deps.length ? deps.map(d => `#${d}`).join(', ') : 'none'}`);
 
-      const output = this.subtaskOutputs.get(s.id);
-      if (output?.text) {
-        const hasPendingDependents = subtasks.some(
+      const crew = crewId !== undefined ? `Crew ${crewId}` : '—';
+      lines.push(`  Crew: ${crew} | ${this.subtaskTiming(s.id, status, deps, now)}`);
+
+      const failReason = this.failureReasons.get(s.id);
+      if (failReason) {
+        lines.push(`  Failed ${this.failureCounts.get(s.id) ?? 0}x: ${failReason}`);
+      }
+    }
+
+    lines.push('', '═══ LIVE STATUS ═══');
+
+    const withOutput = subtasks.filter(
+      s => this.subtaskStatus.get(s.id) === 'completed' && this.subtaskOutputs.get(s.id)?.text,
+    );
+    if (withOutput.length) {
+      lines.push('', 'Outputs:');
+      for (const s of withOutput) {
+        const output = this.subtaskOutputs.get(s.id)!;
+        const feedsDownstream = subtasks.some(
           other =>
             (this.subtaskStatus.get(other.id) === 'pending' || this.subtaskStatus.get(other.id) === 'dispatched') &&
             this.plan.getDependencies(other.id).includes(s.id),
         );
-        const limit = hasPendingDependents ? 600 : 150;
-        parts.push(`— Output: ${output.text.slice(0, limit)}`);
-      }
-
-      const failReason = this.failureReasons.get(s.id);
-      if (failReason) {
-        const failCount = this.failureCounts.get(s.id) ?? 0;
-        parts.push(`— Failed ${failCount}x: ${failReason}`);
-      }
-
-      lines.push(parts.join(' '));
-
-      if (status === 'running') {
-        const actionSummary = this.getCrewActionSummary(s.id);
-        if (actionSummary) {
-          lines.push(actionSummary);
-        }
+        lines.push(`  #${s.id}: ${truncate(output.text, feedsDownstream ? 600 : 150)}`);
       }
     }
 
-    lines.push('', `Progress: ${this.completedCount}/${this.totalCount}`);
+    const running = subtasks.filter(s => this.subtaskStatus.get(s.id) === 'running');
+    if (running.length) {
+      lines.push('', 'Crew actions:');
+      for (const s of running) {
+        const cid = this.crewAssignments.get(s.id);
+        lines.push(`  #${s.id} (Crew ${cid ?? '?'}):`);
+        const summary = this.getCrewActionSummary(s.id);
+        if (summary) lines.push(summary);
+      }
+    }
+
     return lines.join('\n');
+  }
+
+  private subtaskTiming(id: SubtaskId, status: SubtaskStatus, deps: SubtaskId[], now: number): string {
+    const start = this.subtaskStartTimes.get(id);
+    if (status === 'running' && start) return `Elapsed: ${formatDuration(now - start)}`;
+    if (status === 'completed' && start) {
+      return `Took: ${formatDuration((this.subtaskCompletionTimes.get(id) ?? now) - start)}`;
+    }
+    if (status === 'pending' || status === 'dispatched') {
+      const blocking = deps.filter(d => {
+        const ds = this.subtaskStatus.get(d);
+        return ds !== 'completed' && ds !== 'skipped';
+      });
+      return blocking.length ? `Waiting on: ${blocking.map(d => `#${d}`).join(', ')}` : 'Ready';
+    }
+    return '';
   }
 
   private getCrewActionSummary(subtaskId: SubtaskId): string | undefined {
@@ -204,17 +233,21 @@ export class CaptainState {
     const MAX_ACTIONS = 8;
     const recent = logs.slice(-MAX_ACTIONS);
     const actionLines = recent.map(l => {
-      const prefix = l.type === 'action' ? '  ▸' : l.type === 'error' ? '  ✗' : '  ·';
+      const prefix = l.type === 'action' ? '    ▸' : l.type === 'error' ? '    ✗' : '    ·';
       return `${prefix} ${l.message}`;
     });
 
     const skipped = logs.length - recent.length;
     if (skipped > 0) {
-      actionLines.unshift(`  ... (${skipped} earlier actions omitted)`);
+      actionLines.unshift(`    ... (${skipped} earlier actions omitted)`);
     }
 
     return actionLines.join('\n');
   }
+}
+
+function truncate(text: string, limit: number): string {
+  return text.length > limit ? text.slice(0, limit) + '...' : text;
 }
 
 function formatDuration(ms: number): string {
