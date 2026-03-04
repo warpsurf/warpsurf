@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import { Actors } from '@extension/storage';
 import { EventType, type AgentEvent } from '../types/event';
+import { stripWorkerTrailingSuffix, WORKER_DEDUP_MIN_LENGTH } from '../logic/handlers/utils';
 
 type BackgroundHandlers = {
   onExecution?: (event: AgentEvent) => void;
@@ -439,10 +440,25 @@ export function useBackgroundConnection(params: UseBackgroundConnectionParams) {
                     existingItems.map((t: any) => String((t as any)?.eventId || '')).filter(Boolean),
                   );
                   const existingTs = new Set(existingItems.map((t: any) => t.timestamp));
+                  const existingWorkerContent = new Set<string>();
+                  for (const t of existingItems) {
+                    const wid = (t as any)?.workerId;
+                    if (wid != null) {
+                      const norm = stripWorkerTrailingSuffix(String((t as any)?.content || ''));
+                      if (norm.length > WORKER_DEDUP_MIN_LENGTH) existingWorkerContent.add(`${wid}|${norm}`);
+                    }
+                  }
                   const newItems = (traceItems || []).filter((t: any) => {
                     const id = String((t as any)?.eventId || '');
-                    if (id) return !existingIds.has(id);
-                    return !existingTs.has(t.timestamp);
+                    if (id && existingIds.has(id)) return false;
+                    if (!id && existingTs.has(t.timestamp)) return false;
+                    const wid = (t as any)?.workerId;
+                    if (wid != null) {
+                      const norm = stripWorkerTrailingSuffix(String((t as any)?.content || ''));
+                      if (norm.length > WORKER_DEDUP_MIN_LENGTH && existingWorkerContent.has(`${wid}|${norm}`))
+                        return false;
+                    }
+                    return true;
                   });
                   const merged = [...existingItems, ...newItems].sort((a: any, b: any) => a.timestamp - b.timestamp);
 
