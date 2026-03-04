@@ -10,6 +10,10 @@ import type {
   WorkerTabGroup,
 } from './create-task-event-handler';
 
+/** Strip trailing worker suffix `[N]` and optional `(agentName)` for content dedup. */
+export const stripWorkerTrailingSuffix = (s: string) => s.replace(/\s*\[\d+](?:\s*\([^)]*\))?$/, '').trim();
+export const WORKER_DEDUP_MIN_LENGTH = 20;
+
 // ==================== Event Utilities ====================
 
 /** Normalizes potentially variant event shapes from background */
@@ -314,6 +318,23 @@ export function addTraceItem(
             String(t?.content || '') === String(content || ''),
         );
         if (hasDuplicate) return prev as any;
+      }
+      // For worker items, deduplicate by normalized content within the same
+      // worker to collapse repeated output from STEP_OK / ACT_OK / subtask_completed.
+      const wid = rest?.workerId;
+      if (wid != null) {
+        const norm = stripWorkerTrailingSuffix(content);
+        if (
+          norm.length > WORKER_DEDUP_MIN_LENGTH &&
+          traceItems.some(
+            (t: any) =>
+              t?.workerId != null &&
+              Number(t.workerId) === Number(wid) &&
+              stripWorkerTrailingSuffix(String(t?.content || '')) === norm,
+          )
+        ) {
+          return prev as any;
+        }
       }
       const newItem = {
         actor,
