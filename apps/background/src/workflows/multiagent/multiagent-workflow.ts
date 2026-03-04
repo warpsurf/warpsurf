@@ -219,10 +219,6 @@ export class MultiAgentWorkflow {
     });
     this.emit('workflow_quartermaster_log', { sessionId: this.sessionId, log: qmLog });
 
-    for (let i = 0; i < 10 && !this.cancelled; i++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
     if (this.cancelled) {
       for (const d of validDispatches) crew.cancel(d.sessionId).catch(() => {});
       return this.emitEnded(false, 'Cancelled by user');
@@ -505,41 +501,44 @@ export class MultiAgentWorkflow {
 
   // --- Helpers ---
 
+  private emitSeq = 0;
+
   private emit(type: string, data: any): void {
     const port = this.getPort();
     if (import.meta.env.DEV) {
       logger.info(`[emit] ${type}`, data?.message || data?.text || '');
     }
+
+    // Attach a stable eventId so background + panel dedup to one trace item
+    if (type === 'workflow_progress' && data?.message) {
+      const eventId = `ma-${this.sessionId}-${++this.emitSeq}`;
+      data = { ...data, eventId };
+      try {
+        const actor = data.actor || 'multiagent';
+        const wid = data.workerId;
+        trajectoryPersistence.addTraceItem(this.sessionId, actor, data.message, Date.now(), {
+          ...(wid != null && { workerId: wid }),
+          eventId,
+        });
+      } catch {}
+    }
+
     if (port) {
       safePostMessage(port as any, { type, data });
     } else if (import.meta.env.DEV) {
       logger.warning(`[emit] No port available for ${type} — message dropped`);
     }
-
-    if (type === 'workflow_progress' && data?.message) {
-      try {
-        const actor = data.actor || 'multiagent';
-        const wid = data.workerId;
-        trajectoryPersistence.addTraceItem(
-          this.sessionId,
-          actor,
-          data.message,
-          Date.now(),
-          wid != null ? { workerId: wid } : undefined,
-        );
-      } catch {}
-    }
   }
+
+  private traceSeq = 0;
 
   private trace(actor: string, content: string, workerId?: number): void {
     try {
-      trajectoryPersistence.addTraceItem(
-        this.sessionId,
-        actor,
-        content,
-        Date.now(),
-        workerId != null ? { workerId } : undefined,
-      );
+      const eventId = `mat-${this.sessionId}-${++this.traceSeq}`;
+      trajectoryPersistence.addTraceItem(this.sessionId, actor, content, Date.now(), {
+        ...(workerId != null && { workerId }),
+        eventId,
+      });
     } catch {}
   }
 
