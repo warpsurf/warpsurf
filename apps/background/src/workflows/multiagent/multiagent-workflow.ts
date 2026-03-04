@@ -70,8 +70,14 @@ export class MultiAgentWorkflow {
     const graph = buildGraphData(merged.vizSchedules, merged.dependenciesViz, merged.groupTitles, merged.durations);
     return {
       ...graph,
-      nodes: graph.nodes.map(n => ({ ...n, status: this.statusMap.get(n.id) || 'not_started' })),
+      nodes: graph.nodes.map(n => ({ ...n, status: this.resolveNodeStatus(n.id) })),
     };
+  }
+
+  private resolveNodeStatus(id: SubtaskId): string {
+    const status = this.statusMap.get(id) || 'not_started';
+    if (status === 'completed' && this.captainState?.obsoleteCompletedIds.has(id)) return 'obsolete';
+    return status;
   }
 
   async start(query: string, plannerLLM: any): Promise<void> {
@@ -596,7 +602,8 @@ export class MultiAgentWorkflow {
         if (subtasks.length > 0) {
           patch.__workflowPlanItems = subtasks.map(s => ({
             text: s.title,
-            status: this.statusMap.get(s.id) === 'completed' ? 'done' : String(this.statusMap.get(s.id) || 'pending'),
+            status:
+              this.resolveNodeStatus(s.id) === 'completed' ? 'done' : String(this.resolveNodeStatus(s.id) || 'pending'),
           }));
         }
       }
@@ -617,7 +624,7 @@ export class MultiAgentWorkflow {
       ...graph,
       nodes: graph.nodes.map(n => ({
         ...n,
-        status: this.statusMap.get(n.id) || 'not_started',
+        status: this.resolveNodeStatus(n.id),
       })),
     };
     this.emit('workflow_graph_update', { sessionId: this.sessionId, graph: annotated });
