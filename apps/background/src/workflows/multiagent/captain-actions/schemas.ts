@@ -11,6 +11,18 @@ const subtaskSpec = z.object({
   title: z.string(),
   prompt: z.string(),
   dependencies: z.array(z.number().int()),
+  is_final: z.boolean().optional(),
+  no_browse: z.boolean().optional(),
+  suggested_urls: z.array(z.string()).optional(),
+  suggested_search_queries: z.array(z.string()).optional(),
+});
+
+const revisedSubtaskSpec = z.object({
+  temp_id: z.string().optional().describe('short label for inter-dependency references (e.g., "search", "r1")'),
+  title: z.string(),
+  prompt: z.string(),
+  dependencies: z.array(z.union([z.number().int(), z.string()])),
+  is_final: z.boolean().optional(),
   no_browse: z.boolean().optional(),
   suggested_urls: z.array(z.string()).optional(),
   suggested_search_queries: z.array(z.string()).optional(),
@@ -65,24 +77,25 @@ export const addSubtaskSchema: CaptainActionSchema = {
 
 export const modifySubtaskSchema: CaptainActionSchema = {
   name: 'modify_subtask',
-  description: "Change a pending subtask's prompt/title before dispatch",
+  description: "Change a pending subtask's prompt, title, or dependencies",
   schema: z.object({
     subtask_id: z.number().int().describe('id'),
     new_prompt: z.string().optional().describe('prompt'),
     new_title: z.string().optional().describe('title'),
     no_browse: z.boolean().optional().describe('bool'),
+    new_dependencies: z.array(z.number().int()).optional().describe('replace dependency list with these subtask IDs'),
   }),
 };
 
 export const modifyPlanSchema: CaptainActionSchema = {
   name: 'modify_plan',
-  description: 'Replace all pending subtasks with a revised set',
+  description: 'Replace all pending subtasks with a revised set (use temp_id strings for inter-dependencies)',
   schema: z.object({
-    revised_subtasks: z.array(subtaskSpec),
+    revised_subtasks: z.array(revisedSubtaskSpec),
     reason: z.string().describe('why'),
   }),
   promptExample:
-    '{"type": "modify_plan", "revised_subtasks": [{"title": "...", "prompt": "...", "dependencies": [...]}], "reason": "<why>"}',
+    '{"type": "modify_plan", "revised_subtasks": [{"temp_id": "search", "title": "Search eBay", "prompt": "...", "dependencies": []}, {"title": "Research 1", "prompt": "...", "dependencies": ["search"]}], "reason": "<why>"}',
 };
 
 export const launchSpeculativeSchema: CaptainActionSchema = {
