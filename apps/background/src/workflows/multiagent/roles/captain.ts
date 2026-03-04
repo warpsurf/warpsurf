@@ -432,14 +432,23 @@ export class Captain {
     if (import.meta.env.DEV)
       logger.info(`[runSubtask] START #${subtaskId} "${title}" on crew ${crewId} (session=${sessionId})`);
 
-    // Only inherit tabs from dependencies completed by the SAME crew to prevent
-    // multiple crews fighting over the same tab (e.g., search results page).
+    // Collect dependency tabs. Skip tabs from other crews that are currently
+    // active — they have priority on their own tabs. Own tabs go last so
+    // adoptTargetTabs (which iterates in reverse) tries them first.
     const deps = this.state.plan.getDependencies(subtaskId);
-    const depTabIds = deps.flatMap(d => {
-      if (this.state.crewAssignments.get(d) !== crewId) return [];
-      return this.state.subtaskOutputs.get(d)?.tabIds ?? [];
-    });
-    const uniqueTabIds = [...new Set(depTabIds)].filter(n => typeof n === 'number');
+    const ownTabs: number[] = [];
+    const otherTabs: number[] = [];
+    for (const d of deps) {
+      const tabIds = this.state.subtaskOutputs.get(d)?.tabIds ?? [];
+      if (!tabIds.length) continue;
+      const producerId = this.state.crewAssignments.get(d);
+      if (producerId === crewId) {
+        ownTabs.push(...tabIds);
+      } else if (producerId === undefined || !this.state.busyCrew.has(producerId)) {
+        otherTabs.push(...tabIds);
+      }
+    }
+    const uniqueTabIds = [...new Set([...otherTabs, ...ownTabs])].filter(n => typeof n === 'number');
 
     const result = await this.crew.dispatch(
       sessionId,
@@ -628,14 +637,14 @@ export class Captain {
 
   // --- Finalization ---
 
-  private finalize(answer: string): void {
+  private async finalize(answer: string): Promise<void> {
     if (this.cancelled) return;
     this.stopPollingLoop();
     if (import.meta.env.DEV) logger.info(`[finalize] answer length=${answer.length}`);
 
-    for (const sid of this.state.crewSessionIds.values()) {
-      this.crew.endSession(sid, 'completed').catch(() => {});
-    }
+    await Promise.allSettled(
+      Array.from(this.state.crewSessionIds.values()).map(sid => this.crew.endSession(sid, 'completed')),
+    );
 
     this.onEvent({ type: 'workflow_complete', finalAnswer: answer });
     this._resolve?.(answer);
@@ -663,7 +672,7 @@ export class Captain {
     return parts.join('\n\n').trim() || 'Workflow completed successfully.';
   }
 
-  private abort(reason: string): void {
+  private async abort(reason: string): Promise<void> {
     if (import.meta.env.DEV) logger.info(`[abort] reason="${reason}"`);
     this.cancelled = true;
     this.stopPollingLoop();
@@ -672,9 +681,8 @@ export class Captain {
     for (const [id, st] of this.state.subtaskStatus) {
       if (st !== 'completed') this.state.subtaskStatus.set(id, 'cancelled');
     }
-    for (const sid of this.state.crewSessionIds.values()) {
-      this.crew.cancel(sid).catch(() => {});
-    }
+
+    await Promise.allSettled(Array.from(this.state.crewSessionIds.values()).map(sid => this.crew.cancel(sid)));
 
     this.onEvent({ type: 'workflow_aborted', reason });
     this._resolve?.(reason);
