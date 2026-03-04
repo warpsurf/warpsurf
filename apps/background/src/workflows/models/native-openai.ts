@@ -431,7 +431,10 @@ export class NativeOpenAIChatModel {
 
   private isReasoningModel(): boolean {
     const name = this.modelName ?? '';
-    return /^o\d|^o-|^gpt-5/.test(name);
+    if (/^o\d|^o-/.test(name)) return true;
+    const gptMatch = name.match(/^gpt-(\d+)/);
+    if (gptMatch && parseInt(gptMatch[1], 10) >= 5) return true;
+    return false;
   }
 
   private shouldUseResponsesAPI(): boolean {
