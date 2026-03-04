@@ -41,12 +41,12 @@ export class NativeGrokChatModel {
     this.thinkingLevel = args.thinkingLevel;
   }
 
-  /** Build reasoning_effort param. Only grok-3-mini supports it; grok-4 errors on it. */
+  /** Build reasoning_effort param for mini/reasoning variants. */
   private getReasoningConfig(): Record<string, unknown> {
     if (!this.thinkingLevel || this.thinkingLevel === 'default') return {};
     const name = this.modelName.toLowerCase();
-    // Only grok-3-mini supports reasoning_effort ('low' | 'high')
-    if (!name.startsWith('grok-3-mini')) return {};
+    // Mini variants support reasoning_effort; full models (e.g. grok-4) error on it
+    if (!name.includes('mini')) return {};
     const effort = this.thinkingLevel === 'off' || this.thinkingLevel === 'low' ? 'low' : 'high';
     return { reasoning_effort: effort };
   }
