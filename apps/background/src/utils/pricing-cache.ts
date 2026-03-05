@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-04 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-05 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-04T23:43:57.815Z',
+  generatedAt: '2026-03-05T00:17:49.973Z',
   version: 1,
   helicone: {
     openai: {
