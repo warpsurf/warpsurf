@@ -72,7 +72,7 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 
 // Default settings
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
-  maxSteps: 100,
+  maxSteps: 50,
   maxActionsPerStep: 5,
   maxFailures: 3,
   maxValidatorFailures: 3,
