@@ -1,6 +1,6 @@
 import { createLogger } from '@src/log';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
-import { extractJsonFromModelOutput, escapeUntrustedContent } from '@src/workflows/shared/messages/utils';
+import { extractJsonFromModelOutput, wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
 import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
 import { generalSettingsStore } from '@extension/storage';
 import { captainSystemPrompt } from './captain-prompt';
@@ -253,7 +253,7 @@ export class Captain {
     if (pendingFanOut.length >= 2) {
       // Fan-out: consult Captain FIRST so it can inject specific URLs/details
       // into each research subtask before they are dispatched.
-      const outputSnippet = escapeUntrustedContent(output.text?.slice(0, 2000) || '(no output)');
+      const outputSnippet = wrapUntrustedContent(output.text?.slice(0, 2000) || '(no output)');
       await this.consultAndExecute(
         `Subtask "${title}" completed and unblocked ${pendingFanOut.length} parallel downstream tasks. Full output:\n${outputSnippet}\n\nCRITICAL — FAN-OUT: Use modify_subtask to inject the specific item URL and name from this output into each pending downstream subtask's prompt BEFORE they are dispatched. This is your only chance to refine prompts before workers start. Review the output, identify each item, and update each research subtask with the exact URL and item name.`,
       );
@@ -261,9 +261,9 @@ export class Captain {
     } else {
       // Normal completion: dispatch immediately, then consult asynchronously.
       await this.dispatchReady();
-      const outputSnippet = escapeUntrustedContent(output.text?.slice(0, 200) || '(no output)');
+      const outputSnippet = wrapUntrustedContent(output.text?.slice(0, 200) || '(no output)');
       await this.consultAndExecute(
-        `Subtask "${title}" completed. Output: ${outputSnippet}\n\nReview: Is this output sufficient for downstream tasks? Should any pending subtask prompts be refined with this context? Return empty actions if all looks good.`,
+        `Subtask "${title}" completed. Output:\n${outputSnippet}\n\nReview: Is this output sufficient for downstream tasks? Should any pending subtask prompts be refined with this context? Return empty actions if all looks good.`,
       );
     }
   }
