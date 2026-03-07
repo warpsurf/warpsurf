@@ -18,7 +18,8 @@ export default function AgentManager() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Privacy gate for auto-tab context
-  const { promptAutoTabContextPrivacy, autoTabContextPrivacyModal } = useAutoTabContextPrivacyGate(isDarkMode);
+  const { promptAutoTabContextPrivacy, resetAutoTabContextPrivacy, autoTabContextPrivacyModal } =
+    useAutoTabContextPrivacyGate(isDarkMode);
 
   // Detect dark mode preference (manual setting or system preference)
   useEffect(() => {
@@ -115,14 +116,14 @@ export default function AgentManager() {
   const handleAutoContextToggle = useCallback(
     async (enabled: boolean) => {
       if (enabled) {
-        // Prompt privacy modal
         const accepted = await promptAutoTabContextPrivacy();
         if (!accepted) return;
+      } else {
+        await resetAutoTabContextPrivacy();
       }
-      // Update settings
       await generalSettingsStore.updateSettings({ enableAutoTabContext: enabled });
     },
-    [promptAutoTabContextPrivacy],
+    [promptAutoTabContextPrivacy, resetAutoTabContextPrivacy],
   );
 
   const { agents, sendNewTask, openSidepanelToSession, isConnected, portRef, addPortListener, removePortListener } =
@@ -274,8 +275,8 @@ export default function AgentManager() {
   }, [filteredAgents]);
 
   const handleSendMessage = useCallback(
-    async (text: string, agentType?: string, contextTabIds?: number[]) => {
-      await sendNewTask(text, agentType, contextTabIds);
+    async (text: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => {
+      await sendNewTask(text, agentType, contextTabIds, attachments);
     },
     [sendNewTask],
   );
