@@ -150,34 +150,42 @@ function mergeSuccessiveMessages(
 }
 
 /**
- * Escape untrusted content to prevent prompt injection
- * @param rawContent - The raw string of untrusted content
- * @returns Escaped content string
+ * Structural tags used in the prompt architecture. Untrusted content must not
+ * be able to open/close these boundaries. Each tag name is escaped to a
+ * numbered fake placeholder so the model cannot confuse them with real markers.
+ */
+const STRUCTURAL_TAGS = [
+  'untrusted_content',
+  'user_request',
+  'system_instructions',
+  'instructions',
+  'browser_state',
+  'task_history',
+  'context_tabs',
+  'plan',
+  'chat_history',
+  'attached_file',
+];
+
+const TAG_ESCAPE_PATTERNS = STRUCTURAL_TAGS.map((tag, i) => ({
+  pattern: new RegExp(`<\\s*/?\\s*${tag}[\\s>]`, 'gi'),
+  replacement: (match: string) => {
+    const close = match.includes('/') ? '/' : '';
+    const tail = match[match.length - 1]; // preserve trailing '>' or whitespace
+    return `&lt;${close}fake_tag_${i + 1}${tail}`;
+  },
+}));
+
+/**
+ * Escape untrusted content to prevent prompt injection.
+ * Neutralises all structural XML-like tags used in the prompt architecture.
  */
 export function escapeUntrustedContent(rawContent: string): string {
-  // Define regex patterns that account for whitespace variations within tags
-  const tagPatterns = [
-    {
-      // Match <untrusted_content> and </untrusted_content> with any whitespace
-      pattern: /<\s*\/?\s*untrusted_content\s*>/g,
-      replacement: (match: string) =>
-        match.includes('/') ? '&lt;/fake_content_tag_1&gt;' : '&lt;fake_content_tag_1&gt;',
-    },
-    {
-      // Match <user_request> and </user_request> with any whitespace
-      pattern: /<\s*\/?\s*user_request\s*>/g,
-      replacement: (match: string) =>
-        match.includes('/') ? '&lt;/fake_request_tag_2&gt;' : '&lt;fake_request_tag_2&gt;',
-    },
-  ];
-
-  let escapedContent = rawContent;
-
-  for (const { pattern, replacement } of tagPatterns) {
-    escapedContent = escapedContent.replace(pattern, replacement);
+  let escaped = rawContent;
+  for (const { pattern, replacement } of TAG_ESCAPE_PATTERNS) {
+    escaped = escaped.replace(pattern, replacement);
   }
-
-  return escapedContent;
+  return escaped;
 }
 
 export function wrapUntrustedContent(rawContent: string, escapeFirst = true): string {
