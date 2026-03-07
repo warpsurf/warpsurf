@@ -19,9 +19,9 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
       <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
         <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>warpsurf</h2>
         <p className={textSubtle}>
-          An AI-powered browser copilot. Add an API key in the <strong>API Keys</strong> tab, pick a model in{' '}
-          <strong>Workflow</strong>, and start chatting. Agent workflows run in dedicated tab groups to stay separate
-          from your personal tabs.
+          An AI-powered browser copilot. Add an API key in the <strong>API Keys</strong> tab, choose a model under{' '}
+          <strong>Model</strong>, and start chatting. Agent workflows run in dedicated tab groups to stay separate from
+          your personal tabs.
         </p>
       </div>
 
@@ -144,7 +144,7 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
           <li>Set API spending limits with your provider — uncapped keys are risky.</li>
           <li>Monitor agents closely; they can make mistakes or take unexpected actions.</li>
           <li>
-            Configure per-role models and parameters under <strong>Advanced &gt; Workflow (Advanced)</strong>.
+            Configure per-role models and parameters under <strong>Advanced &gt; Agent Settings</strong>.
           </li>
         </ul>
       </div>
