@@ -38,7 +38,7 @@ import { z } from 'zod';
 import { createLogger } from '@src/log';
 import { ExecutionState, Actors } from '@src/workflows/shared/event/types';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
+import { wrapUntrustedContent, escapeUntrustedContent } from '@src/workflows/shared/messages/utils';
 import { getMarkdownContent, getReadabilityContent } from '@src/browser/dom/service';
 import { RequestCancelledError } from '@src/workflows/shared/agent-errors';
 
@@ -487,7 +487,7 @@ export class ActionBuilder {
           this.checkCancelled();
           await page.clickElementNode(isVisionActive(this.context.options.useVision), elementNode);
           this.checkCancelled();
-          let msg = `Clicked button with index ${input.index}: ${elementNode.getAllTextTillNextClickableElement(2)}`;
+          let msg = `Clicked button with index ${input.index}: ${escapeUntrustedContent(elementNode.getAllTextTillNextClickableElement(2))}`;
           logger.info(msg);
 
           const currentTabIds = await this.context.browserContext.getAllTabIds();
@@ -924,7 +924,6 @@ export class ActionBuilder {
           if (options && options.length > 0) {
             // Format options for display
             const formattedOptions: string[] = options.map(opt => {
-              // Encoding ensures AI uses the exact string in select_dropdown_option
               const encodedText = JSON.stringify(opt.text);
               return `${opt.index}: text=${encodedText}`;
             });
@@ -1008,7 +1007,7 @@ export class ActionBuilder {
           logger.info(msg);
           this.context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
           return new ActionResult({
-            extractedContent: result,
+            extractedContent: escapeUntrustedContent(result),
             includeInMemory: true,
           });
         } catch (error) {
