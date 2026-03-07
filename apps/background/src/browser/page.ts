@@ -161,7 +161,8 @@ export default class Page {
     return await page.content();
   }
 
-  takeScreenshot = (fullPage?: boolean) => this._screenshots.capture(fullPage);
+  takeScreenshot = (fullPage?: boolean, freezeAnimations?: boolean) =>
+    this._screenshots.capture(fullPage, freezeAnimations);
   getGoogleSearchResults = (max?: number) => this._screenshots.getGoogleSearchResults(max);
   getGoogleSearchResultsWithMeta = (max?: number) => this._screenshots.getGoogleSearchResultsWithMeta(max);
 
