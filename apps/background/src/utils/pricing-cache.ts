@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-05 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-07 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-05T00:17:49.973Z',
+  generatedAt: '2026-03-07T15:36:04.198Z',
   version: 1,
   helicone: {
     openai: {
@@ -1386,7 +1386,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'inception',
         displayName: 'Inception',
-        models: ['inception/mercury', 'inception/mercury-coder'],
+        models: ['inception/mercury', 'inception/mercury-2', 'inception/mercury-coder'],
       },
       {
         id: 'inflection',
@@ -1573,6 +1573,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'openai/gpt-5.2-pro',
           'openai/gpt-5.3-chat',
           'openai/gpt-5.3-codex',
+          'openai/gpt-5.4',
+          'openai/gpt-5.4-pro',
           'openai/gpt-audio',
           'openai/gpt-audio-mini',
           'openai/gpt-oss-120b',
@@ -1768,6 +1770,18 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'openai/gpt-5.4-pro': {
+        inputPerToken: 0.00003,
+        outputPerToken: 0.00018,
+      },
+      'openai/gpt-5.4': {
+        inputPerToken: 0.0000025,
+        outputPerToken: 0.000015,
+      },
+      'inception/mercury-2': {
+        inputPerToken: 2.5e-7,
+        outputPerToken: 7.5e-7,
+      },
       'openai/gpt-5.3-chat': {
         inputPerToken: 0.00000175,
         outputPerToken: 0.000014,
@@ -1913,8 +1927,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 9.5e-7,
       },
       'z-ai/glm-4.7': {
-        inputPerToken: 3e-7,
-        outputPerToken: 0.0000014,
+        inputPerToken: 3.8e-7,
+        outputPerToken: 0.00000198,
       },
       'google/gemini-3-flash-preview': {
         inputPerToken: 5e-7,
@@ -2349,16 +2363,16 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 3e-7,
       },
       'z-ai/glm-4.5': {
-        inputPerToken: 5.5e-7,
-        outputPerToken: 0.000002,
+        inputPerToken: 6e-7,
+        outputPerToken: 0.0000022,
       },
       'z-ai/glm-4.5-air': {
         inputPerToken: 1.3e-7,
         outputPerToken: 8.5e-7,
       },
       'qwen/qwen3-235b-a22b-thinking-2507': {
-        inputPerToken: 0,
-        outputPerToken: 0,
+        inputPerToken: 1.1e-7,
+        outputPerToken: 6e-7,
       },
       'z-ai/glm-4-32b': {
         inputPerToken: 1e-7,
@@ -3042,6 +3056,9 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'openai/gpt-5.4-pro': 1050000,
+      'openai/gpt-5.4': 1050000,
+      'inception/mercury-2': 128000,
       'openai/gpt-5.3-chat': 128000,
       'google/gemini-3.1-flash-lite-preview': 1048576,
       'bytedance-seed/seed-2.0-mini': 262144,
@@ -3187,9 +3204,9 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'mistralai/codestral-2508': 256000,
       'qwen/qwen3-coder-30b-a3b-instruct': 160000,
       'qwen/qwen3-30b-a3b-instruct-2507': 262144,
-      'z-ai/glm-4.5': 131000,
+      'z-ai/glm-4.5': 131072,
       'z-ai/glm-4.5-air': 131072,
-      'qwen/qwen3-235b-a22b-thinking-2507': 131072,
+      'qwen/qwen3-235b-a22b-thinking-2507': 262144,
       'z-ai/glm-4-32b': 128000,
       'qwen/qwen3-coder': 262144,
       'qwen/qwen3-coder:exacto': 262144,
@@ -3218,7 +3235,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'google/gemini-2.5-pro-preview': 1048576,
       'deepseek/deepseek-r1-0528': 163840,
       'anthropic/claude-opus-4': 200000,
-      'anthropic/claude-sonnet-4': 1000000,
+      'anthropic/claude-sonnet-4': 200000,
       'google/gemma-3n-e4b-it': 32768,
       'mistralai/mistral-medium-3': 131072,
       'google/gemini-2.5-pro-preview-05-06': 1048576,
