@@ -98,7 +98,10 @@ export function AgentInputBar({
   useEffect(() => {
     if (!showPlusMenu) return;
     const handleClick = (e: MouseEvent) => {
-      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) setShowPlusMenu(false);
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) {
+        if ((e.target as Element).closest?.('[data-tab-context-dropdown]')) return;
+        setShowPlusMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
