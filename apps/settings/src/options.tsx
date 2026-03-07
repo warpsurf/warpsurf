@@ -11,8 +11,8 @@ import {
   FiLayers,
   FiMic,
   FiSettings,
+  FiCpu,
   FiShield,
-  FiTool,
 } from 'react-icons/fi';
 import { ApiKeysSettings } from './components/api-keys-settings';
 import { AgentSettings } from './components/agent-settings';
@@ -40,14 +40,14 @@ type TabDef = { id: TabTypes; label: string; icon: JSX.Element; isLogo?: boolean
 const STANDARD_TABS: TabDef[] = [
   { id: 'warpsurf', label: 'warpsurf', icon: <FiSettings className="h-4 w-4" />, isLogo: true },
   { id: 'api-keys', label: 'API Keys', icon: <FiKey className="h-4 w-4" /> },
-  { id: 'workflow-settings', label: 'Workflow', icon: <FiTool className="h-4 w-4" /> },
+  { id: 'workflow-settings', label: 'Model', icon: <FiCpu className="h-4 w-4" /> },
   { id: 'web-settings', label: 'Web', icon: <FiGlobe className="h-4 w-4" /> },
   { id: 'voice', label: 'Voice', icon: <FiMic className="h-4 w-4" /> },
   { id: 'help', label: 'Help', icon: <FiHelpCircle className="h-4 w-4" /> },
 ];
 
 const ADVANCED_TABS: TabDef[] = [
-  { id: 'workflow-advanced', label: 'Workflow (Advanced)', icon: <FiLayers className="h-4 w-4" /> },
+  { id: 'workflow-advanced', label: 'Agent Settings', icon: <FiLayers className="h-4 w-4" /> },
   { id: 'pricing-data', label: 'Pricing & Model Data', icon: <FiSettings className="h-4 w-4" /> },
   { id: 'warnings', label: 'Warnings', icon: <FiShield className="h-4 w-4" /> },
 ];
