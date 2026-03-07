@@ -6,7 +6,7 @@ interface UseAgentManagerConnectionResult {
   agents: AgentData[];
   isConnected: boolean;
   portRef: React.MutableRefObject<chrome.runtime.Port | null>;
-  sendNewTask: (task: string, agentType?: string, contextTabIds?: number[]) => Promise<void>;
+  sendNewTask: (task: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => Promise<void>;
   openSidepanelToSession: (sessionId: string) => void;
   /** Register a listener for custom port message types */
   addPortListener: (listener: (message: any) => void) => void;
@@ -169,39 +169,40 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     };
   }, [connect]);
 
-  const sendNewTask = useCallback(async (task: string, agentType?: string, contextTabIds?: number[]) => {
-    // Check if per-chat warnings are enabled
-    let warningsEnabled = false;
-    try {
-      const settings = await warningsSettingsStore.getWarnings();
-      warningsEnabled = !settings.disablePerChatWarnings;
-    } catch {}
-
-    if (warningsEnabled) {
-      // Route through side panel to show disclaimer first
-      await chrome.storage.session.set({
-        pendingAction: {
-          prompt: task,
-          autoStart: true,
-          workflowType: agentType || 'agent',
-          contextTabIds,
-          forceNewSession: true,
-          requireWarningCheck: true, // Flag to show disclaimer before executing
-        },
-      });
-      // Open side panel to process the pending action
+  const sendNewTask = useCallback(
+    async (task: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => {
+      // Check if per-chat warnings are enabled
+      let warningsEnabled = false;
       try {
-        const currentWindow = await chrome.windows.getCurrent();
-        if (currentWindow?.id) {
-          await chrome.sidePanel.open({ windowId: currentWindow.id });
-        }
+        const settings = await warningsSettingsStore.getWarnings();
+        warningsEnabled = !settings.disablePerChatWarnings;
       } catch {}
-    } else {
-      // Warnings disabled - send directly to background
-      if (!portRef.current) return;
-      portRef.current.postMessage({ type: 'start-new-task', task, agentType, contextTabIds });
-    }
-  }, []);
+
+      if (warningsEnabled) {
+        // Route through side panel to show disclaimer first
+        await chrome.storage.session.set({
+          pendingAction: {
+            prompt: task,
+            autoStart: true,
+            workflowType: agentType || 'agent',
+            contextTabIds,
+            forceNewSession: true,
+            requireWarningCheck: true,
+          },
+        });
+        try {
+          const currentWindow = await chrome.windows.getCurrent();
+          if (currentWindow?.id) {
+            await chrome.sidePanel.open({ windowId: currentWindow.id });
+          }
+        } catch {}
+      } else {
+        if (!portRef.current) return;
+        portRef.current.postMessage({ type: 'start-new-task', task, agentType, contextTabIds, attachments });
+      }
+    },
+    [],
+  );
 
   const openSidepanelToSession = useCallback(async (sessionId: string) => {
     // Pre-warm: notify background to persist trajectory data immediately
