@@ -1265,7 +1265,7 @@ export class Executor {
    * Capture a screenshot of the agent's current page using Puppeteer/CDP.
    * Returns a base64 string (without data URI) when successful.
    */
-  async captureCurrentPageScreenshot(): Promise<string | undefined> {
+  async captureCurrentPageScreenshot(freezeAnimations = false): Promise<string | undefined> {
     try {
       const page = await this.context.browserContext.getCurrentPage();
       // Ensure the page is attached to Puppeteer before taking screenshot
@@ -1280,7 +1280,7 @@ export class Executor {
           return undefined;
         }
       }
-      const b64 = await page.takeScreenshot();
+      const b64 = await page.takeScreenshot(undefined, freezeAnimations);
       return b64 || undefined;
     } catch (e) {
       logger.debug('captureCurrentPageScreenshot failed', e);
@@ -1288,7 +1288,7 @@ export class Executor {
     }
   }
 
-  async captureTabScreenshot(tabId: number): Promise<string | undefined> {
+  async captureTabScreenshot(tabId: number, freezeAnimations = false): Promise<string | undefined> {
     try {
       logger.debug(`captureTabScreenshot called for tab ${tabId}`);
 
@@ -1310,7 +1310,7 @@ export class Executor {
         try {
           const attached = await this.context.browserContext.attachPage(currentPage);
           if (attached) {
-            const b64 = await currentPage.takeScreenshot();
+            const b64 = await currentPage.takeScreenshot(undefined, freezeAnimations);
             if (b64) {
               logger.debug(`Screenshot taken for current tab ${tabId}, size: ${b64.length}`);
             }
@@ -1362,7 +1362,7 @@ export class Executor {
 
       logger.debug(`Page attached for tab ${tabId}, taking screenshot`);
       try {
-        const b64 = await page.takeScreenshot();
+        const b64 = await page.takeScreenshot(undefined, freezeAnimations);
         if (b64) {
           logger.debug(`Screenshot taken for tab ${tabId}, size: ${b64.length}`);
         }
