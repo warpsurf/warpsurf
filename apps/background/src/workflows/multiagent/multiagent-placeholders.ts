@@ -1,23 +1,20 @@
 import type { PriorOutput } from './multiagent-types';
+import { wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
 
 /** Simple template replacement allowing both <name> and {{name}} placeholders. */
 export function replacePlaceholders(template: string, values: Record<string, string>): string {
   let out = template;
   for (const [key, val] of Object.entries(values)) {
     const patterns = [new RegExp(String.raw`<${key}>`, 'g'), new RegExp(String.raw`\{\{\s*${key}\s*\}\}`, 'g')];
-    for (const p of patterns) out = out.replace(p, val);
+    for (const p of patterns) out = out.replace(p, () => val);
   }
   return out;
 }
 
 /**
  * Build the repeated prior-output sections for prerequisite tasks.
- * Each entry format:
- * Here is the output from a previous task entitled <task_title>:
- *
- * <output>
- *
- * this task was carried out in tabs: <TabIDs>
+ * Worker outputs may contain website-derived data, so all output content
+ * is wrapped as untrusted to prevent cross-worker prompt injection.
  */
 export function buildPriorOutputsSection(
   priors: PriorOutput[],
@@ -27,7 +24,6 @@ export function buildPriorOutputsSection(
   const mk = (name: string) => (placeholderStyle === 'angle' ? `<${name}>` : `{{${name}}}`);
   for (const p of priors) {
     const tabs = (p.tabIds || []).join(', ');
-    // Prefer structured JSON if available; otherwise include a compact text snippet.
     const jsonStr = p.rawJson !== undefined ? JSON.stringify(p.rawJson, null, 2) : tryStringifyJson(p.output);
     const hasJson = jsonStr && jsonStr !== 'null';
     const body: string[] = [];
@@ -39,7 +35,7 @@ export function buildPriorOutputsSection(
     } else {
       const out = (p.output || '').trim();
       const compact = out.length > 5000 ? `${out.slice(0, 5000)}…` : out;
-      body.push(compact || 'null');
+      body.push(wrapUntrustedContent(compact || 'null'));
     }
     if (tabs.length > 0) {
       body.push('');
@@ -59,7 +55,7 @@ export function buildPriorOutputsSection(
     const filled = replacePlaceholders(body.join('\n'), {
       task_title: p.title || '',
       TabIDs: tabs,
-      output_json: hasJson ? jsonStr : 'null',
+      output_json: hasJson ? wrapUntrustedContent(jsonStr) : 'null',
     });
     lines.push(filled);
   }
