@@ -1,6 +1,6 @@
 import { HumanMessage, type SystemMessage } from '@langchain/core/messages';
 import type { AgentContext } from '@src/workflows/shared/agent-types';
-import { wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
+import { wrapUntrustedContent, escapeUntrustedContent } from '@src/workflows/shared/messages/utils';
 import { resizeBase64Image } from '@src/utils/image-resize';
 import { createLogger } from '@src/log';
 
@@ -114,13 +114,14 @@ abstract class BasePrompt {
         }
       }
 
-      const currentTab = `{id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}}`;
+      const safeTitle = escapeUntrustedContent(browserState.title || '');
+      const currentTab = `{id: ${browserState.tabId}, url: ${browserState.url}, title: ${safeTitle}}`;
       const otherTabs =
         (browserState.tabs as Array<{ id: number; url: string; title: string }> | undefined)
           ?.filter((tab: { id: number }) => tab.id !== browserState.tabId)
           ?.map(
             (tab: { id: number; url: string; title: string }) =>
-              `- {id: ${tab.id}, url: ${tab.url}, title: ${tab.title}}`,
+              `- {id: ${tab.id}, url: ${tab.url}, title: ${escapeUntrustedContent(tab.title || '')}}`,
           ) || [];
       const PLAN_MARKERS: Record<string, string> = { done: '[x]', current: '[>]', pending: '[ ]', skipped: '[-]' };
       const planDescription = context.plan?.length
