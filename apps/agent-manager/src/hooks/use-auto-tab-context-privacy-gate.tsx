@@ -53,6 +53,13 @@ export function useAutoTabContextPrivacyGate(isDarkMode: boolean) {
     resolveRef.current = null;
   }, []);
 
+  const resetAutoTabContextPrivacy = useCallback(async () => {
+    try {
+      await warningsSettingsStore.updateWarnings({ hasAcceptedAutoTabContextPrivacyWarning: false });
+    } catch {}
+    setHasAcceptedAutoTabContextPrivacy(false);
+  }, []);
+
   const autoTabContextPrivacyModal = showModal ? (
     <AutoTabContextPrivacyModal isDarkMode={isDarkMode} onAccept={handleAccept} onDecline={handleDecline} />
   ) : null;
@@ -60,6 +67,7 @@ export function useAutoTabContextPrivacyGate(isDarkMode: boolean) {
   return {
     hasAcceptedAutoTabContextPrivacy,
     promptAutoTabContextPrivacy,
+    resetAutoTabContextPrivacy,
     autoTabContextPrivacyModal,
   } as const;
 }
