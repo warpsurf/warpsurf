@@ -1,7 +1,7 @@
 import type { SubtaskId } from './multiagent-types';
 import type { LivePlan } from './live-plan';
 import type { StructuredOutput, SubtaskStatus } from './workflow-events';
-import { escapeUntrustedContent } from '@src/workflows/shared/messages/utils';
+import { wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
 
 export interface CrewLogEntry {
   timestamp: number;
@@ -180,7 +180,7 @@ export class CaptainState {
       s => this.subtaskStatus.get(s.id) === 'completed' && this.subtaskOutputs.get(s.id)?.text,
     );
     if (withOutput.length) {
-      lines.push('', 'Outputs:');
+      const outputLines: string[] = [];
       for (const s of withOutput) {
         const output = this.subtaskOutputs.get(s.id)!;
         const feedsDownstream = subtasks.some(
@@ -188,8 +188,9 @@ export class CaptainState {
             (this.subtaskStatus.get(other.id) === 'pending' || this.subtaskStatus.get(other.id) === 'dispatched') &&
             this.plan.getDependencies(other.id).includes(s.id),
         );
-        lines.push(`  #${s.id}: ${escapeUntrustedContent(truncate(output.text, feedsDownstream ? 600 : 150))}`);
+        outputLines.push(`  #${s.id}: ${truncate(output.text, feedsDownstream ? 600 : 150)}`);
       }
+      lines.push('', 'Outputs:', wrapUntrustedContent(outputLines.join('\n')));
     }
 
     const running = subtasks.filter(s => this.subtaskStatus.get(s.id) === 'running');
