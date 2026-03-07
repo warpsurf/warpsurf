@@ -254,6 +254,7 @@ export default function TabContextSelector({
   const dropdownContent = isOpen && (
     <div
       ref={dropdownRef}
+      data-tab-context-dropdown
       className={`w-70 max-h-64 overflow-y-auto rounded-lg border shadow-lg ${
         isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'
       }`}
