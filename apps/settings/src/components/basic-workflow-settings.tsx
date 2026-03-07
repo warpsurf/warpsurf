@@ -104,9 +104,9 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
   return (
     <section
       className={`rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#171715]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`}>
-      <h2 className={`text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Workflow</h2>
+      <h2 className={`text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Model</h2>
       <p className={`mt-1 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-        Choose one global model for all workflows.
+        Choose one global model for all agents.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <select
