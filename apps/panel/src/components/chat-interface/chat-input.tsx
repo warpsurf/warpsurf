@@ -284,11 +284,14 @@ export default function ChatInput({
   // Drag and drop
   const { isDragging, dropRef } = useFileDrop({ onFilesAdded: handleFilesAdded, disabled });
 
-  // Close plus menu on outside click
+  // Close plus menu on outside click (but not when clicking inside the TabContextSelector's portal)
   useEffect(() => {
     if (!showPlusMenu) return;
     const handleClick = (e: MouseEvent) => {
-      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) setShowPlusMenu(false);
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) {
+        if ((e.target as Element).closest?.('[data-tab-context-dropdown]')) return;
+        setShowPlusMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
