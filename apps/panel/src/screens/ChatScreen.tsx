@@ -74,7 +74,16 @@ export interface ChatScreenProps {
   setPendingEstimation: (v: any) => void;
   setShowCloseTabs: (v: boolean) => void;
   setWorkerTabGroups: (v: any[]) => void;
-  handleSendMessage: (text: string, agentType?: string) => Promise<void>;
+  handleSendMessage: (
+    text: string,
+    agentType?: string,
+    contextTabIds?: number[],
+    contextMenuAction?: string,
+    skipAutoContext?: boolean,
+    attachments?: Attachment[],
+    imageUrl?: string,
+    overrideSessionId?: string,
+  ) => Promise<void>;
   handleStopTask: () => Promise<void>;
   handlePauseTask: () => Promise<void>;
   handleResumeTask: () => Promise<void>;
