@@ -1,6 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { Attachment } from '@extension/storage/lib/chat/types';
+import { escapeUntrustedContent } from '@src/workflows/shared/messages/utils';
 
 type SessionMessage = { actor: string; content: string; timestamp?: number };
 
@@ -101,17 +102,19 @@ export function buildLLMMessagesWithHistory(
         content.push({ type: 'image_url', image_url: { url: a.dataUrl } });
       } else if (a.dataUrl) {
         // Document: decode base64 text content and include inline
+        const safeName = (a.filename || '').replace(/[&"<>]/g, '_');
         try {
           const b64 = a.dataUrl.split(',')[1];
           const text =
             a.mimeType?.startsWith('text/') || a.mimeType === 'application/json'
               ? atob(b64)
-              : `[Binary file: ${a.filename} (${a.mimeType})]`;
-          content.push({ type: 'text', text: `<attached_file name="${a.filename}">\n${text}\n</attached_file>` });
+              : `[Binary file: ${safeName} (${a.mimeType})]`;
+          const safeText = escapeUntrustedContent(text);
+          content.push({ type: 'text', text: `<attached_file name="${safeName}">\n${safeText}\n</attached_file>` });
         } catch {
           content.push({
             type: 'text',
-            text: `<attached_file name="${a.filename}">[Could not decode file]</attached_file>`,
+            text: `<attached_file name="${safeName}">[Could not decode file]</attached_file>`,
           });
         }
       }
