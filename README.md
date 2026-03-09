@@ -102,6 +102,19 @@ All demos are shown in real time.
 | 💬 **Live Follow-Up** | Send instructions to a running agent without stopping it |
 | 🔗 **Workflow Graph** | Visual graph of multi-agent task topology and status |
 
+### Multi-Agent
+
+Warpsurf's multi-agent workflow decomposes complex tasks into a DAG of subtasks and executes them in parallel across multiple browser agents. Four roles coordinate the process:
+
+<img src="images/warpsurf_ma.jpeg" alt="Multi-agent architecture" width="100%"/>
+
+| Role | Description |
+|------|-------------|
+| **Commodore** | The planner. Receives the user query and decomposes it into a DAG of subtasks with dependencies. Root subtasks are warmstarted and begin immediately. This is a single LLM call hand off — no further involvement in execution. |
+| **Quartermaster** | The scheduler. Programatic assignment of subtasks to available crew members and optimises the execution schedule. |
+| **Captain** | The overseer. Monitors the running subtasks in real time — reviewing completions, handling failures, retrying stuck tasks, modifying the plan, and deciding when to pause, complete, or abort. |
+| **Crew** | The workers. Each crew member is a full browser agent that executes an individual subtask, navigating pages and returning structured output that flows to downstream tasks. |
+
 ### Search URLs
 
 Warpsurf agents are encouraged to use a [pattern database](https://github.com/warpsurf/search-urls) to resolve direct search URLs for popular sites, skipping search box interactions and landing on results in a single navigation. This reduces the number of agent actions and improves speed.
