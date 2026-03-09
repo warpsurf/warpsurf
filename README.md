@@ -90,6 +90,17 @@ All demos are shown in real time.
 | ⏱️ **Task Estimation** | Preview task duration and cost before initialisation |
 | 🎤 **Voice Input** | Make requests via voice using speech-to-text transcription |
 | 🛠️ **Conversational Settings** | Configure models, parameters, and tab context through natural language |
+| 🗂️ **Agent Manager** | Dashboard to view, search, and manage all agent workflows with live previews |
+| 📌 **Auto Tab Context** | Automatically gather open tabs as context with privacy controls |
+| 🖼️ **Explain Image** | Right-click any image to get an AI explanation |
+| 📎 **Attachments** | Drag-and-drop files and images directly into chat |
+| ⭐ **Favorites** | Save, browse, and import favorite prompts |
+| 🎨 **Themes** | Switch between dark, light, and auto themes |
+| 🛡️ **URL Firewall** | Allow/deny lists to restrict where agents can navigate |
+| 🛑 **Emergency Stop** | One-click termination of all running workflows |
+| ⏸️ **Pause & Resume** | Pause and resume running agent tasks |
+| 💬 **Live Follow-Up** | Send instructions to a running agent without stopping it |
+| 🔗 **Workflow Graph** | Visual graph of multi-agent task topology and status |
 
 ### Search URLs
 
