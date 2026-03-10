@@ -83,6 +83,18 @@ export function AgentInputBar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
 
+  // Remove closed tabs from manualContextTabIds regardless of whether TabContextSelector is mounted
+  useEffect(() => {
+    const handleTabRemoved = (tabId: number) => {
+      setManualContextTabIds(prev => {
+        if (!prev.includes(tabId)) return prev;
+        return prev.filter(id => id !== tabId);
+      });
+    };
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+    return () => chrome.tabs.onRemoved.removeListener(handleTabRemoved);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
