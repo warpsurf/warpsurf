@@ -206,6 +206,18 @@ export function ChatScreen(props: ChatScreenProps) {
   // Context tabs state lifted here to persist across ChatInput remounts
   const [contextTabIds, setContextTabIds] = useState<number[]>([]);
 
+  // Remove closed tabs from contextTabIds regardless of whether TabContextSelector is mounted
+  useEffect(() => {
+    const handleTabRemoved = (tabId: number) => {
+      setContextTabIds(prev => {
+        if (!prev.includes(tabId)) return prev;
+        return prev.filter(id => id !== tabId);
+      });
+    };
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+    return () => chrome.tabs.onRemoved.removeListener(handleTabRemoved);
+  }, []);
+
   // Expose setContextTabIds via ref for external control (e.g., context menu)
   useEffect(() => {
     if (setContextTabIdsRef) {
