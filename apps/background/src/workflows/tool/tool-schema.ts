@@ -125,7 +125,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description: `Update a general extension setting. Allowed settings: ${ALLOWED_GENERAL_SETTINGS.join(', ')}.`,
     parameters: {
       setting: { type: 'string', description: 'Setting key to update.', enum: [...ALLOWED_GENERAL_SETTINGS] },
-      value: { type: 'any', description: 'New value (boolean or number depending on the setting).' },
+      value: {
+        type: 'any',
+        description: 'New value (boolean, number, or string depending on the setting). null or empty to clear.',
+      },
     },
     required: ['setting', 'value'],
   },
