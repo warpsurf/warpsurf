@@ -453,6 +453,8 @@ export function createPanelHandlers(deps: any): any {
             const sid = String((message as any)?.data?.sessionId || deps.sessionIdRef.current || '');
             const s = (message as any)?.data?.summary;
             if (sid && s) {
+              const rawCancelCost = Number(s.totalCost);
+              const cancelCost = rawCancelCost < 0 ? -1 : isFinite(rawCancelCost) ? rawCancelCost : 0;
               const jobSummaryId = `${sid}_${s.totalLatencyMs || 0}_${s.totalCost || 0}_workflow_end_cancel`;
               if (!deps.processedJobSummariesRef.current.has(jobSummaryId)) {
                 deps.processedJobSummariesRef.current.add(jobSummaryId);
@@ -461,7 +463,7 @@ export function createPanelHandlers(deps: any): any {
                   totalInputTokens: Number(s.totalInputTokens) || 0,
                   totalOutputTokens: Number(s.totalOutputTokens) || 0,
                   totalLatencyMs: Number(s.totalLatencyMs) || Math.round(Number(s.totalLatencySeconds) * 1000) || 0,
-                  totalCost: Math.max(0, Number(s.totalCost) || 0),
+                  totalCost: cancelCost,
                   requestCount: Number(s.apiCallCount) || 1,
                 });
               }
@@ -475,7 +477,7 @@ export function createPanelHandlers(deps: any): any {
                     latency: (
                       s.totalLatencySeconds ?? (s.totalLatencyMs ? (s.totalLatencyMs / 1000).toFixed(2) : '0.00')
                     ).toString(),
-                    cost: Number(s.totalCost) || 0,
+                    cost: cancelCost,
                     apiCalls: Number(s.apiCallCount) || 0,
                     modelName: s.modelName,
                     provider: s.provider,
@@ -567,13 +569,15 @@ export function createPanelHandlers(deps: any): any {
           const target = deps.lastAgentMessageRef.current;
           if (target) {
             const messageId = `${target.timestamp}-${target.actor}`;
+            const rawEndedCost = Number(s.totalCost);
+            const endedCost = rawEndedCost < 0 ? -1 : isFinite(rawEndedCost) ? rawEndedCost : 0;
             const requestSummary = {
               inputTokens: Number(s.totalInputTokens) || 0,
               outputTokens: Number(s.totalOutputTokens) || 0,
               latency: (
                 s.totalLatencySeconds ?? (s.totalLatencyMs ? (s.totalLatencyMs / 1000).toFixed(2) : '0.00')
               ).toString(),
-              cost: Number(s.totalCost) || 0,
+              cost: endedCost,
               apiCalls: Number(s.apiCallCount) || 0,
             };
             deps.setRequestSummaries((prev: any) => {
@@ -590,7 +594,7 @@ export function createPanelHandlers(deps: any): any {
                 totalInputTokens: Number(s.totalInputTokens) || 0,
                 totalOutputTokens: Number(s.totalOutputTokens) || 0,
                 totalLatencyMs: Number(s.totalLatencyMs) || Math.round(Number(s.totalLatencySeconds) * 1000) || 0,
-                totalCost: Math.max(0, Number(s.totalCost) || 0),
+                totalCost: endedCost,
                 requestCount: Number(s.apiCallCount) || 1,
               });
             }
@@ -697,11 +701,12 @@ export function createPanelHandlers(deps: any): any {
         const statsKey = `${sid}:workflow_stats_applied`;
         if (!deps.processedJobSummariesRef.current.has(statsKey)) {
           deps.processedJobSummariesRef.current.add(statsKey);
+          const rawLogsCost = Number(summary.cost);
           deps.updateSessionStats({
             totalInputTokens: Number(summary.inputTokens) || 0,
             totalOutputTokens: Number(summary.outputTokens) || 0,
             totalLatencyMs: totalLatencyMs || 0,
-            totalCost: Math.max(0, Number(summary.cost) || 0),
+            totalCost: rawLogsCost < 0 ? -1 : isFinite(rawLogsCost) ? rawLogsCost : 0,
             requestCount: Number(summary.apiCalls) || 1,
           });
         }
