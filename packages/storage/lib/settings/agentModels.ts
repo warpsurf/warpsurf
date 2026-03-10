@@ -104,6 +104,19 @@ export const agentModelStore: AgentModelStorage = {
   },
   getAllAgentModels: async () => {
     const data = await storage.get();
-    return data.agents;
+    const migrated = {} as Record<AgentNameEnum, ModelConfig>;
+    for (const [agent, config] of Object.entries(data.agents)) {
+      const thinkingLevel = config.thinkingLevel ?? config.reasoningEffort;
+      migrated[agent as AgentNameEnum] = {
+        ...config,
+        thinkingLevel,
+        reasoningEffort: undefined,
+        parameters: {
+          ...getNeutralParameters(),
+          ...config.parameters,
+        },
+      };
+    }
+    return migrated;
   },
 };
