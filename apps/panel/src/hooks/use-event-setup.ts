@@ -283,7 +283,7 @@ export function useEventSetup(params: {
           totalInputTokens: prev.totalInputTokens + requestData.totalInputTokens,
           totalOutputTokens: prev.totalOutputTokens + requestData.totalOutputTokens,
           totalLatency: prev.totalLatency + requestData.totalLatencyMs,
-          totalCost: prev.totalCost + requestData.totalCost,
+          totalCost: prev.totalCost < 0 || requestData.totalCost < 0 ? -1 : prev.totalCost + requestData.totalCost,
           avgLatencyPerRequest: 0,
         };
         newStats.avgLatencyPerRequest = newStats.totalRequests > 0 ? newStats.totalLatency / newStats.totalRequests : 0;
