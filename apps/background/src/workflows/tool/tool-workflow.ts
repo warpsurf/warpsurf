@@ -238,7 +238,7 @@ export class ToolWorkflow {
       if (temp !== undefined) parts.push(`t=${temp}`);
       const maxTokens = config?.parameters?.maxOutputTokens;
       if (maxTokens !== undefined) parts.push(`mt=${maxTokens}`);
-      if (config?.reasoningEffort) parts.push(`re=${config.reasoningEffort}`);
+      if (config?.thinkingLevel) parts.push(`tl=${config.thinkingLevel}`);
       if (config?.webSearch) parts.push('ws');
       return parts.join('\0');
     };
@@ -339,9 +339,14 @@ export class ToolWorkflow {
 
       const modelSummary = Object.entries(models)
         .map(([role, config]: [string, any]) => {
-          const temp = config.parameters?.temperature;
-          const tempStr = temp !== undefined ? `, temp=${temp}` : '';
-          return `  ${role}: ${config.modelName} (${config.provider}${tempStr})`;
+          const extras: string[] = [];
+          if (config.parameters?.temperature !== undefined) extras.push(`temp=${config.parameters.temperature}`);
+          if (config.parameters?.maxOutputTokens !== undefined)
+            extras.push(`maxTokens=${config.parameters.maxOutputTokens}`);
+          if (config.thinkingLevel) extras.push(`thinking=${config.thinkingLevel}`);
+          if (config.webSearch) extras.push('webSearch');
+          const suffix = extras.length ? `, ${extras.join(', ')}` : '';
+          return `  ${role}: ${config.modelName} (${config.provider}${suffix})`;
         })
         .join('\n');
 
