@@ -176,24 +176,22 @@ export function handleGetSessionLogs(port: chrome.runtime.Port, taskManager: any
       workers[Number(k)] = workers[Number(k)].sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 
-    // Totals (cost -1 means unavailable, only sum valid costs)
+    // Totals (cost -1 means unavailable; if any usage lacks pricing the total is -1)
     const sum = (arr: any[]) => {
-      let hasAnyCost = false;
+      let hasUnknownCost = false;
       const result = arr.reduce(
         (acc, u) => {
           acc.inputTokens += Math.max(0, Number(u.inputTokens) || 0);
           acc.outputTokens += Math.max(0, Number(u.outputTokens) || 0);
           acc.totalTokens += Math.max(0, Number(u.totalTokens) || 0);
           const uCost = Number(u.cost);
-          if (isFinite(uCost) && uCost >= 0) {
-            acc.cost += uCost;
-            hasAnyCost = true;
-          }
+          if (isFinite(uCost) && uCost >= 0) acc.cost += uCost;
+          else hasUnknownCost = true;
           return acc;
         },
         { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 },
       );
-      if (!hasAnyCost) result.cost = -1;
+      if (hasUnknownCost) result.cost = -1;
       return result;
     };
     const perWorker: Record<number, { inputTokens: number; outputTokens: number; totalTokens: number; cost: number }> =
