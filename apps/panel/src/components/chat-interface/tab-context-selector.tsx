@@ -94,9 +94,11 @@ export default function TabContextSelector({
     }
   }, []);
 
-  // Store selectedTabIds in a ref to avoid stale closures in event handlers
+  // Store selectedTabIds and onSelectionChange in refs to avoid stale closures
   const selectedTabIdsRef = useRef(selectedTabIds);
   selectedTabIdsRef.current = selectedTabIds;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
 
   useEffect(() => {
     loadTabs();
@@ -114,7 +116,7 @@ export default function TabContextSelector({
     const handleTabRemoved = (tabId: number) => {
       const current = selectedTabIdsRef.current;
       if (current.includes(tabId)) {
-        onSelectionChange(current.filter(id => id !== tabId));
+        onSelectionChangeRef.current(current.filter(id => id !== tabId));
       }
       loadTabs();
     };
@@ -128,7 +130,20 @@ export default function TabContextSelector({
       chrome.tabs.onUpdated.removeListener(handleTabUpdated);
       chrome.tabs.onRemoved.removeListener(handleTabRemoved);
     };
-  }, [loadTabs, onSelectionChange]);
+  }, [loadTabs]);
+
+  // Reconcile: remove any selectedTabIds that refer to tabs no longer open.
+  // Catches edge cases (tab closed while this component was unmounted, background
+  // pushed stale IDs, race conditions during component transitions).
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    const openTabIds = new Set(tabs.map(t => t.id));
+    const current = selectedTabIdsRef.current;
+    const staleIds = current.filter(id => !openTabIds.has(id));
+    if (staleIds.length > 0) {
+      onSelectionChangeRef.current(current.filter(id => openTabIds.has(id)));
+    }
+  }, [tabs]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
