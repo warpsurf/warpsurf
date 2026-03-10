@@ -127,9 +127,16 @@ const handlers: Record<string, Handler> = {
     // Validate string enum settings
     const allowedValues = STRING_ENUM_SETTINGS[setting];
     if (allowedValues) {
-      // Allow empty/null to clear optional string settings (e.g. preferredRegion)
       if (value === null || value === '' || value === undefined) {
-        coerced = undefined;
+        // Only allow clearing for settings where undefined is valid (not required defaults like themeMode)
+        if (currentVal === undefined || currentVal === null || setting === 'preferredRegion') {
+          coerced = undefined;
+        } else {
+          return {
+            success: false,
+            message: `Cannot clear '${setting}'. Provide a value: ${allowedValues.join(', ')}.`,
+          };
+        }
       } else {
         const strValue = String(value).toLowerCase();
         if (!allowedValues.includes(strValue)) {
