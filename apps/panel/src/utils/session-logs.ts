@@ -38,7 +38,7 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
   let inputTokens = 0;
   let outputTokens = 0;
   let cost = 0;
-  let hasAnyCost = false;
+  let hasUnknownCost = false;
   let apiCalls = 0;
   const completionTimes: number[] = [];
   const startTimes: number[] = [];
@@ -47,17 +47,15 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
     inputTokens += Math.max(0, Number(u?.inputTokens) || 0);
     outputTokens += Math.max(0, Number(u?.outputTokens) || 0);
     const uCost = Number(u?.cost);
-    if (isFinite(uCost) && uCost >= 0) {
-      cost += uCost;
-      hasAnyCost = true;
-    }
+    if (isFinite(uCost) && uCost >= 0) cost += uCost;
+    else hasUnknownCost = true;
     apiCalls += 1;
     const ts = Number(u?.timestamp || 0);
     if (Number.isFinite(ts) && ts > 0) completionTimes.push(ts);
     const start = Number(u?.requestStartTime || u?.timestamp || 0);
     if (Number.isFinite(start) && start > 0) startTimes.push(start);
   }
-  if (!hasAnyCost) cost = -1;
+  if (hasUnknownCost) cost = -1;
 
   // Prefer authoritative totals from background (computed from full deduplicated
   // usage list before the main/worker split, avoiding client-side recombination
@@ -66,7 +64,7 @@ export function computeRequestSummaryFromSessionLogs(data: SessionLogsData | nul
     inputTokens = Math.max(0, Number(overall.inputTokens) || 0);
     outputTokens = Math.max(0, Number(overall.outputTokens) || 0);
     const overallCost = Number(overall.cost);
-    if (isFinite(overallCost) && overallCost >= 0) cost = overallCost;
+    if (isFinite(overallCost)) cost = overallCost;
     if (typeof overall.apiCalls === 'number' && overall.apiCalls > 0) apiCalls = overall.apiCalls;
   }
 
