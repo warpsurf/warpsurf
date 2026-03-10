@@ -1167,16 +1167,14 @@ export class TaskManager extends EventEmitter {
       } catch {}
       const totalInputTokens = usages.reduce((sum: number, u: any) => sum + (u.inputTokens || 0), 0);
       const totalOutputTokens = usages.reduce((sum: number, u: any) => sum + (u.outputTokens || 0), 0);
-      let hasAnyCost = false;
-      const totalCost =
-        usages.reduce((sum: number, u: any) => {
-          const c = Number(u.cost);
-          if (isFinite(c) && c >= 0) {
-            hasAnyCost = true;
-            return sum + c;
-          }
-          return sum;
-        }, 0) || (hasAnyCost ? 0 : -1);
+      let hasUnknownCost = false;
+      let totalCost = usages.reduce((sum: number, u: any) => {
+        const c = Number(u.cost);
+        if (isFinite(c) && c >= 0) return sum + c;
+        hasUnknownCost = true;
+        return sum;
+      }, 0);
+      if (hasUnknownCost) totalCost = -1;
       const apiCallCount = usages.length;
       const last = usages[usages.length - 1] || {};
       const provider = last.provider || 'Unknown';
