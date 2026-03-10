@@ -551,23 +551,21 @@ export class MultiAgentWorkflow {
       let inputTokens = 0;
       let outputTokens = 0;
       let totalCost = 0;
-      let hasAnyCost = false;
+      let hasUnknownCost = false;
       const timestamps: number[] = [];
       const startTimes: number[] = [];
       for (const u of usages) {
         inputTokens += Math.max(0, Number((u as any).inputTokens) || 0);
         outputTokens += Math.max(0, Number((u as any).outputTokens) || 0);
         const c = Number((u as any).cost);
-        if (isFinite(c) && c >= 0) {
-          totalCost += c;
-          hasAnyCost = true;
-        }
+        if (isFinite(c) && c >= 0) totalCost += c;
+        else hasUnknownCost = true;
         const ts = Number((u as any).timestamp);
         if (isFinite(ts) && ts > 0) timestamps.push(ts);
         const start = Number((u as any).requestStartTime || (u as any).timestamp);
         if (isFinite(start) && start > 0) startTimes.push(start);
       }
-      if (!hasAnyCost) totalCost = -1;
+      if (hasUnknownCost) totalCost = -1;
       let totalLatencyMs = 0;
       if (startTimes.length > 0 && timestamps.length > 0) {
         totalLatencyMs = Math.max(0, Math.max(...timestamps) - Math.min(...startTimes));
