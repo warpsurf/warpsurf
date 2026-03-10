@@ -7,7 +7,7 @@ import {
   speechToTextModelStore,
 } from '@extension/storage';
 import { getAllProvidersDecrypted } from '@src/crypto';
-import { ALLOWED_GENERAL_SETTINGS, VALID_REGIONS } from './tool-schema';
+import { ALLOWED_GENERAL_SETTINGS, VALID_REGIONS, REGION_ALIASES } from './tool-schema';
 import { createLogger } from '@src/log';
 
 const logger = createLogger('ToolHandlers');
@@ -138,7 +138,11 @@ const handlers: Record<string, Handler> = {
           };
         }
       } else {
-        const strValue = String(value).toLowerCase();
+        let strValue = String(value).toLowerCase();
+        // Resolve country name aliases for preferredRegion (e.g. "uk" → "co.uk")
+        if (setting === 'preferredRegion' && !allowedValues.includes(strValue)) {
+          strValue = REGION_ALIASES[strValue] ?? strValue;
+        }
         if (!allowedValues.includes(strValue)) {
           return { success: false, message: `Invalid value for '${setting}'. Allowed: ${allowedValues.join(', ')}.` };
         }
