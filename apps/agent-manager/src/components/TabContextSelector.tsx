@@ -51,6 +51,12 @@ export function TabContextSelector({
     ? autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id) && !blockedTabIds.has(id))
     : [];
 
+  // Store selectedTabIds and onSelectionChange in refs to avoid stale closures
+  const selectedTabIdsRef = useRef(selectedTabIds);
+  selectedTabIdsRef.current = selectedTabIds;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
   const loadTabs = useCallback(async () => {
     try {
       const allTabs = await chrome.tabs.query({ currentWindow: true });
@@ -95,7 +101,40 @@ export function TabContextSelector({
 
   useEffect(() => {
     loadTabs();
+
+    const handleTabRemoved = (tabId: number) => {
+      const current = selectedTabIdsRef.current;
+      if (current.includes(tabId)) {
+        onSelectionChangeRef.current(current.filter(id => id !== tabId));
+      }
+      loadTabs();
+    };
+
+    const handleTabUpdated = (_tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+      if (changeInfo.title || changeInfo.url || changeInfo.favIconUrl) {
+        loadTabs();
+      }
+    };
+
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+    chrome.tabs.onUpdated.addListener(handleTabUpdated);
+
+    return () => {
+      chrome.tabs.onRemoved.removeListener(handleTabRemoved);
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+    };
   }, [loadTabs]);
+
+  // Reconcile: remove any selectedTabIds that refer to tabs no longer open
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    const openTabIds = new Set(tabs.map(t => t.id));
+    const current = selectedTabIdsRef.current;
+    const staleIds = current.filter(id => !openTabIds.has(id));
+    if (staleIds.length > 0) {
+      onSelectionChangeRef.current(current.filter(id => openTabIds.has(id)));
+    }
+  }, [tabs]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
