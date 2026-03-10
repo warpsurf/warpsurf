@@ -4,9 +4,10 @@ import {
   AgentNameEnum,
   llmProviderFallbackModelNames,
   ProviderTypeEnum,
+  speechToTextModelStore,
 } from '@extension/storage';
 import { getAllProvidersDecrypted } from '@src/crypto';
-import { ALLOWED_GENERAL_SETTINGS } from './tool-schema';
+import { ALLOWED_GENERAL_SETTINGS, VALID_REGIONS } from './tool-schema';
 import { createLogger } from '@src/log';
 
 const logger = createLogger('ToolHandlers');
@@ -43,6 +44,7 @@ const allowedSettingsSet = new Set<string>(ALLOWED_GENERAL_SETTINGS);
 /** String settings with specific allowed values. */
 const STRING_ENUM_SETTINGS: Record<string, readonly string[]> = {
   themeMode: ['auto', 'light', 'dark'],
+  preferredRegion: VALID_REGIONS,
 };
 
 type Handler = (args: Record<string, any>, ctx: ToolContext) => Promise<ToolCallResult>;
@@ -125,11 +127,16 @@ const handlers: Record<string, Handler> = {
     // Validate string enum settings
     const allowedValues = STRING_ENUM_SETTINGS[setting];
     if (allowedValues) {
-      const strValue = String(value).toLowerCase();
-      if (!allowedValues.includes(strValue)) {
-        return { success: false, message: `Invalid value for '${setting}'. Allowed: ${allowedValues.join(', ')}.` };
+      // Allow empty/null to clear optional string settings (e.g. preferredRegion)
+      if (value === null || value === '' || value === undefined) {
+        coerced = undefined;
+      } else {
+        const strValue = String(value).toLowerCase();
+        if (!allowedValues.includes(strValue)) {
+          return { success: false, message: `Invalid value for '${setting}'. Allowed: ${allowedValues.join(', ')}.` };
+        }
+        coerced = strValue;
       }
-      coerced = strValue;
     } else if (typeof currentVal === 'boolean') {
       coerced = value === true || value === 'true';
     } else if (typeof currentVal === 'number') {
@@ -186,9 +193,10 @@ const handlers: Record<string, Handler> = {
     }
 
     const update: any = { ...existing, parameters: params };
-    if (args.reasoning_effort !== undefined) {
-      update.reasoningEffort = args.reasoning_effort === null ? undefined : args.reasoning_effort;
-      changes.push(`reasoningEffort → ${args.reasoning_effort ?? 'removed'}`);
+    if (args.thinking_level !== undefined) {
+      update.thinkingLevel = args.thinking_level === null ? undefined : args.thinking_level;
+      update.reasoningEffort = undefined;
+      changes.push(`thinkingLevel → ${args.thinking_level ?? 'removed'}`);
     }
     if (args.web_search !== undefined) {
       update.webSearch = args.web_search;
@@ -272,6 +280,44 @@ const handlers: Record<string, Handler> = {
     } catch {
       return { success: false, message: 'Failed to read provider configuration.' };
     }
+  },
+
+  update_speech_to_text: async args => {
+    const existing = await speechToTextModelStore.getConfig();
+    if (!existing)
+      return { success: false, message: 'No speech-to-text model configured. Set one in Settings → Voice first.' };
+
+    const changes: string[] = [];
+    const updated = { ...existing };
+
+    if (args.language !== undefined) {
+      updated.language = args.language || undefined;
+      changes.push(`language → ${args.language || 'reset'}`);
+    }
+    if (args.auto_submit !== undefined) {
+      updated.autoSubmit = args.auto_submit;
+      changes.push(`autoSubmit → ${args.auto_submit}`);
+    }
+
+    if (changes.length === 0) return { success: false, message: 'No parameters specified to update.' };
+
+    await speechToTextModelStore.setConfig(updated);
+    return { success: true, message: `Speech-to-text: ${changes.join(', ')}` };
+  },
+
+  get_speech_to_text_settings: async () => {
+    const config = await speechToTextModelStore.getConfig();
+    if (!config) return { success: true, message: 'No speech-to-text model configured.', data: { configured: false } };
+    return {
+      success: true,
+      message: 'Speech-to-text settings retrieved.',
+      data: {
+        provider: config.provider,
+        model: config.modelName,
+        language: config.language || 'auto',
+        autoSubmit: config.autoSubmit ?? false,
+      },
+    };
   },
 };
 
