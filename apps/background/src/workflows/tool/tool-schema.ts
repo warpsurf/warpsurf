@@ -55,6 +55,36 @@ export const ALLOWED_GENERAL_SETTINGS = [
   'responseTimeoutSeconds',
   'enableWorkflowEstimation',
   'showEmergencyStop',
+  // Region
+  'preferredRegion',
+] as const;
+
+/** Region values accepted by preferredRegion (matches web-settings UI). */
+export const VALID_REGIONS = [
+  'com',
+  'co.uk',
+  'ca',
+  'com.au',
+  'de',
+  'fr',
+  'es',
+  'it',
+  'nl',
+  'be',
+  'at',
+  'ch',
+  'ie',
+  'co.jp',
+  'in',
+  'com.br',
+  'com.mx',
+  'co.nz',
+  'se',
+  'no',
+  'dk',
+  'fi',
+  'pl',
+  'pt',
 ] as const;
 
 /** Valid agent role names (user-facing → AgentNameEnum mapping is in tool-handlers). */
@@ -114,15 +144,15 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'update_model_parameters',
-    description: 'Adjust parameters (temperature, max tokens, reasoning effort, web search) for a model role.',
+    description: 'Adjust parameters (temperature, max tokens, thinking level, web search) for a model role.',
     parameters: {
       role: { type: 'string', description: 'Agent role.', enum: [...VALID_ROLES] },
       temperature: { type: 'number|null', description: '0-2. null = reset to provider default.' },
       max_output_tokens: { type: 'number', description: 'Max output tokens (default 8192).' },
-      reasoning_effort: {
+      thinking_level: {
         type: 'string|null',
-        description: 'low, medium, or high. null = remove.',
-        enum: ['low', 'medium', 'high'],
+        description: 'Controls reasoning depth. null = remove.',
+        enum: ['high', 'medium', 'low', 'off', 'default'],
       },
       web_search: { type: 'boolean', description: 'Enable native web search tools.' },
     },
@@ -173,6 +203,22 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'list_configured_providers',
     description: 'List which LLM providers the user has configured (has API keys for).',
+    parameters: {},
+  },
+  {
+    name: 'update_speech_to_text',
+    description: 'Update speech-to-text settings (language and auto-submit).',
+    parameters: {
+      language: {
+        type: 'string',
+        description: 'ISO 639-1 language code (e.g., en, fr, de, ja). Empty string to reset.',
+      },
+      auto_submit: { type: 'boolean', description: 'Auto-submit transcribed text after recording.' },
+    },
+  },
+  {
+    name: 'get_speech_to_text_settings',
+    description: 'Retrieve current speech-to-text configuration.',
     parameters: {},
   },
 ];
