@@ -7,33 +7,54 @@ import { useState, useEffect, useCallback } from 'react';
 import { firewallStore, generalSettingsStore } from '@extension/storage';
 import { Button } from '@extension/ui';
 
-// Available region options for the user to select
 const REGION_OPTIONS = [
   { value: '', label: 'Select a region...' },
+  // Americas
   { value: 'com', label: 'United States (.com)' },
-  { value: 'co.uk', label: 'United Kingdom (.co.uk)' },
   { value: 'ca', label: 'Canada (.ca)' },
-  { value: 'com.au', label: 'Australia (.com.au)' },
-  { value: 'de', label: 'Germany (.de)' },
+  { value: 'com.mx', label: 'Mexico (.com.mx)' },
+  { value: 'com.br', label: 'Brazil (.com.br)' },
+  { value: 'com.ar', label: 'Argentina (.com.ar)' },
+  { value: 'com.co', label: 'Colombia (.com.co)' },
+  // Europe
+  { value: 'co.uk', label: 'United Kingdom (.co.uk)' },
+  { value: 'ie', label: 'Ireland (.ie)' },
   { value: 'fr', label: 'France (.fr)' },
-  { value: 'es', label: 'Spain (.es)' },
-  { value: 'it', label: 'Italy (.it)' },
-  { value: 'nl', label: 'Netherlands (.nl)' },
-  { value: 'be', label: 'Belgium (.be)' },
+  { value: 'de', label: 'Germany (.de)' },
   { value: 'at', label: 'Austria (.at)' },
   { value: 'ch', label: 'Switzerland (.ch)' },
-  { value: 'ie', label: 'Ireland (.ie)' },
-  { value: 'co.jp', label: 'Japan (.co.jp)' },
-  { value: 'in', label: 'India (.in)' },
-  { value: 'com.br', label: 'Brazil (.com.br)' },
-  { value: 'com.mx', label: 'Mexico (.com.mx)' },
-  { value: 'co.nz', label: 'New Zealand (.co.nz)' },
+  { value: 'nl', label: 'Netherlands (.nl)' },
+  { value: 'be', label: 'Belgium (.be)' },
+  { value: 'es', label: 'Spain (.es)' },
+  { value: 'pt', label: 'Portugal (.pt)' },
+  { value: 'it', label: 'Italy (.it)' },
   { value: 'se', label: 'Sweden (.se)' },
   { value: 'no', label: 'Norway (.no)' },
   { value: 'dk', label: 'Denmark (.dk)' },
   { value: 'fi', label: 'Finland (.fi)' },
   { value: 'pl', label: 'Poland (.pl)' },
-  { value: 'pt', label: 'Portugal (.pt)' },
+  { value: 'cz', label: 'Czech Republic (.cz)' },
+  { value: 'com.tr', label: 'Turkey (.com.tr)' },
+  // Middle East & Africa
+  { value: 'ae', label: 'United Arab Emirates (.ae)' },
+  { value: 'com.sa', label: 'Saudi Arabia (.com.sa)' },
+  { value: 'co.il', label: 'Israel (.co.il)' },
+  { value: 'co.za', label: 'South Africa (.co.za)' },
+  // Asia-Pacific
+  { value: 'cn', label: 'China (.cn)' },
+  { value: 'co.jp', label: 'Japan (.co.jp)' },
+  { value: 'co.kr', label: 'South Korea (.co.kr)' },
+  { value: 'com.tw', label: 'Taiwan (.com.tw)' },
+  { value: 'com.hk', label: 'Hong Kong (.com.hk)' },
+  { value: 'in', label: 'India (.in)' },
+  { value: 'com.sg', label: 'Singapore (.com.sg)' },
+  { value: 'co.id', label: 'Indonesia (.co.id)' },
+  { value: 'co.th', label: 'Thailand (.co.th)' },
+  { value: 'com.my', label: 'Malaysia (.com.my)' },
+  { value: 'com.ph', label: 'Philippines (.com.ph)' },
+  { value: 'com.vn', label: 'Vietnam (.com.vn)' },
+  { value: 'com.au', label: 'Australia (.com.au)' },
+  { value: 'co.nz', label: 'New Zealand (.co.nz)' },
 ];
 
 interface WebSettingsProps {
@@ -126,7 +147,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
               id="region-select"
               value={preferredRegion}
               onChange={e => handleRegionChange(e.target.value)}
-              className={`w-64 rounded-md border px-3 py-2 text-sm ${
+              className={`w-72 rounded-md border px-3 py-2 text-sm ${
                 isDarkMode ? 'border-gray-600 bg-slate-600 text-white' : 'border-gray-300 bg-white text-gray-700'
               }`}>
               {REGION_OPTIONS.map(option => (
