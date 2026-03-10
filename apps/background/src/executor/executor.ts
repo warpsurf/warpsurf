@@ -1453,17 +1453,15 @@ export class Executor {
       totalOutputTokens = taskTokens.reduce((sum: number, usage: any) => sum + usage.outputTokens, 0);
       totalThoughtTokens = taskTokens.reduce((sum: number, usage: any) => sum + (usage.thoughtTokens || 0), 0);
       totalTokens = taskTokens.reduce((sum: number, usage: any) => sum + usage.totalTokens, 0);
-      // Sum only valid costs (>= 0); if none found, total is -1 (unavailable)
-      let hasAnyCost = false;
+      // Sum valid costs (>= 0); if any usage lacks pricing, total is -1 (unavailable)
+      let hasUnknownCost = false;
       totalCost = taskTokens.reduce((sum: number, usage: any) => {
         const cost = Number(usage.cost);
-        if (isFinite(cost) && cost >= 0) {
-          hasAnyCost = true;
-          return sum + cost;
-        }
+        if (isFinite(cost) && cost >= 0) return sum + cost;
+        hasUnknownCost = true;
         return sum;
       }, 0);
-      if (!hasAnyCost) totalCost = -1;
+      if (hasUnknownCost) totalCost = -1;
       totalWebSearches = taskTokens.reduce((sum: number, usage: any) => sum + (usage.webSearchCount || 0), 0);
 
       // Extract model name and provider from the primary API call (usually the last/main one)
