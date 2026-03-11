@@ -20,6 +20,7 @@ ${commonSecurityRules}
   - Identify potential challenges or roadblocks
   - Suggest the next high-level steps to take
   - If you know the direct URL, use it directly instead of searching for it (e.g. github.com, www.espn.com). Search it if you don't know the direct URL.
+  - When a task requires a web search, suggest using the \`search_web\` action. Do NOT suggest navigating to any specific search engine (Google, Bing, Yahoo, DuckDuckGo, etc.). The \`search_web\` action automatically uses the user's preferred search engine.
   - For any step that requires reading the content of a web page, explicitly plan to use the built-in \`extract_page_markdown\` action after navigating to the target page. Do NOT plan to visit external URL-to-Markdown converter sites.
   - Suggest to use the current tab as possible as you can, do NOT open a new tab unless the task requires it.
   - IMPORTANT: 
