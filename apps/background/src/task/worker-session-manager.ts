@@ -68,21 +68,20 @@ export class WorkerSessionManager {
     },
   ): Promise<void> {
     const settings = await generalSettingsStore.getSettings();
-    const workerPrompt = new CrewPrompt(settings.maxActionsPerStep);
+    const workerPrompt = new CrewPrompt(
+      settings.maxActionsPerStep,
+      settings.preferredRegion,
+      settings.useVision,
+      settings.enableCoordinateClick ?? false,
+      settings.defaultSearchEngine,
+    );
     const executor = await createWorkerExecutor({
       prompt: initialPrompt,
       sessionId: task.id,
       workerModelPrefers: AgentNameEnum.MultiagentWorker,
+      systemMessageOverride: workerPrompt.getSystemMessage(),
+      messageContext: options.messageContext,
     });
-
-    try {
-      (executor as any).updateOptions?.({
-        agentType: 'agent',
-        messageContext: options.messageContext,
-        retainTokenLogs: true,
-        systemMessageOverride: workerPrompt.getSystemMessage(),
-      });
-    } catch {}
 
     if (options.workerIndex != null) {
       (executor as any).__workerIndex = options.workerIndex;
