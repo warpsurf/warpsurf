@@ -30,8 +30,15 @@ export const searchWebActionSchema: ActionSchema = {
   }),
 };
 
-// Backwards compatibility alias
-export const searchGoogleActionSchema = searchWebActionSchema;
+// Backwards compatibility alias - must create NEW Zod schema to avoid $ref in JSON schema conversion
+export const searchGoogleActionSchema: ActionSchema = {
+  name: 'search_google',
+  description: searchWebActionSchema.description,
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    query: z.string(),
+  }),
+};
 
 export const extractSearchResultsActionSchema: ActionSchema = {
   name: 'extract_search_results',
@@ -43,8 +50,15 @@ export const extractSearchResultsActionSchema: ActionSchema = {
   }),
 };
 
-// Backwards compatibility alias
-export const extractGoogleResultsActionSchema = extractSearchResultsActionSchema;
+// Backwards compatibility alias - must create NEW Zod schema to avoid $ref in JSON schema conversion
+export const extractGoogleResultsActionSchema: ActionSchema = {
+  name: 'extract_google_results',
+  description: extractSearchResultsActionSchema.description,
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    max_results: z.number().int().min(1).max(20).default(10).describe('maximum number of results to return (1-20)'),
+  }),
+};
 
 export const goToUrlActionSchema: ActionSchema = isLegacyNavigation
   ? {
