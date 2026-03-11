@@ -13,12 +13,24 @@ export function getAvailableEngines(): Array<{ id: string; name: string }> {
 }
 
 export function buildSearchUrl(engine: SearchEngine, query: string): string {
-  const encoded = query.trim().split(/\s+/).join('+');
+  const encoded = encodeURIComponent(query.trim()).replace(/%20/g, '+');
   return engine.searchUrlTemplate.replace('{q}', encoded);
 }
 
 export function isSerpPage(engine: SearchEngine, url: string): boolean {
   return engine.serpPattern.test(url);
+}
+
+/** Detect which engine (if any) matches the given URL. Checks preferred engine first, then all others. */
+export function detectSerpEngine(url: string, preferredId?: string): SearchEngine | null {
+  if (preferredId) {
+    const preferred = SEARCH_ENGINES[preferredId];
+    if (preferred?.serpPattern.test(url)) return preferred;
+  }
+  for (const engine of Object.values(SEARCH_ENGINES)) {
+    if (engine.id !== preferredId && engine.serpPattern.test(url)) return engine;
+  }
+  return null;
 }
 
 export function getNextSerpUrl(engine: SearchEngine, currentUrl: string): string | null {
