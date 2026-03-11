@@ -24,6 +24,7 @@ export const workerSystemPromptTemplate = workerBaseSystemPromptTemplate
   .replace('{{site_search_nav_rule}}', '')
   .replace('{{vision_guidance_section}}', '')
   .replace('{{region_preference_section}}', '')
+  .replace('{{search_engine_section}}', '')
   .replace('{{post_sections}}', multiagentPostSections);
 
 export class CrewPrompt {
