@@ -5,6 +5,7 @@ import { Executor } from '../executor/executor';
 import BrowserContext from '../browser/context';
 import { setPreviewVisibility, sendTabMirror, sendAllMirrorsForCleanup } from '../tabs/handlers';
 import { getAllProvidersDecrypted } from '../crypto';
+import { logPortMessage } from '../test/instrumentation';
 
 type BaseChatModel = any;
 
@@ -20,8 +21,9 @@ export function attachDashboardPortHandlers(port: chrome.runtime.Port, deps: Das
   setDashboardPort(port);
 
   port.onMessage.addListener(async (message: any) => {
+    const msgType = String(((message as any)?.type ?? (message as any)?.messageType) || '');
+    logPortMessage('dashboard', msgType, 'call', { input: message });
     try {
-      const msgType = String(((message as any)?.type ?? (message as any)?.messageType) || '');
       logger.info('[Dashboard] Incoming message type:', msgType);
       switch (msgType) {
         case 'new_task': {

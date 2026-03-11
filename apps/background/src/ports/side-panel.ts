@@ -37,6 +37,7 @@ import {
 } from '../workflows/shared/context/context-tab-extractor';
 import { mergeContextTabIds } from '../workflows/shared/context/auto-tab-context-service';
 import { titleGenerator } from '../services/title-generator';
+import { logPortMessage } from '../test/instrumentation';
 
 type BaseChatModel = any;
 
@@ -89,9 +90,11 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
   } catch {}
 
   port.onMessage.addListener(async (message: any) => {
+    const msgType = String((message as any)?.type || '');
+    logPortMessage('side-panel', msgType, 'call', { input: message });
     try {
       // Global guard: block task-start actions until first-run disclaimer accepted
-      const typeStr = String((message as any)?.type || '');
+      const typeStr = msgType;
       if (typeStr === 'new_task' || typeStr === 'follow_up_task' || typeStr === 'start_multi_agent_workflow_v2') {
         try {
           const w = await warningsSettingsStore.getWarnings();

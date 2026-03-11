@@ -1,5 +1,6 @@
 import { safePostMessage } from '@extension/shared/lib/utils';
 import type { Task } from '../task/task-manager';
+import { logPortMessage } from '../test/instrumentation';
 
 export type AgentManagerDeps = {
   taskManager: any;
@@ -311,8 +312,9 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
   sendAgentData();
 
   port.onMessage.addListener(async (message: any) => {
+    const msgType = String(message?.type || '');
+    logPortMessage('agent-manager', msgType, 'call', { input: message });
     try {
-      const msgType = String(message?.type || '');
       logger.info('[AgentManager] Incoming message:', msgType);
 
       switch (msgType) {
