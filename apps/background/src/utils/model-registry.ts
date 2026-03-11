@@ -407,6 +407,22 @@ class ModelRegistry {
       return helPricing;
     }
 
+    // Fallback: try OpenRouter provider prefixes for direct-provider models
+    // (e.g. "gemini-3.1-flash-lite-preview" → find "google/gemini-3.1-flash-lite-preview")
+    for (const group of this.openRouterGroups) {
+      const orKey = `${group.id}/${modelName}`;
+      const orPricing = this.openRouterPricing.get(orKey);
+      if (orPricing) {
+        if (isFirstLookup) {
+          this.loggedModels.add(modelName);
+          console.log(
+            `[ModelRegistry] Model "${modelName}" pricing: $${(orPricing.inputPerToken * 1e6).toFixed(2)}/$${(orPricing.outputPerToken * 1e6).toFixed(2)} per 1M (OpenRouter fallback via ${orKey})`,
+          );
+        }
+        return orPricing;
+      }
+    }
+
     // No match found
     if (isFirstLookup) {
       this.loggedModels.add(modelName);
