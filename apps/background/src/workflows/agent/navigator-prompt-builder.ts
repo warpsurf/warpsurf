@@ -31,7 +31,7 @@ export class NavigatorPrompt extends BasePrompt {
     }
 
     const engine = getSearchEngine(this.defaultSearchEngine ?? 'google');
-    const exampleUrl = buildSearchUrl(engine, 'your+search+terms');
+    const exampleUrl = buildSearchUrl(engine, 'your search terms');
     const searchSection = searchEngineGuidance
       .replace('{{search_engine_name}}', engine.name)
       .replace('{{search_engine_url_example}}', exampleUrl);
