@@ -132,6 +132,7 @@ export async function setupExecutor(
       useVisionForPlanner: true,
       planningInterval: generalSettings.planningInterval,
       enableCoordinateClick: generalSettings.enableCoordinateClick ?? false,
+      defaultSearchEngine: generalSettings.defaultSearchEngine ?? 'google',
     },
     generalSettings: generalSettings,
     agentType: agentType,
