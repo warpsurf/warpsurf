@@ -69,11 +69,10 @@ const RESULT_PATTERNS: Array<{
   extract?: (m: RegExpMatchArray, content: string) => Record<string, unknown>;
   label?: (m: RegExpMatchArray, content: string) => string;
 }> = [
-  // Search - sets site to google.com
+  // Search - matches both new and legacy action messages
   {
-    pattern: /^Searched (?:for )?"?([^"]+)"?(?:\s+in Google)?$/i,
-    action: 'search_google',
-    siteUrl: 'https://www.google.com',
+    pattern: /^Searched (?:for )?"?([^"]+)"?$/i,
+    action: 'search_web',
     extract: m => ({ query: m[1].trim() }),
   },
   // Navigation
@@ -139,8 +138,8 @@ const RESULT_PATTERNS: Array<{
   { pattern: /^Pressed (.+)$/i, action: 'send_keys', extract: m => ({ keys: m[1] }) },
   // Extraction
   {
-    pattern: /^Extracted (\d+) (?:Google )?(?:search )?results?/i,
-    action: 'extract_google_results',
+    pattern: /^Extracted (\d+) (?:search )?results?/i,
+    action: 'extract_search_results',
     extract: m => ({ max_results: parseInt(m[1]) }),
   },
   {
