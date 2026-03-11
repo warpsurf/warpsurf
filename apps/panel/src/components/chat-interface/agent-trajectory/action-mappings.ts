@@ -36,6 +36,22 @@ const extractDomain = (url: string): string | null => {
 /** Complete action mappings registry */
 export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
   // Navigation
+  search_web: {
+    actionName: 'search_web',
+    category: 'search',
+    display: {
+      icon: '🔍',
+      IconComponent: FaSearch,
+      iconColor: { light: '#4285F4', dark: '#8AB4F8' },
+      categoryLabel: 'Search',
+      causesNavigation: true,
+      priority: 90,
+    },
+    formatLabel: (args, intent) =>
+      args.query ? `Searched "${truncate(String(args.query), 50)}"` : intent || 'Web search',
+    extractDetails: args => ({ primary: String(args.query || '') }),
+  },
+  // Backwards compatibility alias
   search_google: {
     actionName: 'search_google',
     category: 'search',
@@ -48,7 +64,7 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
       priority: 90,
     },
     formatLabel: (args, intent) =>
-      args.query ? `Searched "${truncate(String(args.query), 50)}"` : intent || 'Google search',
+      args.query ? `Searched "${truncate(String(args.query), 50)}"` : intent || 'Web search',
     extractDetails: args => ({ primary: String(args.query || '') }),
   },
   go_to_url: {
@@ -337,6 +353,21 @@ export const ACTION_MAPPINGS: Record<string, ActionMapping> = {
   },
 
   // Extraction actions
+  extract_search_results: {
+    actionName: 'extract_search_results',
+    category: 'extract',
+    display: {
+      icon: '📜',
+      IconComponent: FaAlignLeft,
+      iconColor: { light: '#34A853', dark: '#81C995' },
+      categoryLabel: 'Extract',
+      causesNavigation: false,
+      priority: 75,
+    },
+    formatLabel: (args, intent) => intent?.trim() || `Extracted ${args.max_results || 10} search results`,
+    extractDetails: args => ({ primary: `${args.max_results || 10} results` }),
+  },
+  // Backwards compatibility alias
   extract_google_results: {
     actionName: 'extract_google_results',
     category: 'extract',
