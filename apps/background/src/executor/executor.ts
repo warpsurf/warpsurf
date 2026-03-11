@@ -127,6 +127,7 @@ export class Executor {
       extraArgs?.generalSettings?.preferredRegion,
       context.options.useVision,
       context.options.enableCoordinateClick,
+      context.options.defaultSearchEngine,
     );
     this.plannerPrompt = new PlannerPrompt();
     this.validatorPrompt = new ValidatorPrompt(task);
