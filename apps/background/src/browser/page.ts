@@ -163,6 +163,10 @@ export default class Page {
 
   takeScreenshot = (fullPage?: boolean, freezeAnimations?: boolean) =>
     this._screenshots.capture(fullPage, freezeAnimations);
+  getSearchResults = (max?: number, engineId?: string) => this._screenshots.getSearchResults(max, engineId);
+  getSearchResultsWithMeta = (max?: number, engineId?: string) =>
+    this._screenshots.getSearchResultsWithMeta(max, engineId);
+  // Backwards compatibility aliases
   getGoogleSearchResults = (max?: number) => this._screenshots.getGoogleSearchResults(max);
   getGoogleSearchResultsWithMeta = (max?: number) => this._screenshots.getGoogleSearchResultsWithMeta(max);
 
