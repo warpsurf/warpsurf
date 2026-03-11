@@ -48,11 +48,11 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
     colorOverride,
   } = props;
 
-  const defaultColor = isDarkMode ? 'border-slate-700/70 bg-slate-800/60' : 'border-white/20 bg-white/40';
+  const defaultColor = isDarkMode ? 'border-[#2f2f29] bg-[#252522]' : 'border-[#dddcd5] bg-[#f3f2ee]';
 
   return (
-    <div className={cn('rounded-xl border p-5 text-left shadow-sm backdrop-blur-md', colorOverride || defaultColor)}>
-      <h3 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
+    <div className={cn('rounded-xl border p-4 text-left', colorOverride || defaultColor)}>
+      <h3 className={cn('mb-3 text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
         {sectionTitle}
       </h3>
       {children}
