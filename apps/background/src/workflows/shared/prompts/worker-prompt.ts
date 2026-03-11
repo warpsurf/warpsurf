@@ -38,6 +38,41 @@ const loginAuthGuidance = isApiMode
 - Instead, use \`request_user_control\` action to pause and let the user sign in, then the workflow will resume.
 - Remember: As a Chrome extension, most sites the user visits regularly (Google, social media, etc.) will already have active sessions - try navigating first before assuming login is needed.`;
 
+const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
+
+export const siteSearchSection = isLegacyNavigation
+  ? ''
+  : `
+## CRITICAL CRITICAL CRITICAL DIRECT SITE SEARCH - MANDATORY
+
+**When navigating to a website to search for something, you MUST include the \`search_query\` parameter in your \`go_to_url\` action.**
+
+Examples:
+\`{"go_to_url": {"url": "walmart.com", "search_query": "coffee maker"}}\`
+\`{"go_to_url": {"url": "target.com", "search_query": "running shoes"}}\`
+\`{"go_to_url": {"url": "reddit.com", "search_query": "programming tips"}}\`
+\`{"go_to_url": {"url": "stackoverflow.com", "search_query": "async await"}}\`
+\`{"go_to_url": {"url": "imdb.com", "search_query": "christopher nolan"}}\`
+
+**Do NOT:**
+- Navigate to the homepage first, then use the search box
+- Go to site.com without search_query, then click search, then type
+- Open a site and manually interact with search elements
+
+The \`search_query\` parameter takes you directly to search results in one step.
+
+**Fallback (ONLY if search_query fails with captcha/block):**
+1. Navigate to homepage WITHOUT search_query
+2. Use the site's search box manually
+3. Last resort: DuckDuckGo or Bing
+
+`;
+
+export const siteSearchNavRule = isLegacyNavigation
+  ? ''
+  : `
+- **SITE SEARCH**: When navigating to a site to search, ALWAYS use \`go_to_url\` with \`search_query\` parameter. Do NOT go to the homepage first and then use the search box manually.`;
+
 export const regionPreferenceGuidance = `
 19. REGION PREFERENCE:
 
