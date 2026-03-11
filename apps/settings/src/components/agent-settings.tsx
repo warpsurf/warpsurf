@@ -385,6 +385,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     }
   };
 
+  const handleMultiAgentModelChange = async (_agentName: AgentNameEnum, modelValue: string) => {
+    const multiAgentRoles = [
+      AgentNameEnum.MultiagentPlanner,
+      AgentNameEnum.MultiagentWorker,
+      AgentNameEnum.MultiagentRefiner,
+    ];
+    for (const role of multiAgentRoles) {
+      await handleModelChange(role, modelValue);
+    }
+  };
+
   const handleModelChange = async (agentName: AgentNameEnum, modelValue: string) => {
     const [provider, model] = modelValue.split('>');
 
@@ -622,27 +633,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         showSaveIndicator={globalSaveIndicator.show}
       />
 
-      {/* Auto Tab Context Toggle */}
-      <div className={cardClass}>
-        <div className="flex items-center justify-between">
-          <div className="text-left">
-            <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-              Auto Tab Context
-            </h3>
-            <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              {settings.enableAutoTabContext ? 'Including all open tabs as context' : 'Enable from panel dropdown'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => updateSetting('enableAutoTabContext', !settings.enableAutoTabContext)}
-            className={`toggle-slider ${settings.enableAutoTabContext ? 'toggle-on' : 'toggle-off'}`}
-            aria-pressed={settings.enableAutoTabContext}>
-            <span className="toggle-knob" />
-          </button>
-        </div>
-      </div>
-
       {/* Auto Section */}
       <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.Auto)}`} style={{ order: 2 }}>
         <h2
@@ -708,15 +698,13 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         onChangeThinkingLevel={handleThinkingLevelChange}
       />
 
-      {/* Agent & Multi-Agent Section (Navigator, Planner, Validator) */}
-      <div className={cardClass} style={{ order: 5 }}>
+      {/* Agent & Multi-Agent Section */}
+      <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.AgentNavigator)}`} style={{ order: 5 }}>
         <h2
           className={`mb-4 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           <FiCpu className="h-4 w-4" /> Agent & Multi-Agent
         </h2>
-        {/* Agent Settings - merged configuration */}
-        <div className="mt-5 space-y-4">
-          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Agent Settings</h3>
+        <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex items-center justify-between">
               <div>
@@ -732,7 +720,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Actions/Step</span>
@@ -747,7 +734,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Failure Tolerance</span>
@@ -762,7 +748,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Validator Failures</span>
@@ -777,7 +762,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Retry Delay</span>
@@ -792,7 +776,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Input Tokens</span>
@@ -808,7 +791,20 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 className={`w-24 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
-
+            <div className="flex items-center justify-between">
+              <div>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Workers</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Multi-agent (1-10)</p>
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={settings.maxWorkerAgents}
+                onChange={e => updateSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10))}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+              />
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -845,7 +841,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <option value="true">Always</option>
               </select>
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -873,7 +868,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <option value="true">Always</option>
               </select>
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -885,14 +879,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                     </span>
                     <span
                       className={`pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
-                      Allow the agent to click at exact pixel coordinates from screenshots. Useful for captchas and
-                      visually-identified targets.
+                      Allow the agent to click at exact pixel coordinates from screenshots.
                     </span>
                   </span>
                 </span>
-                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Click by pixel position from screenshots
-                </p>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Click by pixel position</p>
               </div>
               <button
                 type="button"
@@ -902,12 +893,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className="toggle-knob" />
               </button>
             </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <span className="group relative inline-flex items-center gap-1">
-                    Use Vision for Planner
+                    Planner Vision
                     <span
                       className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                       ?
@@ -918,9 +908,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                     </span>
                   </span>
                 </span>
-                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Enable vision for planning
-                </p>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Screenshots for planner</p>
               </div>
               <button
                 type="button"
@@ -930,68 +918,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className="toggle-knob" />
               </button>
             </div>
-          </div>
-
-          <div className={`mt-4 border-t pt-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Single-Agent
-                </h4>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSetting('enablePlanner', !settings.enablePlanner)}
-                      className={`toggle-slider ${settings.enablePlanner ? 'toggle-on' : 'toggle-off'}`}
-                      aria-pressed={settings.enablePlanner}>
-                      <span className="toggle-knob" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSetting('enableValidator', !settings.enableValidator)}
-                      className={`toggle-slider ${settings.enableValidator ? 'toggle-on' : 'toggle-off'}`}
-                      aria-pressed={settings.enableValidator}>
-                      <span className="toggle-knob" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Multi-Agent
-                </h4>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner)}
-                      className={`toggle-slider ${settings.enableMultiagentPlanner ? 'toggle-on' : 'toggle-off'}`}
-                      aria-pressed={settings.enableMultiagentPlanner}>
-                      <span className="toggle-knob" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
-                    <button
-                      type="button"
-                      onClick={() => updateSetting('enableMultiagentValidator', !settings.enableMultiagentValidator)}
-                      className={`toggle-slider ${settings.enableMultiagentValidator ? 'toggle-on' : 'toggle-off'}`}
-                      aria-pressed={settings.enableMultiagentValidator}>
-                      <span className="toggle-knob" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tab Previews</span>
@@ -1006,157 +932,179 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </button>
             </div>
           </div>
-        </div>
-
-        <div className={`mt-4 border-t pt-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Worker Agents</span>
-              <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Parallel workers (1-10)</p>
+          <div className={`mt-4 border-t pt-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+            <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Components</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('enablePlanner', !settings.enablePlanner)}
+                  className={`toggle-slider ${settings.enablePlanner ? 'toggle-on' : 'toggle-off'}`}
+                  aria-pressed={settings.enablePlanner}>
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('enableValidator', !settings.enableValidator)}
+                  className={`toggle-slider ${settings.enableValidator ? 'toggle-on' : 'toggle-off'}`}
+                  aria-pressed={settings.enableValidator}>
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Multi-Agent Planner</span>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner)}
+                  className={`toggle-slider ${settings.enableMultiagentPlanner ? 'toggle-on' : 'toggle-off'}`}
+                  aria-pressed={settings.enableMultiagentPlanner}>
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Multi-Agent Validator
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('enableMultiagentValidator', !settings.enableMultiagentValidator)}
+                  className={`toggle-slider ${settings.enableMultiagentValidator ? 'toggle-on' : 'toggle-off'}`}
+                  aria-pressed={settings.enableMultiagentValidator}>
+                  <span className="toggle-knob" />
+                </button>
+              </div>
             </div>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={settings.maxWorkerAgents}
-              onChange={e => updateSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10))}
-              className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+          </div>
+          <div className={`mt-4 border-t pt-4 space-y-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+            <AgentModelsSection
+              isDarkMode={isDarkMode}
+              sectionTitle="Agent Models"
+              agents={[AgentNameEnum.AgentPlanner, AgentNameEnum.AgentNavigator, AgentNameEnum.AgentValidator]}
+              availableModels={availableModels}
+              selectedModels={selectedModels}
+              modelParameters={modelParameters}
+              thinkingLevel={thinkingLevel}
+              showAllModels={showAllModels}
+              getAgentDisplayName={getAgentDisplayName}
+              getAgentDescription={getAgentDescription}
+              getAgentSectionColor={getSectionColor}
+              hasModelPricing={hasModelPricing}
+              onChangeModel={handleModelChange}
+              onChangeParameter={handleParameterChange}
+              onChangeThinkingLevel={handleThinkingLevelChange}
             />
+            <div className={`pt-4 border-t ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+              <h4 className={`text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Multi-Agent Model
+              </h4>
+              <p className={`text-xs mb-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Single model used for all multi-agent roles (planner, worker, refiner)
+              </p>
+              <ModelSelect
+                isDarkMode={isDarkMode}
+                agentName={AgentNameEnum.MultiagentWorker}
+                availableModels={availableModels}
+                selectedValue={selectedModels[AgentNameEnum.MultiagentWorker] || ''}
+                modelParameters={modelParameters[AgentNameEnum.MultiagentWorker]}
+                thinkingLevelValue={thinkingLevel[AgentNameEnum.MultiagentWorker]}
+                showAllModels={showAllModels}
+                getAgentDisplayName={() => ''}
+                getAgentDescription={() => ''}
+                getAgentSectionColor={getSectionColor}
+                hasModelPricing={hasModelPricing}
+                onChangeModel={handleMultiAgentModelChange}
+                onChangeParameter={(agent, param, value) => {
+                  handleParameterChange(AgentNameEnum.MultiagentPlanner, param, value);
+                  handleParameterChange(AgentNameEnum.MultiagentWorker, param, value);
+                  handleParameterChange(AgentNameEnum.MultiagentRefiner, param, value);
+                }}
+                onChangeThinkingLevel={(agent, value) => {
+                  handleThinkingLevelChange(AgentNameEnum.MultiagentPlanner, value);
+                  handleThinkingLevelChange(AgentNameEnum.MultiagentWorker, value);
+                  handleThinkingLevelChange(AgentNameEnum.MultiagentRefiner, value);
+                }}
+                hideHeader
+              />
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className={`mt-4 border-t pt-4 space-y-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
-          <label className={`flex items-center gap-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            <input
-              type="checkbox"
-              checked={showAllModels}
-              onChange={e => setShowAllModels(e.target.checked)}
-              className="rounded"
-            />
-            Show all models (including those without pricing)
-          </label>
-          <AgentModelsSection
-            isDarkMode={isDarkMode}
-            sectionTitle="Agent Models"
-            agents={[AgentNameEnum.AgentPlanner, AgentNameEnum.AgentNavigator, AgentNameEnum.AgentValidator]}
-            availableModels={availableModels}
-            selectedModels={selectedModels}
-            modelParameters={modelParameters}
-            thinkingLevel={thinkingLevel}
-            showAllModels={showAllModels}
-            getAgentDisplayName={getAgentDisplayName}
-            getAgentDescription={getAgentDescription}
-            getAgentSectionColor={getSectionColor}
-            hasModelPricing={hasModelPricing}
-            onChangeModel={handleModelChange}
-            onChangeParameter={handleParameterChange}
-            onChangeThinkingLevel={handleThinkingLevelChange}
-          />
-          <AgentModelsSection
-            isDarkMode={isDarkMode}
-            sectionTitle="Multi-Agent Models"
-            agents={[AgentNameEnum.MultiagentPlanner, AgentNameEnum.MultiagentRefiner, AgentNameEnum.MultiagentWorker]}
-            availableModels={availableModels}
-            selectedModels={selectedModels}
-            modelParameters={modelParameters}
-            thinkingLevel={thinkingLevel}
-            showAllModels={showAllModels}
-            getAgentDisplayName={getAgentDisplayName}
-            getAgentDescription={getAgentDescription}
-            getAgentSectionColor={getSectionColor}
-            hasModelPricing={hasModelPricing}
-            onChangeModel={handleModelChange}
-            onChangeParameter={handleParameterChange}
-            onChangeThinkingLevel={handleThinkingLevelChange}
-          />
-
-          <div className={`my-4 border-t ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`} />
-          <AgentModelsSection
-            isDarkMode={isDarkMode}
-            sectionTitle="History Context Summarization"
-            agents={[AgentNameEnum.HistorySummariser]}
-            availableModels={availableModels}
-            selectedModels={selectedModels}
-            modelParameters={modelParameters}
-            thinkingLevel={thinkingLevel}
-            showAllModels={showAllModels}
-            getAgentDisplayName={getAgentDisplayName}
-            getAgentDescription={getAgentDescription}
-            getAgentSectionColor={getSectionColor}
-            hasModelPricing={hasModelPricing}
-            onChangeModel={handleModelChange}
-            onChangeParameter={handleParameterChange}
-            onChangeThinkingLevel={handleThinkingLevelChange}>
-            <div className="grid grid-cols-3 gap-3 mt-3">
-              <div>
-                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Window (hrs)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={168}
-                  value={settings.historySummaryWindowHours || 24}
-                  onChange={e =>
-                    updateSetting(
-                      'historySummaryWindowHours',
-                      Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)),
-                    )
-                  }
-                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
-                />
-              </div>
-              <div>
-                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Max Fetch
-                </label>
-                <input
-                  type="number"
-                  min={100}
-                  max={50000}
-                  step={100}
-                  value={settings.historySummaryMaxRawItems || 1000}
-                  onChange={e =>
-                    updateSetting(
-                      'historySummaryMaxRawItems',
-                      Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)),
-                    )
-                  }
-                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
-                />
-              </div>
-              <div>
-                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Max to AI
-                </label>
-                <input
-                  type="number"
-                  min={50}
-                  max={2000}
-                  step={50}
-                  value={settings.historySummaryMaxProcessedItems || 50}
-                  onChange={e =>
-                    updateSetting(
-                      'historySummaryMaxProcessedItems',
-                      Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)),
-                    )
-                  }
-                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
-                />
-              </div>
+      {/* History Context Summarization Section */}
+      <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.HistorySummariser)}`} style={{ order: 7 }}>
+        <h2 className={`mb-4 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          History Context Summarization
+        </h2>
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Window (hrs)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={168}
+                value={settings.historySummaryWindowHours || 24}
+                onChange={e =>
+                  updateSetting(
+                    'historySummaryWindowHours',
+                    Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)),
+                  )
+                }
+                className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+              />
             </div>
-          </AgentModelsSection>
-
-          <div className={`my-4 border-t ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`} />
-
-          <AgentModelsSection
+            <div>
+              <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Max Fetch
+              </label>
+              <input
+                type="number"
+                min={100}
+                max={50000}
+                step={100}
+                value={settings.historySummaryMaxRawItems || 1000}
+                onChange={e =>
+                  updateSetting(
+                    'historySummaryMaxRawItems',
+                    Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)),
+                  )
+                }
+                className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+              />
+            </div>
+            <div>
+              <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Max to AI
+              </label>
+              <input
+                type="number"
+                min={50}
+                max={2000}
+                step={50}
+                value={settings.historySummaryMaxProcessedItems || 50}
+                onChange={e =>
+                  updateSetting(
+                    'historySummaryMaxProcessedItems',
+                    Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)),
+                  )
+                }
+                className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+              />
+            </div>
+          </div>
+          <ModelSelect
             isDarkMode={isDarkMode}
-            sectionTitle="Workflow Estimation"
-            agents={[AgentNameEnum.Estimator]}
+            agentName={AgentNameEnum.HistorySummariser}
             availableModels={availableModels}
-            selectedModels={selectedModels}
-            modelParameters={modelParameters}
-            thinkingLevel={thinkingLevel}
+            selectedValue={selectedModels[AgentNameEnum.HistorySummariser] || ''}
+            modelParameters={modelParameters[AgentNameEnum.HistorySummariser]}
+            thinkingLevelValue={thinkingLevel[AgentNameEnum.HistorySummariser]}
             showAllModels={showAllModels}
             getAgentDisplayName={getAgentDisplayName}
             getAgentDescription={getAgentDescription}
@@ -1165,8 +1113,33 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeThinkingLevel={handleThinkingLevelChange}
+            hideHeader
           />
         </div>
+      </div>
+
+      {/* Workflow Estimation Section */}
+      <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.Estimator)}`} style={{ order: 8 }}>
+        <h2 className={`mb-4 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          Workflow Estimation
+        </h2>
+        <ModelSelect
+          isDarkMode={isDarkMode}
+          agentName={AgentNameEnum.Estimator}
+          availableModels={availableModels}
+          selectedValue={selectedModels[AgentNameEnum.Estimator] || ''}
+          modelParameters={modelParameters[AgentNameEnum.Estimator]}
+          thinkingLevelValue={thinkingLevel[AgentNameEnum.Estimator]}
+          showAllModels={showAllModels}
+          getAgentDisplayName={getAgentDisplayName}
+          getAgentDescription={getAgentDescription}
+          getAgentSectionColor={getSectionColor}
+          hasModelPricing={hasModelPricing}
+          onChangeModel={handleModelChange}
+          onChangeParameter={handleParameterChange}
+          onChangeThinkingLevel={handleThinkingLevelChange}
+          hideHeader
+        />
       </div>
     </section>
   );
