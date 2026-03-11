@@ -3,10 +3,14 @@ import { initializeLatencyCalculator, getCachedLatencyCount } from '../utils/lat
 import { initializeModelRegistry, getModelRegistryCachedCount } from '../utils/model-registry';
 import { setupLLMApiLogging } from '../utils/llm-fetch-logger';
 import { setupXHRLogging } from '../utils/xhrLogger';
+import { setupLLMInterceptor } from '../test/llm-interceptor';
 
-export async function initInstrumentation(logger: { info: Function; error: Function }): Promise<{ pricedModels: number; latencyModels: number; registryModels: number; errors: number }> {
+export async function initInstrumentation(logger: {
+  info: Function;
+  error: Function;
+}): Promise<{ pricedModels: number; latencyModels: number; registryModels: number; errors: number }> {
   let errors = 0;
-  
+
   try {
     await initializeCostCalculator();
   } catch (error) {
@@ -35,14 +39,28 @@ export async function initInstrumentation(logger: { info: Function; error: Funct
     errors++;
   }
 
-  try { setupXHRLogging(logger); } catch {}
-  
+  // Setup LLM interceptor for testing (only in test mode)
+  // Always call setupLLMInterceptor - it has its own guard
+  try {
+    setupLLMInterceptor();
+    if (process.env.__TEST__ === 'true') {
+      logger.info('LLM interceptor enabled for testing');
+    }
+  } catch (e) {
+    if (process.env.__TEST__ === 'true') {
+      logger.error('Failed to setup LLM interceptor', e);
+      errors++;
+    }
+  }
+
+  try {
+    setupXHRLogging(logger);
+  } catch {}
+
   return {
     pricedModels: getCachedPricingCount(),
     latencyModels: getCachedLatencyCount(),
     registryModels: getModelRegistryCachedCount(),
-    errors
+    errors,
   };
 }
-
-
