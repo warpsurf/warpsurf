@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { FiCpu, FiZap } from 'react-icons/fi';
 import {
   generalSettingsStore,
@@ -17,7 +17,7 @@ import { ModelSelect } from './model-select';
 import { GlobalSettings } from './global-settings';
 import { AgentModelsSection } from './agent-models-section';
 import { SingleModelSection } from './single-model-section';
-import { isThinkingCapableModel, useSaveIndicator } from './primitives';
+import { isThinkingCapableModel, SectionApplyButton } from './primitives';
 import {
   getAgentDisplayName,
   getAgentDescription,
@@ -69,7 +69,36 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     maxOutputTokens: 8192,
     thinkingLevel: 'default',
   });
-  const globalSaveIndicator = useSaveIndicator();
+  // Per-card dirty tracking and confirmation via chrome.storage.onChanged
+  const [dirtyCards, setDirtyCards] = useState<Set<string>>(new Set());
+  const [confirmedCard, setConfirmedCard] = useState<string | null>(null);
+  const pendingCardRef = useRef<string | null>(null);
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const markDirty = (card: string) => setDirtyCards(prev => new Set(prev).add(card));
+  const clearDirty = (card: string) =>
+    setDirtyCards(prev => {
+      const next = new Set(prev);
+      next.delete(card);
+      return next;
+    });
+
+  useEffect(() => {
+    const listener = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if ((changes['agent-models'] || changes['general-settings']) && pendingCardRef.current) {
+        const card = pendingCardRef.current;
+        pendingCardRef.current = null;
+        if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+        setConfirmedCard(card);
+        confirmTimeoutRef.current = setTimeout(() => setConfirmedCard(null), 2000);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => {
+      chrome.storage.onChanged.removeListener(listener);
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    };
+  }, []);
 
   // Load general settings and subscribe to changes
   useEffect(() => {
@@ -350,7 +379,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
       try {
         for (const agent of targets) {
-          await handleModelChange(agent, value);
+          const shouldEnableWebSearch = agent === AgentNameEnum.Search;
+          await agentModelStore.setAgentModel(agent, {
+            provider: firstProviderId!,
+            modelName: defaultModel,
+            parameters: { maxOutputTokens: 8192 },
+            thinkingLevel: 'default',
+            webSearch: shouldEnableWebSearch,
+          });
         }
       } finally {
         setHasAppliedInitialDefaults(true);
@@ -362,27 +398,64 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
   // Removed recommended model logic
 
-  const updateSetting = async (key: keyof GeneralSettingsConfig, value: any) => {
-    try {
-      const updatedSettings = { ...settings, [key]: value };
-      setSettings(updatedSettings);
-      await generalSettingsStore.updateSettings({ [key]: value });
+  // Agent-card general settings keys (for applyCard)
+  const AGENT_CARD_GENERAL_KEYS: (keyof GeneralSettingsConfig)[] = [
+    'maxSteps',
+    'maxActionsPerStep',
+    'maxFailures',
+    'maxValidatorFailures',
+    'retryDelay',
+    'maxInputTokens',
+    'maxWorkerAgents',
+    'useVision',
+    'useVisionForPlanner',
+    'displayHighlights',
+    'enableCoordinateClick',
+    'showTabPreviews',
+    'enablePlanner',
+    'enableValidator',
+    'enableMultiagentPlanner',
+    'enableMultiagentValidator',
+  ];
+  const HISTORY_CARD_GENERAL_KEYS: (keyof GeneralSettingsConfig)[] = [
+    'historySummaryWindowHours',
+    'historySummaryMaxRawItems',
+    'historySummaryMaxProcessedItems',
+  ];
 
-      const latestSettings = await generalSettingsStore.getSettings();
+  const AGENT_CARD_MAP: Record<string, string> = {
+    [AgentNameEnum.Auto]: 'auto',
+    [AgentNameEnum.Chat]: 'chat',
+    [AgentNameEnum.Search]: 'search',
+    [AgentNameEnum.AgentPlanner]: 'agent',
+    [AgentNameEnum.AgentNavigator]: 'agent',
+    [AgentNameEnum.AgentValidator]: 'agent',
+    [AgentNameEnum.MultiagentPlanner]: 'agent',
+    [AgentNameEnum.MultiagentWorker]: 'agent',
+    [AgentNameEnum.MultiagentRefiner]: 'agent',
+    [AgentNameEnum.HistorySummariser]: 'history',
+    [AgentNameEnum.Estimator]: 'estimator',
+  };
 
-      // Debug: Verify settings were saved correctly for planner/validator toggles
-      if (key === 'enablePlanner' || key === 'enableValidator') {
-        console.log(`[Settings] Updated ${key}:`, {
-          requestedValue: value,
-          savedValue: (latestSettings as any)[key],
-          match: (latestSettings as any)[key] === value,
-        });
-      }
+  const CARD_AGENTS: Record<string, AgentNameEnum[]> = {
+    auto: [AgentNameEnum.Auto],
+    chat: [AgentNameEnum.Chat],
+    search: [AgentNameEnum.Search],
+    agent: [
+      AgentNameEnum.AgentPlanner,
+      AgentNameEnum.AgentNavigator,
+      AgentNameEnum.AgentValidator,
+      AgentNameEnum.MultiagentPlanner,
+      AgentNameEnum.MultiagentWorker,
+      AgentNameEnum.MultiagentRefiner,
+    ],
+    history: [AgentNameEnum.HistorySummariser],
+    estimator: [AgentNameEnum.Estimator],
+  };
 
-      setSettings(latestSettings);
-    } catch (error) {
-      console.error('Error updating setting:', error);
-    }
+  const updateLocalSetting = (key: keyof GeneralSettingsConfig, value: any, card: string) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    markDirty(card);
   };
 
   const handleMultiAgentModelChange = async (_agentName: AgentNameEnum, modelValue: string) => {
@@ -396,142 +469,108 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     }
   };
 
-  const handleModelChange = async (agentName: AgentNameEnum, modelValue: string) => {
-    const [provider, model] = modelValue.split('>');
-
-    console.log(`[handleModelChange] Setting ${agentName} model: provider=${provider}, model=${model}`);
-
-    // When changing models, reset to provider defaults (temperature undefined = use provider default)
-    const newParameters = {
-      temperature: undefined as number | undefined, // Use provider's default temperature
-      maxOutputTokens: 8192,
-    };
+  const handleModelChange = (agentName: AgentNameEnum, modelValue: string) => {
+    const [, model] = modelValue.split('>');
 
     setModelParameters(prev => ({
       ...prev,
-      [agentName]: newParameters,
+      [agentName]: { temperature: undefined as number | undefined, maxOutputTokens: 8192 },
     }));
+    setSelectedModels(prev => ({ ...prev, [agentName]: modelValue }));
 
-    setSelectedModels(prev => ({
-      ...prev,
-      [agentName]: modelValue,
-    }));
-
-    try {
-      if (model) {
-        if (isThinkingCapableModel(model)) {
-          setThinkingLevel(prev => ({
-            ...prev,
-            [agentName]: prev[agentName] || 'default',
-          }));
-        } else {
-          setThinkingLevel(prev => ({
-            ...prev,
-            [agentName]: undefined,
-          }));
-        }
-
-        const shouldEnableWebSearch = agentName === AgentNameEnum.Search ? true : webSearchEnabled[agentName] || false;
-        if (agentName === AgentNameEnum.Search && !webSearchEnabled[agentName]) {
-          setWebSearchEnabled(prev => ({ ...prev, [agentName]: true }));
-        }
-
-        await agentModelStore.setAgentModel(agentName, {
-          provider,
-          modelName: model,
-          parameters: { maxOutputTokens: newParameters.maxOutputTokens },
-          thinkingLevel: isThinkingCapableModel(model) ? thinkingLevel[agentName] || 'default' : undefined,
-          webSearch: shouldEnableWebSearch,
-        });
-      } else {
-        await agentModelStore.resetAgentModel(agentName);
+    if (model) {
+      setThinkingLevel(prev => ({
+        ...prev,
+        [agentName]: isThinkingCapableModel(model) ? prev[agentName] || 'default' : undefined,
+      }));
+      if (agentName === AgentNameEnum.Search) {
+        setWebSearchEnabled(prev => ({ ...prev, [agentName]: true }));
       }
-    } catch (error) {
-      console.error('Error saving agent model:', error);
     }
+
+    markDirty(AGENT_CARD_MAP[agentName] || 'agent');
   };
 
-  const handleThinkingLevelChange = async (agentName: AgentNameEnum, value: ThinkingLevel) => {
+  const handleThinkingLevelChange = (agentName: AgentNameEnum, value: ThinkingLevel) => {
     setThinkingLevel(prev => ({ ...prev, [agentName]: value }));
-
-    if (selectedModels[agentName]) {
-      try {
-        const [provider, model] = selectedModels[agentName].split('>');
-        if (provider) {
-          await agentModelStore.setAgentModel(agentName, {
-            provider,
-            modelName: model,
-            parameters: modelParameters[agentName],
-            thinkingLevel: value,
-            webSearch: webSearchEnabled[agentName] || false,
-          });
-        }
-      } catch (error) {
-        console.error('Error saving thinking level:', error);
-      }
-    }
+    markDirty(AGENT_CARD_MAP[agentName] || 'agent');
   };
 
-  const handleParameterChange = async (
+  const handleParameterChange = (
     agentName: AgentNameEnum,
     paramName: 'temperature' | 'maxOutputTokens',
     value: number | undefined,
   ) => {
-    const newParameters = {
-      ...modelParameters[agentName],
-      [paramName]: value,
-    };
-
     setModelParameters(prev => ({
       ...prev,
-      [agentName]: newParameters,
+      [agentName]: { ...prev[agentName], [paramName]: value },
     }));
-
-    if (selectedModels[agentName]) {
-      try {
-        const [provider, model] = selectedModels[agentName].split('>');
-
-        if (provider) {
-          // Build parameters object, omitting undefined temperature to use provider default
-          const parametersToSave: Record<string, unknown> = {
-            maxOutputTokens: newParameters.maxOutputTokens,
-          };
-          if (newParameters.temperature !== undefined) {
-            parametersToSave.temperature = newParameters.temperature;
-          }
-
-          await agentModelStore.setAgentModel(agentName, {
-            provider,
-            modelName: model,
-            parameters: parametersToSave,
-            thinkingLevel: thinkingLevel[agentName],
-            webSearch: webSearchEnabled[agentName] || false,
-          });
-        }
-      } catch (error) {
-        console.error('Error saving agent parameters:', error);
-      }
-    }
+    markDirty(AGENT_CARD_MAP[agentName] || 'agent');
   };
 
-  // Handle global model parameter changes
   const handleGlobalParameterChange = (
     param: 'temperature' | 'maxOutputTokens' | 'thinkingLevel',
     value: number | undefined | ThinkingLevel,
   ) => {
-    setGlobalModelParameters(prev => ({
-      ...prev,
-      [param]: value,
-    }));
+    setGlobalModelParameters(prev => ({ ...prev, [param]: value }));
+    markDirty('global');
   };
 
-  // Apply a selected global model to all agents
+  const saveAgentModel = async (agent: AgentNameEnum) => {
+    const modelValue = selectedModels[agent];
+    if (!modelValue) {
+      await agentModelStore.resetAgentModel(agent);
+      return;
+    }
+    const [provider, model] = modelValue.split('>');
+    if (!provider || !model) return;
+    const params = modelParameters[agent];
+    const parametersToSave: Record<string, unknown> = { maxOutputTokens: params.maxOutputTokens };
+    if (params.temperature !== undefined) parametersToSave.temperature = params.temperature;
+    await agentModelStore.setAgentModel(agent, {
+      provider,
+      modelName: model,
+      parameters: parametersToSave,
+      thinkingLevel: thinkingLevel[agent],
+      webSearch: agent === AgentNameEnum.Search ? true : webSearchEnabled[agent] || false,
+    });
+  };
+
+  const applyCard = async (card: string) => {
+    pendingCardRef.current = card;
+    setConfirmedCard(null);
+
+    // Write general settings belonging to this card
+    const generalKeys =
+      card === 'agent' ? AGENT_CARD_GENERAL_KEYS : card === 'history' ? HISTORY_CARD_GENERAL_KEYS : null;
+    if (generalKeys) {
+      const patch: Partial<GeneralSettingsConfig> = {};
+      for (const key of generalKeys) (patch as any)[key] = settings[key];
+      await generalSettingsStore.updateSettings(patch);
+    }
+
+    // Write model settings for agents in this card
+    const agents = CARD_AGENTS[card] || [];
+    for (const agent of agents) await saveAgentModel(agent);
+
+    clearDirty(card);
+  };
+
   const applyGlobalModelToAll = async () => {
     try {
       if (!globalModelValue) return;
-      const [provider, model] = globalModelValue.split('>');
+      pendingCardRef.current = 'global';
+      setConfirmedCard(null);
 
-      // Agents to update (all workflow roles)
+      const [provider, model] = globalModelValue.split('>');
+      const isThinkingModel = isThinkingCapableModel(globalModelValue);
+      const parametersToSave: Record<string, unknown> = {
+        maxOutputTokens: globalModelParameters.maxOutputTokens,
+      };
+      if (globalModelParameters.temperature !== undefined) {
+        parametersToSave.temperature = globalModelParameters.temperature;
+      }
+
       const agentList: AgentNameEnum[] = [
         AgentNameEnum.Auto,
         AgentNameEnum.AgentPlanner,
@@ -546,18 +585,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         AgentNameEnum.Estimator,
       ];
 
-      const isThinkingModel = isThinkingCapableModel(globalModelValue);
-
-      // Build parameters object
-      const parametersToSave: Record<string, unknown> = {
-        maxOutputTokens: globalModelParameters.maxOutputTokens,
-      };
-      if (globalModelParameters.temperature !== undefined) {
-        parametersToSave.temperature = globalModelParameters.temperature;
-      }
-
       for (const agent of agentList) {
-        // Update local state
         setSelectedModels(prev => ({ ...prev, [agent]: globalModelValue }));
         setModelParameters(prev => ({
           ...prev,
@@ -569,18 +597,20 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         if (isThinkingModel) {
           setThinkingLevel(prev => ({ ...prev, [agent]: globalModelParameters.thinkingLevel }));
         }
-
-        // Save to storage
-        const shouldEnableWebSearch = agent === AgentNameEnum.Search ? true : webSearchEnabled[agent] || false;
         await agentModelStore.setAgentModel(agent, {
           provider,
           modelName: model,
           parameters: parametersToSave,
           thinkingLevel: isThinkingModel ? globalModelParameters.thinkingLevel : undefined,
-          webSearch: shouldEnableWebSearch,
+          webSearch: agent === AgentNameEnum.Search ? true : webSearchEnabled[agent] || false,
         });
       }
-      globalSaveIndicator.trigger();
+
+      // Also save response timeout
+      await generalSettingsStore.updateSettings({ responseTimeoutSeconds: settings.responseTimeoutSeconds });
+
+      // Clear all card dirty states since global apply affects everything
+      setDirtyCards(new Set());
     } catch (error) {
       console.error('Error applying global model to all agents:', error);
     }
@@ -622,15 +652,19 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         isDarkMode={isDarkMode}
         availableModels={availableModels}
         globalModelValue={globalModelValue}
-        onChangeGlobalModel={setGlobalModelValue}
+        onChangeGlobalModel={v => {
+          setGlobalModelValue(v);
+          markDirty('global');
+        }}
         applyToAll={applyGlobalModelToAll}
         showAllModels={showAllModels}
         hasModelPricing={hasModelPricing}
         globalModelParameters={globalModelParameters}
         onChangeGlobalParameter={handleGlobalParameterChange}
         responseTimeoutSeconds={settings.responseTimeoutSeconds ?? 120}
-        onChangeTimeout={seconds => updateSetting('responseTimeoutSeconds', seconds)}
-        showSaveIndicator={globalSaveIndicator.show}
+        onChangeTimeout={seconds => updateLocalSetting('responseTimeoutSeconds', seconds, 'global')}
+        isDirty={dirtyCards.has('global')}
+        confirmed={confirmedCard === 'global'}
       />
 
       {/* Auto Section */}
@@ -657,6 +691,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             onChangeThinkingLevel={handleThinkingLevelChange}
             hideHeader
           />
+          <SectionApplyButton
+            isDarkMode={isDarkMode}
+            isDirty={dirtyCards.has('auto')}
+            confirmed={confirmedCard === 'auto'}
+            onApply={() => applyCard('auto')}
+          />
         </div>
       </div>
 
@@ -676,8 +716,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
-        onChangeThinkingLevel={handleThinkingLevelChange}
-      />
+        onChangeThinkingLevel={handleThinkingLevelChange}>
+        <SectionApplyButton
+          isDarkMode={isDarkMode}
+          isDirty={dirtyCards.has('chat')}
+          confirmed={confirmedCard === 'chat'}
+          onApply={() => applyCard('chat')}
+        />
+      </SingleModelSection>
 
       {/* Search Section */}
       <SingleModelSection
@@ -695,8 +741,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
         hasModelPricing={hasModelPricing}
         onChangeModel={handleModelChange}
         onChangeParameter={handleParameterChange}
-        onChangeThinkingLevel={handleThinkingLevelChange}
-      />
+        onChangeThinkingLevel={handleThinkingLevelChange}>
+        <SectionApplyButton
+          isDarkMode={isDarkMode}
+          isDirty={dirtyCards.has('search')}
+          confirmed={confirmedCard === 'search'}
+          onApply={() => applyCard('search')}
+        />
+      </SingleModelSection>
 
       {/* Agent & Multi-Agent Section */}
       <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.AgentNavigator)}`} style={{ order: 5 }}>
@@ -716,7 +768,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={1}
                 max={50}
                 value={settings.maxSteps}
-                onChange={e => updateSetting('maxSteps', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxSteps', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -730,7 +782,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={1}
                 max={50}
                 value={settings.maxActionsPerStep}
-                onChange={e => updateSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -744,7 +796,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={1}
                 max={10}
                 value={settings.maxFailures}
-                onChange={e => updateSetting('maxFailures', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxFailures', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -758,7 +810,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={1}
                 max={10}
                 value={settings.maxValidatorFailures}
-                onChange={e => updateSetting('maxValidatorFailures', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxValidatorFailures', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -772,7 +824,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={0}
                 max={30}
                 value={settings.retryDelay}
-                onChange={e => updateSetting('retryDelay', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('retryDelay', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -787,7 +839,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={200000}
                 step={1000}
                 value={settings.maxInputTokens}
-                onChange={e => updateSetting('maxInputTokens', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxInputTokens', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-24 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -801,7 +853,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 min={1}
                 max={10}
                 value={settings.maxWorkerAgents}
-                onChange={e => updateSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10))}
+                onChange={e => updateLocalSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10), 'agent')}
                 className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
@@ -833,7 +885,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 value={String(settings.useVision)}
                 onChange={e => {
                   const v = e.target.value;
-                  updateSetting('useVision', v === 'true' ? true : v === 'auto' ? 'auto' : false);
+                  updateLocalSetting('useVision', v === 'true' ? true : v === 'auto' ? 'auto' : false, 'agent');
                 }}
                 className={`rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}>
                 <option value="false">Off</option>
@@ -862,7 +914,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </div>
               <select
                 value={String(settings.displayHighlights ?? 'auto')}
-                onChange={e => updateSetting('displayHighlights', e.target.value === 'true' ? true : 'auto')}
+                onChange={e =>
+                  updateLocalSetting('displayHighlights', e.target.value === 'true' ? true : 'auto', 'agent')
+                }
                 className={`rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}>
                 <option value="auto">Auto</option>
                 <option value="true">Always</option>
@@ -887,7 +941,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </div>
               <button
                 type="button"
-                onClick={() => updateSetting('enableCoordinateClick', !settings.enableCoordinateClick)}
+                onClick={() => updateLocalSetting('enableCoordinateClick', !settings.enableCoordinateClick, 'agent')}
                 className={`toggle-slider ${settings.enableCoordinateClick ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={!!settings.enableCoordinateClick}>
                 <span className="toggle-knob" />
@@ -912,7 +966,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </div>
               <button
                 type="button"
-                onClick={() => updateSetting('useVisionForPlanner', !settings.useVisionForPlanner)}
+                onClick={() => updateLocalSetting('useVisionForPlanner', !settings.useVisionForPlanner, 'agent')}
                 className={`toggle-slider ${settings.useVisionForPlanner ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={settings.useVisionForPlanner}>
                 <span className="toggle-knob" />
@@ -925,7 +979,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               </div>
               <button
                 type="button"
-                onClick={() => updateSetting('showTabPreviews' as any, !((settings as any).showTabPreviews ?? true))}
+                onClick={() =>
+                  updateLocalSetting('showTabPreviews' as any, !((settings as any).showTabPreviews ?? true), 'agent')
+                }
                 className={`toggle-slider ${((settings as any).showTabPreviews ?? true) ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={(settings as any).showTabPreviews ?? true}>
                 <span className="toggle-knob" />
@@ -939,7 +995,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
                 <button
                   type="button"
-                  onClick={() => updateSetting('enablePlanner', !settings.enablePlanner)}
+                  onClick={() => updateLocalSetting('enablePlanner', !settings.enablePlanner, 'agent')}
                   className={`toggle-slider ${settings.enablePlanner ? 'toggle-on' : 'toggle-off'}`}
                   aria-pressed={settings.enablePlanner}>
                   <span className="toggle-knob" />
@@ -949,7 +1005,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
                 <button
                   type="button"
-                  onClick={() => updateSetting('enableValidator', !settings.enableValidator)}
+                  onClick={() => updateLocalSetting('enableValidator', !settings.enableValidator, 'agent')}
                   className={`toggle-slider ${settings.enableValidator ? 'toggle-on' : 'toggle-off'}`}
                   aria-pressed={settings.enableValidator}>
                   <span className="toggle-knob" />
@@ -959,7 +1015,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Multi-Agent Planner</span>
                 <button
                   type="button"
-                  onClick={() => updateSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner)}
+                  onClick={() =>
+                    updateLocalSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner, 'agent')
+                  }
                   className={`toggle-slider ${settings.enableMultiagentPlanner ? 'toggle-on' : 'toggle-off'}`}
                   aria-pressed={settings.enableMultiagentPlanner}>
                   <span className="toggle-knob" />
@@ -971,7 +1029,9 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 </span>
                 <button
                   type="button"
-                  onClick={() => updateSetting('enableMultiagentValidator', !settings.enableMultiagentValidator)}
+                  onClick={() =>
+                    updateLocalSetting('enableMultiagentValidator', !settings.enableMultiagentValidator, 'agent')
+                  }
                   className={`toggle-slider ${settings.enableMultiagentValidator ? 'toggle-on' : 'toggle-off'}`}
                   aria-pressed={settings.enableMultiagentValidator}>
                   <span className="toggle-knob" />
@@ -1031,6 +1091,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
               />
             </div>
           </div>
+          <SectionApplyButton
+            isDarkMode={isDarkMode}
+            isDirty={dirtyCards.has('agent')}
+            confirmed={confirmedCard === 'agent'}
+            onApply={() => applyCard('agent')}
+          />
         </div>
       </div>
 
@@ -1051,9 +1117,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={168}
                 value={settings.historySummaryWindowHours || 24}
                 onChange={e =>
-                  updateSetting(
+                  updateLocalSetting(
                     'historySummaryWindowHours',
                     Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)),
+                    'history',
                   )
                 }
                 className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
@@ -1070,9 +1137,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 step={100}
                 value={settings.historySummaryMaxRawItems || 1000}
                 onChange={e =>
-                  updateSetting(
+                  updateLocalSetting(
                     'historySummaryMaxRawItems',
                     Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)),
+                    'history',
                   )
                 }
                 className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
@@ -1089,9 +1157,10 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 step={50}
                 value={settings.historySummaryMaxProcessedItems || 50}
                 onChange={e =>
-                  updateSetting(
+                  updateLocalSetting(
                     'historySummaryMaxProcessedItems',
                     Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)),
+                    'history',
                   )
                 }
                 className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
@@ -1114,6 +1183,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             onChangeParameter={handleParameterChange}
             onChangeThinkingLevel={handleThinkingLevelChange}
             hideHeader
+          />
+          <SectionApplyButton
+            isDarkMode={isDarkMode}
+            isDirty={dirtyCards.has('history')}
+            confirmed={confirmedCard === 'history'}
+            onApply={() => applyCard('history')}
           />
         </div>
       </div>
@@ -1139,6 +1214,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
           onChangeParameter={handleParameterChange}
           onChangeThinkingLevel={handleThinkingLevelChange}
           hideHeader
+        />
+        <SectionApplyButton
+          isDarkMode={isDarkMode}
+          isDirty={dirtyCards.has('estimator')}
+          confirmed={confirmedCard === 'estimator'}
+          onApply={() => applyCard('estimator')}
         />
       </div>
     </section>
