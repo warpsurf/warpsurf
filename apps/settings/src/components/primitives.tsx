@@ -41,16 +41,16 @@ export function LabelWithTooltip({
             <span
               className={cn(
                 'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]',
-                isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700',
+                isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600',
               )}>
               ?
             </span>
             <span
               className={cn(
-                'pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded px-2 py-1 text-[10px] shadow-lg group-hover:block',
+                'pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block',
                 isDarkMode
-                  ? 'bg-slate-900 text-slate-100 border border-slate-700'
-                  : 'bg-gray-900 text-white border border-gray-800',
+                  ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]'
+                  : 'bg-white text-gray-700 border border-[#dddcd5]',
               )}>
               {tooltip}
             </span>
@@ -71,16 +71,19 @@ export function SectionCard({
   isDarkMode: boolean;
   title: string;
   icon?: React.ReactNode;
-  toneClass: string;
+  toneClass?: string;
   children: React.ReactNode;
 }) {
+  const defaultClass = isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]';
   return (
-    <div className={cn('rounded-xl border p-5 text-left shadow-sm backdrop-blur-md', toneClass)}>
-      <h2 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
-        <span className="inline-flex items-center gap-2">
-          {icon}
-          <span>{title}</span>
-        </span>
+    <div className={cn('rounded-xl border p-5 text-left', toneClass || defaultClass)}>
+      <h2
+        className={cn(
+          'mb-4 flex items-center gap-2 text-base font-semibold',
+          isDarkMode ? 'text-gray-100' : 'text-gray-900',
+        )}>
+        {icon}
+        <span>{title}</span>
       </h2>
       {children}
     </div>
@@ -106,6 +109,9 @@ export function SliderWithNumber({
   onChange: (v: number) => void;
   ariaLabel: string;
 }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  const trackColor = isDarkMode ? '#3a3a34' : '#dddcd5';
+  const fillColor = isDarkMode ? '#6b7280' : '#9ca3af';
   return (
     <div className="flex flex-1 items-center space-x-2">
       <input
@@ -117,12 +123,12 @@ export function SliderWithNumber({
         value={value}
         onChange={e => onChange(Number.parseFloat(e.target.value))}
         style={{
-          background: `linear-gradient(to right, ${isDarkMode ? '#3b82f6' : '#60a5fa'} 0%, ${isDarkMode ? '#3b82f6' : '#60a5fa'} ${((value - min) / (max - min)) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} ${((value - min) / (max - min)) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} 100%)`,
+          background: `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${pct}%, ${trackColor} ${pct}%, ${trackColor} 100%)`,
         }}
-        className={cn('h-1 flex-1 appearance-none rounded-full', isDarkMode ? 'accent-blue-500' : 'accent-blue-400')}
+        className="h-1 flex-1 appearance-none rounded-full"
       />
       <div className="flex items-center space-x-2">
-        <span className={cn('w-12 text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-600')}>
+        <span className={cn('w-12 text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
           {value.toFixed(step <= 0.01 ? 1 : 2)}
         </span>
         <input
@@ -136,10 +142,8 @@ export function SliderWithNumber({
             if (!Number.isNaN(v) && v >= min && v <= max) onChange(v);
           }}
           className={cn(
-            'w-20 rounded-md border px-2 py-1 text-sm',
-            isDarkMode
-              ? 'border-slate-600 bg-slate-700 text-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-800'
-              : 'border-gray-300 bg-white text-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-200',
+            'w-20 rounded-lg border px-2 py-1 text-sm outline-none',
+            isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
           )}
           aria-label={ariaLabel}
         />
@@ -171,30 +175,26 @@ export function TemperatureControl({
   const step = 0.01;
   const displayValue = value ?? 1.0; // Default display value when switching from default
 
+  const btnClass = cn(
+    'rounded-lg px-3 py-1 text-xs font-medium',
+    isDarkMode ? 'bg-[#2a2a26] text-gray-300 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-600 hover:bg-[#dfddd4]',
+  );
+
   if (value === undefined) {
-    // Show "Default" state with button to customize
     return (
       <div className="flex flex-1 items-center justify-end space-x-3">
-        <span className={cn('text-sm italic', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
-          Using provider default
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(1.0)}
-          className={cn(
-            'rounded-md border px-3 py-1 text-xs font-medium transition-colors',
-            isDarkMode
-              ? 'border-slate-600 bg-slate-700 text-gray-300 hover:bg-slate-600'
-              : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50',
-          )}
-          aria-label="Set custom temperature">
+        <span className={cn('text-sm', isDarkMode ? 'text-gray-500' : 'text-gray-500')}>Provider default</span>
+        <button type="button" onClick={() => onChange(1.0)} className={btnClass}>
           Customize
         </button>
       </div>
     );
   }
 
-  // Show slider with reset button
+  const pct = ((displayValue - min) / (max - min)) * 100;
+  const trackColor = isDarkMode ? '#3a3a34' : '#dddcd5';
+  const fillColor = isDarkMode ? '#6b7280' : '#9ca3af';
+
   return (
     <div className="flex flex-1 items-center space-x-2">
       <input
@@ -206,9 +206,9 @@ export function TemperatureControl({
         value={displayValue}
         onChange={e => onChange(Number.parseFloat(e.target.value))}
         style={{
-          background: `linear-gradient(to right, ${isDarkMode ? '#3b82f6' : '#60a5fa'} 0%, ${isDarkMode ? '#3b82f6' : '#60a5fa'} ${((displayValue - min) / (max - min)) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} ${((displayValue - min) / (max - min)) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} 100%)`,
+          background: `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${pct}%, ${trackColor} ${pct}%, ${trackColor} 100%)`,
         }}
-        className={cn('h-1 flex-1 appearance-none rounded-full', isDarkMode ? 'accent-blue-500' : 'accent-blue-400')}
+        className="h-1 flex-1 appearance-none rounded-full"
       />
       <div className="flex items-center space-x-2">
         <input
@@ -222,25 +222,13 @@ export function TemperatureControl({
             if (!Number.isNaN(v) && v >= min && v <= max) onChange(v);
           }}
           className={cn(
-            'w-16 rounded-md border px-2 py-1 text-sm',
-            isDarkMode
-              ? 'border-slate-600 bg-slate-700 text-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-800'
-              : 'border-gray-300 bg-white text-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-200',
+            'w-16 rounded-lg border px-2 py-1 text-sm outline-none',
+            isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
           )}
           aria-label={ariaLabel}
         />
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          className={cn(
-            'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
-            isDarkMode
-              ? 'border-slate-600 bg-slate-700 text-gray-400 hover:bg-slate-600 hover:text-gray-300'
-              : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-600',
-          )}
-          title="Reset to provider default"
-          aria-label="Reset temperature to provider default">
-          Reset to default
+        <button type="button" onClick={() => onChange(undefined)} className={btnClass}>
+          Reset
         </button>
       </div>
     </div>
@@ -328,9 +316,7 @@ export function ModelComboBox({
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      const clickedInsideContainer = containerRef.current && containerRef.current.contains(target);
-      const clickedInsideMenu = menuRef.current && menuRef.current.contains(target);
-      if (!clickedInsideContainer && !clickedInsideMenu) setOpen(false);
+      if (!containerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -341,43 +327,23 @@ export function ModelComboBox({
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
     const viewportH = window.innerHeight;
-    const viewportW = window.innerWidth;
     const gap = 4;
-    const menuH = menuRef.current?.offsetHeight || 224; // ~max-h-56 default
-
-    let top = rect.bottom + gap; // try open downward first
-    // Flip upward if clipped at bottom and there's more space above
-    if (top + menuH > viewportH && rect.top - gap - menuH >= 0) {
-      top = rect.top - gap - menuH;
-    }
-
-    let left = rect.left;
-    const width = rect.width;
-    // Clamp horizontally within viewport
-    if (left + width > viewportW - 8) {
-      left = Math.max(8, viewportW - width - 8);
-    }
-    if (left < 8) left = 8;
-
-    // Ensure top within viewport
-    if (top < 8) top = 8;
-    if (top > viewportH - 8) top = viewportH - 8;
-
-    setMenuStyle({ left, top, width });
+    const menuH = menuRef.current?.offsetHeight || 224;
+    let top = rect.bottom + gap;
+    if (top + menuH > viewportH && rect.top - gap - menuH >= 0) top = rect.top - gap - menuH;
+    setMenuStyle({ left: rect.left, top: Math.max(8, Math.min(top, viewportH - 8)), width: rect.width });
   };
 
   useEffect(() => {
     if (!open) return;
-    const update = () => computeMenuPosition();
-    // Initial position, then re-measure after paint to get actual menu height
-    update();
-    const raf = requestAnimationFrame(update);
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
+    computeMenuPosition();
+    const raf = requestAnimationFrame(computeMenuPosition);
+    window.addEventListener('scroll', computeMenuPosition, true);
+    window.addEventListener('resize', computeMenuPosition);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', computeMenuPosition, true);
+      window.removeEventListener('resize', computeMenuPosition);
     };
   }, [open, query, options.length]);
 
@@ -385,7 +351,6 @@ export function ModelComboBox({
     const match = options.find(o => o.value === value);
     if (match) return match.label;
     if (!value) return 'Choose model';
-    // Show stored model name when not in available options (e.g., provider changed)
     const modelName = value.includes('>') ? value.split('>')[1] : value;
     return `${modelName} (unavailable)`;
   })();
@@ -403,8 +368,8 @@ export function ModelComboBox({
           }, 0);
         }}
         className={cn(
-          'w-full rounded-md border px-3 py-2 text-left text-sm',
-          isDarkMode ? 'border-slate-600 bg-slate-800/70 text-gray-200' : 'border-white/20 bg-white/60 text-gray-800',
+          'w-full rounded-lg border px-3 py-2 text-left text-sm',
+          isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
         )}
         aria-haspopup="listbox"
         aria-expanded={open}>
@@ -415,25 +380,25 @@ export function ModelComboBox({
           <div
             ref={menuRef}
             className={cn(
-              'fixed rounded-md border p-2 shadow-lg',
-              isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white',
+              'fixed rounded-xl border p-2',
+              isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-white',
             )}
             style={{ left: menuStyle.left, top: menuStyle.top, width: menuStyle.width, zIndex: 2147483647 }}>
             <input
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search models..."
+              placeholder="Search..."
               className={cn(
-                'mb-2 w-full rounded border px-2 py-1 text-sm outline-none',
+                'mb-2 w-full rounded-lg border px-2 py-1.5 text-sm outline-none',
                 isDarkMode
-                  ? 'border-slate-600 bg-slate-700 text-gray-200 placeholder-slate-400'
-                  : 'border-gray-300 bg-white text-gray-700 placeholder-gray-400',
+                  ? 'border-[#3a3a34] bg-[#252522] text-gray-200 placeholder-gray-600'
+                  : 'border-[#dddcd5] bg-white text-gray-700 placeholder-gray-400',
               )}
             />
             <ul role="listbox" className="max-h-56 overflow-auto">
               {filtered.length === 0 && (
-                <li className={cn('px-2 py-1 text-sm', isDarkMode ? 'text-slate-400' : 'text-gray-500')}>No matches</li>
+                <li className={cn('px-2 py-1 text-sm', isDarkMode ? 'text-gray-500' : 'text-gray-500')}>No matches</li>
               )}
               {filtered.map(opt => (
                 <li key={opt.value}>
@@ -445,13 +410,12 @@ export function ModelComboBox({
                       setQuery('');
                     }}
                     className={cn(
-                      'flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm hover:bg-black/5',
-                      isDarkMode ? 'hover:bg-white/10 text-gray-200' : 'text-gray-800',
+                      'w-full rounded-lg px-2 py-1.5 text-left text-sm',
+                      isDarkMode ? 'text-gray-300 hover:bg-[#252522]' : 'text-gray-700 hover:bg-[#f3f2ee]',
                     )}
                     role="option"
                     aria-selected={opt.value === value}>
-                    <span>{opt.label}</span>
-                    {/* Removed recommended badge */}
+                    {opt.label}
                   </button>
                 </li>
               ))}
