@@ -1,6 +1,6 @@
 /**
  * Workflow Estimation Prompt Template
- * 
+ *
  * This prompt guides the LLM to estimate workflow steps, durations, and token costs.
  */
 
@@ -41,7 +41,7 @@ Return a JSON object with this exact structure:
 
 1. **Step Granularity:**
    - Each step should represent 1 agent action
-   - Common steps: performing google search, opening new tab, opening search result, clicking element, inputting text, data extraction
+   - Common steps: performing web search, opening new tab, opening search result, clicking element, inputting text, data extraction
    - Break complex tasks into logical steps
 
 2. **Agent Duration (web_agent_duration_s):**
@@ -58,11 +58,11 @@ Return a JSON object with this exact structure:
 
 **Examples:**
 
-Request: "Search for 'machine learning' on Google and open the first result"
+Request: "Search for 'machine learning' and open the first result"
 {
   "steps": [
     {
-      "title": "Perform google search for 'machine learning'",
+      "title": "Search for 'machine learning'",
       "web_agent_duration_s": 3,
       "human_duration_s": 2,
       "num_tokens": 2500
@@ -80,7 +80,7 @@ Request: "Find a recipe for chocolate cake, add ingredients to a Google doc shop
 {
   "steps": [
     {
-      "title": "Perform google search for 'chocolate cake recipe'",
+      "title": "Search for 'chocolate cake recipe'",
       "web_agent_duration_s": 3,
       "human_duration_s": 4,
       "num_tokens": 3500
@@ -124,4 +124,3 @@ Request: "Find a recipe for chocolate cake, add ingredients to a Google doc shop
 - Account for page load variability
 - Return ONLY the JSON object, no additional text
 - Ensure all numbers are positive integers`;
-
