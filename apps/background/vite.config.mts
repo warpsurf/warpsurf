@@ -3,7 +3,7 @@ import { defineConfig, type PluginOption } from "vite";
 import libAssetsPlugin from '@laynezh/vite-plugin-lib-assets';
 import makeManifestPlugin from './utils/plugins/make-manifest-plugin';
 import { watchPublicPlugin, watchRebuildPlugin } from '@extension/hmr';
-import { isDev, isProduction, isStore, isAPI, isLegacyNavigation, enableSiteSkills, watchOption } from '@extension/vite-config';
+import { isDev, isProduction, isStore, isAPI, isTest, isLegacyNavigation, enableSiteSkills, watchOption } from '@extension/vite-config';
 
 const rootDir = resolve(__dirname);
 const srcDir = resolve(rootDir, 'src');
@@ -73,7 +73,9 @@ export default defineConfig({
     'import.meta.env.DEV': isDev,
     'import.meta.env.STORE': isStore,
     'import.meta.env.API': isAPI,
+    'import.meta.env.TEST': isTest,
     'process.env.__API__': JSON.stringify(isAPI ? 'true' : 'false'),
+    'process.env.__TEST__': JSON.stringify(isTest ? 'true' : 'false'),
     'process.env.__LEGACY_NAVIGATION__': JSON.stringify(isLegacyNavigation ? 'true' : 'false'),
     'process.env.__ENABLE_SITE_SKILLS__': JSON.stringify(enableSiteSkills ? 'true' : 'false'),
   },
