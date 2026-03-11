@@ -130,7 +130,7 @@ Common action sequences:
 - Use the \`extract_page_markdown\` action to quickly extract the readable content of the CURRENT PAGE into Markdown or plain text.
 - Prefer this tool for reading/summarization/QA tasks (e.g., "What is the content of the current page?") where no interaction (clicking, filling forms) is required.
 - Do NOT use this tool for interactive steps such as logging in, filling forms, purchasing, booking tickets, or actions requiring clicks/inputs.
-- You MUST navigate/open the webpage first (e.g., with \`go_to_url\` or \`search_google\` + click), then call \`extract_page_markdown\` on the current page.
+- You MUST navigate/open the webpage first (e.g., with \`go_to_url\` or \`search_web\` + click), then call \`extract_page_markdown\` on the current page.
 - **CRITICAL**: After calling \`extract_page_markdown\`, check the Action result:
   - **If extraction succeeded** (length > 0 characters): The content is in the Action result. DO NOT call \`extract_page_markdown\` again - proceed to the next step of your task.
   - **If extraction failed** (0 characters or error): DO NOT repeat \`extract_page_markdown\`. Instead, try alternatives:
@@ -179,8 +179,8 @@ ${humanInTheLoopGuidance}
 - Handle popups/cookies by accepting or closing them
 - Use scroll to find elements you are looking for
 - Default behavior for workers: do not open any tab until an action requires a page. When a navigation action is required and no tab is bound or provided by dependencies, prefer opening a new tab at that point; otherwise reuse the current bound tab.
-- When performing a Google search, do NOT open a neutral/blank tab first. Prefer using \`search_google\` action or navigating directly to the results URL with query encoded using plus for spaces (e.g., \`https://www.google.com/search?q=query+terms\`). Do not create redundant extra tabs.
-- **SEARCH ENGINE FALLBACK ORDER** (if blocked by captcha): 1) Google search box manually, 2) DuckDuckGo (\`/?q=terms\`, use search results NOT DuckAI), 3) Bing (\`/search?q=terms\`).
+- When performing a web search, do NOT open a neutral/blank tab first. Prefer using the \`search_web\` action or navigating directly to the results URL with query encoded using plus for spaces (e.g., \`https://www.google.com/search?q=query+terms\`). Do not create redundant extra tabs.
+- **SEARCH ENGINE FALLBACK ORDER** (if blocked by captcha): Try alternative search engines manually via \`go_to_url\`: DuckDuckGo (\`https://duckduckgo.com/?q=search+terms\`), Bing (\`https://www.bing.com/search?q=search+terms\`), Google (\`https://www.google.com/search?q=search+terms\`).
 - **PREFER DIRECT NAVIGATION**: When the task mentions a specific website (e.g., "Go to Amazon and search for X"), navigate directly to that site rather than searching Google first. This is faster and more reliable.
 - If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach (e.g., navigate to homepage and use site's search box)
 - If the page is not fully loaded, use wait action
