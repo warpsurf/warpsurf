@@ -13,12 +13,14 @@ import {
   FiSettings,
   FiCpu,
   FiShield,
+  FiGrid,
 } from 'react-icons/fi';
 import { ApiKeysSettings } from './components/api-keys-settings';
 import { AgentSettings } from './components/agent-settings';
 import { BasicWorkflowSettings } from './components/basic-workflow-settings';
 import { Help } from './components/help';
 import { PricingDataSettings } from './components/pricing-data-settings';
+import { TabsSettings } from './components/tabs-settings';
 import { VoiceSettings } from './components/voice-settings';
 import { WarpSurfLauncher } from './components/warpsurf-launcher';
 import { Warnings } from './components/warnings';
@@ -28,6 +30,7 @@ type TabTypes =
   | 'warpsurf'
   | 'api-keys'
   | 'workflow-settings'
+  | 'tabs-settings'
   | 'web-settings'
   | 'voice'
   | 'help'
@@ -41,6 +44,7 @@ const STANDARD_TABS: TabDef[] = [
   { id: 'warpsurf', label: 'warpsurf', icon: <FiSettings className="h-4 w-4" />, isLogo: true },
   { id: 'api-keys', label: 'API Keys', icon: <FiKey className="h-4 w-4" /> },
   { id: 'workflow-settings', label: 'Model', icon: <FiCpu className="h-4 w-4" /> },
+  { id: 'tabs-settings', label: 'Tabs', icon: <FiGrid className="h-4 w-4" /> },
   { id: 'web-settings', label: 'Web', icon: <FiGlobe className="h-4 w-4" /> },
   { id: 'voice', label: 'Voice', icon: <FiMic className="h-4 w-4" /> },
   { id: 'help', label: 'Help', icon: <FiHelpCircle className="h-4 w-4" /> },
@@ -149,6 +153,7 @@ const Options = () => {
       warpsurf: <WarpSurfLauncher isDarkMode={isDarkMode} />,
       'api-keys': <ApiKeysSettings isDarkMode={isDarkMode} />,
       'workflow-settings': <BasicWorkflowSettings isDarkMode={isDarkMode} />,
+      'tabs-settings': <TabsSettings isDarkMode={isDarkMode} />,
       'web-settings': <WebSettings isDarkMode={isDarkMode} />,
       voice: <VoiceSettings isDarkMode={isDarkMode} />,
       help: <Help isDarkMode={isDarkMode} />,
