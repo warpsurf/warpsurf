@@ -101,20 +101,23 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     }
   };
 
+  const cardClass = `rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
+  const selectClass = `rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`;
+  const btnClass = `rounded-lg px-3 py-2 text-sm font-medium ${isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]'}`;
+
   return (
-    <section
-      className={`rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#171715]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`}>
+    <section className={cardClass}>
       <h2 className={`text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>Model</h2>
-      <p className={`mt-1 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+      <p className={`mt-1 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
         Choose one global model for all agents.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <select
           value={globalModel}
           onChange={e => setGlobalModel(e.target.value)}
-          className={`min-w-[360px] rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-gray-300 bg-white text-gray-800'}`}>
+          className={`min-w-[360px] ${selectClass}`}>
           {availableModels.length === 0 ? (
-            <option value="">No models available - add API keys first</option>
+            <option value="">No models — add API keys first</option>
           ) : (
             availableModels.map(m => (
               <option key={m.value} value={m.value}>
@@ -127,24 +130,23 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           type="button"
           onClick={applyGlobalModel}
           disabled={!globalModel || isApplying}
-          className={`rounded-md px-3 py-2 text-sm font-medium ${isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-900 hover:bg-[#dfddd4]'} ${!globalModel || isApplying ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          className={`${btnClass} ${!globalModel || isApplying ? 'opacity-50 cursor-not-allowed' : ''}`}>
           {isApplying ? 'Applying...' : 'Apply'}
         </button>
-        <SaveIndicator show={saveIndicator.show} isDarkMode={isDarkMode} message="Applied to all agents" />
+        <SaveIndicator show={saveIndicator.show} isDarkMode={isDarkMode} message="Applied" />
       </div>
 
-      {/* Thinking Level Selector */}
       {globalModel && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
             <span className="group relative inline-flex items-center gap-1">
               Thinking Level
               <span
-                className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                 ?
               </span>
               <span
-                className={`pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded px-2 py-1 text-[10px] shadow-lg group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'}`}>
+                className={`pointer-events-none absolute bottom-full left-0 z-[9999] mb-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
                 Controls reasoning depth for supported models. Set to Default if unsupported.
               </span>
             </span>
@@ -152,7 +154,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           <select
             value={globalThinkingLevel}
             onChange={e => setGlobalThinkingLevel(e.target.value as ThinkingLevel)}
-            className={`min-w-[200px] rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-gray-300 bg-white text-gray-800'}`}>
+            className={`min-w-[160px] ${selectClass}`}>
             <option value="default">Default</option>
             <option value="high">High (Thorough)</option>
             <option value="medium">Medium (Balanced)</option>
