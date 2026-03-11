@@ -21,8 +21,32 @@ interface CryptoResponse {
 }
 
 export function registerCryptoHandlers(): void {
+  // Expose provider setup for test harness - uses the real encrypt pipeline
+  if (process.env.__TEST__ === 'true') {
+    (globalThis as any).__testSetProvider = async (
+      providerId: string,
+      apiKey: string,
+      config: Record<string, unknown>,
+    ) => {
+      const encryptedKey = await encrypt(apiKey);
+      const result = await chrome.storage.local.get('llm-api-keys');
+      const current = (result['llm-api-keys'] as any) || { providers: {} };
+      const secureConfig = { ...config, _k: encryptedKey };
+      delete secureConfig.apiKey;
+      await chrome.storage.local.set({
+        'llm-api-keys': {
+          providers: { ...current.providers, [providerId]: secureConfig },
+        },
+      });
+    };
+  }
+
   chrome.runtime.onMessage.addListener(
-    (message: CryptoMessage, sender: chrome.runtime.MessageSender, sendResponse: (response: CryptoResponse) => void) => {
+    (
+      message: CryptoMessage,
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response: CryptoResponse) => void,
+    ) => {
       if (!message?.type?.startsWith('crypto_')) {
         return false;
       }
