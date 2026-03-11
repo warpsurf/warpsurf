@@ -58,6 +58,8 @@ export interface GeneralSettingsConfig {
   // User's preferred region/locale for websites (e.g., 'com', 'co.uk', 'de', 'fr')
   // When set, the agent will prefer regional versions of websites matching this preference
   preferredRegion?: string;
+  // Default search engine for agent web search actions
+  defaultSearchEngine?: string;
   // Message compaction: periodically summarize older step messages to prevent context overflow
   messageCompactionEnabled?: boolean;
   compactEveryNSteps?: number;
@@ -108,6 +110,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   themeMode: 'auto',
   // No default region - user should select their preference
   preferredRegion: undefined,
+  // Default search engine
+  defaultSearchEngine: 'google',
   loopDetectionEnabled: true,
   loopDetectionWindow: 20,
   finalResponseAfterFailure: true,
