@@ -1,6 +1,5 @@
 import { ModelComboBox, TemperatureControl, LabelWithTooltip, cn } from './primitives';
 import { AgentNameEnum, type ThinkingLevel } from '@extension/storage';
-import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 
 interface ModelSelectProps {
   isDarkMode: boolean;
@@ -21,6 +20,7 @@ interface ModelSelectProps {
     value: number | undefined,
   ) => void;
   onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => void;
+  hideHeader?: boolean;
 }
 
 export function ModelSelect(props: ModelSelectProps) {
@@ -39,120 +39,109 @@ export function ModelSelect(props: ModelSelectProps) {
     onChangeModel,
     onChangeParameter,
     onChangeThinkingLevel,
+    hideHeader = false,
   } = props;
 
   const sectionTone = getAgentSectionColor(agentName);
+  const inputClass = cn(
+    'rounded-lg border px-3 py-1.5 text-sm',
+    isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
+  );
+
   const options = availableModels.map(({ provider, providerName, model }) => {
     const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
     return { value: `${provider}>${model}`, label: `${providerName} > ${model}${costNote}` };
   });
 
-  return (
-    <div className={cn('rounded-xl border p-4 shadow-sm', sectionTone)}>
-      <h3 className={cn('mb-2 text-base font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
-        {getAgentDisplayName(agentName)}
-      </h3>
-      <p className={cn('mb-4 text-sm font-normal', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
-        {getAgentDescription(agentName)}
-      </p>
+  const displayName = getAgentDisplayName(agentName);
+  const description = getAgentDescription(agentName);
 
-      <div className="space-y-4">
-        <div className="flex items-center">
-          <LabelWithTooltip
+  const wrapperClass = hideHeader ? '' : cn('rounded-xl border p-4', sectionTone);
+
+  return (
+    <div className={wrapperClass}>
+      {!hideHeader && displayName && (
+        <h3 className={cn('mb-1 text-sm font-medium', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
+          {displayName}
+        </h3>
+      )}
+      {!hideHeader && description && (
+        <p className={cn('mb-3 text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500')}>{description}</p>
+      )}
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <LabelWithTooltip isDarkMode={isDarkMode} htmlFor={`${agentName}-model`} label="Model" width="w-20" />
+          <ModelComboBox
             isDarkMode={isDarkMode}
-            htmlFor={`${agentName}-model`}
-            label="Model"
-            tooltip="Choose provider and model for this role"
+            id={`${agentName}-model`}
+            value={selectedValue || ''}
+            options={options}
+            onChange={v => onChangeModel(agentName, v)}
           />
-          <div className="flex flex-1 items-center space-x-2">
-            <ModelComboBox
-              isDarkMode={isDarkMode}
-              id={`${agentName}-model`}
-              value={selectedValue || ''}
-              options={options}
-              onChange={v => onChangeModel(agentName, v)}
-            />
-          </div>
         </div>
 
         {agentName === AgentNameEnum.Search && selectedValue && (
-          <div
-            className={cn(
-              'rounded-md px-3 py-2 text-xs',
-              isDarkMode ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-100 text-amber-700',
-            )}>
-            {WEB_SEARCH_COMPATIBILITY_WARNING}
-          </div>
+          <p className={cn('text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500')}>
+            Web search compatibility varies by model.
+          </p>
         )}
 
-        <div className="flex items-center">
-          <LabelWithTooltip
-            isDarkMode={isDarkMode}
-            htmlFor={`${agentName}-temperature`}
-            label="Temperature"
-            tooltip="Controls randomness of outputs. Leave as default to use the provider's recommended temperature."
-          />
+        <div className="flex items-center gap-3">
+          <LabelWithTooltip isDarkMode={isDarkMode} htmlFor={`${agentName}-temperature`} label="Temp" width="w-20" />
           <TemperatureControl
             isDarkMode={isDarkMode}
             id={`${agentName}-temperature`}
             value={modelParameters.temperature}
             onChange={v => onChangeParameter(agentName, 'temperature', v)}
-            ariaLabel={`${agentName} temperature input`}
+            ariaLabel={`${agentName} temperature`}
           />
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <LabelWithTooltip
             isDarkMode={isDarkMode}
             htmlFor={`${agentName}-maxOutputTokens`}
-            label="Max Output"
-            tooltip="Maximum tokens in model response"
+            label="Max Out"
+            width="w-20"
           />
-          <div className="flex flex-1 items-center space-x-2">
-            <input
-              id={`${agentName}-maxOutputTokens`}
-              type="number"
-              min={256}
-              max={65536}
-              step={256}
-              value={modelParameters.maxOutputTokens}
-              onChange={e => {
-                const val = Math.max(256, Math.min(65536, Number.parseInt(e.target.value, 10) || 8192));
-                onChangeParameter(agentName, 'maxOutputTokens', val);
-              }}
-              className={cn(
-                'w-24 rounded-md border px-3 py-2 text-sm',
-                isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
-              )}
-              aria-label={`${agentName} max output tokens`}
-            />
-          </div>
+          <input
+            id={`${agentName}-maxOutputTokens`}
+            type="number"
+            min={256}
+            max={65536}
+            step={256}
+            value={modelParameters.maxOutputTokens}
+            onChange={e =>
+              onChangeParameter(
+                agentName,
+                'maxOutputTokens',
+                Math.max(256, Math.min(65536, Number.parseInt(e.target.value, 10) || 8192)),
+              )
+            }
+            className={cn('w-24', inputClass)}
+          />
         </div>
 
         {selectedValue && (
-          <div className="flex items-center">
+          <div className="flex items-center gap-3">
             <LabelWithTooltip
               isDarkMode={isDarkMode}
               htmlFor={`${agentName}-thinking-level`}
               label="Thinking"
-              tooltip="Controls reasoning depth for supported models. Set to Default if unsupported."
+              width="w-20"
             />
-            <div className="flex flex-1 items-center space-x-2">
-              <select
-                id={`${agentName}-thinking-level`}
-                value={thinkingLevelValue || 'default'}
-                onChange={e => onChangeThinkingLevel(agentName, e.target.value as ThinkingLevel)}
-                className={cn(
-                  'flex-1 rounded-md border px-3 py-2 text-sm',
-                  isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
-                )}>
-                <option value="default">Default</option>
-                <option value="high">High (Thorough)</option>
-                <option value="medium">Medium (Balanced)</option>
-                <option value="low">Low (Faster)</option>
-                <option value="off">Off (Suppress)</option>
-              </select>
-            </div>
+            <select
+              id={`${agentName}-thinking-level`}
+              value={thinkingLevelValue || 'default'}
+              onChange={e => onChangeThinkingLevel(agentName, e.target.value as ThinkingLevel)}
+              className={cn('flex-1', inputClass)}>
+              <option value="default">Default</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="off">Off</option>
+            </select>
           </div>
         )}
       </div>
