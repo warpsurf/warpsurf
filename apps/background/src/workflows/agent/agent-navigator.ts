@@ -23,13 +23,15 @@ import { HistoryTreeProcessor } from '@src/browser/dom/history/service';
 import { AgentStepRecord } from '@src/workflows/shared/step-history';
 import { type DOMHistoryElement } from '@src/browser/dom/history/view';
 import { globalTokenTracker } from '@src/utils/token-tracker';
+import { getSearchEngine, getNextSerpUrl } from '@src/search-engines';
 
 const logger = createLogger('AgentNavigator');
 
 /** Action-specific delays (ms) - fast actions use minimal delays, navigation actions use longer delays */
 const ACTION_DELAYS: Record<string, number> = {
   go_to_url: 800,
-  search_google: 800,
+  search_web: 800,
+  search_google: 800, // backwards compat alias
   open_tab: 600,
   click_element: 500,
   click_selector: 400,
@@ -45,7 +47,8 @@ const ACTION_DELAYS: Record<string, number> = {
   previous_page: 150,
   cache_content: 50,
   extract_page_markdown: 200,
-  extract_google_results: 200,
+  extract_search_results: 200,
+  extract_google_results: 200, // backwards compat alias
   quick_text_scan: 100,
   wait: 0, // wait action handles its own timing
   done: 0,
@@ -457,24 +460,22 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     }
   }
 
-  /** Compute next Google SERP page URL (increments start by 10) */
+  /** Compute next SERP page URL using the configured search engine */
   private computeNextSerpUrl(currentUrl: string): string | null {
-    try {
-      const u = new URL(currentUrl);
-      if (!/google\.[^/]+\/search/i.test(u.href)) return null;
-      const start = parseInt(u.searchParams.get('start') || '0', 10);
-      const next = Number.isFinite(start) ? start + 10 : 10;
-      u.searchParams.set('start', String(next));
-      return u.toString();
-    } catch {
-      return null;
-    }
+    const engineId = this.context.options.defaultSearchEngine ?? 'google';
+    const engine = getSearchEngine(engineId);
+    return getNextSerpUrl(engine, currentUrl);
+  }
+
+  /** Check if action is a search results extraction action */
+  private isExtractResultsAction(name: string): boolean {
+    return name === 'extract_search_results' || name === 'extract_google_results';
   }
 
   /**
    * Dedupe identical actions for this step (name+args+URL).
-   * If extract_google_results is duplicated within the same step, insert a go_to_url to the next SERP page before a single extraction.
-   * If the only action is extract_google_results and state signature matches last extraction, replace with next-page navigation + extraction.
+   * If extract_search_results is duplicated within the same step, insert a go_to_url to the next SERP page before a single extraction.
+   * If the only action is extract_search_results and state signature matches last extraction, replace with next-page navigation + extraction.
    */
   private async preprocessActions(
     actions: Record<string, unknown>[],
@@ -496,11 +497,11 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       const args = (act as Record<string, unknown>)[name];
       const key = makeKey(name, args);
       if (seen.has(key)) {
-        if (name === 'extract_google_results') sawDuplicateExtract = true;
+        if (this.isExtractResultsAction(name)) sawDuplicateExtract = true;
         continue;
       }
       seen.add(key);
-      if (name === 'extract_google_results' && firstExtractIndex === -1) firstExtractIndex = filtered.length;
+      if (this.isExtractResultsAction(name) && firstExtractIndex === -1) firstExtractIndex = filtered.length;
       filtered.push(act);
     }
 
@@ -508,7 +509,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
       const nextUrl = this.computeNextSerpUrl(url);
       if (nextUrl) {
         filtered.splice(firstExtractIndex, 0, {
-          go_to_url: { intent: 'Go to next Google results page', url: nextUrl },
+          go_to_url: { intent: 'Go to next results page', url: nextUrl },
         });
       }
     }
@@ -517,10 +518,9 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     const stateSig = await this.buildStateSignature(state).catch(() => null);
     if (stateSig) {
       const onlyOne = filtered.length === 1 ? Object.keys(filtered[0])[0] : '';
-      if (onlyOne === 'extract_google_results' && this._lastSerpExtractSignature === stateSig) {
+      if (this.isExtractResultsAction(onlyOne) && this._lastSerpExtractSignature === stateSig) {
         const nextUrl = this.computeNextSerpUrl(url);
-        if (nextUrl)
-          filtered = [{ go_to_url: { intent: 'Go to next Google results page', url: nextUrl } }, filtered[0]];
+        if (nextUrl) filtered = [{ go_to_url: { intent: 'Go to next results page', url: nextUrl } }, filtered[0]];
       }
     }
 
@@ -649,7 +649,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
     const browserState = await browserContext.getCachedState(this.context.options.useVision);
     // In worker mode with no bound tab yet, prioritize any navigation/open actions first
     if (browserState && Array.isArray((browserState as any).tabs) && (browserState as any).tabs.length === 0) {
-      const navNames = new Set(['go_to_url', 'open_tab', 'search_google']);
+      const navNames = new Set(['go_to_url', 'open_tab', 'search_web', 'search_google']);
       const navActions: Record<string, unknown>[] = [];
       const otherActions: Record<string, unknown>[] = [];
       for (const act of actions) {
@@ -703,7 +703,7 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         results.push(result);
 
         // Remember last SERP extraction state to prevent repeats in the following step
-        if (actionName === 'extract_google_results' && stateSignatureForThisBatch) {
+        if (this.isExtractResultsAction(actionName) && stateSignatureForThisBatch) {
           this._lastSerpExtractSignature = stateSignatureForThisBatch;
         }
 
