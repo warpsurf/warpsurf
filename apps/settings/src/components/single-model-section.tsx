@@ -46,9 +46,11 @@ export function SingleModelSection(props: SingleModelSectionProps) {
     children,
   } = props;
 
+  const sectionColor = getAgentSectionColor(agent);
+
   return (
-    <div className={cn('rounded-xl border p-5 text-left shadow-sm backdrop-blur-md', getAgentSectionColor(agent))}>
-      <h2 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>{title}</h2>
+    <div className={cn('rounded-xl border p-5 text-left', sectionColor)}>
+      <h2 className={cn('mb-4 text-base font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900')}>{title}</h2>
       <div className="space-y-4">
         <ModelSelect
           isDarkMode={isDarkMode}
@@ -65,6 +67,7 @@ export function SingleModelSection(props: SingleModelSectionProps) {
           onChangeModel={onChangeModel}
           onChangeParameter={onChangeParameter}
           onChangeThinkingLevel={onChangeThinkingLevel}
+          hideHeader
         />
         {children}
       </div>
