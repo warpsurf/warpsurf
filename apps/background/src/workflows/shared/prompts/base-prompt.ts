@@ -199,7 +199,7 @@ ${extractionContent}
 </task_history>
 
 <browser_state>
-No usable worker tab is currently bound (attach failed or in use). Use go_to_url, open_tab, or search_google to navigate to a page first.
+No usable worker tab is currently bound (attach failed or in use). Use go_to_url, open_tab, or search_web to navigate to a page first.
 ${stepInfoDescription}
 </browser_state>
 `;
