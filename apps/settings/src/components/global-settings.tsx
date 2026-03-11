@@ -16,21 +16,18 @@ export interface GlobalModelParameters {
 
 interface GlobalSettingsProps {
   isDarkMode: boolean;
-  // Global model selection
   availableModels: GlobalModelOption[];
   globalModelValue: string;
   onChangeGlobalModel: (v: string) => void;
   applyToAll: () => void;
   showAllModels: boolean;
   hasModelPricing: (modelName: string) => boolean;
-  // Global model parameters
   globalModelParameters: GlobalModelParameters;
   onChangeGlobalParameter: (param: keyof GlobalModelParameters, value: number | undefined | ThinkingLevel) => void;
-  // Response timeout
   responseTimeoutSeconds: number;
   onChangeTimeout: (seconds: number) => void;
-  // Save indicator
-  showSaveIndicator?: boolean;
+  isDirty?: boolean;
+  confirmed?: boolean;
 }
 
 export function GlobalSettings(props: GlobalSettingsProps) {
@@ -46,7 +43,8 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeGlobalParameter,
     responseTimeoutSeconds,
     onChangeTimeout,
-    showSaveIndicator = false,
+    isDirty = false,
+    confirmed = false,
   } = props;
 
   const options = availableModels.map(({ provider, providerName, model }) => {
@@ -60,7 +58,8 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeTimeout(val);
   };
 
-  // Global settings: pale cyan/sky tint
+  const applyDisabled = !globalModelValue && !isDirty;
+
   return (
     <div
       className={cn(
@@ -87,20 +86,6 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           options={options}
           onChange={onChangeGlobalModel}
         />
-        <button
-          type="button"
-          onClick={applyToAll}
-          disabled={!globalModelValue}
-          className={cn(
-            'rounded-lg px-3 py-2 text-sm font-medium shrink-0',
-            isDarkMode
-              ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
-              : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
-            !globalModelValue && 'opacity-50 cursor-not-allowed',
-          )}>
-          Apply to all
-        </button>
-        <SaveIndicator show={showSaveIndicator} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
 
       {/* Search compatibility warning */}
@@ -211,6 +196,24 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           aria-label="Response timeout in seconds"
         />
         <span className={cn('text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>seconds</span>
+      </div>
+
+      {/* Apply button */}
+      <div className="flex items-center gap-2 pt-3">
+        <button
+          type="button"
+          onClick={applyToAll}
+          disabled={applyDisabled}
+          className={cn(
+            'rounded-lg px-3 py-2 text-sm font-medium',
+            isDarkMode
+              ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
+              : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
+            applyDisabled && 'opacity-50 cursor-not-allowed',
+          )}>
+          Apply to all agents
+        </button>
+        <SaveIndicator show={confirmed} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
     </div>
   );
