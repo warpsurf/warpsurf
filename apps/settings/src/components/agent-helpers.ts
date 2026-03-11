@@ -6,7 +6,7 @@ import { AgentNameEnum, type ThinkingLevel } from '@extension/storage';
 
 /** Warning message for web search compatibility (shown when selecting models for Search) */
 export const WEB_SEARCH_COMPATIBILITY_WARNING =
-  '⚠️ Web search compatibility varies by model. Queries may fail for unsupported models.';
+  'Web search compatibility varies by model. Queries may fail for unsupported models.';
 
 /**
  * Get human-readable display name for an agent
@@ -82,46 +82,29 @@ export function getAgentDescription(agentName: AgentNameEnum): string {
 
 /**
  * Get CSS classes for agent section styling based on agent type and dark mode
+ * Uses subtle, pale tints to differentiate sections while maintaining the warm palette
  */
 export function getAgentSectionColor(agentName: AgentNameEnum, isDarkMode: boolean): string {
   switch (agentName) {
     case AgentNameEnum.Auto:
-      // Auto: very pale black
-      return isDarkMode ? 'border-white/10 bg-white/5 backdrop-blur-md' : 'border-black/10 bg-black/5 backdrop-blur-md';
+      return isDarkMode ? 'border-[#3a3a38] bg-[#252524]' : 'border-[#e5e4e0] bg-[#f5f4f0]';
     case AgentNameEnum.Chat:
-      // Chat: very pale violet
-      return isDarkMode
-        ? 'border-violet-400/30 bg-violet-500/10 backdrop-blur-md'
-        : 'border-violet-500/20 bg-violet-500/10 backdrop-blur-md';
+      return isDarkMode ? 'border-[#3a3a40] bg-[#252528]' : 'border-[#e4e4ec] bg-[#f4f4f8]';
     case AgentNameEnum.Search:
-      // Search: very pale teal
-      return isDarkMode
-        ? 'border-teal-400/30 bg-teal-500/10 backdrop-blur-md'
-        : 'border-teal-500/20 bg-teal-500/10 backdrop-blur-md';
+      return isDarkMode ? 'border-[#3a4040] bg-[#252828]' : 'border-[#e4ecec] bg-[#f4f8f8]';
     case AgentNameEnum.MultiagentPlanner:
     case AgentNameEnum.MultiagentRefiner:
     case AgentNameEnum.MultiagentWorker:
-      // Multi-agent: pale orange
-      return isDarkMode
-        ? 'border-orange-400/30 bg-orange-500/10 backdrop-blur-md'
-        : 'border-orange-500/20 bg-orange-500/10 backdrop-blur-md';
+      return isDarkMode ? 'border-[#403a38] bg-[#282524]' : 'border-[#ece8e4] bg-[#f8f6f4]';
     case AgentNameEnum.AgentNavigator:
     case AgentNameEnum.AgentPlanner:
     case AgentNameEnum.AgentValidator:
-      // Agent family: very pale amber
-      return isDarkMode
-        ? 'border-amber-400/30 bg-amber-500/10 backdrop-blur-md'
-        : 'border-amber-500/25 bg-amber-500/10 backdrop-blur-md';
+      return isDarkMode ? 'border-[#3e3a34] bg-[#282520]' : 'border-[#ebe6e0] bg-[#f8f6f2]';
     case AgentNameEnum.HistorySummariser:
     case AgentNameEnum.Estimator:
-      // Utility agents: pale blue/gray
-      return isDarkMode
-        ? 'border-blue-400/20 bg-blue-500/5 backdrop-blur-md'
-        : 'border-blue-500/15 bg-blue-500/5 backdrop-blur-md';
+      return isDarkMode ? 'border-[#383a3a] bg-[#242526]' : 'border-[#e6e8e8] bg-[#f4f6f6]';
     default:
-      return isDarkMode
-        ? 'border-slate-700/70 bg-slate-800/60 backdrop-blur-md'
-        : 'border-white/20 bg-white/40 backdrop-blur-md';
+      return isDarkMode ? 'border-[#3a3a34] bg-[#252522]' : 'border-[#e5e4de] bg-[#f3f2ee]';
   }
 }
 
