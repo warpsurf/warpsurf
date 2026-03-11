@@ -1,6 +1,8 @@
 import type { PuppeteerAdapter } from './puppeteer-adapter';
 import type { PageState, BrowserContextConfig } from '../views';
 import { createLogger } from '@src/log';
+import { getSearchEngine } from '@src/search-engines';
+import { extractSerpResults } from '@src/search-engines/serp-extractor';
 
 const logger = createLogger('ScreenshotService');
 
@@ -66,20 +68,22 @@ export class ScreenshotService {
     }
   }
 
-  async getGoogleSearchResults(maxResults = 10): Promise<Array<{ title: string; url: string }>> {
-    const meta = await this.getGoogleSearchResultsWithMeta(maxResults);
+  async getSearchResults(maxResults = 10, engineId = 'google'): Promise<Array<{ title: string; url: string }>> {
+    const meta = await this.getSearchResultsWithMeta(maxResults, engineId);
     return meta.items;
   }
 
-  async getGoogleSearchResultsWithMeta(
+  async getSearchResultsWithMeta(
     maxResults = 10,
+    engineId = 'google',
   ): Promise<{ items: Array<{ title: string; url: string }>; fromCache: boolean }> {
     const page = this._adapter.page;
     if (!page) return { items: [], fromCache: false };
 
     try {
       const currentUrl = page.url();
-      if (this._serpCache?.url === currentUrl && Date.now() - this._serpCache.ts <= 8000) {
+      const cacheKey = `${engineId}:${currentUrl}`;
+      if (this._serpCache?.url === cacheKey && Date.now() - this._serpCache.ts <= 8000) {
         return {
           items: this._serpCache.items.slice(0, Math.max(1, Math.min(20, maxResults))),
           fromCache: true,
@@ -88,79 +92,27 @@ export class ScreenshotService {
 
       await this._waitForPageLoad();
 
-      const items = await page.evaluate(
-        (max: number) => {
-          const results: Array<{ title: string; url: string }> = [];
-          const seen = new Set<string>();
-
-          const cleanUrl = (href: string): string => {
-            try {
-              if (href.startsWith('/url?') || href.startsWith('https://www.google.com/url?')) {
-                const u = new URL(href, location.origin);
-                const q = u.searchParams.get('q');
-                if (q) return q;
-              }
-            } catch {}
-            return href;
-          };
-
-          const isGoogleDomain = (u: string) => /^https?:\/\/([^.]+\.)?google\./i.test(u);
-
-          const addResult = (titleRaw: string | null | undefined, hrefRaw: string | null | undefined) => {
-            const title = (titleRaw || '').trim().replace(/[\t\n\r ]+/g, ' ');
-            let url = (hrefRaw || '').trim();
-            if (!title || !url) return;
-            url = cleanUrl(url);
-            if (!/^https?:/i.test(url)) return;
-            if (isGoogleDomain(url)) return;
-            if (seen.has(url)) return;
-            seen.add(url);
-            results.push({ title, url });
-          };
-
-          const scope: ParentNode = document.getElementById('search') || document.body;
-
-          const anchorsWithH3 = Array.from(scope.querySelectorAll('a[href] h3')) as HTMLElement[];
-          for (const h3 of anchorsWithH3) {
-            if (results.length >= max) break;
-            const a = h3.closest('a');
-            if (!a) continue;
-            addResult(h3.textContent, a.getAttribute('href'));
-          }
-
-          if (results.length < max) {
-            const containers = Array.from(scope.querySelectorAll('div.yuRUbf > a[href]')) as HTMLAnchorElement[];
-            for (const a of containers) {
-              if (results.length >= max) break;
-              const h3 = a.querySelector('h3');
-              addResult(h3?.textContent || a.getAttribute('aria-label') || a.textContent, a.getAttribute('href'));
-            }
-          }
-
-          if (results.length < max) {
-            const generic = Array.from(
-              scope.querySelectorAll('div.MjjYud a[href], div.g a[href]'),
-            ) as HTMLAnchorElement[];
-            for (const a of generic) {
-              if (results.length >= max) break;
-              const h3 = a.querySelector('h3') || a.parentElement?.querySelector?.('h3');
-              if (!h3) continue;
-              addResult(h3.textContent || a.getAttribute('aria-label') || a.textContent, a.getAttribute('href'));
-            }
-          }
-
-          return results.slice(0, max);
-        },
-        Math.max(1, Math.min(20, maxResults)),
-      );
+      const engine = getSearchEngine(engineId);
+      const items = await extractSerpResults(page, engine, maxResults);
 
       const list = Array.isArray(items) ? items : [];
-      this._serpCache = { url: page.url(), ts: Date.now(), items: list.slice(0, 20) };
+      this._serpCache = { url: cacheKey, ts: Date.now(), items: list.slice(0, 20) };
       return { items: list, fromCache: false };
     } catch (error) {
       logger.debug('SERP extraction failed:', error);
       return { items: [], fromCache: false };
     }
+  }
+
+  // Backwards compatibility aliases
+  async getGoogleSearchResults(maxResults = 10): Promise<Array<{ title: string; url: string }>> {
+    return this.getSearchResults(maxResults, 'google');
+  }
+
+  async getGoogleSearchResultsWithMeta(
+    maxResults = 10,
+  ): Promise<{ items: Array<{ title: string; url: string }>; fromCache: boolean }> {
+    return this.getSearchResultsWithMeta(maxResults, 'google');
   }
 
   private _computeQuality(state: PageState | null): number {
