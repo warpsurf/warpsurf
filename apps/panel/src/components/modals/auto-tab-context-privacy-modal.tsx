@@ -49,6 +49,7 @@ export default function AutoTabContextPrivacyModal({
               excluded.
             </li>
             <li>With many tabs open this can be expensive: includes page content, URLs, and titles for each tab.</li>
+            <li>To change this setting later, go to Settings &gt; Tabs.</li>
           </ul>
           <div className="flex gap-3 justify-end pt-2">
             <button
