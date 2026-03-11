@@ -38,6 +38,8 @@ export interface AgentOptions {
   llmScreenshotSize?: [number, number];
   /** Allow the agent to click at exact pixel coordinates from screenshots. */
   enableCoordinateClick?: boolean;
+  /** Default search engine for web search actions (e.g., 'google', 'duckduckgo', 'bing'). */
+  defaultSearchEngine?: string;
 }
 
 export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
