@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
 import { warningsSettingsStore, type WarningsSettings, DEFAULT_WARNINGS_SETTINGS } from '@extension/storage';
+import { useStorageConfirmation, SectionApplyButton } from './primitives';
 
 export const Warnings = ({ isDarkMode = false }: { isDarkMode?: boolean }) => {
   const [settings, setSettings] = useState<WarningsSettings>(DEFAULT_WARNINGS_SETTINGS);
+  const [savedSettings, setSavedSettings] = useState<WarningsSettings>(DEFAULT_WARNINGS_SETTINGS);
+  const confirmation = useStorageConfirmation('warnings-settings');
+
+  const isDirty = settings.disablePerChatWarnings !== savedSettings.disablePerChatWarnings;
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         const s = await warningsSettingsStore.getWarnings();
-        if (mounted) setSettings(s);
+        if (mounted) {
+          setSettings(s);
+          setSavedSettings(s);
+        }
       } catch {}
     };
     load();
@@ -25,9 +33,14 @@ export const Warnings = ({ isDarkMode = false }: { isDarkMode?: boolean }) => {
     };
   }, []);
 
-  const update = async (patch: Partial<WarningsSettings>) => {
-    setSettings(prev => ({ ...prev, ...patch }));
-    await warningsSettingsStore.updateWarnings(patch);
+  const toggle = () => {
+    setSettings(prev => ({ ...prev, disablePerChatWarnings: !prev.disablePerChatWarnings }));
+  };
+
+  const applySettings = async () => {
+    confirmation.markPending();
+    await warningsSettingsStore.updateWarnings({ disablePerChatWarnings: settings.disablePerChatWarnings });
+    setSavedSettings({ ...settings });
   };
 
   const cardClass = `rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
@@ -48,12 +61,19 @@ export const Warnings = ({ isDarkMode = false }: { isDarkMode?: boolean }) => {
           </div>
           <button
             type="button"
-            onClick={() => update({ disablePerChatWarnings: !settings.disablePerChatWarnings })}
+            onClick={toggle}
             className={`toggle-slider ${settings.disablePerChatWarnings ? 'toggle-on' : 'toggle-off'}`}
             aria-pressed={settings.disablePerChatWarnings}>
             <span className="toggle-knob" />
           </button>
         </div>
+
+        <SectionApplyButton
+          isDarkMode={isDarkMode}
+          isDirty={isDirty}
+          confirmed={confirmation.confirmed}
+          onApply={applySettings}
+        />
       </div>
     </section>
   );
