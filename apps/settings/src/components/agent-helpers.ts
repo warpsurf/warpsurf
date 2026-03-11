@@ -82,27 +82,35 @@ export function getAgentDescription(agentName: AgentNameEnum): string {
 
 /**
  * Get CSS classes for agent section styling based on agent type and dark mode
- * Uses subtle, pale tints to differentiate sections while maintaining the warm palette
+ * Each section has a distinct pale tint for visual differentiation
  */
 export function getAgentSectionColor(agentName: AgentNameEnum, isDarkMode: boolean): string {
   switch (agentName) {
     case AgentNameEnum.Auto:
-      return isDarkMode ? 'border-[#3a3a38] bg-[#252524]' : 'border-[#e5e4e0] bg-[#f5f4f0]';
+      // Neutral warm gray
+      return isDarkMode ? 'border-[#3a3a38] bg-[#232321]' : 'border-[#e5e4e0] bg-[#f7f6f2]';
     case AgentNameEnum.Chat:
-      return isDarkMode ? 'border-[#3a3a40] bg-[#252528]' : 'border-[#e4e4ec] bg-[#f4f4f8]';
+      // Pale violet tint
+      return isDarkMode ? 'border-[#3d3a42] bg-[#252428]' : 'border-[#e6e4ed] bg-[#f6f5fa]';
     case AgentNameEnum.Search:
-      return isDarkMode ? 'border-[#3a4040] bg-[#252828]' : 'border-[#e4ecec] bg-[#f4f8f8]';
+      // Pale teal tint
+      return isDarkMode ? 'border-[#384040] bg-[#222828]' : 'border-[#e0eaea] bg-[#f2f8f8]';
     case AgentNameEnum.MultiagentPlanner:
     case AgentNameEnum.MultiagentRefiner:
     case AgentNameEnum.MultiagentWorker:
-      return isDarkMode ? 'border-[#403a38] bg-[#282524]' : 'border-[#ece8e4] bg-[#f8f6f4]';
+      // Pale orange/peach tint
+      return isDarkMode ? 'border-[#423a36] bg-[#2a2420]' : 'border-[#ede6e0] bg-[#faf6f2]';
     case AgentNameEnum.AgentNavigator:
     case AgentNameEnum.AgentPlanner:
     case AgentNameEnum.AgentValidator:
-      return isDarkMode ? 'border-[#3e3a34] bg-[#282520]' : 'border-[#ebe6e0] bg-[#f8f6f2]';
+      // Pale amber/yellow tint
+      return isDarkMode ? 'border-[#403c32] bg-[#28261e]' : 'border-[#ebe8dc] bg-[#f9f7ee]';
     case AgentNameEnum.HistorySummariser:
+      // Pale blue tint
+      return isDarkMode ? 'border-[#363a40] bg-[#222528]' : 'border-[#e2e6ec] bg-[#f4f6fa]';
     case AgentNameEnum.Estimator:
-      return isDarkMode ? 'border-[#383a3a] bg-[#242526]' : 'border-[#e6e8e8] bg-[#f4f6f6]';
+      // Pale green tint
+      return isDarkMode ? 'border-[#384038] bg-[#222822]' : 'border-[#e2ebe2] bg-[#f4faf4]';
     default:
       return isDarkMode ? 'border-[#3a3a34] bg-[#252522]' : 'border-[#e5e4de] bg-[#f3f2ee]';
   }
