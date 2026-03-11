@@ -34,7 +34,7 @@ import {
   clickCoordinateActionSchema,
 } from './schemas';
 import { resolveSearchUrl } from '@src/utils/search-pattern-resolver';
-import { getSearchEngine, buildSearchUrl, isSerpPage } from '@src/search-engines';
+import { getSearchEngine, buildSearchUrl, detectSerpEngine } from '@src/search-engines';
 
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
 import { z } from 'zod';
@@ -234,23 +234,28 @@ export class ActionBuilder {
       try {
         const page = await context.browserContext.getCurrentPage();
         const url = page.url();
-        if (!isSerpPage(searchEngine, url)) {
+        const detectedEngine = detectSerpEngine(url, engineId);
+        if (!detectedEngine) {
           context.emitEvent(
             Actors.AGENT_NAVIGATOR,
             ExecutionState.ACT_FAIL,
-            `Current page does not appear to be a ${searchEngine.name} results page; perform search first`,
+            `Current page does not appear to be a search results page; perform search first`,
           );
           return new ActionResult({
-            error: `Not on a ${searchEngine.name} results page. Use search_web or navigate to search results before extraction.`,
+            error: `Not on a search results page. Use search_web or navigate to search results before extraction.`,
             includeInMemory: true,
           });
         }
 
+        const extractEngineId = detectedEngine.id;
         const meta = (await (page as any).getSearchResultsWithMeta?.(
           Math.max(1, Math.min(20, input.max_results || 10)),
-          engineId,
+          extractEngineId,
         )) ?? {
-          items: await (page as any).getSearchResults(Math.max(1, Math.min(20, input.max_results || 10)), engineId),
+          items: await (page as any).getSearchResults(
+            Math.max(1, Math.min(20, input.max_results || 10)),
+            extractEngineId,
+          ),
           fromCache: false,
         };
         list = meta.items;
