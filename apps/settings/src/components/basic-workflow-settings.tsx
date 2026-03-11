@@ -7,7 +7,7 @@ import {
   type ProviderConfig,
   type ThinkingLevel,
 } from '@extension/storage';
-import { SaveIndicator, useSaveIndicator } from './primitives';
+import { SaveIndicator, useStorageConfirmation } from './primitives';
 
 interface BasicWorkflowSettingsProps {
   isDarkMode?: boolean;
@@ -32,7 +32,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
   const [globalModel, setGlobalModel] = useState('');
   const [globalThinkingLevel, setGlobalThinkingLevel] = useState<ThinkingLevel>('default');
   const [isApplying, setIsApplying] = useState(false);
-  const saveIndicator = useSaveIndicator();
+  const confirmation = useStorageConfirmation('agent-models');
 
   useEffect(() => {
     (async () => {
@@ -78,6 +78,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     const [provider, modelName] = globalModel.split('>');
     if (!provider || !modelName) return;
     setIsApplying(true);
+    confirmation.markPending();
     try {
       await Promise.all(
         ALL_AGENTS.map(async agent => {
@@ -95,7 +96,6 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           });
         }),
       );
-      saveIndicator.trigger();
     } finally {
       setIsApplying(false);
     }
@@ -134,7 +134,7 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
           className={`${btnClass} ${!globalModel || isApplying ? 'opacity-50 cursor-not-allowed' : ''}`}>
           {isApplying ? 'Applying...' : 'Apply'}
         </button>
-        <SaveIndicator show={saveIndicator.show} isDarkMode={isDarkMode} message="Applied" />
+        <SaveIndicator show={confirmation.confirmed} isDarkMode={isDarkMode} message="Applied" />
       </div>
 
       {globalModel && (
