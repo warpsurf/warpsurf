@@ -11,8 +11,8 @@ import {
   clickSelectorActionSchema,
   findAndClickTextActionSchema,
   quickTextScanActionSchema,
-  searchGoogleActionSchema,
-  extractGoogleResultsActionSchema,
+  searchWebActionSchema,
+  extractSearchResultsActionSchema,
   switchTabActionSchema,
   type ActionSchema,
   sendKeysActionSchema,
@@ -32,6 +32,7 @@ import {
   clickCoordinateActionSchema,
 } from './schemas';
 import { resolveSearchUrl } from '@src/utils/search-pattern-resolver';
+import { getSearchEngine, buildSearchUrl, isSerpPage } from '@src/search-engines';
 
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
 import { z } from 'zod';
@@ -183,18 +184,17 @@ export class ActionBuilder {
     }, doneActionSchema);
     actions.push(done);
 
-    const searchGoogle = new Action(async (input: z.infer<typeof searchGoogleActionSchema.schema>) => {
+    // Resolve search engine from context options
+    const engineId = this.context.options.defaultSearchEngine ?? 'google';
+    const searchEngine = getSearchEngine(engineId);
+
+    const searchWeb = new Action(async (input: z.infer<typeof searchWebActionSchema.schema>) => {
       this.checkCancelled();
       const context = this.context;
-      const intent = input.intent || `Searching for "${input.query}" in Google`;
+      const intent = input.intent || `Searching for "${input.query}"`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
-      // Perform a direct Google search navigation without opening a blank/neutral page first
-      const encoded = String(input.query || '')
-        .trim()
-        .split(/\s+/g)
-        .join('+');
-      const searchUrl = `https://www.google.com/search?q=${encoded}`;
+      const searchUrl = buildSearchUrl(searchEngine, input.query);
       await context.browserContext.navigateTo(searchUrl);
       this.checkCancelled();
       // If this created a new tab (first navigation in worker mode), emit TAB_CREATED so grouping/mirroring starts
@@ -211,46 +211,46 @@ export class ActionBuilder {
       // Track URL for site skill injection
       context.addSkillUrl(searchUrl);
 
-      const msg2 = `Searched for "${input.query}" in Google`;
+      const msg2 = `Searched for "${input.query}"`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_OK, msg2);
       return new ActionResult({ extractedContent: msg2, includeInMemory: true });
-    }, searchGoogleActionSchema);
-    actions.push(searchGoogle);
+    }, searchWebActionSchema);
+    actions.push(searchWeb);
 
-    const extractGoogleResults = new Action(async (input: z.infer<typeof extractGoogleResultsActionSchema.schema>) => {
+    const extractSearchResults = new Action(async (input: z.infer<typeof extractSearchResultsActionSchema.schema>) => {
       this.checkCancelled();
       const context = this.context;
-      const intent = input.intent || `Extracting top Google results`;
+      const intent = input.intent || `Extracting search results`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_START, intent);
 
       let list: Array<{ title: string; url: string }> = [];
       let fromCache = false;
       try {
         const page = await context.browserContext.getCurrentPage();
-        const url = page.url().toLowerCase();
-        if (!/google\.[^/]+\/search/.test(url) && !/tbm=/.test(url)) {
-          // Not obviously on a Google SERP
+        const url = page.url();
+        if (!isSerpPage(searchEngine, url)) {
           context.emitEvent(
             Actors.AGENT_NAVIGATOR,
             ExecutionState.ACT_FAIL,
-            'Current page does not appear to be a Google results page; perform search first',
+            `Current page does not appear to be a ${searchEngine.name} results page; perform search first`,
           );
           return new ActionResult({
-            error: 'Not on a Google SERP. Use search_google or navigate to Google results before extraction.',
+            error: `Not on a ${searchEngine.name} results page. Use search_web or navigate to search results before extraction.`,
             includeInMemory: true,
           });
         }
 
-        const meta = (await (page as any).getGoogleSearchResultsWithMeta?.(
+        const meta = (await (page as any).getSearchResultsWithMeta?.(
           Math.max(1, Math.min(20, input.max_results || 10)),
+          engineId,
         )) ?? {
-          items: await page.getGoogleSearchResults(Math.max(1, Math.min(20, input.max_results || 10))),
+          items: await (page as any).getSearchResults(Math.max(1, Math.min(20, input.max_results || 10)), engineId),
           fromCache: false,
         };
         list = meta.items;
         fromCache = !!meta.fromCache;
       } catch (e) {
-        const msg = `Failed to extract Google results: ${e instanceof Error ? e.message : String(e)}`;
+        const msg = `Failed to extract search results: ${e instanceof Error ? e.message : String(e)}`;
         context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_FAIL, msg);
         return new ActionResult({ error: msg, includeInMemory: true });
       }
@@ -264,11 +264,11 @@ export class ActionBuilder {
       const formatted = JSON.stringify(payload);
       const wrappedContent = wrapUntrustedContent(formatted);
 
-      const msg = `Extracted ${list.length} Google results${fromCache ? ' (cached)' : ''}`;
+      const msg = `Extracted ${list.length} results${fromCache ? ' (cached)' : ''}`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
       return new ActionResult({ extractedContent: wrappedContent, includeInMemory: !fromCache, success: true });
-    }, extractGoogleResultsActionSchema);
-    actions.push(extractGoogleResults);
+    }, extractSearchResultsActionSchema);
+    actions.push(extractSearchResults);
 
     const goToUrl = new Action(async (input: z.infer<typeof goToUrlActionSchema.schema>) => {
       this.checkCancelled();
