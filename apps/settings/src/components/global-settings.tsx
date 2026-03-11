@@ -1,4 +1,3 @@
-import { Button } from '@extension/ui';
 import { LabelWithTooltip, cn, ModelComboBox, TemperatureControl, SaveIndicator } from './primitives';
 import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 import type { ThinkingLevel } from '@extension/storage';
@@ -64,10 +63,10 @@ export function GlobalSettings(props: GlobalSettingsProps) {
   return (
     <div
       className={cn(
-        'rounded-xl border-2 p-5 text-left shadow-sm backdrop-blur-md',
-        isDarkMode ? 'border-slate-500 bg-slate-800/60' : 'border-gray-300 bg-white/40',
+        'rounded-xl border p-5 text-left',
+        isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]',
       )}>
-      <h2 className={cn('mb-4 text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
+      <h2 className={cn('mb-4 text-base font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900')}>
         Global Settings
       </h2>
 
@@ -87,18 +86,19 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           options={options}
           onChange={onChangeGlobalModel}
         />
-        <Button
-          variant="secondary"
+        <button
+          type="button"
           onClick={applyToAll}
           disabled={!globalModelValue}
           className={cn(
-            'text-sm shrink-0',
+            'rounded-lg px-3 py-2 text-sm font-medium shrink-0',
             isDarkMode
-              ? 'border-[#3a3a34] bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
-              : 'border-[#d9d7ce] bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
+              ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
+              : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
+            !globalModelValue && 'opacity-50 cursor-not-allowed',
           )}>
           Apply to all
-        </Button>
+        </button>
         <SaveIndicator show={showSaveIndicator} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
 
@@ -109,14 +109,13 @@ export function GlobalSettings(props: GlobalSettingsProps) {
         </div>
       )}
 
-      {/* Thinking Level */}
       {globalModelValue && (
         <div className="mt-4 flex items-center gap-3">
           <LabelWithTooltip
             isDarkMode={isDarkMode}
             htmlFor="global-thinking-level"
             label="Thinking Level"
-            tooltip="Controls reasoning depth for supported models. Set to Default if unsupported."
+            tooltip="Controls reasoning depth for supported models."
             width="w-28"
           />
           <select
@@ -124,14 +123,14 @@ export function GlobalSettings(props: GlobalSettingsProps) {
             value={globalModelParameters.thinkingLevel}
             onChange={e => onChangeGlobalParameter('thinkingLevel', e.target.value as ThinkingLevel)}
             className={cn(
-              'flex-1 rounded-md border px-3 py-2 text-sm',
-              isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
+              'flex-1 rounded-lg border px-3 py-2 text-sm',
+              isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
             )}>
             <option value="default">Default</option>
-            <option value="high">High (Thorough)</option>
-            <option value="medium">Medium (Balanced)</option>
-            <option value="low">Low (Faster)</option>
-            <option value="off">Off (Suppress)</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="off">Off</option>
           </select>
         </div>
       )}
@@ -176,8 +175,8 @@ export function GlobalSettings(props: GlobalSettingsProps) {
               onChangeGlobalParameter('maxOutputTokens', val);
             }}
             className={cn(
-              'w-24 rounded-md border px-3 py-2 text-sm',
-              isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
+              'w-24 rounded-lg border px-3 py-2 text-sm',
+              isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
             )}
             aria-label="Global max output tokens"
           />
@@ -185,8 +184,7 @@ export function GlobalSettings(props: GlobalSettingsProps) {
         </div>
       </div>
 
-      {/* Divider */}
-      <div className={cn('my-4 border-t', isDarkMode ? 'border-slate-600' : 'border-gray-200')} />
+      <div className={cn('my-4 border-t', isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]')} />
 
       {/* Response Timeout */}
       <div className="flex items-center gap-3">
@@ -206,8 +204,8 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           value={responseTimeoutSeconds}
           onChange={handleTimeoutChange}
           className={cn(
-            'w-20 rounded-md border px-3 py-2 text-sm',
-            isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700',
+            'w-20 rounded-lg border px-3 py-2 text-sm',
+            isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700',
           )}
           aria-label="Response timeout in seconds"
         />
