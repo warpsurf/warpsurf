@@ -1,10 +1,5 @@
-/*
- * Agent Settings Component
- * This component combines General settings with Model selection functionality
- * Organized by chat option with color-coded sections (Triage = black, Agent = yellow, etc.)
- */
 import { useEffect, useState, useCallback } from 'react';
-import { FaRobot, FaRandom, FaLightbulb } from 'react-icons/fa';
+import { FiCpu, FiZap } from 'react-icons/fi';
 import {
   generalSettingsStore,
   secureProviderClient,
@@ -602,12 +597,13 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     />
   );
 
+  const cardClass = `rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
+
   return (
-    <section className="flex flex-col space-y-6">
-      {/*Suggestion note for model selection*/}
-      <div className="rounded-xl border p-5 text-left shadow-sm backdrop-blur-md">
-        <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          We suggest balancing capability with latency/cost, e.g., "flash" or "fast" versions of frontier models.
+    <section className="flex flex-col space-y-5">
+      <div className={cardClass}>
+        <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          Balance capability with latency/cost — "flash" or "fast" model variants are recommended.
         </p>
       </div>
       {/* Global Settings (Model Selection + Timeout) */}
@@ -627,55 +623,51 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       />
 
       {/* Auto Tab Context Toggle */}
-      <div
-        className={`rounded-xl border p-4 shadow-sm backdrop-blur-md ${
-          isDarkMode ? 'border-purple-700/40 bg-purple-900/20' : 'border-purple-300/60 bg-purple-50/60'
-        }`}>
+      <div className={cardClass}>
         <div className="flex items-center justify-between">
           <div className="text-left">
-            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+            <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
               Auto Tab Context
             </h3>
-            <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              {settings.enableAutoTabContext
-                ? 'Automatically including all open browser tabs as context'
-                : 'Enable from the panel\'s "Add tab as context" dropdown'}
+            <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              {settings.enableAutoTabContext ? 'Including all open tabs as context' : 'Enable from panel dropdown'}
             </p>
           </div>
-          {settings.enableAutoTabContext ? (
-            <button
-              type="button"
-              onClick={() => updateSetting('enableAutoTabContext', false)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                isDarkMode
-                  ? 'bg-red-900/50 text-red-200 hover:bg-red-800/60'
-                  : 'bg-red-100 text-red-700 hover:bg-red-200'
-              }`}>
-              Disable
-            </button>
-          ) : (
-            <span
-              className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>
-              Disabled
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={() => updateSetting('enableAutoTabContext', !settings.enableAutoTabContext)}
+            className={`toggle-slider ${settings.enableAutoTabContext ? 'toggle-on' : 'toggle-off'}`}
+            aria-pressed={settings.enableAutoTabContext}>
+            <span className="toggle-knob" />
+          </button>
         </div>
       </div>
 
       {/* Auto Section */}
-      <div
-        className={`rounded-xl border ${getSectionColor(AgentNameEnum.Auto)} p-5 text-left shadow-sm backdrop-blur-md`}
-        style={{ order: 2 }}>
-        <h2 className={`mb-4 text-lg font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          <span className="inline-flex items-center gap-2">
-            <span
-              className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-black/70 text-white' : 'bg-black text-white'}`}>
-              <FaRandom className="h-3.5 w-3.5" />
-            </span>
-            <span>Auto</span>
-          </span>
+      <div className={`rounded-xl border p-5 ${getSectionColor(AgentNameEnum.Auto)}`} style={{ order: 2 }}>
+        <h2
+          className={`mb-4 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          <FiZap className="h-4 w-4" /> Auto
         </h2>
-        <div className="space-y-4">{renderModelSelect(AgentNameEnum.Auto)}</div>
+        <div className="space-y-4">
+          <ModelSelect
+            isDarkMode={isDarkMode}
+            agentName={AgentNameEnum.Auto}
+            availableModels={availableModels}
+            selectedValue={selectedModels[AgentNameEnum.Auto] || ''}
+            modelParameters={modelParameters[AgentNameEnum.Auto]}
+            thinkingLevelValue={thinkingLevel[AgentNameEnum.Auto]}
+            showAllModels={showAllModels}
+            getAgentDisplayName={getAgentDisplayName}
+            getAgentDescription={getAgentDescription}
+            getAgentSectionColor={getSectionColor}
+            hasModelPricing={hasModelPricing}
+            onChangeModel={handleModelChange}
+            onChangeParameter={handleParameterChange}
+            onChangeThinkingLevel={handleThinkingLevelChange}
+            hideHeader
+          />
+        </div>
       </div>
 
       {/* Chat Section */}
@@ -717,28 +709,19 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
       />
 
       {/* Agent & Multi-Agent Section (Navigator, Planner, Validator) */}
-      <div
-        className={`rounded-xl border ${getSectionColor(AgentNameEnum.AgentNavigator)} p-5 text-left shadow-sm backdrop-blur-md`}
-        style={{ order: 5 }}>
-        <h2 className={`mb-4 text-lg font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          <span className="inline-flex items-center gap-2">
-            <span
-              className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isDarkMode ? 'bg-amber-400/70 text-white' : 'bg-amber-300 text-white'}`}>
-              <FaRobot className="h-3.5 w-3.5" />
-            </span>
-            <span>Agent & Multi-Agent</span>
-          </span>
+      <div className={cardClass} style={{ order: 5 }}>
+        <h2
+          className={`mb-4 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          <FiCpu className="h-4 w-4" /> Agent & Multi-Agent
         </h2>
         {/* Agent Settings - merged configuration */}
-        <div className="mt-6 space-y-4">
-          <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Agent Settings</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-5 space-y-4">
+          <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Agent Settings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Steps</h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Step limit per task (1-50)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Steps</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>1-50</p>
               </div>
               <input
                 type="number"
@@ -746,18 +729,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={50}
                 value={settings.maxSteps}
                 onChange={e => updateSetting('maxSteps', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Actions Per Step
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Action limit per step (1-50)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Actions/Step</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>1-50</p>
               </div>
               <input
                 type="number"
@@ -765,18 +744,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={50}
                 value={settings.maxActionsPerStep}
                 onChange={e => updateSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Failure Tolerance
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Max consecutive failures (1-10)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Failure Tolerance</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>1-10</p>
               </div>
               <input
                 type="number"
@@ -784,18 +759,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={10}
                 value={settings.maxFailures}
                 onChange={e => updateSetting('maxFailures', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Validator Failures
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Max validator failures (1-10)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Validator Failures</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>1-10</p>
               </div>
               <input
                 type="number"
@@ -803,18 +774,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={10}
                 value={settings.maxValidatorFailures}
                 onChange={e => updateSetting('maxValidatorFailures', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Retry Delay
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Wait between retries (0-30s)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Retry Delay</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>0-30s</p>
               </div>
               <input
                 type="number"
@@ -822,18 +789,14 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 max={30}
                 value={settings.retryDelay}
                 onChange={e => updateSetting('retryDelay', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Input Tokens
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Context window size (32k-200k)
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Input Tokens</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>32k-200k</p>
               </div>
               <input
                 type="number"
@@ -842,28 +805,27 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 step={1000}
                 value={settings.maxInputTokens}
                 onChange={e => updateSetting('maxInputTokens', Number.parseInt(e.target.value, 10))}
-                className={`w-24 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={`w-24 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
               />
             </div>
 
-            {/* Toggle settings */}
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1">
                     Vision Mode
                     <span
-                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                       ?
                     </span>
                     <span
-                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                      className={`pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
                       Off: no screenshots. Auto: agent requests screenshots on demand. Always: every step includes a
                       screenshot.
                     </span>
                   </span>
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                </span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                   {settings.useVision === 'auto'
                     ? 'On-demand screenshots'
                     : settings.useVision
@@ -877,7 +839,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                   const v = e.target.value;
                   updateSetting('useVision', v === 'true' ? true : v === 'auto' ? 'auto' : false);
                 }}
-                className={`rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'}`}>
+                className={`rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}>
                 <option value="false">Off</option>
                 <option value="auto">Auto</option>
                 <option value="true">Always</option>
@@ -886,52 +848,49 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1">
                     Display Highlights
                     <span
-                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                       ?
                     </span>
                     <span
-                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                      className={`pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
                       Auto: highlights only appear on-demand with screenshots. Always On: highlights shown every step.
                     </span>
                   </span>
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                </span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                   {settings.displayHighlights === 'auto' ? 'On-demand with screenshots' : 'Shown every step'}
                 </p>
               </div>
               <select
                 value={String(settings.displayHighlights ?? 'auto')}
-                onChange={e => {
-                  const v = e.target.value;
-                  updateSetting('displayHighlights', v === 'true' ? true : 'auto');
-                }}
-                className={`rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'}`}>
+                onChange={e => updateSetting('displayHighlights', e.target.value === 'true' ? true : 'auto')}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}>
                 <option value="auto">Auto</option>
-                <option value="true">Always On</option>
+                <option value="true">Always</option>
               </select>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1">
                     Coordinate Clicking
                     <span
-                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                       ?
                     </span>
                     <span
-                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
+                      className={`pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
                       Allow the agent to click at exact pixel coordinates from screenshots. Useful for captchas and
                       visually-identified targets.
                     </span>
                   </span>
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                </span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                   Click by pixel position from screenshots
                 </p>
               </div>
@@ -939,28 +898,27 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 type="button"
                 onClick={() => updateSetting('enableCoordinateClick', !settings.enableCoordinateClick)}
                 className={`toggle-slider ${settings.enableCoordinateClick ? 'toggle-on' : 'toggle-off'}`}
-                aria-pressed={!!settings.enableCoordinateClick}
-                aria-label="Coordinate Clicking toggle">
+                aria-pressed={!!settings.enableCoordinateClick}>
                 <span className="toggle-knob" />
               </button>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="group relative inline-flex items-center gap-1 pb-1">
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="group relative inline-flex items-center gap-1">
                     Use Vision for Planner
                     <span
-                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isDarkMode ? 'bg-[#3a3a34] text-gray-400' : 'bg-[#e5e4de] text-gray-600'}`}>
                       ?
                     </span>
                     <span
-                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
-                      Allow planner to use screenshots
+                      className={`pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-48 whitespace-normal rounded-lg px-2 py-1 text-[10px] group-hover:block ${isDarkMode ? 'bg-[#252522] text-gray-300 border border-[#3a3a34]' : 'bg-white text-gray-700 border border-[#dddcd5]'}`}>
+                      Allow planner to use screenshots for better planning decisions.
                     </span>
                   </span>
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                </span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                   Enable vision for planning
                 </p>
               </div>
@@ -968,181 +926,115 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                 type="button"
                 onClick={() => updateSetting('useVisionForPlanner', !settings.useVisionForPlanner)}
                 className={`toggle-slider ${settings.useVisionForPlanner ? 'toggle-on' : 'toggle-off'}`}
-                aria-pressed={settings.useVisionForPlanner}
-                aria-label="Use Vision for Planner toggle">
+                aria-pressed={settings.useVisionForPlanner}>
                 <span className="toggle-knob" />
               </button>
             </div>
           </div>
 
-          {/* Planner & Validator Settings - Full Width Sections */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            {/* Single-Agent Workflow Box */}
-            <div
-              className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
-              <h4 className={`text-base font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                🤖 Single-Agent Workflow
-              </h4>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Planner
-                    </span>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Plans before navigation
-                    </p>
+          <div className={`mt-4 border-t pt-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Single-Agent
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting('enablePlanner', !settings.enablePlanner)}
+                      className={`toggle-slider ${settings.enablePlanner ? 'toggle-on' : 'toggle-off'}`}
+                      aria-pressed={settings.enablePlanner}>
+                      <span className="toggle-knob" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSetting('enablePlanner', !settings.enablePlanner)}
-                    className={`toggle-slider ${settings.enablePlanner ? 'toggle-on' : 'toggle-off'}`}
-                    aria-pressed={settings.enablePlanner}
-                    aria-label="Enable Planner toggle">
-                    <span className="toggle-knob" />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Validator
-                    </span>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Validates task output</p>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting('enableValidator', !settings.enableValidator)}
+                      className={`toggle-slider ${settings.enableValidator ? 'toggle-on' : 'toggle-off'}`}
+                      aria-pressed={settings.enableValidator}>
+                      <span className="toggle-knob" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSetting('enableValidator', !settings.enableValidator)}
-                    className={`toggle-slider ${settings.enableValidator ? 'toggle-on' : 'toggle-off'}`}
-                    aria-pressed={settings.enableValidator}
-                    aria-label="Enable Validator toggle">
-                    <span className="toggle-knob" />
-                  </button>
                 </div>
               </div>
-            </div>
-
-            {/* Multi-Agent Workflow Box */}
-            <div
-              className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
-              <h4 className={`text-base font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                🤖🤖 Multi-Agent Workflow
-              </h4>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Planner
-                    </span>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Each worker plans</p>
+              <div>
+                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Multi-Agent
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Planner</span>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner)}
+                      className={`toggle-slider ${settings.enableMultiagentPlanner ? 'toggle-on' : 'toggle-off'}`}
+                      aria-pressed={settings.enableMultiagentPlanner}>
+                      <span className="toggle-knob" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSetting('enableMultiagentPlanner', !settings.enableMultiagentPlanner)}
-                    className={`toggle-slider ${settings.enableMultiagentPlanner ? 'toggle-on' : 'toggle-off'}`}
-                    aria-pressed={settings.enableMultiagentPlanner}
-                    aria-label="Enable Multi-Agent Planner toggle">
-                    <span className="toggle-knob" />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Validator
-                    </span>
-                    <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Each worker validates</p>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Validator</span>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting('enableMultiagentValidator', !settings.enableMultiagentValidator)}
+                      className={`toggle-slider ${settings.enableMultiagentValidator ? 'toggle-on' : 'toggle-off'}`}
+                      aria-pressed={settings.enableMultiagentValidator}>
+                      <span className="toggle-knob" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSetting('enableMultiagentValidator', !settings.enableMultiagentValidator)}
-                    className={`toggle-slider ${settings.enableMultiagentValidator ? 'toggle-on' : 'toggle-off'}`}
-                    aria-pressed={settings.enableMultiagentValidator}
-                    aria-label="Enable Multi-Agent Validator toggle">
-                    <span className="toggle-knob" />
-                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Other Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <span className="group relative inline-flex items-center gap-1 pb-1">
-                    Show Tab Previews
-                    <span
-                      className={`inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700'}`}>
-                      ?
-                    </span>
-                    <span
-                      className={`absolute left-0 top-full z-50 mt-0 hidden whitespace-normal rounded px-2 py-1 text-[10px] shadow group-hover:block ${isDarkMode ? 'bg-slate-900 text-slate-100 border border-slate-700' : 'bg-gray-900 text-white border border-gray-800'} pointer-events-auto`}>
-                      Show low-FPS tab mirroring in chat UI
-                    </span>
-                  </span>
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Display tab previews
-                </p>
+                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tab Previews</span>
+                <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>In-chat mirroring</p>
               </div>
               <button
                 type="button"
                 onClick={() => updateSetting('showTabPreviews' as any, !((settings as any).showTabPreviews ?? true))}
                 className={`toggle-slider ${((settings as any).showTabPreviews ?? true) ? 'toggle-on' : 'toggle-off'}`}
-                aria-pressed={(settings as any).showTabPreviews ?? true}
-                aria-label="Show Tab Previews toggle">
+                aria-pressed={(settings as any).showTabPreviews ?? true}>
                 <span className="toggle-knob" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Multi-Agent Settings */}
-        <div className="mt-6 space-y-4">
-          <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            Multi-Agent Settings
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Worker Agents
-                </h4>
-                <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Maximum parallel workers (1-10)
-                </p>
-              </div>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={settings.maxWorkerAgents}
-                onChange={e => updateSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
-              />
+        <div className={`mt-4 border-t pt-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Max Worker Agents</span>
+              <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Parallel workers (1-10)</p>
             </div>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={settings.maxWorkerAgents}
+              onChange={e => updateSetting('maxWorkerAgents', Number.parseInt(e.target.value, 10))}
+              className={`w-20 rounded-lg border px-3 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
+            />
           </div>
         </div>
 
-        {/* Agent Models */}
-        <div className="mt-6 space-y-4">
-          <div className="mb-2 flex items-center gap-3 text-sm">
-            <label className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>
-              <input
-                type="checkbox"
-                className="mr-2"
-                checked={showAllModels}
-                onChange={e => setShowAllModels(e.target.checked)}
-              />
-              Show all models (include ones with cost unknown)
-            </label>
-            {!showAllModels && (
-              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
-                Models without Helicone pricing are hidden. Enable to override.
-              </span>
-            )}
-          </div>
-          {/* <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Agent Models</h3> */}
+        <div className={`mt-4 border-t pt-4 space-y-4 ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`}>
+          <label className={`flex items-center gap-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <input
+              type="checkbox"
+              checked={showAllModels}
+              onChange={e => setShowAllModels(e.target.checked)}
+              className="rounded"
+            />
+            Show all models (including those without pricing)
+          </label>
           <AgentModelsSection
             isDarkMode={isDarkMode}
             sectionTitle="Agent Models"
@@ -1178,10 +1070,7 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             onChangeThinkingLevel={handleThinkingLevelChange}
           />
 
-          {/* Divider */}
-          <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
-
-          {/* History Context Summarization - pale green */}
+          <div className={`my-4 border-t ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`} />
           <AgentModelsSection
             isDarkMode={isDarkMode}
             sectionTitle="History Context Summarization"
@@ -1197,15 +1086,11 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             hasModelPricing={hasModelPricing}
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
-            onChangeThinkingLevel={handleThinkingLevelChange}
-            colorOverride={isDarkMode ? 'border-green-700/40 bg-green-900/20' : 'border-green-300/60 bg-green-50/60'}>
-            <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Configure how browser history is processed and sent to the AI for summarization.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            onChangeThinkingLevel={handleThinkingLevelChange}>
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Time Window (hours)
+                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Window (hrs)
                 </label>
                 <input
                   type="number"
@@ -1218,15 +1103,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                       Math.max(1, Math.min(168, Number.parseInt(e.target.value, 10) || 24)),
                     )
                   }
-                  className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
+                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  How far back to fetch (1-168)
-                </p>
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Items to Fetch
+                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Max Fetch
                 </label>
                 <input
                   type="number"
@@ -1240,15 +1122,12 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                       Math.max(100, Math.min(50000, Number.parseInt(e.target.value, 10) || 1000)),
                     )
                   }
-                  className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
+                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  From browser API (100-50,000)
-                </p>
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Items to AI
+                <label className={`block text-xs mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Max to AI
                 </label>
                 <input
                   type="number"
@@ -1262,22 +1141,17 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
                       Math.max(50, Math.min(2000, Number.parseInt(e.target.value, 10) || 50)),
                     )
                   }
-                  className={`w-full rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2 text-sm`}
+                  className={`w-full rounded-lg border px-2 py-1.5 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`}
                 />
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  After dedup/filter (50-2,000)
-                </p>
               </div>
             </div>
           </AgentModelsSection>
 
-          {/* Divider */}
-          <div className={`my-6 border-t ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`} />
+          <div className={`my-4 border-t ${isDarkMode ? 'border-[#2f2f29]' : 'border-[#dddcd5]'}`} />
 
-          {/* Workflow Estimation Model - pale blue */}
           <AgentModelsSection
             isDarkMode={isDarkMode}
-            sectionTitle="Workflow Estimation Model"
+            sectionTitle="Workflow Estimation"
             agents={[AgentNameEnum.Estimator]}
             availableModels={availableModels}
             selectedModels={selectedModels}
@@ -1291,7 +1165,6 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
             onChangeModel={handleModelChange}
             onChangeParameter={handleParameterChange}
             onChangeThinkingLevel={handleThinkingLevelChange}
-            colorOverride={isDarkMode ? 'border-blue-700/40 bg-blue-900/20' : 'border-blue-300/60 bg-blue-50/60'}
           />
         </div>
       </div>
