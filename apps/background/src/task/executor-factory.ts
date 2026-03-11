@@ -58,6 +58,8 @@ export async function createSingleAgentExecutor(input: SingleAgentFactoryInput):
       useVision: generalSettings.useVision,
       useVisionForPlanner: true,
       planningInterval: generalSettings.planningInterval,
+      enableCoordinateClick: generalSettings.enableCoordinateClick ?? false,
+      defaultSearchEngine: generalSettings.defaultSearchEngine ?? 'google',
     },
     generalSettings: effectiveSettings,
     agentType: manualAgentType,
@@ -68,11 +70,13 @@ export async function createSingleAgentExecutor(input: SingleAgentFactoryInput):
 export type WorkerExecutorFactoryInput = {
   prompt: string;
   sessionId: string;
-  workerModelPrefers?: AgentNameEnum; // optionally prefer MultiagentWorker/AgentPlanner/AgentNavigator override
+  workerModelPrefers?: AgentNameEnum;
+  systemMessageOverride?: import('@langchain/core/messages').SystemMessage;
+  messageContext?: string;
 };
 
 export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): Promise<Executor> {
-  const { prompt, sessionId, workerModelPrefers } = input;
+  const { prompt, sessionId, workerModelPrefers, systemMessageOverride, messageContext } = input;
 
   const providers = await getAllProvidersDecrypted();
   const agentModels = await agentModelStore.getAllAgentModels();
@@ -119,10 +123,14 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
       useVision: generalSettings.useVision,
       useVisionForPlanner: true,
       planningInterval: generalSettings.planningInterval,
+      enableCoordinateClick: generalSettings.enableCoordinateClick ?? false,
+      defaultSearchEngine: generalSettings.defaultSearchEngine ?? 'google',
     },
     generalSettings: workerSettings,
     agentType: 'agent',
-    retainTokenLogs: true, // Workers must retain tokens for session log aggregation
+    retainTokenLogs: true,
+    systemMessageOverride,
+    messageContext,
   });
   return executor;
 }
