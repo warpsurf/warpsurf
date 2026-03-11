@@ -43,20 +43,19 @@ function detectProvider(url: string): string {
   return 'custom';
 }
 
-function isLLMRequest(url: string, init?: RequestInit): boolean {
-  if (init?.method !== 'POST') return false;
-  const contentType = (init.headers as Record<string, string>)?.['Content-Type'] || '';
-  if (!contentType.includes('application/json')) return false;
+const LLM_URL_PATTERNS = [
+  /openai\.com\/v1\/(chat\/completions|responses)/,
+  /anthropic\.com\/v1\/messages/,
+  /generativelanguage\.googleapis\.com/,
+  /openrouter\.ai\/api\/v1/,
+  /api\.x\.ai\/v1/,
+];
 
-  // Check for LLM API patterns
-  const llmPatterns = [
-    /openai\.com\/v1\/(chat\/completions|responses)/,
-    /anthropic\.com\/v1\/messages/,
-    /generativelanguage\.googleapis\.com/,
-    /openrouter\.ai\/api\/v1/,
-    /api\.x\.ai\/v1/,
-  ];
-  return llmPatterns.some(p => p.test(url));
+function isLLMRequest(url: string, input: RequestInfo | URL, init?: RequestInit): boolean {
+  // Extract method from either the Request object or init
+  const method = init?.method ?? (input instanceof Request ? input.method : undefined);
+  if (method !== 'POST') return false;
+  return LLM_URL_PATTERNS.some(p => p.test(url));
 }
 
 function createMockOpenAIResponse(mock: MockResponse['response']): Response {
@@ -137,10 +136,11 @@ export function setupLLMInterceptor(): void {
   globalThis.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
-    if (isLLMRequest(url, init)) {
+    if (isLLMRequest(url, input, init)) {
       let body: unknown = null;
       try {
-        body = init?.body ? JSON.parse(init.body as string) : null;
+        const rawBody = init?.body ?? (input instanceof Request ? await input.clone().text() : null);
+        body = rawBody ? JSON.parse(rawBody as string) : null;
       } catch {}
 
       const request: LLMRequest = {
