@@ -19,11 +19,16 @@ import { attachAgentManagerPortHandlers } from './ports/agent-manager';
 import { workflowLogger } from './executor/workflow-logger';
 
 import { registerCryptoHandlers } from './crypto';
+import { extractMultipleTabs, isUrlAllowedByFirewall } from './workflows/shared/context/context-tab-extractor';
 import {
-  extractTabContent,
-  extractMultipleTabs,
-  isUrlAllowedByFirewall,
-} from './workflows/shared/context/context-tab-extractor';
+  isTestMode,
+  logMessageCall,
+  logMessageSuccess,
+  logMessageError,
+  getTestLogs,
+  clearTestLogs,
+  getTestLogsJSON,
+} from './test/instrumentation';
 
 const logger = createLogger('background');
 
@@ -232,7 +237,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     switch (message?.type) {
       case 'test_provider': {
         (async () => {
-          await handleTestProviderMessage(message, sendResponse);
+          logMessageCall('test_provider', message);
+          try {
+            await handleTestProviderMessage(message, sendResponse);
+            logMessageSuccess('test_provider', { handled: true });
+          } catch (e) {
+            logMessageError('test_provider', e instanceof Error ? e.message : 'Failed');
+          }
         })();
         return true;
       }
@@ -290,18 +301,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ? message.tabIds.filter((id: any) => typeof id === 'number' && id > 0)
           : [];
         (async () => {
+          logMessageCall('extract_context_tabs', { tabIds });
           try {
             if (tabIds.length === 0) {
-              sendResponse({ success: true, tabIds: [] });
+              const response = { success: true, tabIds: [] };
+              logMessageSuccess('extract_context_tabs', response);
+              sendResponse(response);
               return;
             }
             const results = await extractMultipleTabs(tabIds);
             const extracted = Array.from(results.keys());
             logger.info(`[extract_context_tabs] Extracted ${extracted.length}/${tabIds.length} tabs`);
-            sendResponse({ success: true, tabIds: extracted });
+            const response = { success: true, tabIds: extracted };
+            logMessageSuccess('extract_context_tabs', response);
+            sendResponse(response);
           } catch (e) {
+            const errorMsg = e instanceof Error ? e.message : 'Extraction failed';
             logger.error('[extract_context_tabs] Failed:', e);
-            sendResponse({ success: false, error: e instanceof Error ? e.message : 'Extraction failed' });
+            logMessageError('extract_context_tabs', errorMsg);
+            sendResponse({ success: false, error: errorMsg });
           }
         })();
         return true; // Async response
@@ -309,15 +327,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case 'check_urls_firewall': {
         const urls: { tabId: number; url: string }[] = Array.isArray(message.urls) ? message.urls : [];
         (async () => {
+          logMessageCall('check_urls_firewall', { urls });
           try {
             const results: { tabId: number; allowed: boolean }[] = [];
             for (const { tabId, url } of urls) {
               const allowed = await isUrlAllowedByFirewall(url);
               results.push({ tabId, allowed });
             }
-            sendResponse({ results });
+            const response = { results };
+            logMessageSuccess('check_urls_firewall', response);
+            sendResponse(response);
           } catch (e) {
+            const errorMsg = e instanceof Error ? e.message : 'Check failed';
             logger.error('[check_urls_firewall] Failed:', e);
+            logMessageError('check_urls_firewall', errorMsg);
             sendResponse({ results: [], error: 'Check failed' });
           }
         })();
@@ -380,34 +403,46 @@ chrome.runtime.onConnect.addListener(async port => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'calculate_cost') {
     (async () => {
+      logMessageCall('calculate_cost', {
+        modelName: message.modelName,
+        inputTokens: message.inputTokens,
+        outputTokens: message.outputTokens,
+      });
       try {
         const { calculateCost } = await import('./utils/cost-calculator');
         const cost = calculateCost(message.modelName, message.inputTokens, message.outputTokens);
-        sendResponse({ cost });
+        const response = { cost };
+        logMessageSuccess('calculate_cost', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to calculate cost:', e);
+        logMessageError('calculate_cost', e instanceof Error ? e.message : 'Failed');
         sendResponse({ cost: 0 });
       }
     })();
-    return true; // Indicates async response
+    return true;
   }
 
   if (message.type === 'get_model_latency') {
     (async () => {
+      logMessageCall('get_model_latency', { modelName: message.modelName });
       try {
         const { getModelLatency } = await import('./utils/latency-calculator');
         const latency = getModelLatency(message.modelName);
+        logMessageSuccess('get_model_latency', latency);
         sendResponse(latency);
       } catch (e) {
         logger.error('Failed to get model latency:', e);
+        logMessageError('get_model_latency', e instanceof Error ? e.message : 'Failed');
         sendResponse(null);
       }
     })();
-    return true; // Indicates async response
+    return true;
   }
 
   if (message.type === 'get_available_models') {
     (async () => {
+      logMessageCall('get_available_models', {});
       try {
         const { getAllProvidersDecrypted } = await import('./crypto');
         const providers = await getAllProvidersDecrypted();
@@ -418,8 +453,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!config?.apiKey || config.apiKey.trim() === '') continue;
 
           const providerModels = config.modelNames || [];
-          // Include all models, not just those with pricing data
-          // Models without pricing will display costs as NaN
           models.push(
             ...providerModels.map((model: string) => ({
               provider,
@@ -429,25 +462,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           );
         }
 
-        sendResponse({ models });
+        const response = { models };
+        logMessageSuccess('get_available_models', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to get available models:', e);
+        logMessageError('get_available_models', e instanceof Error ? e.message : 'Failed');
         sendResponse({ models: [] });
       }
     })();
     return true;
   }
 
-  // Model registry handlers
   if (message.type === 'get_provider_models') {
     (async () => {
+      logMessageCall('get_provider_models', { provider: message.provider });
       try {
         const { initializeModelRegistry, getModelsForProvider } = await import('./utils/model-registry');
-        await initializeModelRegistry(); // Ensure initialized
+        await initializeModelRegistry();
         const models = getModelsForProvider(message.provider);
-        sendResponse({ ok: true, models });
+        const response = { ok: true, models };
+        logMessageSuccess('get_provider_models', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to get provider models:', e);
+        logMessageError('get_provider_models', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false, models: [] });
       }
     })();
@@ -456,13 +495,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'get_openrouter_providers') {
     (async () => {
+      logMessageCall('get_openrouter_providers', {});
       try {
         const { initializeModelRegistry, getOpenRouterProviderGroups } = await import('./utils/model-registry');
-        await initializeModelRegistry(); // Ensure initialized
+        await initializeModelRegistry();
         const providers = getOpenRouterProviderGroups();
-        sendResponse({ ok: true, providers });
+        const response = { ok: true, providers };
+        logMessageSuccess('get_openrouter_providers', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to get OpenRouter providers:', e);
+        logMessageError('get_openrouter_providers', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false, providers: [] });
       }
     })();
@@ -471,12 +514,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'get_openrouter_models_for_providers') {
     (async () => {
+      logMessageCall('get_openrouter_models_for_providers', { enabledProviders: message.enabledProviders });
       try {
         const { getModelsForOpenRouterProviders } = await import('./utils/model-registry');
         const models = getModelsForOpenRouterProviders(message.enabledProviders || []);
-        sendResponse({ ok: true, models });
+        const response = { ok: true, models };
+        logMessageSuccess('get_openrouter_models_for_providers', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to get OpenRouter models:', e);
+        logMessageError('get_openrouter_models_for_providers', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false, models: [] });
       }
     })();
@@ -485,48 +532,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'refresh_model_registry') {
     (async () => {
+      logMessageCall('refresh_model_registry', {});
       try {
         const { forceRefreshModelRegistry } = await import('./utils/model-registry');
         await forceRefreshModelRegistry();
-        sendResponse({ ok: true });
+        const response = { ok: true };
+        logMessageSuccess('refresh_model_registry', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to refresh model registry:', e);
+        logMessageError('refresh_model_registry', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false });
       }
     })();
     return true;
   }
 
-  // Reinitialize registry after changing live/cached mode setting
   if (message.type === 'reinitialize_model_registry') {
     (async () => {
+      logMessageCall('reinitialize_model_registry', {});
       try {
         const { reinitializeModelRegistry } = await import('./utils/model-registry');
         await reinitializeModelRegistry();
-        sendResponse({ ok: true });
+        const response = { ok: true };
+        logMessageSuccess('reinitialize_model_registry', response);
+        sendResponse(response);
       } catch (e) {
         logger.error('Failed to reinitialize model registry:', e);
+        logMessageError('reinitialize_model_registry', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false });
       }
     })();
     return true;
   }
 
-  // Get cache status for UI display
   if (message.type === 'get_pricing_cache_status') {
     (async () => {
+      logMessageCall('get_pricing_cache_status', {});
       try {
         const { isUsingCachedPricing, getCachedPricingDate } = await import('./utils/model-registry');
-        sendResponse({
+        const response = {
           ok: true,
           isUsingCache: isUsingCachedPricing(),
           cacheDate: getCachedPricingDate(),
-        });
+        };
+        logMessageSuccess('get_pricing_cache_status', response);
+        sendResponse(response);
       } catch (e) {
+        logMessageError('get_pricing_cache_status', e instanceof Error ? e.message : 'Failed');
         sendResponse({ ok: false, isUsingCache: false, cacheDate: null });
       }
     })();
     return true;
+  }
+
+  // Test API endpoints - only available when __TEST__=true
+  if (isTestMode()) {
+    if (message.type === '__test_get_logs') {
+      (async () => {
+        const logs = await getTestLogs();
+        sendResponse({ logs });
+      })();
+      return true;
+    }
+
+    if (message.type === '__test_clear_logs') {
+      (async () => {
+        await clearTestLogs();
+        sendResponse({ ok: true });
+      })();
+      return true;
+    }
+
+    if (message.type === '__test_get_logs_json') {
+      (async () => {
+        const json = await getTestLogsJSON();
+        sendResponse({ json });
+      })();
+      return true;
+    }
   }
 
   return false;
