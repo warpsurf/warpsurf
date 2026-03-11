@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { generalSettingsStore, type GeneralSettingsConfig, DEFAULT_GENERAL_SETTINGS } from '@extension/storage';
+import { useStorageConfirmation, SectionApplyButton } from './primitives';
 
 interface TabsSettingsProps {
   isDarkMode?: boolean;
@@ -7,12 +8,17 @@ interface TabsSettingsProps {
 
 export function TabsSettings({ isDarkMode = false }: TabsSettingsProps) {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
+  const [savedAutoTabContext, setSavedAutoTabContext] = useState(DEFAULT_GENERAL_SETTINGS.enableAutoTabContext);
+  const confirmation = useStorageConfirmation('general-settings');
+
+  const isDirty = settings.enableAutoTabContext !== savedAutoTabContext;
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const currentSettings = await generalSettingsStore.getSettings();
         setSettings(currentSettings);
+        setSavedAutoTabContext(currentSettings.enableAutoTabContext);
       } catch (error) {
         console.error('Error loading settings:', error);
       }
@@ -32,10 +38,14 @@ export function TabsSettings({ isDarkMode = false }: TabsSettingsProps) {
     };
   }, []);
 
-  const handleAutoTabContextToggle = async () => {
-    const newValue = !settings.enableAutoTabContext;
-    setSettings(prev => ({ ...prev, enableAutoTabContext: newValue }));
-    await generalSettingsStore.updateSettings({ enableAutoTabContext: newValue });
+  const handleAutoTabContextToggle = () => {
+    setSettings(prev => ({ ...prev, enableAutoTabContext: !prev.enableAutoTabContext }));
+  };
+
+  const applySettings = async () => {
+    confirmation.markPending();
+    await generalSettingsStore.updateSettings({ enableAutoTabContext: settings.enableAutoTabContext });
+    setSavedAutoTabContext(settings.enableAutoTabContext);
   };
 
   const cardClass = `rounded-xl border p-5 text-left ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
@@ -72,6 +82,13 @@ export function TabsSettings({ isDarkMode = false }: TabsSettingsProps) {
             </ul>
           </div>
         )}
+
+        <SectionApplyButton
+          isDarkMode={isDarkMode}
+          isDirty={isDirty}
+          confirmed={confirmation.confirmed}
+          onApply={applySettings}
+        />
       </div>
     </section>
   );
