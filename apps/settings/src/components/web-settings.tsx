@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { firewallStore, generalSettingsStore } from '@extension/storage';
-import { FiGlobe, FiShield, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiGlobe, FiShield, FiPlus, FiTrash2, FiSearch } from 'react-icons/fi';
+
+const SEARCH_ENGINE_OPTIONS = [
+  { value: 'google', label: 'Google' },
+  { value: 'duckduckgo', label: 'DuckDuckGo' },
+  { value: 'bing', label: 'Bing' },
+  { value: 'ecosia', label: 'Ecosia' },
+  { value: 'qwant', label: 'Qwant' },
+  { value: 'yahoo', label: 'Yahoo' },
+  { value: 'startpage', label: 'Startpage' },
+  { value: 'brave', label: 'Brave Search' },
+];
 
 const REGION_OPTIONS = [
   { value: '', label: 'Select a region...' },
@@ -59,6 +70,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
   const [newAllowUrl, setNewAllowUrl] = useState('');
   const [newDenyUrl, setNewDenyUrl] = useState('');
   const [preferredRegion, setPreferredRegion] = useState<string>('');
+  const [defaultSearchEngine, setDefaultSearchEngine] = useState<string>('google');
 
   const loadFirewallSettings = useCallback(async () => {
     const settings = await firewallStore.getFirewall();
@@ -67,19 +79,25 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
     setDenyList(settings.denyList);
   }, []);
 
-  const loadRegionSettings = useCallback(async () => {
+  const loadGeneralSettings = useCallback(async () => {
     const settings = await generalSettingsStore.getSettings();
     setPreferredRegion(settings.preferredRegion || '');
+    setDefaultSearchEngine(settings.defaultSearchEngine || 'google');
   }, []);
 
   useEffect(() => {
     loadFirewallSettings();
-    loadRegionSettings();
-  }, [loadFirewallSettings, loadRegionSettings]);
+    loadGeneralSettings();
+  }, [loadFirewallSettings, loadGeneralSettings]);
 
   const handleRegionChange = async (region: string) => {
     setPreferredRegion(region);
     await generalSettingsStore.updateSettings({ preferredRegion: region || undefined });
+  };
+
+  const handleSearchEngineChange = async (engine: string) => {
+    setDefaultSearchEngine(engine);
+    await generalSettingsStore.updateSettings({ defaultSearchEngine: engine });
   };
 
   const handleToggleFirewall = async () => {
@@ -159,6 +177,39 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
               No region selected. The agent will use default (.com) versions of websites.
             </p>
           )}
+        </div>
+      </div>
+
+      <div className={cardClass}>
+        <h2
+          className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          <FiSearch className="h-4 w-4" /> Search Engine Preference
+        </h2>
+        <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Choose the default search engine for agent web search actions.
+        </p>
+
+        <div className={innerCardClass}>
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="search-engine-select"
+              className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Default Search Engine
+            </label>
+            <select
+              id="search-engine-select"
+              value={defaultSearchEngine}
+              onChange={e => handleSearchEngineChange(e.target.value)}
+              className={`w-72 rounded-lg border px-3 py-2 text-sm ${
+                isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
+              }`}>
+              {SEARCH_ENGINE_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
