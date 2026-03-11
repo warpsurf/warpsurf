@@ -47,6 +47,16 @@ export const regionPreferenceGuidance = `
 - If the regional variant doesn't exist or isn't relevant to the task, use the default (.com) version.
 `;
 
+export const searchEngineGuidance = `
+20. DEFAULT SEARCH ENGINE:
+
+- The user's preferred search engine is: **{{search_engine_name}}**
+- **PREFER DIRECT NAVIGATION**: When the task involves a known website (e.g., "search Amazon for X", "find Y on Reddit"), navigate directly to that site using \`go_to_url\` with \`search_query\`. This is always the fastest and most reliable approach.
+- For general web searches (where no specific site is involved), you MUST use the \`search_web\` action. It automatically uses the user's preferred search engine.
+- Do NOT navigate to any search engine (Google, Bing, DuckDuckGo, Yahoo, etc.) via \`go_to_url\` to perform a web search. Always use \`search_web\` instead.
+- If \`search_web\` is blocked by captcha, fall back to \`go_to_url\` with: \`{{search_engine_url_example}}\`
+`;
+
 export const screenshotVisionGuidance = `
 - You have a \`screenshot\` action that captures a visual snapshot of the page with element index overlays.
 - **USE IT when you are:**
@@ -179,9 +189,7 @@ ${humanInTheLoopGuidance}
 - Handle popups/cookies by accepting or closing them
 - Use scroll to find elements you are looking for
 - Default behavior for workers: do not open any tab until an action requires a page. When a navigation action is required and no tab is bound or provided by dependencies, prefer opening a new tab at that point; otherwise reuse the current bound tab.
-- When performing a web search, do NOT open a neutral/blank tab first. Prefer using the \`search_web\` action or navigating directly to the results URL with query encoded using plus for spaces (e.g., \`https://www.google.com/search?q=query+terms\`). Do not create redundant extra tabs.
-- **SEARCH ENGINE FALLBACK ORDER** (if blocked by captcha): Try alternative search engines manually via \`go_to_url\`: DuckDuckGo (\`https://duckduckgo.com/?q=search+terms\`), Bing (\`https://www.bing.com/search?q=search+terms\`), Google (\`https://www.google.com/search?q=search+terms\`).
-- **PREFER DIRECT NAVIGATION**: When the task mentions a specific website (e.g., "Go to Amazon and search for X"), navigate directly to that site rather than searching Google first. This is faster and more reliable.
+- For web search and direct navigation rules, see the DEFAULT SEARCH ENGINE section.
 - If captcha pops up, try to solve it if a screenshot image is provided - else try a different approach (e.g., navigate to homepage and use site's search box)
 - If the page is not fully loaded, use wait action
 
@@ -255,5 +263,6 @@ ${loginAuthGuidance}
 ${noPageContextGuidance}
 {{post_sections}}
 {{region_preference_section}}
+{{search_engine_section}}
 </system_instructions>
 `;
