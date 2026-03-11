@@ -1,11 +1,12 @@
 import {
   workerBaseSystemPromptTemplate,
   regionPreferenceGuidance,
+  searchEngineGuidance,
   screenshotVisionGuidance,
   coordinateClickGuidance,
 } from '@src/workflows/shared/prompts/worker-prompt';
 
-export { regionPreferenceGuidance, screenshotVisionGuidance, coordinateClickGuidance };
+export { regionPreferenceGuidance, searchEngineGuidance, screenshotVisionGuidance, coordinateClickGuidance };
 
 const isLegacyNavigation = process.env.__LEGACY_NAVIGATION__ === 'true';
 
