@@ -101,7 +101,8 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     }
   };
 
-  const cardClass = `rounded-xl border p-5 ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
+  // Model section: pale rose/pink tint
+  const cardClass = `rounded-xl border p-5 ${isDarkMode ? 'border-[#403840] bg-[#282426]' : 'border-[#ebe4e8] bg-[#faf6f8]'}`;
   const selectClass = `rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-[#3a3a34] bg-[#252522] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'}`;
   const btnClass = `rounded-lg px-3 py-2 text-sm font-medium ${isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]'}`;
 
