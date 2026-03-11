@@ -20,25 +20,31 @@ export const doneActionSchema: ActionSchema = {
 };
 
 // Basic Navigation Actions
-export const searchGoogleActionSchema: ActionSchema = {
-  name: 'search_google',
+export const searchWebActionSchema: ActionSchema = {
+  name: 'search_web',
   description:
-    'Search Google with a query. Query should be concrete and specific. If blocked by captcha, try alternatives: DuckDuckGo (/?q=, use search NOT DuckAI), then Bing (/search?q=).',
+    'Search the web with a query. Query should be concrete and specific. If blocked by captcha, try alternative search engines via go_to_url.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     query: z.string(),
   }),
 };
 
-export const extractGoogleResultsActionSchema: ActionSchema = {
-  name: 'extract_google_results',
+// Backwards compatibility alias
+export const searchGoogleActionSchema = searchWebActionSchema;
+
+export const extractSearchResultsActionSchema: ActionSchema = {
+  name: 'extract_search_results',
   description:
-    'Extract Google search results from current SERP as list of {title, url} objects. Use after search or on Google results page.',
+    'Extract search results from current results page as list of {title, url} objects. Use after search_web or on a search results page.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     max_results: z.number().int().min(1).max(20).default(10).describe('maximum number of results to return (1-20)'),
   }),
 };
+
+// Backwards compatibility alias
+export const extractGoogleResultsActionSchema = extractSearchResultsActionSchema;
 
 export const goToUrlActionSchema: ActionSchema = isLegacyNavigation
   ? {
