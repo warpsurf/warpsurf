@@ -27,6 +27,7 @@ function canonicalize(name: string, params: Record<string, unknown>): string {
         .toLowerCase()}`;
     case 'go_to_url':
       return `nav:${params.url}`;
+    case 'search_web':
     case 'search_google':
       return `search:${String(params.query ?? '')
         .toLowerCase()
