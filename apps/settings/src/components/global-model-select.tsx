@@ -1,6 +1,4 @@
-import { Button } from '@extension/ui';
 import { LabelWithTooltip, cn, ModelComboBox } from './primitives';
-import { WEB_SEARCH_COMPATIBILITY_WARNING } from './agent-helpers';
 
 export interface GlobalModelOption {
   provider: string;
@@ -23,24 +21,20 @@ export function GlobalModelSelect(props: GlobalModelSelectProps) {
 
   const options = availableModels.map(({ provider, providerName, model }) => {
     const costNote = showAllModels && !hasModelPricing(model) ? ' (cost unknown)' : '';
-    const val = `${provider}>${model}`;
-    return { value: val, label: `${providerName} > ${model}${costNote}` };
+    return { value: `${provider}>${model}`, label: `${providerName} > ${model}${costNote}` };
   });
 
+  const cardClass = isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]';
+  const btnClass = cn(
+    'rounded-lg px-3 py-2 text-sm font-medium',
+    isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
+    !value && 'opacity-50 cursor-not-allowed',
+  );
+
   return (
-    <div
-      className={cn(
-        'rounded-xl border p-5 text-left shadow-sm backdrop-blur-md',
-        isDarkMode ? 'border-slate-700/70 bg-slate-800/60' : 'border-white/20 bg-white/40',
-      )}>
+    <div className={cn('rounded-xl border p-5 text-left', cardClass)}>
       <div className="flex items-center gap-3">
-        <LabelWithTooltip
-          isDarkMode={isDarkMode}
-          htmlFor="global-model"
-          label="Global model"
-          tooltip="Select model for all options"
-          width="w-28"
-        />
+        <LabelWithTooltip isDarkMode={isDarkMode} htmlFor="global-model" label="Global model" width="w-28" />
         <ModelComboBox
           id="global-model"
           isDarkMode={isDarkMode}
@@ -48,23 +42,14 @@ export function GlobalModelSelect(props: GlobalModelSelectProps) {
           options={options}
           onChange={onChangeValue}
         />
-        <Button
-          variant="secondary"
-          onClick={applyToAll}
-          disabled={!value}
-          className={cn(
-            'text-sm',
-            isDarkMode
-              ? 'border-blue-600 bg-blue-700 text-blue-100 hover:bg-blue-600'
-              : 'border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200',
-          )}>
+        <button type="button" onClick={applyToAll} disabled={!value} className={btnClass}>
           Apply to all
-        </Button>
+        </button>
       </div>
       {value && (
-        <div className={cn('mt-2 text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700')}>
-          {WEB_SEARCH_COMPATIBILITY_WARNING}
-        </div>
+        <p className={cn('mt-2 text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500')}>
+          Web search compatibility varies by model.
+        </p>
       )}
     </div>
   );
