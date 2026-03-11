@@ -60,11 +60,12 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeTimeout(val);
   };
 
+  // Global settings: pale cyan/sky tint
   return (
     <div
       className={cn(
         'rounded-xl border p-5 text-left',
-        isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]',
+        isDarkMode ? 'border-[#364042] bg-[#222628]' : 'border-[#e0e8ec] bg-[#f4f8fa]',
       )}>
       <h2 className={cn('mb-4 text-base font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900')}>
         Global Settings
