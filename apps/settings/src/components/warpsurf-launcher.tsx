@@ -10,32 +10,22 @@ export function WarpSurfLauncher({ isDarkMode }: { isDarkMode: boolean }) {
     }
   };
 
+  const btnClass = `rounded-lg px-6 py-3 text-base font-medium ${
+    isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]'
+  }`;
+
   return (
-    <div className="flex flex-col items-center justify-center py-16">
-      <img 
-        src="/warpsurflogo_tagline.png" 
-        alt="warpsurf Logo" 
-        className="mb-8 h-24 w-auto" 
-      />
-      <p className={`mb-6 text-center text-lg ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-        Click the button below to open the warpsurf side panel
+    <div className="flex flex-col items-center justify-center py-12">
+      <img src="/warpsurflogo_tagline.png" alt="warpsurf Logo" className="mb-6 h-20 w-auto" />
+      <p className={`mb-5 text-center text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+        Open the warpsurf side panel to get started
       </p>
-      <button
-        type="button"
-        onClick={handleOpenWarpsurf}
-        className={`rounded-lg px-6 py-3 text-lg font-medium transition-colors ${
-          isDarkMode 
-            ? 'bg-blue-600 text-white hover:bg-blue-500' 
-            : 'bg-blue-600 text-white hover:bg-blue-500'
-        }`}
-      >
+      <button type="button" onClick={handleOpenWarpsurf} className={btnClass}>
         Open warpsurf
       </button>
-      
-      <div className={`mt-8 text-center text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-        <p className="font-medium mb-1">📌 Pin warpsurf for quick access:</p>
-        <p>Click the puzzle piece icon in your toolbar, then click the pin icon next to warpsurf</p>
-      </div>
+      <p className={`mt-6 text-center text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+        Pin warpsurf for quick access: click the puzzle piece icon, then pin.
+      </p>
     </div>
   );
 }
