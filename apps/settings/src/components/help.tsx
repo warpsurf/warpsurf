@@ -8,16 +8,15 @@ interface HelpProps {
 
 export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
   const textSubtle = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-  const card = isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50';
+  const cardClass = `rounded-xl border p-5 text-left ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
   const iconInline = 'inline-block align-text-bottom mx-0.5';
 
   const modeBadge = (bg: string) => `mr-2 inline-flex h-5 items-center gap-1 rounded px-2 text-xs text-white ${bg}`;
 
   return (
-    <section className="space-y-6">
-      {/* Overview & Getting started */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>warpsurf</h2>
+    <section className="space-y-5">
+      <div className={cardClass}>
+        <h2 className={`mb-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>warpsurf</h2>
         <p className={textSubtle}>
           An AI-powered browser copilot. Add an API key in the <strong>API Keys</strong> tab, choose a model under{' '}
           <strong>Model</strong>, and start chatting. Agent workflows run in dedicated tab groups to stay separate from
@@ -25,9 +24,8 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
         </p>
       </div>
 
-      {/* Side panel UI */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Side panel</h3>
+      <div className={cardClass}>
+        <h3 className={`mb-3 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Side panel</h3>
         <p className={`mb-3 text-sm ${textSubtle}`}>
           The side panel is the main interface. The version number is shown at the top left — hover over it to view
           release notes. The header bar contains the following controls:
@@ -56,9 +54,8 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
         </ul>
       </div>
 
-      {/* Modes */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Modes</h3>
+      <div className={cardClass}>
+        <h3 className={`mb-3 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Modes</h3>
         <ul className={`space-y-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
           <li>
             <span className={modeBadge(isDarkMode ? 'bg-black/70' : 'bg-black/80')}>
@@ -98,9 +95,8 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
         </p>
       </div>
 
-      {/* Key features */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Key features</h3>
+      <div className={cardClass}>
+        <h3 className={`mb-3 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Key features</h3>
         <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
           <li>
             <strong>Natural language configuration:</strong> Change models, adjust temperature, toggle vision, add tab
@@ -136,9 +132,8 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
         </ul>
       </div>
 
-      {/* Tips */}
-      <div className={`rounded-lg border ${card} p-6 text-left shadow-sm`}>
-        <h3 className={`mb-3 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tips</h3>
+      <div className={cardClass}>
+        <h3 className={`mb-3 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Tips</h3>
         <ul className={`list-disc space-y-1 pl-5 ${textSubtle}`}>
           <li>Use Multi-Agent for tasks that benefit from parallel research or multi-site comparison.</li>
           <li>Set API spending limits with your provider — uncapped keys are risky.</li>
