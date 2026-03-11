@@ -12,7 +12,9 @@ import {
   findAndClickTextActionSchema,
   quickTextScanActionSchema,
   searchWebActionSchema,
+  searchGoogleActionSchema,
   extractSearchResultsActionSchema,
+  extractGoogleResultsActionSchema,
   switchTabActionSchema,
   type ActionSchema,
   sendKeysActionSchema,
@@ -188,7 +190,8 @@ export class ActionBuilder {
     const engineId = this.context.options.defaultSearchEngine ?? 'google';
     const searchEngine = getSearchEngine(engineId);
 
-    const searchWeb = new Action(async (input: z.infer<typeof searchWebActionSchema.schema>) => {
+    // Shared handler for search_web and search_google (backwards compat)
+    const searchHandler = async (input: z.infer<typeof searchWebActionSchema.schema>) => {
       this.checkCancelled();
       const context = this.context;
       const intent = input.intent || `Searching for "${input.query}"`;
@@ -214,10 +217,13 @@ export class ActionBuilder {
       const msg2 = `Searched for "${input.query}"`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.STEP_OK, msg2);
       return new ActionResult({ extractedContent: msg2, includeInMemory: true });
-    }, searchWebActionSchema);
-    actions.push(searchWeb);
+    };
+    actions.push(new Action(searchHandler, searchWebActionSchema));
+    // Register backwards-compat alias so LLM can use either search_web or search_google
+    actions.push(new Action(searchHandler, searchGoogleActionSchema));
 
-    const extractSearchResults = new Action(async (input: z.infer<typeof extractSearchResultsActionSchema.schema>) => {
+    // Shared handler for extract_search_results and extract_google_results (backwards compat)
+    const extractResultsHandler = async (input: z.infer<typeof extractSearchResultsActionSchema.schema>) => {
       this.checkCancelled();
       const context = this.context;
       const intent = input.intent || `Extracting search results`;
@@ -267,8 +273,10 @@ export class ActionBuilder {
       const msg = `Extracted ${list.length} results${fromCache ? ' (cached)' : ''}`;
       context.emitEvent(Actors.AGENT_NAVIGATOR, ExecutionState.ACT_OK, msg);
       return new ActionResult({ extractedContent: wrappedContent, includeInMemory: !fromCache, success: true });
-    }, extractSearchResultsActionSchema);
-    actions.push(extractSearchResults);
+    };
+    actions.push(new Action(extractResultsHandler, extractSearchResultsActionSchema));
+    // Register backwards-compat alias so LLM can use either extract_search_results or extract_google_results
+    actions.push(new Action(extractResultsHandler, extractGoogleResultsActionSchema));
 
     const goToUrl = new Action(async (input: z.infer<typeof goToUrlActionSchema.schema>) => {
       this.checkCancelled();
