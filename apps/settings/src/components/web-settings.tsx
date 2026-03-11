@@ -1,22 +1,15 @@
-/*
- * Web Settings Component
- * This component handles web-related settings, including region preference and firewall configuration
- * Extracted from the original FirewallSettings component
- */
 import { useState, useEffect, useCallback } from 'react';
 import { firewallStore, generalSettingsStore } from '@extension/storage';
-import { Button } from '@extension/ui';
+import { FiGlobe, FiShield, FiPlus, FiTrash2 } from 'react-icons/fi';
 
 const REGION_OPTIONS = [
   { value: '', label: 'Select a region...' },
-  // Americas
   { value: 'com', label: 'United States (.com)' },
   { value: 'ca', label: 'Canada (.ca)' },
   { value: 'com.mx', label: 'Mexico (.com.mx)' },
   { value: 'com.br', label: 'Brazil (.com.br)' },
   { value: 'com.ar', label: 'Argentina (.com.ar)' },
   { value: 'com.co', label: 'Colombia (.com.co)' },
-  // Europe
   { value: 'co.uk', label: 'United Kingdom (.co.uk)' },
   { value: 'ie', label: 'Ireland (.ie)' },
   { value: 'fr', label: 'France (.fr)' },
@@ -35,12 +28,10 @@ const REGION_OPTIONS = [
   { value: 'pl', label: 'Poland (.pl)' },
   { value: 'cz', label: 'Czech Republic (.cz)' },
   { value: 'com.tr', label: 'Turkey (.com.tr)' },
-  // Middle East & Africa
   { value: 'ae', label: 'United Arab Emirates (.ae)' },
   { value: 'com.sa', label: 'Saudi Arabia (.com.sa)' },
   { value: 'co.il', label: 'Israel (.co.il)' },
   { value: 'co.za', label: 'South Africa (.co.za)' },
-  // Asia-Pacific
   { value: 'cn', label: 'China (.cn)' },
   { value: 'co.jp', label: 'Japan (.co.jp)' },
   { value: 'co.kr', label: 'South Korea (.co.kr)' },
@@ -121,34 +112,40 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
     await loadFirewallSettings();
   };
 
-  return (
-    <section className="space-y-6">
-      {/* Region Preference Settings */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          🌍 Region Preference
-        </h2>
+  const cardClass = `rounded-xl border p-5 text-left ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
+  const innerCardClass = `rounded-lg border p-4 ${isDarkMode ? 'border-[#3a3a34] bg-[#252522]' : 'border-[#e5e4de] bg-[#f3f2ee]'}`;
+  const inputClass = `flex-1 rounded-lg border px-3 py-2 text-sm outline-none ${
+    isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
+  }`;
+  const btnClass = `rounded-lg px-3 py-2 text-sm font-medium ${
+    isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]'
+  }`;
 
+  return (
+    <section className="space-y-5">
+      <div className={cardClass}>
+        <h2
+          className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          <FiGlobe className="h-4 w-4" /> Region Preference
+        </h2>
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Set your preferred region for websites. The agent will prefer regional versions of sites (e.g., amazon.de
           instead of amazon.com) when available.
         </p>
 
-        <div
-          className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-700' : 'border-gray-200 bg-gray-100'}`}>
+        <div className={innerCardClass}>
           <div className="flex items-center justify-between">
             <label
               htmlFor="region-select"
-              className={`text-base font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+              className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Preferred Region
             </label>
             <select
               id="region-select"
               value={preferredRegion}
               onChange={e => handleRegionChange(e.target.value)}
-              className={`w-72 rounded-md border px-3 py-2 text-sm ${
-                isDarkMode ? 'border-gray-600 bg-slate-600 text-white' : 'border-gray-300 bg-white text-gray-700'
+              className={`w-72 rounded-lg border px-3 py-2 text-sm ${
+                isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
               }`}>
               {REGION_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>
@@ -158,181 +155,127 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             </select>
           </div>
           {!preferredRegion && (
-            <p className={`mt-2 text-xs ${isDarkMode ? 'text-yellow-400' : 'text-yellow-600'}`}>
+            <p className={`mt-2 text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
               No region selected. The agent will use default (.com) versions of websites.
             </p>
           )}
         </div>
       </div>
 
-      {/* Firewall Settings */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-2 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          🌐 Web Access Control
+      <div className={cardClass}>
+        <h2
+          className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          <FiShield className="h-4 w-4" /> Web Access Control
         </h2>
-
-        {/* Concise explanation note */}
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Control which sites the warpsurf agents can access. Deny list blocks sites; allow list restricts to listed
           sites <strong>only</strong> when populated.
         </p>
 
-        <div className="space-y-6">
-          <div
-            className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-700' : 'border-gray-200 bg-gray-100'}`}>
+        <div className="space-y-4">
+          <div className={innerCardClass}>
             <div className="flex items-center justify-between">
-              <label
-                htmlFor="toggle-firewall"
-                className={`text-base font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-                🔒 Enable Firewall
-              </label>
-              <div className="relative inline-block w-12 select-none">
-                <input
-                  type="checkbox"
-                  checked={isEnabled}
-                  onChange={handleToggleFirewall}
-                  className="sr-only"
-                  id="toggle-firewall"
-                />
-                <label
-                  htmlFor="toggle-firewall"
-                  className={`block h-6 cursor-pointer overflow-hidden rounded-full ${
-                    isEnabled ? 'bg-blue-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
-                  }`}>
-                  <span className="sr-only">Toggle Firewall</span>
-                  <span
-                    className={`block size-6 rounded-full bg-white shadow transition-transform ${
-                      isEnabled ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </label>
-              </div>
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Enable Firewall
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleFirewall}
+                className={`toggle-slider ${isEnabled ? 'toggle-on' : 'toggle-off'}`}
+                aria-pressed={isEnabled}>
+                <span className="toggle-knob" />
+              </button>
             </div>
           </div>
 
-          {/* Allow List Section */}
           <div
-            className={`rounded-lg border p-4 ${isDarkMode ? 'border-green-800 bg-slate-700/50' : 'border-green-200 bg-green-50'}`}>
-            <h3 className={`mb-3 text-base font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
-              ✅ Allow List
+            className={`rounded-lg border p-4 ${isDarkMode ? 'border-[#3a4a3a] bg-[#1d251d]' : 'border-[#d5ddd5] bg-[#f5fbf5]'}`}>
+            <h3 className={`mb-2 text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
+              Allow List
             </h3>
             <p className={`mb-3 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               When empty: all non-denied sites allowed. When populated: <strong>only</strong> these sites allowed.
             </p>
-            <div className="mb-3 flex space-x-2">
+            <div className="mb-3 flex gap-2">
               <input
-                id="allow-url-input"
                 type="text"
                 value={newAllowUrl}
                 onChange={e => setNewAllowUrl(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    handleAddToAllowList();
-                  }
-                }}
+                onKeyDown={e => e.key === 'Enter' && handleAddToAllowList()}
                 placeholder="e.g. example.com, localhost"
-                className={`flex-1 rounded-md border px-3 py-2 text-sm ${
-                  isDarkMode ? 'border-gray-600 bg-slate-700 text-white' : 'border-gray-300 bg-white text-gray-700'
-                }`}
+                className={inputClass}
               />
-              <Button
-                onClick={handleAddToAllowList}
-                className={`px-3 py-2 text-sm ${
-                  isDarkMode
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                }`}>
-                ➕ Add
-              </Button>
+              <button type="button" onClick={handleAddToAllowList} className={btnClass}>
+                <FiPlus className="h-4 w-4" />
+              </button>
             </div>
             <div className="max-h-40 overflow-y-auto">
               {allowList.length > 0 ? (
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {allowList.map(url => (
                     <li
                       key={url}
-                      className={`flex items-center justify-between rounded-md p-2 pr-0 ${
-                        isDarkMode ? 'bg-slate-700' : 'bg-white'
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${
+                        isDarkMode ? 'bg-[#252522]' : 'bg-white'
                       }`}>
-                      <span className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>🌍 {url}</span>
-                      <Button
+                      <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>{url}</span>
+                      <button
+                        type="button"
                         onClick={() => handleRemoveUrl(url, 'allow')}
-                        className={`rounded-l-none px-2 py-1 text-xs ${
-                          isDarkMode
-                            ? 'bg-red-600 text-white hover:bg-red-700'
-                            : 'bg-red-500 text-white hover:bg-red-600'
-                        }`}>
-                        🗑️
-                      </Button>
+                        className={`p-1 rounded ${isDarkMode ? 'hover:bg-[#33332e]' : 'hover:bg-[#e5e4de]'}`}>
+                        <FiTrash2 className={`h-3.5 w-3.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                      </button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className={`py-2 text-center text-xs italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                <p className={`py-2 text-xs italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                   Empty — all non-denied sites are allowed
                 </p>
               )}
             </div>
           </div>
 
-          {/* Deny List Section */}
           <div
-            className={`rounded-lg border p-4 ${isDarkMode ? 'border-red-800 bg-slate-700/50' : 'border-red-200 bg-red-50'}`}>
-            <h3 className={`mb-3 text-base font-medium ${isDarkMode ? 'text-red-400' : 'text-red-700'}`}>
-              ❌ Deny List
-            </h3>
+            className={`rounded-lg border p-4 ${isDarkMode ? 'border-[#4a3a3a] bg-[#251d1d]' : 'border-[#ddd5d5] bg-[#fbf5f5]'}`}>
+            <h3 className={`mb-2 text-sm font-medium ${isDarkMode ? 'text-red-400' : 'text-red-700'}`}>Deny List</h3>
             <p className={`mb-3 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Blocked sites. Takes priority over the allow list.
             </p>
-            <div className="mb-3 flex space-x-2">
+            <div className="mb-3 flex gap-2">
               <input
-                id="deny-url-input"
                 type="text"
                 value={newDenyUrl}
                 onChange={e => setNewDenyUrl(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    handleAddToDenyList();
-                  }
-                }}
+                onKeyDown={e => e.key === 'Enter' && handleAddToDenyList()}
                 placeholder="e.g. dangerous-site.com"
-                className={`flex-1 rounded-md border px-3 py-2 text-sm ${
-                  isDarkMode ? 'border-gray-600 bg-slate-700 text-white' : 'border-gray-300 bg-white text-gray-700'
-                }`}
+                className={inputClass}
               />
-              <Button
-                onClick={handleAddToDenyList}
-                className={`px-3 py-2 text-sm ${
-                  isDarkMode ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-500 text-white hover:bg-red-600'
-                }`}>
-                ➕ Add
-              </Button>
+              <button type="button" onClick={handleAddToDenyList} className={btnClass}>
+                <FiPlus className="h-4 w-4" />
+              </button>
             </div>
             <div className="max-h-40 overflow-y-auto">
               {denyList.length > 0 ? (
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {denyList.map(url => (
                     <li
                       key={url}
-                      className={`flex items-center justify-between rounded-md p-2 pr-0 ${
-                        isDarkMode ? 'bg-slate-700' : 'bg-white'
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${
+                        isDarkMode ? 'bg-[#252522]' : 'bg-white'
                       }`}>
-                      <span className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>🚫 {url}</span>
-                      <Button
+                      <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>{url}</span>
+                      <button
+                        type="button"
                         onClick={() => handleRemoveUrl(url, 'deny')}
-                        className={`rounded-l-none px-2 py-1 text-xs ${
-                          isDarkMode
-                            ? 'bg-red-600 text-white hover:bg-red-700'
-                            : 'bg-red-500 text-white hover:bg-red-600'
-                        }`}>
-                        🗑️
-                      </Button>
+                        className={`p-1 rounded ${isDarkMode ? 'hover:bg-[#33332e]' : 'hover:bg-[#e5e4de]'}`}>
+                        <FiTrash2 className={`h-3.5 w-3.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                      </button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className={`py-2 text-center text-xs italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                <p className={`py-2 text-xs italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                   Empty — no sites explicitly blocked
                 </p>
               )}
@@ -341,29 +284,26 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
         </div>
       </div>
 
-      {/* Firewall Information */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-4 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          📚 How Web Access Control Works
+      <div className={cardClass}>
+        <h2 className={`mb-4 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+          How Web Access Control Works
         </h2>
-        <ul className={`list-disc space-y-2 pl-5 text-left text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          <li>🛡️ The firewall contains a deny list and an allow list.</li>
-          <li>🌐 If both lists are empty, all URLs are allowed</li>
-          <li>🚫 Deny list takes priority - if a URL matches any deny list entry, it&apos;s blocked</li>
-          <li>✅ When allow list is empty, all non-denied URLs are allowed</li>
-          <li className="font-bold">⚠️ When allow list is not empty, only matching URLs are allowed</li>
+        <ul className={`list-disc space-y-2 pl-5 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <li>The firewall contains a deny list and an allow list.</li>
+          <li>If both lists are empty, all URLs are allowed</li>
+          <li>Deny list takes priority - if a URL matches any deny list entry, it's blocked</li>
+          <li>When allow list is empty, all non-denied URLs are allowed</li>
+          <li className="font-medium">When allow list is not empty, only matching URLs are allowed</li>
           <li>
-            🔗 <strong>Domain matching:</strong> entries match the exact domain <em>and</em> all subdomains. For
-            example,{' '}
-            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>wikipedia.org</code> blocks{' '}
-            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>en.wikipedia.org</code>,{' '}
-            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>www.wikipedia.org</code>,
+            <strong>Domain matching:</strong> entries match the exact domain <em>and</em> all subdomains. For example,{' '}
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-[#252522]' : 'bg-[#e5e4de]'}`}>wikipedia.org</code> blocks{' '}
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-[#252522]' : 'bg-[#e5e4de]'}`}>en.wikipedia.org</code>,{' '}
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-[#252522]' : 'bg-[#e5e4de]'}`}>www.wikipedia.org</code>,
             etc. But{' '}
-            <code className={`rounded px-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>en.wikipedia.org</code> only
-            blocks that specific subdomain.
+            <code className={`rounded px-1 ${isDarkMode ? 'bg-[#252522]' : 'bg-[#e5e4de]'}`}>en.wikipedia.org</code>{' '}
+            only blocks that specific subdomain.
           </li>
-          <li>🔍 Wildcards are NOT supported yet</li>
+          <li>Wildcards are NOT supported yet</li>
         </ul>
       </div>
     </section>
