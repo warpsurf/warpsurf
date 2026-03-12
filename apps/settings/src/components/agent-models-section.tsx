@@ -25,6 +25,7 @@ interface AgentModelsSectionProps {
   onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => Promise<void> | void;
   children?: ReactNode;
   colorOverride?: string;
+  saveIndicator?: ReactNode;
 }
 
 export function AgentModelsSection(props: AgentModelsSectionProps) {
@@ -46,14 +47,20 @@ export function AgentModelsSection(props: AgentModelsSectionProps) {
     onChangeThinkingLevel,
     children,
     colorOverride,
+    saveIndicator,
   } = props;
 
   const defaultColor = isDarkMode ? 'border-[#2f2f29] bg-[#252522]' : 'border-[#dddcd5] bg-[#f3f2ee]';
 
   return (
     <div className={cn('rounded-xl border p-4 text-left', colorOverride || defaultColor)}>
-      <h3 className={cn('mb-3 text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-800')}>
+      <h3
+        className={cn(
+          'mb-3 flex items-center gap-2 text-sm font-semibold',
+          isDarkMode ? 'text-gray-200' : 'text-gray-800',
+        )}>
         {sectionTitle}
+        {saveIndicator}
       </h3>
       {children}
       {agents.length > 0 && (
