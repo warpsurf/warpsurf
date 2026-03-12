@@ -19,15 +19,14 @@ interface GlobalSettingsProps {
   availableModels: GlobalModelOption[];
   globalModelValue: string;
   onChangeGlobalModel: (v: string) => void;
-  applyToAll: () => void;
   showAllModels: boolean;
   hasModelPricing: (modelName: string) => boolean;
   globalModelParameters: GlobalModelParameters;
   onChangeGlobalParameter: (param: keyof GlobalModelParameters, value: number | undefined | ThinkingLevel) => void;
   responseTimeoutSeconds: number;
   onChangeTimeout: (seconds: number) => void;
-  isDirty?: boolean;
-  confirmed?: boolean;
+  modelSaved?: boolean;
+  timeoutSaved?: boolean;
 }
 
 export function GlobalSettings(props: GlobalSettingsProps) {
@@ -36,15 +35,14 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     availableModels,
     globalModelValue,
     onChangeGlobalModel,
-    applyToAll,
     showAllModels,
     hasModelPricing,
     globalModelParameters,
     onChangeGlobalParameter,
     responseTimeoutSeconds,
     onChangeTimeout,
-    isDirty = false,
-    confirmed = false,
+    modelSaved = false,
+    timeoutSaved = false,
   } = props;
 
   const options = availableModels.map(({ provider, providerName, model }) => {
@@ -58,24 +56,30 @@ export function GlobalSettings(props: GlobalSettingsProps) {
     onChangeTimeout(val);
   };
 
-  const applyDisabled = !globalModelValue && !isDirty;
-
   return (
     <div
       className={cn(
         'rounded-xl border p-5 text-left',
         isDarkMode ? 'border-[#364042] bg-[#222628]' : 'border-[#e0e8ec] bg-[#f4f8fa]',
       )}>
-      <h2 className={cn('mb-4 text-base font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900')}>
+      <h2
+        className={cn(
+          'mb-1 flex items-center gap-2 text-base font-semibold',
+          isDarkMode ? 'text-gray-100' : 'text-gray-900',
+        )}>
         Global Settings
+        <SaveIndicator show={modelSaved || timeoutSaved} isDarkMode={isDarkMode} />
       </h2>
+      <p className={cn('mb-4 text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
+        These settings apply to all workflows. Per-agent model overrides can be configured below.
+      </p>
 
       {/* Global Model Selection */}
       <div className="flex items-center gap-3">
         <LabelWithTooltip
           isDarkMode={isDarkMode}
           htmlFor="global-model"
-          label="Global model"
+          label="Model"
           tooltip="Select model for all agents"
           width="w-28"
         />
@@ -196,24 +200,6 @@ export function GlobalSettings(props: GlobalSettingsProps) {
           aria-label="Response timeout in seconds"
         />
         <span className={cn('text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500')}>seconds</span>
-      </div>
-
-      {/* Apply button */}
-      <div className="flex items-center gap-2 pt-3">
-        <button
-          type="button"
-          onClick={applyToAll}
-          disabled={applyDisabled}
-          className={cn(
-            'rounded-lg px-3 py-2 text-sm font-medium',
-            isDarkMode
-              ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]'
-              : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]',
-            applyDisabled && 'opacity-50 cursor-not-allowed',
-          )}>
-          Apply to all agents
-        </button>
-        <SaveIndicator show={confirmed} isDarkMode={isDarkMode} message="Applied to all agents" />
       </div>
     </div>
   );
