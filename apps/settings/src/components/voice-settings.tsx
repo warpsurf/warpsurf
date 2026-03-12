@@ -5,6 +5,7 @@ import {
   STT_MODELS,
   type SpeechToTextModelConfig,
 } from '@extension/storage';
+import { SaveIndicator, useSaveIndicator } from './primitives';
 
 interface VoiceSettingsProps {
   isDarkMode?: boolean;
@@ -17,7 +18,7 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
   const [language, setLanguage] = useState('');
   const [autoSubmit, setAutoSubmit] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<Set<string>>(new Set());
-  const [saved, setSaved] = useState(false);
+  const saved = useSaveIndicator();
 
   useEffect(() => {
     let mounted = true;
@@ -47,34 +48,40 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
     };
   }, []);
 
-  const handleSave = async () => {
+  const saveConfig = async (model: string, lang: string, submit: boolean) => {
     try {
-      if (!selectedModel) {
+      if (!model) {
         await speechToTextModelStore.resetConfig();
       } else {
-        const [provider, modelName] = selectedModel.split('>');
+        const [provider, modelName] = model.split('>');
         const config: SpeechToTextModelConfig = {
           provider,
           modelName,
-          autoSubmit,
-          ...(language.trim() && { language: language.trim() }),
+          autoSubmit: submit,
+          ...(lang.trim() && { language: lang.trim() }),
         };
         await speechToTextModelStore.setConfig(config);
       }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      saved.trigger();
     } catch (e) {
       console.error('Failed to save voice settings:', e);
     }
   };
 
-  const handleReset = async () => {
-    try {
-      await speechToTextModelStore.resetConfig();
-      setSelectedModel('');
-      setLanguage('');
-      setAutoSubmit(false);
-    } catch {}
+  const handleModelChange = async (value: string) => {
+    setSelectedModel(value);
+    await saveConfig(value, language, autoSubmit);
+  };
+
+  const handleLanguageChange = async (value: string) => {
+    setLanguage(value);
+    await saveConfig(selectedModel, value, autoSubmit);
+  };
+
+  const handleAutoSubmitToggle = async () => {
+    const newValue = !autoSubmit;
+    setAutoSubmit(newValue);
+    await saveConfig(selectedModel, language, newValue);
   };
 
   const providerDisplayName: Record<string, string> = {
@@ -96,15 +103,14 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
   const inputClass = `w-full rounded-lg border px-3 py-2 text-sm outline-none ${
     isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
   }`;
-  const btnClass = `rounded-lg px-4 py-2 text-sm font-medium ${
-    isDarkMode ? 'bg-[#2a2a26] text-gray-100 hover:bg-[#33332e]' : 'bg-[#ecebe5] text-gray-800 hover:bg-[#dfddd4]'
-  }`;
 
   return (
     <section className="space-y-5">
       <div className={cardClass}>
-        <h2 className={`mb-1 text-base font-semibold text-left ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+        <h2
+          className={`mb-1 flex items-center gap-2 text-base font-semibold text-left ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           Voice Settings
+          <SaveIndicator show={saved.show} isDarkMode={isDarkMode} />
         </h2>
         <p className={`mb-5 text-sm text-left ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
           Configure speech-to-text for voice input in the chat interface.
@@ -118,7 +124,7 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
             <select
               id="stt-model"
               value={selectedModel}
-              onChange={e => setSelectedModel(e.target.value)}
+              onChange={e => handleModelChange(e.target.value)}
               className={inputClass}>
               <option value="">None (voice input disabled)</option>
               {groupedByProvider.map(group => (
@@ -146,6 +152,7 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
               type="text"
               value={language}
               onChange={e => setLanguage(e.target.value)}
+              onBlur={e => handleLanguageChange(e.target.value)}
               placeholder="en"
               maxLength={10}
               className={`${inputClass} max-w-[120px]`}
@@ -163,21 +170,12 @@ export const VoiceSettings = ({ isDarkMode = false }: VoiceSettingsProps) => {
               </div>
               <button
                 type="button"
-                onClick={() => setAutoSubmit(v => !v)}
+                onClick={handleAutoSubmitToggle}
                 className={`toggle-slider ${autoSubmit ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={autoSubmit}>
                 <span className="toggle-knob" />
               </button>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <button type="button" onClick={handleSave} className={btnClass}>
-              {saved ? 'Saved' : 'Save'}
-            </button>
-            <button type="button" onClick={handleReset} className={btnClass}>
-              Reset to Default
-            </button>
           </div>
         </div>
       </div>
