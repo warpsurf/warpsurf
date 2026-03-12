@@ -24,6 +24,7 @@ interface SingleModelSectionProps {
   ) => Promise<void> | void;
   onChangeThinkingLevel: (agent: AgentNameEnum, value: ThinkingLevel) => Promise<void> | void;
   children?: ReactNode;
+  saveIndicator?: ReactNode;
 }
 
 export function SingleModelSection(props: SingleModelSectionProps) {
@@ -44,13 +45,21 @@ export function SingleModelSection(props: SingleModelSectionProps) {
     onChangeParameter,
     onChangeThinkingLevel,
     children,
+    saveIndicator,
   } = props;
 
   const sectionColor = getAgentSectionColor(agent);
 
   return (
     <div className={cn('rounded-xl border p-5 text-left', sectionColor)}>
-      <h2 className={cn('mb-4 text-base font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900')}>{title}</h2>
+      <h2
+        className={cn(
+          'mb-4 flex items-center gap-2 text-base font-semibold',
+          isDarkMode ? 'text-gray-100' : 'text-gray-900',
+        )}>
+        {title}
+        {saveIndicator}
+      </h2>
       <div className="space-y-4">
         <ModelSelect
           isDarkMode={isDarkMode}
