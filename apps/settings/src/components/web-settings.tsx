@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { firewallStore, generalSettingsStore } from '@extension/storage';
 import { FiGlobe, FiShield, FiPlus, FiTrash2, FiSearch } from 'react-icons/fi';
-import { useStorageConfirmation, SectionApplyButton } from './primitives';
+import { SaveIndicator, useSaveIndicator } from './primitives';
 
 const SEARCH_ENGINE_OPTIONS = [
   { value: 'google', label: 'Google' },
@@ -73,42 +73,21 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
   const [preferredRegion, setPreferredRegion] = useState<string>('');
   const [defaultSearchEngine, setDefaultSearchEngine] = useState<string>('google');
 
-  // Saved snapshots for dirty detection
-  const [savedRegion, setSavedRegion] = useState<string>('');
-  const [savedSearchEngine, setSavedSearchEngine] = useState<string>('google');
-  const [savedFirewall, setSavedFirewall] = useState({
-    enabled: true,
-    allowList: [] as string[],
-    denyList: [] as string[],
-  });
-
-  const regionConfirmation = useStorageConfirmation('general-settings');
-  const searchEngineConfirmation = useStorageConfirmation('general-settings');
-  const firewallConfirmation = useStorageConfirmation('firewall-settings');
-
-  const regionDirty = preferredRegion !== savedRegion;
-  const searchEngineDirty = defaultSearchEngine !== savedSearchEngine;
-  const firewallDirty =
-    isEnabled !== savedFirewall.enabled ||
-    JSON.stringify(allowList) !== JSON.stringify(savedFirewall.allowList) ||
-    JSON.stringify(denyList) !== JSON.stringify(savedFirewall.denyList);
+  const regionSaved = useSaveIndicator();
+  const searchEngineSaved = useSaveIndicator();
+  const firewallSaved = useSaveIndicator();
 
   const loadFirewallSettings = useCallback(async () => {
     const settings = await firewallStore.getFirewall();
     setIsEnabled(settings.enabled);
     setAllowList(settings.allowList);
     setDenyList(settings.denyList);
-    setSavedFirewall({ enabled: settings.enabled, allowList: settings.allowList, denyList: settings.denyList });
   }, []);
 
   const loadGeneralSettings = useCallback(async () => {
     const settings = await generalSettingsStore.getSettings();
-    const region = settings.preferredRegion || '';
-    const engine = settings.defaultSearchEngine || 'google';
-    setPreferredRegion(region);
-    setDefaultSearchEngine(engine);
-    setSavedRegion(region);
-    setSavedSearchEngine(engine);
+    setPreferredRegion(settings.preferredRegion || '');
+    setDefaultSearchEngine(settings.defaultSearchEngine || 'google');
   }, []);
 
   useEffect(() => {
@@ -116,52 +95,63 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
     loadGeneralSettings();
   }, [loadFirewallSettings, loadGeneralSettings]);
 
-  const applyRegion = async () => {
-    regionConfirmation.markPending();
-    await generalSettingsStore.updateSettings({ preferredRegion: preferredRegion || undefined });
-    setSavedRegion(preferredRegion);
+  const handleRegionChange = async (value: string) => {
+    setPreferredRegion(value);
+    await generalSettingsStore.updateSettings({ preferredRegion: value || undefined });
+    regionSaved.trigger();
   };
 
-  const applySearchEngine = async () => {
-    searchEngineConfirmation.markPending();
-    await generalSettingsStore.updateSettings({ defaultSearchEngine: defaultSearchEngine });
-    setSavedSearchEngine(defaultSearchEngine);
+  const handleSearchEngineChange = async (value: string) => {
+    setDefaultSearchEngine(value);
+    await generalSettingsStore.updateSettings({ defaultSearchEngine: value });
+    searchEngineSaved.trigger();
   };
 
-  const applyFirewall = async () => {
-    firewallConfirmation.markPending();
-    await firewallStore.updateFirewall({ enabled: isEnabled, allowList, denyList });
-    setSavedFirewall({ enabled: isEnabled, allowList: [...allowList], denyList: [...denyList] });
+  const saveFirewall = async (enabled: boolean, allow: string[], deny: string[]) => {
+    await firewallStore.updateFirewall({ enabled, allowList: allow, denyList: deny });
+    firewallSaved.trigger();
   };
 
-  const handleAddToAllowList = () => {
+  const handleToggleFirewall = async () => {
+    const newEnabled = !isEnabled;
+    setIsEnabled(newEnabled);
+    await saveFirewall(newEnabled, allowList, denyList);
+  };
+
+  const handleAddToAllowList = async () => {
     const cleanUrl = newAllowUrl
       .trim()
       .replace(/^https?:\/\//, '')
       .toLowerCase();
     if (!cleanUrl || allowList.includes(cleanUrl)) return;
-    setAllowList(prev => [...prev, cleanUrl]);
-    setDenyList(prev => prev.filter(u => u !== cleanUrl));
+    const newAllow = [...allowList, cleanUrl];
+    const newDeny = denyList.filter(u => u !== cleanUrl);
+    setAllowList(newAllow);
+    setDenyList(newDeny);
     setNewAllowUrl('');
+    await saveFirewall(isEnabled, newAllow, newDeny);
   };
 
-  const handleAddToDenyList = () => {
+  const handleAddToDenyList = async () => {
     const cleanUrl = newDenyUrl
       .trim()
       .replace(/^https?:\/\//, '')
       .toLowerCase();
     if (!cleanUrl || denyList.includes(cleanUrl)) return;
-    setDenyList(prev => [...prev, cleanUrl]);
-    setAllowList(prev => prev.filter(u => u !== cleanUrl));
+    const newDeny = [...denyList, cleanUrl];
+    const newAllow = allowList.filter(u => u !== cleanUrl);
+    setDenyList(newDeny);
+    setAllowList(newAllow);
     setNewDenyUrl('');
+    await saveFirewall(isEnabled, newAllow, newDeny);
   };
 
-  const handleRemoveUrl = (url: string, listType: 'allow' | 'deny') => {
-    if (listType === 'allow') {
-      setAllowList(prev => prev.filter(u => u !== url));
-    } else {
-      setDenyList(prev => prev.filter(u => u !== url));
-    }
+  const handleRemoveUrl = async (url: string, listType: 'allow' | 'deny') => {
+    const newAllow = listType === 'allow' ? allowList.filter(u => u !== url) : allowList;
+    const newDeny = listType === 'deny' ? denyList.filter(u => u !== url) : denyList;
+    setAllowList(newAllow);
+    setDenyList(newDeny);
+    await saveFirewall(isEnabled, newAllow, newDeny);
   };
 
   const cardClass = `rounded-xl border p-5 text-left ${isDarkMode ? 'border-[#2f2f29] bg-[#1d1d1a]' : 'border-[#dddcd5] bg-[#fbfbf8]'}`;
@@ -179,6 +169,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
         <h2
           className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           <FiGlobe className="h-4 w-4" /> Region Preference
+          <SaveIndicator show={regionSaved.show} isDarkMode={isDarkMode} />
         </h2>
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Set your preferred region for websites. The agent will prefer regional versions of sites (e.g., amazon.de
@@ -195,7 +186,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             <select
               id="region-select"
               value={preferredRegion}
-              onChange={e => setPreferredRegion(e.target.value)}
+              onChange={e => handleRegionChange(e.target.value)}
               className={`w-72 rounded-lg border px-3 py-2 text-sm ${
                 isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
               }`}>
@@ -212,18 +203,13 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             </p>
           )}
         </div>
-        <SectionApplyButton
-          isDarkMode={isDarkMode}
-          isDirty={regionDirty}
-          confirmed={regionConfirmation.confirmed}
-          onApply={applyRegion}
-        />
       </div>
 
       <div className={cardClass}>
         <h2
           className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           <FiSearch className="h-4 w-4" /> Search Engine Preference
+          <SaveIndicator show={searchEngineSaved.show} isDarkMode={isDarkMode} />
         </h2>
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Choose the default search engine for agent web search actions.
@@ -239,7 +225,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             <select
               id="search-engine-select"
               value={defaultSearchEngine}
-              onChange={e => setDefaultSearchEngine(e.target.value)}
+              onChange={e => handleSearchEngineChange(e.target.value)}
               className={`w-72 rounded-lg border px-3 py-2 text-sm ${
                 isDarkMode ? 'border-[#3a3a34] bg-[#1d1d1a] text-gray-200' : 'border-[#dddcd5] bg-white text-gray-700'
               }`}>
@@ -251,18 +237,13 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             </select>
           </div>
         </div>
-        <SectionApplyButton
-          isDarkMode={isDarkMode}
-          isDirty={searchEngineDirty}
-          confirmed={searchEngineConfirmation.confirmed}
-          onApply={applySearchEngine}
-        />
       </div>
 
       <div className={cardClass}>
         <h2
           className={`mb-2 flex items-center gap-2 text-base font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           <FiShield className="h-4 w-4" /> Web Access Control
+          <SaveIndicator show={firewallSaved.show} isDarkMode={isDarkMode} />
         </h2>
         <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Control which sites the warpsurf agents can access. Deny list blocks sites; allow list restricts to listed
@@ -277,7 +258,7 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
               </span>
               <button
                 type="button"
-                onClick={() => setIsEnabled(prev => !prev)}
+                onClick={handleToggleFirewall}
                 className={`toggle-slider ${isEnabled ? 'toggle-on' : 'toggle-off'}`}
                 aria-pressed={isEnabled}>
                 <span className="toggle-knob" />
@@ -379,12 +360,6 @@ export const WebSettings = ({ isDarkMode }: WebSettingsProps) => {
             </div>
           </div>
         </div>
-        <SectionApplyButton
-          isDarkMode={isDarkMode}
-          isDirty={firewallDirty}
-          confirmed={firewallConfirmation.confirmed}
-          onApply={applyFirewall}
-        />
       </div>
 
       <div className={cardClass}>
