@@ -87,6 +87,7 @@ temp/
 ## Misc
 dev/
 security-tests/
+website/
 
 ## Skills (not yet production-ready)
 live_data/skills/
