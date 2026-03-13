@@ -31,8 +31,8 @@ export function registerCryptoHandlers(): void {
       const encryptedKey = await encrypt(apiKey);
       const result = await chrome.storage.local.get('llm-api-keys');
       const current = (result['llm-api-keys'] as any) || { providers: {} };
-      const secureConfig = { ...config, _k: encryptedKey };
-      delete secureConfig.apiKey;
+      const { apiKey: _unusedKey, ...configWithoutKey } = config as Record<string, unknown> & { apiKey?: unknown };
+      const secureConfig = { ...configWithoutKey, _k: encryptedKey };
       await chrome.storage.local.set({
         'llm-api-keys': {
           providers: { ...current.providers, [providerId]: secureConfig },
