@@ -7,8 +7,8 @@
  * Maps normalized domains to search URL templates.
  * Use {q} as placeholder for the search query.
  *
- * Generated: 2026-03-07T15:50:58.854Z
- * Total patterns: 1050
+ * Generated: 2026-03-13T15:27:28.674Z
+ * Total patterns: 1053
  */
 
 export const SEARCH_PATTERNS: Record<string, string> = {
@@ -209,6 +209,8 @@ export const SEARCH_PATTERNS: Record<string, string> = {
   'channelnewsasia.com': 'https://www.channelnewsasia.com/search?q={q}',
   'chosun.com': 'https://www.chosun.com/nsearch/?query={q}',
   'clarin.com': 'https://www.clarin.com/buscador/{q}',
+  'cn.hotels.com': 'https://cn.hotels.com/Hotel-Search?destination={q}',
+  'cn.indeed.com': 'https://cn.indeed.com/jobs?q={q}',
   'cnet.com': 'https://www.cnet.com/search/?query={q}',
   'cnn.com': 'https://www.cnn.com/search?q={q}',
   'codepen.io': 'https://codepen.io/search/pens?q={q}',
@@ -436,6 +438,7 @@ export const SEARCH_PATTERNS: Record<string, string> = {
   'google.ca': 'https://www.google.ca/search?q={q}',
   'google.ch': 'https://www.google.ch/search?q={q}',
   'google.cl': 'https://www.google.cl/search?q={q}',
+  'google.cn': 'https://www.google.cn/search?q={q}',
   'google.co.id': 'https://www.google.co.id/search?q={q}',
   'google.co.il': 'https://www.google.co.il/search?q={q}',
   'google.co.in': 'https://www.google.co.in/search?q={q}',
