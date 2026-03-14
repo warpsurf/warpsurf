@@ -32,7 +32,7 @@ export enum ProviderTypeEnum {
 // Thinking level type used across all providers
 export type ThinkingLevel = 'high' | 'medium' | 'low' | 'off' | 'default';
 
-// Fallback model lists (used when Helicone API unavailable)
+// Fallback model lists (used when OpenRouter data unavailable)
 export const llmProviderFallbackModelNames = {
   [ProviderTypeEnum.OpenAI]: [
     'gpt-5.2',
