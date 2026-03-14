@@ -1,7 +1,7 @@
 {
   "name": "warpsurf",
   "version": "1.9.2",
-  "description": "Browser copilot for Chrome",
+  "description": "Browser copilot for Chrome and Edge",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

@@ -4,11 +4,11 @@ This policy explains how data is handled by warpsurf.
 
 ## Code
 
-The entire warpsurf codebase is publicly available in this [GitHub repository](https://github.com/warpsurf/warpsurf), released under an Apache 2.0 License. Warpsurf is developed as an open source community project to develop browser copilots, grow the browser automation ecosystem and find bugs and interesting use cases. To facilitate contributions and maximise transparency, code for the extension can be downloaded via this repository (or through the chrome store).
+The entire warpsurf codebase is publicly available in this [GitHub repository](https://github.com/warpsurf/warpsurf), released under an Apache 2.0 License. Warpsurf is developed as an open source community project to develop browser copilots, grow the browser automation ecosystem and find bugs and interesting use cases. To facilitate contributions and maximise transparency, code for the extension can be downloaded via this repository (or through the Chrome Web Store).
 
 ## Data Collection
 
-- **Local by default**: Warpsurf operates entirely within your Chrome browser. All user data (chat history, settings, API keys) is stored locally using Chrome's storage API.
+- **Local by default**: Warpsurf operates entirely within your browser. All user data (chat history, settings, API keys) is stored locally using the browser's storage API.
 - **No user analytics**: Warpsurf does not collect analytics, telemetry, or usage data. Data is never sold or shared with advertisers.
 - **No external servers**: Warpsurf does not operate any backend servers. There is no warpsurf server that receives your data.
 - Sessions run locally and your login credentials and cookies don't leave the browser
@@ -27,7 +27,7 @@ Your data privacy with LLM providers is subject to their respective privacy poli
 
 ## Browser History (disabled by default)
 
-The warpsurf browser history feature is disabled by default. If you enable the "History Context" feature, warpsurf accesses your recent browsing history (via Chrome's History API) to provide context to the agents. This data:
+The warpsurf browser history feature is disabled by default. If you enable the "History Context" feature, warpsurf accesses your recent browsing history (via the browser's History API) to provide context to the agents. This data:
 - Is processed locally within your browser
 - Is only sent to your selected LLM provider when this feature is enabled
 - Is not collected, stored, or transmitted by warpsurf to any other party

@@ -121,7 +121,7 @@ Warpsurf agents are encouraged to use a [pattern database](https://github.com/wa
 
 ## Installation & Usage
 
-warpsurf has only been tested in a Chrome browser.
+warpsurf supports Chrome and Microsoft Edge browsers.
 
 ### Option 1: Chrome Web Store (quick)
 
@@ -134,16 +134,23 @@ warpsurf has only been tested in a Chrome browser.
 #### Download
 Download the `vX.Y.Z.zip` file from the latest warpsurf [GitHub release](https://github.com/warpsurf/warpsurf/releases).
 
-#### Install
+#### Install (Chrome)
 1. Unzip `vX.Y.Z.zip`.
 2. Navigate to chrome://extensions
 3. Enable "Developer mode"
 4. Click "Load unpacked"
-5. Select the unzipped folder folder
+5. Select the unzipped folder
+
+#### Install (Edge)
+1. Unzip `vX.Y.Z.zip`.
+2. Navigate to edge://extensions
+3. Enable "Developer mode"
+4. Click "Load unpacked"
+5. Select the unzipped folder
 
 #### Updates
 1. Repeat the Download and Installation instructions.
-2. At chrome://extensions, click 'Update' and click the refresh icon on the warpsurf listing.
+2. At chrome://extensions (or edge://extensions), click 'Update' and click the refresh icon on the warpsurf listing.
 
 ### Option 3: Manual GitHub Installation (most recent codebase)
 
@@ -158,8 +165,8 @@ pnpm install
 # Build the extension (this creates a dist dir)
 pnpm build:store
 
-## In Chrome browser:
-# 1. Navigate to chrome://extensions
+## In Chrome or Edge:
+# 1. Navigate to chrome://extensions or edge://extensions
 # 2. Enable "Developer mode"
 # 3. Click "Load unpacked"
 # 4. Select the dist folder
@@ -175,9 +182,9 @@ Warpsurf is compatible with leading LLM providers:
 
 OpenAI, Anthropic, Google, xAI, OpenRouter, All OpenAI-compatible APIs
 
-### Complimentary chrome extensions
+### Complimentary browser extensions
 
-Adding chrome extensions that reduce popups (ads, CAPTCHAs, cookie banners) can improve the performance of warpsurf agents. These are some available from the chrome store:
+Adding browser extensions that reduce popups (ads, CAPTCHAs, cookie banners) can improve the performance of warpsurf agents. These are some available from the extension stores:
 - [Ad Blocker](https://chromewebstore.google.com/detail/ad-blocker-stands-adblock/lgblnfidahcdcjddiepkckcfdhpknnjh)
 
 

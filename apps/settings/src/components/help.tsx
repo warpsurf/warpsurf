@@ -48,7 +48,7 @@ export const Help: React.FC<HelpProps> = ({ isDarkMode = false }) => {
             <FaFish className={iconInline} /> <strong>Fish:</strong> Toggle the aquarium overlay.
           </li>
           <li>
-            <FiMessageSquare className={iconInline} /> <strong>Feedback:</strong> Links to the Chrome Web Store and
+            <FiMessageSquare className={iconInline} /> <strong>Feedback:</strong> Links to the extension store and
             GitHub.
           </li>
         </ul>
