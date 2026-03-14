@@ -63,9 +63,8 @@ export const PricingDataSettings = ({ isDarkMode = false }: { isDarkMode?: boole
 
         <div className="space-y-4">
           <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Warpsurf can use live model and pricing data from external APIs (OpenRouter and Helicone). This improves the
-            accuracy of the available models list and pricing estimates. You can choose between using live data or
-            offline cached data.
+            Warpsurf can use live model and pricing data from OpenRouter. This improves the accuracy of the available
+            models list and pricing estimates. You can choose between using live data or offline cached data.
           </p>
 
           <div className={innerCardClass}>
@@ -76,7 +75,7 @@ export const PricingDataSettings = ({ isDarkMode = false }: { isDarkMode?: boole
                 </h3>
                 <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   {settings.useLivePricingData
-                    ? 'Currently periodically fetching live model lists and pricing from OpenRouter and Helicone APIs'
+                    ? 'Currently periodically fetching live model lists and pricing from OpenRouter'
                     : 'Currently using cached data bundled with the extension'}
                 </p>
                 {isRefreshing && (
@@ -143,26 +142,13 @@ export const PricingDataSettings = ({ isDarkMode = false }: { isDarkMode?: boole
           <div>
             <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>OpenRouter API</h3>
             <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              Provides model listings and pricing for OpenRouter provider. Visit{' '}
+              Provides model listings and pricing for all providers. Visit{' '}
               <a
                 href="https://openrouter.ai"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={isDarkMode ? 'text-gray-400 underline' : 'text-gray-600 underline'}>
                 openrouter.ai
-              </a>
-            </p>
-          </div>
-          <div>
-            <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Helicone API</h3>
-            <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              Provides model listings and pricing for OpenAI, Anthropic, Google, and xAI. Visit{' '}
-              <a
-                href="https://helicone.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={isDarkMode ? 'text-gray-400 underline' : 'text-gray-600 underline'}>
-                helicone.ai
               </a>
             </p>
           </div>
