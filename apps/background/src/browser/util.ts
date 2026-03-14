@@ -16,9 +16,11 @@ export function isUrlAllowed(url: string, allowList: string[], denyList: string[
 
   // ALWAYS block dangerous/forbidden URLs, even if firewall is disabled
   const DANGEROUS_PREFIXES = [
-    'https://chromewebstore.google.com', // scripts are not allowed to be injected into chrome web store
+    'https://chromewebstore.google.com',
+    'https://microsoftedge.microsoft.com/addons',
     'chrome-extension://',
     'chrome://',
+    'edge://',
     'javascript:',
     'data:',
     'file:',
@@ -92,7 +94,12 @@ export function isUrlAllowed(url: string, allowList: string[], denyList: string[
   }
 }
 
-// Check if a URL is a new tab page (about:blank or chrome new tab page variants)
 export function isNewTabPage(url: string): boolean {
-  return url === 'about:blank' || url === 'chrome://new-tab-page' || url === 'chrome://new-tab-page/';
+  return (
+    url === 'about:blank' ||
+    url === 'chrome://new-tab-page' ||
+    url === 'chrome://new-tab-page/' ||
+    url === 'edge://newtab' ||
+    url === 'edge://newtab/'
+  );
 }

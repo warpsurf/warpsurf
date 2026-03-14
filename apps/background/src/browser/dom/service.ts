@@ -29,6 +29,7 @@ async function ensurePageExtractorsInjected(tabId: number): Promise<void> {
       'chrome://',
       'chrome-extension://',
       'https://chromewebstore.google.com',
+      'https://microsoftedge.microsoft.com/addons',
       'javascript:',
       'data:',
       'file:',
@@ -79,6 +80,7 @@ async function ensureBuildDomTreeInjected(tabId: number): Promise<void> {
       'chrome://',
       'chrome-extension://',
       'https://chromewebstore.google.com',
+      'https://microsoftedge.microsoft.com/addons',
       'javascript:',
       'data:',
       'file:',
@@ -264,7 +266,7 @@ async function _buildDomTree(
   debugMode = false,
 ): Promise<[DOMElementNode, Map<number, DOMElementNode>]> {
   // If URL is new tab or restricted, return a minimal DOM tree
-  if (isNewTabPage(url) || url.startsWith('chrome://')) {
+  if (isNewTabPage(url) || url.startsWith('chrome://') || url.startsWith('edge://')) {
     const elementTree = new DOMElementNode({
       tagName: 'body',
       xpath: '',

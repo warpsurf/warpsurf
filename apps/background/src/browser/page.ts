@@ -59,7 +59,8 @@ export default class Page {
       (tabId &&
         lowerCaseUrl &&
         lowerCaseUrl.startsWith('http') &&
-        !lowerCaseUrl.startsWith('https://chromewebstore.google.com')) ||
+        !lowerCaseUrl.startsWith('https://chromewebstore.google.com') &&
+        !lowerCaseUrl.startsWith('https://microsoftedge.microsoft.com/addons')) ||
       false;
 
     this._adapter = new PuppeteerAdapter(tabId);

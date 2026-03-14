@@ -7,6 +7,7 @@ export function canInjectScripts(url: string | undefined): boolean {
     'chrome://',
     'chrome-extension://',
     'https://chromewebstore.google.com',
+    'https://microsoftedge.microsoft.com/addons',
     'javascript:',
     'data:',
     'file:',
