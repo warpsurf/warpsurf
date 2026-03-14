@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-13 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-14 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-13T15:27:27.154Z',
+  generatedAt: '2026-03-14T13:25:32.275Z',
   version: 1,
   helicone: {
     openai: {
@@ -1789,7 +1789,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.000002,
       },
       'qwen/qwen3.5-9b': {
-        inputPerToken: 1e-7,
+        inputPerToken: 5e-8,
         outputPerToken: 1.5e-7,
       },
       'openai/gpt-5.4-pro': {
@@ -3047,7 +3047,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openrouter/hunter-alpha': 1048576,
       'openrouter/healer-alpha': 262144,
       'bytedance-seed/seed-2.0-lite': 262144,
-      'qwen/qwen3.5-9b': 262144,
+      'qwen/qwen3.5-9b': 256000,
       'openai/gpt-5.4-pro': 1050000,
       'openai/gpt-5.4': 1050000,
       'inception/mercury-2': 128000,
