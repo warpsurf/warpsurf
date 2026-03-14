@@ -1,11 +1,8 @@
 /**
  * LLM Cost Calculator
  *
- * Thin wrapper around model-registry.ts which fetches pricing from:
- * - Helicone API: Direct providers (OpenAI, Anthropic, Google, xAI)
- * - OpenRouter API: OpenRouter models (provider/model format)
- *
- * Returns -1 when pricing is unavailable (displayed as "—" in UI).
+ * Thin wrapper around model-registry.ts which fetches pricing from the
+ * OpenRouter API. Returns -1 when pricing is unavailable (displayed as "—" in UI).
  */
 import { getModelPricing, initializeModelRegistry, getModelRegistryStats } from './model-registry';
 
@@ -53,7 +50,7 @@ export { getModelPricing, hasModelPricing, isUsingCachedPricing, getCachedPricin
 // Legacy exports for backward compatibility
 export const getCachedPricingCount = () => {
   const stats = getModelRegistryStats();
-  return stats.pricing.helicone + stats.pricing.openRouter;
+  return stats.pricing;
 };
 
 export const getCachedModels = (): string[] => [];
