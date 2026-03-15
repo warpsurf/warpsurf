@@ -44,17 +44,42 @@ export function BasicWorkflowSettings({ isDarkMode = false }: BasicWorkflowSetti
     })();
   }, []);
 
+  const [registryModels, setRegistryModels] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    (async () => {
+      const results: Record<string, string[]> = {};
+      for (const provider of ['openai', 'anthropic', 'gemini', 'grok']) {
+        try {
+          const result = await (window as any).chrome?.runtime?.sendMessage?.({
+            type: 'get_provider_models',
+            provider,
+          });
+          if (result?.ok && result.models?.length > 0) results[provider] = result.models;
+        } catch {}
+      }
+      setRegistryModels(results);
+    })();
+  }, []);
+
   const availableModels = useMemo(() => {
     const items: Array<{ value: string; label: string }> = [];
     for (const [provider, config] of Object.entries(providers)) {
       if (!config?.apiKey) continue;
-      const models = config.modelNames || llmProviderModelNames[provider as keyof typeof llmProviderModelNames] || [];
+      const saved = config.modelNames || llmProviderModelNames[provider as keyof typeof llmProviderModelNames] || [];
+      const fresh = registryModels[provider];
+      let models = saved;
+      if (fresh?.length) {
+        const freshSet = new Set(fresh);
+        const userAdded = saved.filter(m => !freshSet.has(m));
+        models = [...fresh, ...userAdded];
+      }
       for (const model of models) {
         items.push({ value: `${provider}>${model}`, label: `${config.name || provider} > ${model}` });
       }
     }
     return items;
-  }, [providers]);
+  }, [providers, registryModels]);
 
   useEffect(() => {
     (async () => {
