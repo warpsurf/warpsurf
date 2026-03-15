@@ -95,7 +95,7 @@ export default function WorkflowGraph({
   const maxY = Number.isFinite(rawMaxY) ? rawMaxY : 0;
   const hasMultipleLanes = maxY > 0;
   const marginX = hasMultipleLanes ? 120 : 16;
-  const marginY = compact ? 32 : 80;
+  const multiLaneMarginY = compact ? 32 : 80;
 
   // Compute dynamic node widths and heights from label text
   const nodeWidths: Record<number, number> = {};
@@ -119,6 +119,13 @@ export default function WorkflowGraph({
     }
   }
 
+  const maxNodeH = Math.max(...graph.nodes.map((n: any) => nodeHeights[n.id] || baseNodeHeight));
+
+  // For single-lane, use tight vertical padding so nodes fill the space;
+  // for multi-lane, use the wider margin that accounts for lane labels.
+  const vertPad = compact ? 8 : 16;
+  const marginY = hasMultipleLanes ? multiLaneMarginY : maxNodeH / 2 + vertPad;
+
   // Compute pixel x positions per node
   const nodeXPos: Record<number, number> = {};
   if (hasMultipleLanes) {
@@ -141,10 +148,9 @@ export default function WorkflowGraph({
 
   const rightEdge = Math.max(...graph.nodes.map((n: any) => (nodeXPos[n.id] || 0) + (nodeWidths[n.id] || 0)));
   const width = rightEdge + marginX;
-  const height = Math.max(
-    marginY + Math.max(...graph.nodes.map((n: any) => nodeHeights[n.id] || baseNodeHeight)) + marginY,
-    (maxY + (compact ? 1.5 : 3)) * scaleY + marginY,
-  );
+  const height = hasMultipleLanes
+    ? Math.max(multiLaneMarginY + maxNodeH + multiLaneMarginY, (maxY + (compact ? 1.5 : 3)) * scaleY + multiLaneMarginY)
+    : maxNodeH + vertPad * 2;
 
   const edgeColor = EDGE_COLORS[theme];
   const statusColors = STATUS_COLORS[theme];
@@ -186,7 +192,7 @@ export default function WorkflowGraph({
         style={{
           overflowX: 'auto',
           overflowY: compact ? 'auto' : 'visible',
-          maxHeight: compact ? (hasMultipleLanes ? 260 : undefined) : undefined,
+          maxHeight: compact ? (hasMultipleLanes ? 260 : 160) : undefined,
           padding: '8px',
         }}>
         <svg width={width} height={height}>
