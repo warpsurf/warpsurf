@@ -85,23 +85,58 @@ export default function WorkflowGraph({
   const nodeRadius = 10;
   const fontSize = compact ? 9 : 10;
   const laneFontSize = 9;
+  const charWidth = compact ? 5.2 : 5.8;
+  const nodePad = 20;
+  const edgeGap = compact ? 24 : 36;
 
-  const rawMaxX = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.x) || 0));
   const rawMaxY = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.y) || 0));
-  const maxX = Number.isFinite(rawMaxX) ? rawMaxX : 0;
   const maxY = Number.isFinite(rawMaxY) ? rawMaxY : 0;
   const hasMultipleLanes = maxY > 0;
-  const marginX = hasMultipleLanes ? 120 : 20;
+  const marginX = hasMultipleLanes ? 120 : 16;
   const marginY = compact ? 32 : 80;
-  const minHeight = compact ? (hasMultipleLanes ? 220 : 80) : 450;
-  const width = Math.max(hasMultipleLanes ? 900 : 400, (maxX + 5) * scaleX + marginX);
-  const height = Math.max(minHeight, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
 
+  // Compute dynamic node widths from label text
   const nodeWidths: Record<number, number> = {};
+  const wrappedLabels: Record<number, string[]> = {};
   for (const n of graph.nodes) {
-    const p = positions[n.id] || { width: 1 };
-    nodeWidths[n.id] = Math.max(150, (p.width || 1) * Math.floor(scaleX * 0.7));
+    const label = n.label || String(n.id);
+    if (hasMultipleLanes) {
+      const p = positions[n.id] || { width: 1 };
+      const posWidth = Math.max(150, (p.width || 1) * Math.floor(scaleX * 0.7));
+      wrappedLabels[n.id] = wrapLabel(label, Math.max(12, Math.floor((posWidth - 16) / charWidth)));
+      nodeWidths[n.id] = posWidth;
+    } else {
+      const lines = wrapLabel(label, 28);
+      const longest = Math.max(...lines.map(l => l.length));
+      wrappedLabels[n.id] = lines;
+      nodeWidths[n.id] = Math.max(60, longest * charWidth + nodePad);
+    }
   }
+
+  // Compute pixel x positions per node
+  const nodeXPos: Record<number, number> = {};
+  if (hasMultipleLanes) {
+    for (const n of graph.nodes) {
+      const p = positions[n.id] || { x: 0 };
+      nodeXPos[n.id] = (p.x || 0) * scaleX + marginX;
+    }
+  } else {
+    const sorted = [...graph.nodes].sort((a: any, b: any) => {
+      const pa = positions[a.id] || { x: 0 };
+      const pb = positions[b.id] || { x: 0 };
+      return (pa.x || 0) - (pb.x || 0);
+    });
+    let cumX = marginX;
+    for (const n of sorted) {
+      nodeXPos[n.id] = cumX;
+      cumX += nodeWidths[n.id] + edgeGap;
+    }
+  }
+
+  const rightEdge = Math.max(...graph.nodes.map((n: any) => (nodeXPos[n.id] || 0) + (nodeWidths[n.id] || 0)));
+  const minHeight = compact ? (hasMultipleLanes ? 220 : 80) : 450;
+  const width = rightEdge + marginX;
+  const height = Math.max(minHeight, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
 
   const edgeColor = EDGE_COLORS[theme];
   const statusColors = STATUS_COLORS[theme];
@@ -190,10 +225,9 @@ export default function WorkflowGraph({
           {(graph.edges || []).map((e: any, i: number) => {
             const a = positions[e.from] || { x: 0, y: 0 };
             const b = positions[e.to] || { x: 0, y: 0 };
-            const fromW = nodeWidths[e.from] ?? 110;
-            const x1 = (a.x || 0) * scaleX + marginX + fromW;
+            const x1 = (nodeXPos[e.from] || 0) + (nodeWidths[e.from] || 0);
             const y1 = (a.y || 0) * scaleY + marginY;
-            const x2 = (b.x || 0) * scaleX + marginX;
+            const x2 = nodeXPos[e.to] || 0;
             const y2 = (b.y || 0) * scaleY + marginY;
             const isSame = a.y === b.y;
             const color = isSame ? edgeColor.same : edgeColor.cross;
@@ -232,7 +266,7 @@ export default function WorkflowGraph({
           {/* Nodes */}
           {graph.nodes.map((n: any) => {
             const p = positions[n.id] || { x: 0, y: 0 };
-            const x = (p.x || 0) * scaleX + marginX;
+            const x = nodeXPos[n.id] || 0;
             const y = (p.y || 0) * scaleY + marginY;
             const w = nodeWidths[n.id];
             const rawStatus = (n.status as string) || 'not_started';
@@ -244,8 +278,7 @@ export default function WorkflowGraph({
                   : (rawStatus as Status);
             const colors = statusColors[status || 'not_started'] || statusColors['not_started'];
             const isRunning = status === 'running';
-            const maxChars = Math.max(12, Math.floor((w - 16) / 4.5));
-            const lines = wrapLabel(n.label || String(n.id), maxChars);
+            const lines = wrappedLabels[n.id] || wrapLabel(n.label || String(n.id), 20);
 
             return (
               <g key={n.id}>
