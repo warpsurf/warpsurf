@@ -72,11 +72,24 @@ function processDrainedMessages(drained: string[], deps: any): void {
   });
 }
 
-export function createPanelHandlers(deps: any): any {
-  // Snapshot of the first plan emitted for a task run.
-  // Replanning can change text/length; we preserve the original structure and only merge statuses.
-  let initialPlanSnapshot: Array<{ text: string; status: string }> | null = null;
+// Module-level snapshot of the first plan emitted for a task run.
+// Must be outside createPanelHandlers because useMemo recreates the closure frequently,
+// which would reset a closure-scoped variable mid-task.
+let initialPlanSnapshot: Array<{ text: string; status: string }> | null = null;
 
+// Forward-only status progression ranks — never let a completed item regress.
+const PLAN_STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  not_started: 0,
+  current: 1,
+  running: 1,
+  done: 2,
+  completed: 2,
+  failed: 2,
+  skipped: 2,
+};
+
+export function createPanelHandlers(deps: any): any {
   return {
     onSessionSubscribed: (message: any) => {
       try {
@@ -167,19 +180,27 @@ export function createPanelHandlers(deps: any): any {
                 effectivePlan = initialPlanSnapshot;
                 deps.logger?.log?.('[Plan] Snapshot set', { count: initialPlanSnapshot.length, planReset });
               } else {
-                // Routine emission — preserve original texts, only merge statuses
-                effectivePlan = initialPlanSnapshot.map((item, i) => ({
-                  ...item,
-                  status: i < plan.length ? String(plan[i].status || item.status) : item.status,
-                }));
+                // If all incoming items are done, this is a completion signal — mark entire snapshot done
+                const allDone = plan.every((p: any) => String(p.status) === 'done');
+                if (allDone) {
+                  effectivePlan = initialPlanSnapshot.map(item => ({ ...item, status: 'done' }));
+                  deps.logger?.log?.('[Plan] Completion signal — all snapshot items marked done');
+                } else {
+                  // Routine emission — preserve original texts, merge statuses forward-only
+                  effectivePlan = initialPlanSnapshot.map((item, i) => {
+                    if (i >= plan.length) return item;
+                    const incoming = String(plan[i].status || item.status);
+                    const existingRank = PLAN_STATUS_RANK[item.status] ?? 0;
+                    const incomingRank = PLAN_STATUS_RANK[incoming] ?? 0;
+                    return { ...item, status: incomingRank >= existingRank ? incoming : item.status };
+                  });
+                  deps.logger?.log?.('[Plan] Forward-only status merge', {
+                    snapshotCount: effectivePlan.length,
+                    incomingCount: plan.length,
+                    statuses: effectivePlan.map(p => p.status),
+                  });
+                }
                 initialPlanSnapshot = effectivePlan;
-                deps.logger?.log?.('[Plan] Status-only update merged', {
-                  snapshotCount: effectivePlan.length,
-                  incomingCount: plan.length,
-                  incomingTextsChanged: plan.some(
-                    (p: any, i: number) => i < effectivePlan.length && String(p.text || '') !== effectivePlan[i].text,
-                  ),
-                });
               }
 
               deps.setCurrentPlan?.(effectivePlan);
