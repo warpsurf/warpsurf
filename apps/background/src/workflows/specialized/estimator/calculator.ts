@@ -2,7 +2,7 @@
  * Workflow Estimation Calculator
  *
  * Pure functions for calculating costs and summarizing estimations.
- * Uses the cost calculator (backed by OpenRouter pricing data) for accurate pricing.
+ * Uses the cost calculator (backed by Helicone + OpenRouter pricing) for accurate pricing.
  * Integrates latency estimates for realistic time estimates.
  */
 

@@ -140,6 +140,8 @@ export default memo(function MessageList({
           const resolvedAttachments = attachmentIds.map((id: string) => sessionAttachments[id]).filter(Boolean);
 
           const showAnyPreview = showPreviewHere || showFinalPreviewHere;
+          const shouldReceivePlan =
+            isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
           const messageBlockProps = {
             message,
             isSameActor: index > 0 && messages[index - 1].actor === message.actor,
@@ -161,10 +163,10 @@ export default memo(function MessageList({
             onApproveEstimation,
             onCancelEstimation,
             messageAttachments: resolvedAttachments,
-            planItems: isCurrentRunRoot || isFallbackLastAgent ? planItems : undefined,
-            workflowGraph: isCurrentRunRoot || isFallbackLastAgent ? workflowGraph : undefined,
-            workflowLaneInfo: isCurrentRunRoot || isFallbackLastAgent ? workflowLaneInfo : undefined,
-            onOpenWorkflowFullScreen: isCurrentRunRoot || isFallbackLastAgent ? onOpenWorkflowFullScreen : undefined,
+            planItems: shouldReceivePlan ? planItems : undefined,
+            workflowGraph: shouldReceivePlan ? workflowGraph : undefined,
+            workflowLaneInfo: shouldReceivePlan ? workflowLaneInfo : undefined,
+            onOpenWorkflowFullScreen: shouldReceivePlan ? onOpenWorkflowFullScreen : undefined,
           };
 
           const isUserMessage = message.actor === Actors.USER;

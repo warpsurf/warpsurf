@@ -273,14 +273,28 @@ export const AgentSettings = ({ isDarkMode = false }: AgentSettingsProps) => {
     const models: Array<{ provider: string; providerName: string; model: string }> = [];
 
     try {
-      // Use providers from state (which gets updated on storage changes)
       for (const [provider, config] of Object.entries(providers)) {
-        if (!config?.apiKey) continue; // Skip providers without API keys
+        if (!config?.apiKey) continue;
 
-        const providerModels =
+        let providerModels =
           config.modelNames || llmProviderModelNames[provider as keyof typeof llmProviderModelNames] || [];
 
-        // Filter for pricing only when override is OFF
+        // Merge with fresh registry models so newly available models appear
+        // even if the user hasn't re-saved their provider config
+        if (provider !== ProviderTypeEnum.OpenRouter) {
+          try {
+            const result = await (window as any).chrome?.runtime?.sendMessage?.({
+              type: 'get_provider_models',
+              provider,
+            });
+            if (result?.ok && result.models?.length > 0) {
+              const registrySet = new Set(result.models);
+              const userAdded = providerModels.filter((m: string) => !registrySet.has(m));
+              providerModels = [...result.models, ...userAdded];
+            }
+          } catch {}
+        }
+
         const modelsWithPricing =
           costCalculatorReady && !showAllModels
             ? providerModels.filter(model => hasModelPricing(model))

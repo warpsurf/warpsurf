@@ -1,5 +1,26 @@
 type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | 'obsolete' | undefined;
 
+const PLAN_STATUS_MAP: Record<string, string> = {
+  done: 'completed',
+  current: 'running',
+  skipped: 'skipped',
+  pending: 'not_started',
+};
+
+export function planItemsToGraph(items: Array<{ text: string; status: string }>) {
+  const nodes = items.map((item, i) => ({
+    id: i + 1,
+    label: item.text,
+    status: PLAN_STATUS_MAP[item.status] || 'not_started',
+  }));
+  const edges = items.slice(0, -1).map((_, i) => ({ from: i + 1, to: i + 2 }));
+  const positions: Record<number, { x: number; y: number; width?: number }> = {};
+  nodes.forEach((n, i) => {
+    positions[n.id] = { x: i, y: 0 };
+  });
+  return { nodes, edges, positions };
+}
+
 const STATUS_COLORS = {
   light: {
     not_started: { bg: '#e8eef4', text: '#5a7290', border: '#b0c4d8' },
@@ -40,7 +61,7 @@ function wrapLabel(text: string, maxChars: number): string[] {
     }
   }
   if (current) lines.push(current);
-  return lines.slice(0, 4);
+  return lines;
 }
 
 export default function WorkflowGraph({
@@ -60,25 +81,76 @@ export default function WorkflowGraph({
   const positions = graph.positions || {};
   const scaleX = 210;
   const scaleY = compact ? 52 : 110;
-  const marginX = 120;
-  const marginY = compact ? 32 : 80;
-  const nodeHeight = compact ? 36 : 44;
+  const baseNodeHeight = compact ? 36 : 44;
   const nodeRadius = 10;
   const fontSize = compact ? 9 : 10;
+  const lineHeight = compact ? 10 : 12;
   const laneFontSize = 9;
+  const charWidth = compact ? 5.2 : 5.8;
+  const nodePad = 20;
+  const nodeVertPad = 12;
+  const edgeGap = compact ? 24 : 36;
 
-  const rawMaxX = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.x) || 0));
   const rawMaxY = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.y) || 0));
-  const maxX = Number.isFinite(rawMaxX) ? rawMaxX : 0;
   const maxY = Number.isFinite(rawMaxY) ? rawMaxY : 0;
-  const width = Math.max(900, (maxX + 5) * scaleX + marginX);
-  const height = Math.max(compact ? 220 : 450, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
+  const hasMultipleLanes = maxY > 0;
+  const marginX = hasMultipleLanes ? 120 : 16;
+  const multiLaneMarginY = compact ? 32 : 80;
 
+  // Compute dynamic node widths and heights from label text
   const nodeWidths: Record<number, number> = {};
+  const nodeHeights: Record<number, number> = {};
+  const wrappedLabels: Record<number, string[]> = {};
   for (const n of graph.nodes) {
-    const p = positions[n.id] || { width: 1 };
-    nodeWidths[n.id] = Math.max(150, (p.width || 1) * Math.floor(scaleX * 0.7));
+    const label = n.label || String(n.id);
+    if (hasMultipleLanes) {
+      const p = positions[n.id] || { width: 1 };
+      const posWidth = Math.max(150, (p.width || 1) * Math.floor(scaleX * 0.7));
+      const lines = wrapLabel(label, Math.max(12, Math.floor((posWidth - 16) / charWidth)));
+      wrappedLabels[n.id] = lines;
+      nodeWidths[n.id] = posWidth;
+      nodeHeights[n.id] = Math.max(baseNodeHeight, lines.length * lineHeight + nodeVertPad);
+    } else {
+      const lines = wrapLabel(label, 28);
+      const longest = Math.max(...lines.map(l => l.length));
+      wrappedLabels[n.id] = lines;
+      nodeWidths[n.id] = Math.max(60, longest * charWidth + nodePad);
+      nodeHeights[n.id] = Math.max(baseNodeHeight, lines.length * lineHeight + nodeVertPad);
+    }
   }
+
+  const maxNodeH = Math.max(...graph.nodes.map((n: any) => nodeHeights[n.id] || baseNodeHeight));
+
+  // For single-lane, use tight vertical padding so nodes fill the space;
+  // for multi-lane, use the wider margin that accounts for lane labels.
+  const vertPad = compact ? 8 : 16;
+  const marginY = hasMultipleLanes ? multiLaneMarginY : maxNodeH / 2 + vertPad;
+
+  // Compute pixel x positions per node
+  const nodeXPos: Record<number, number> = {};
+  if (hasMultipleLanes) {
+    for (const n of graph.nodes) {
+      const p = positions[n.id] || { x: 0 };
+      nodeXPos[n.id] = (p.x || 0) * scaleX + marginX;
+    }
+  } else {
+    const sorted = [...graph.nodes].sort((a: any, b: any) => {
+      const pa = positions[a.id] || { x: 0 };
+      const pb = positions[b.id] || { x: 0 };
+      return (pa.x || 0) - (pb.x || 0);
+    });
+    let cumX = marginX;
+    for (const n of sorted) {
+      nodeXPos[n.id] = cumX;
+      cumX += nodeWidths[n.id] + edgeGap;
+    }
+  }
+
+  const rightEdge = Math.max(...graph.nodes.map((n: any) => (nodeXPos[n.id] || 0) + (nodeWidths[n.id] || 0)));
+  const width = rightEdge + marginX;
+  const height = hasMultipleLanes
+    ? Math.max(multiLaneMarginY + maxNodeH + multiLaneMarginY, (maxY + (compact ? 1.5 : 3)) * scaleY + multiLaneMarginY)
+    : maxNodeH + vertPad * 2;
 
   const edgeColor = EDGE_COLORS[theme];
   const statusColors = STATUS_COLORS[theme];
@@ -88,6 +160,26 @@ export default function WorkflowGraph({
   Object.values(positions).forEach((p: any) => lanes.add(p?.y ?? 0));
   const sortedLanes = Array.from(lanes).sort((a, b) => a - b);
 
+  const STATUS_LABELS: Record<string, string> = {
+    not_started: 'Pending',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+    skipped: 'Skipped',
+    obsolete: 'Obsolete',
+  };
+  const activeStatuses = [
+    ...new Set<string>(
+      graph.nodes.map((n: any) => {
+        const raw = (n.status as string) || 'not_started';
+        if (raw === 'pending' || raw === 'not_started') return 'not_started';
+        if (raw === 'dispatched') return 'running';
+        return raw;
+      }),
+    ),
+  ].filter((s): s is keyof typeof statusColors => s in statusColors);
+
   return (
     <div
       className="rounded-xl border overflow-hidden"
@@ -96,32 +188,11 @@ export default function WorkflowGraph({
         background: isDarkMode ? '#111c28' : '#f5f8fb',
       }}>
       <div
-        className="px-3 py-2 flex items-center justify-between border-b"
-        style={{
-          borderColor: isDarkMode ? '#2d4054' : '#b0c4d8',
-          background: isDarkMode ? '#162030' : '#edf2f7',
-        }}>
-        <span className="text-xs font-semibold tracking-wide" style={{ color: isDarkMode ? '#8da4be' : '#3d6b8e' }}>
-          {'\u2693'} Plan
-        </span>
-        <div className="flex items-center gap-3 text-[9px]" style={{ color: isDarkMode ? '#5a7a94' : '#7a9ab5' }}>
-          {(['completed', 'running', 'failed', 'not_started', 'cancelled', 'obsolete'] as const).map(status => (
-            <span key={status} className="inline-flex items-center gap-1">
-              <span
-                className="rounded-sm"
-                style={{ width: 8, height: 8, background: statusColors[status].border, display: 'inline-block' }}
-              />
-              {status === 'not_started' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div
         className="relative"
         style={{
           overflowX: 'auto',
           overflowY: compact ? 'auto' : 'visible',
-          maxHeight: compact ? 260 : undefined,
+          maxHeight: compact ? (hasMultipleLanes ? 260 : 160) : undefined,
           padding: '8px',
         }}>
         <svg width={width} height={height}>
@@ -134,43 +205,43 @@ export default function WorkflowGraph({
             </marker>
           </defs>
 
-          {/* Lane labels */}
-          {sortedLanes.map(yVal => {
-            const y = yVal * scaleY + marginY;
-            const info = laneInfo[yVal] || { label: `Crew ${yVal + 1}` };
-            const label = String(info.label || `Crew ${yVal + 1}`);
-            return (
-              <g key={`lane-${yVal}`}>
-                <rect
-                  x={4}
-                  y={y - 10}
-                  rx={8}
-                  width={Math.max(64, label.length * 5.5 + 16)}
-                  height={20}
-                  fill={info.color || (isDarkMode ? '#2a5a7e' : '#3d6b8e')}
-                  opacity={0.9}
-                />
-                <text
-                  x={4 + Math.max(64, label.length * 5.5 + 16) / 2}
-                  y={y + 4}
-                  textAnchor="middle"
-                  fontSize={laneFontSize}
-                  fill="#fff"
-                  fontWeight="500">
-                  {label}
-                </text>
-              </g>
-            );
-          })}
+          {/* Lane labels (hidden for single-lane graphs) */}
+          {hasMultipleLanes &&
+            sortedLanes.map(yVal => {
+              const y = yVal * scaleY + marginY;
+              const info = laneInfo[yVal] || { label: `Crew ${yVal + 1}` };
+              const label = String(info.label || `Crew ${yVal + 1}`);
+              return (
+                <g key={`lane-${yVal}`}>
+                  <rect
+                    x={4}
+                    y={y - 10}
+                    rx={8}
+                    width={Math.max(64, label.length * 5.5 + 16)}
+                    height={20}
+                    fill={info.color || (isDarkMode ? '#2a5a7e' : '#3d6b8e')}
+                    opacity={0.9}
+                  />
+                  <text
+                    x={4 + Math.max(64, label.length * 5.5 + 16) / 2}
+                    y={y + 4}
+                    textAnchor="middle"
+                    fontSize={laneFontSize}
+                    fill="#fff"
+                    fontWeight="500">
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
 
           {/* Edges */}
           {(graph.edges || []).map((e: any, i: number) => {
             const a = positions[e.from] || { x: 0, y: 0 };
             const b = positions[e.to] || { x: 0, y: 0 };
-            const fromW = nodeWidths[e.from] ?? 110;
-            const x1 = (a.x || 0) * scaleX + marginX + fromW;
+            const x1 = (nodeXPos[e.from] || 0) + (nodeWidths[e.from] || 0);
             const y1 = (a.y || 0) * scaleY + marginY;
-            const x2 = (b.x || 0) * scaleX + marginX;
+            const x2 = nodeXPos[e.to] || 0;
             const y2 = (b.y || 0) * scaleY + marginY;
             const isSame = a.y === b.y;
             const color = isSame ? edgeColor.same : edgeColor.cross;
@@ -209,9 +280,10 @@ export default function WorkflowGraph({
           {/* Nodes */}
           {graph.nodes.map((n: any) => {
             const p = positions[n.id] || { x: 0, y: 0 };
-            const x = (p.x || 0) * scaleX + marginX;
+            const x = nodeXPos[n.id] || 0;
             const y = (p.y || 0) * scaleY + marginY;
             const w = nodeWidths[n.id];
+            const h = nodeHeights[n.id] || baseNodeHeight;
             const rawStatus = (n.status as string) || 'not_started';
             const status: Status =
               rawStatus === 'pending' || rawStatus === 'not_started'
@@ -221,17 +293,18 @@ export default function WorkflowGraph({
                   : (rawStatus as Status);
             const colors = statusColors[status || 'not_started'] || statusColors['not_started'];
             const isRunning = status === 'running';
-            const maxChars = Math.max(12, Math.floor((w - 16) / 4.5));
-            const lines = wrapLabel(n.label || String(n.id), maxChars);
+            const lines = wrappedLabels[n.id] || wrapLabel(n.label || String(n.id), 20);
+            const textBlockHeight = (lines.length - 1) * lineHeight;
+            const textStartY = y - textBlockHeight / 2;
 
             return (
               <g key={n.id}>
                 {isRunning && (
                   <rect
                     x={x - 1}
-                    y={y - nodeHeight / 2 - 1}
+                    y={y - h / 2 - 1}
                     width={w + 2}
-                    height={nodeHeight + 2}
+                    height={h + 2}
                     rx={nodeRadius + 1}
                     fill="none"
                     stroke={colors.border}
@@ -242,9 +315,9 @@ export default function WorkflowGraph({
                 )}
                 <rect
                   x={x}
-                  y={y - nodeHeight / 2}
+                  y={y - h / 2}
                   width={w}
-                  height={nodeHeight}
+                  height={h}
                   rx={nodeRadius}
                   fill={colors.bg}
                   stroke={colors.border}
@@ -252,13 +325,13 @@ export default function WorkflowGraph({
                 />
                 <text
                   x={x + w / 2}
-                  y={y - (lines.length > 1 ? (lines.length - 1) * 4 : 0) + 1}
+                  y={textStartY + 1}
                   textAnchor="middle"
                   fontSize={fontSize}
                   fill={colors.text}
                   fontWeight="500">
                   {lines.map((line, idx) => (
-                    <tspan key={idx} x={x + w / 2} dy={idx === 0 ? 0 : 11}>
+                    <tspan key={idx} x={x + w / 2} dy={idx === 0 ? 0 : lineHeight}>
                       {line}
                     </tspan>
                   ))}
@@ -267,6 +340,23 @@ export default function WorkflowGraph({
             );
           })}
         </svg>
+      </div>
+      <div
+        className="flex items-center gap-3 px-3 py-1.5 border-t flex-wrap"
+        style={{
+          borderColor: isDarkMode ? '#2d4054' : '#b0c4d8',
+          color: isDarkMode ? '#5a7a94' : '#7a9ab5',
+          fontSize: 9,
+        }}>
+        {activeStatuses.map(status => (
+          <span key={status} className="inline-flex items-center gap-1">
+            <span
+              className="rounded-sm"
+              style={{ width: 7, height: 7, background: statusColors[status].border, display: 'inline-block' }}
+            />
+            {STATUS_LABELS[status] || status}
+          </span>
+        ))}
       </div>
     </div>
   );

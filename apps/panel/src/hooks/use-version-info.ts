@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes =
-    'Added Microsoft Edge browser compatibility with Edge-specific URL handling, script injection guards, and updated documentation.';
+  const releaseNotes = 'Agent plan visualization, dual-source model registry, and refreshed pricing data.';
 
   useEffect(() => {
     try {

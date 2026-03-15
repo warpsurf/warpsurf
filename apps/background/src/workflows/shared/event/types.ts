@@ -43,6 +43,8 @@ export interface EventData {
   pageTitle?: string;
   /** Current plan state for UI rendering */
   plan?: Array<{ text: string; status: string }>;
+  /** When true, signals the UI to replace its plan snapshot (e.g. user-triggered replan) */
+  planReset?: boolean;
   /** Messages drained from the live-injection queue this step */
   drainedMessages?: string[];
   /** Structured model/provider error payload for UI-safe rendering */

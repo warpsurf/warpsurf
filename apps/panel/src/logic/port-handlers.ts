@@ -72,6 +72,23 @@ function processDrainedMessages(drained: string[], deps: any): void {
   });
 }
 
+// Module-level snapshot of the first plan emitted for a task run.
+// Must be outside createPanelHandlers because useMemo recreates the closure frequently,
+// which would reset a closure-scoped variable mid-task.
+let initialPlanSnapshot: Array<{ text: string; status: string }> | null = null;
+
+// Forward-only status progression ranks — never let a completed item regress.
+const PLAN_STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  not_started: 0,
+  current: 1,
+  running: 1,
+  done: 2,
+  completed: 2,
+  failed: 2,
+  skipped: 2,
+};
+
 export function createPanelHandlers(deps: any): any {
   return {
     onSessionSubscribed: (message: any) => {
@@ -132,16 +149,63 @@ export function createPanelHandlers(deps: any): any {
           if (isTerminal) win.__lastExecKeys.set(key, now);
         } catch {}
 
-        // Extract plan state from execution events (only for current session)
+        // Reset plan snapshot when a new task starts
+        try {
+          const state = String((event as any)?.state || '');
+          if (state === ExecutionState.TASK_START) {
+            initialPlanSnapshot = null;
+            deps.logger?.log?.('[Plan] Snapshot reset (TASK_START)');
+          }
+        } catch {}
+
+        // Extract plan state from execution events (only for current session).
+        // We lock the plan structure on the first emission so that routine replanning
+        // doesn't replace the original steps — only statuses are merged.
+        // A planReset flag (set by user-triggered replans) replaces the snapshot entirely.
         try {
           const plan = (event as any)?.data?.plan;
           if (Array.isArray(plan) && plan.length > 0) {
             const evtSid = String((event as any)?.data?.taskId || (event as any)?.data?.sessionId || '');
             const curSid = String(deps.sessionIdRef?.current || '');
             if (!evtSid || !curSid || evtSid === curSid) {
-              deps.setCurrentPlan?.(plan);
+              const planReset = !!(event as any)?.data?.planReset;
+              let effectivePlan: Array<{ text: string; status: string }>;
+
+              if (!initialPlanSnapshot || planReset) {
+                // First plan or explicit reset (user-triggered replan) — store as canonical snapshot
+                initialPlanSnapshot = plan.map((p: any) => ({
+                  text: String(p.text || ''),
+                  status: String(p.status || 'pending'),
+                }));
+                effectivePlan = initialPlanSnapshot;
+                deps.logger?.log?.('[Plan] Snapshot set', { count: initialPlanSnapshot.length, planReset });
+              } else {
+                // If all incoming items are done, this is a completion signal — mark entire snapshot done
+                const allDone = plan.every((p: any) => String(p.status) === 'done');
+                if (allDone) {
+                  effectivePlan = initialPlanSnapshot.map(item => ({ ...item, status: 'done' }));
+                  deps.logger?.log?.('[Plan] Completion signal — all snapshot items marked done');
+                } else {
+                  // Routine emission — preserve original texts, merge statuses forward-only
+                  effectivePlan = initialPlanSnapshot.map((item, i) => {
+                    if (i >= plan.length) return item;
+                    const incoming = String(plan[i].status || item.status);
+                    const existingRank = PLAN_STATUS_RANK[item.status] ?? 0;
+                    const incomingRank = PLAN_STATUS_RANK[incoming] ?? 0;
+                    return { ...item, status: incomingRank >= existingRank ? incoming : item.status };
+                  });
+                  deps.logger?.log?.('[Plan] Forward-only status merge', {
+                    snapshotCount: effectivePlan.length,
+                    incomingCount: plan.length,
+                    statuses: effectivePlan.map(p => p.status),
+                  });
+                }
+                initialPlanSnapshot = effectivePlan;
+              }
+
+              deps.setCurrentPlan?.(effectivePlan);
               deps.setMessageMetadata((prev: any) => {
-                const next = { ...prev, __workflowPlanItems: plan } as any;
+                const next = { ...prev, __workflowPlanItems: effectivePlan } as any;
                 try {
                   if (deps.sessionIdRef.current) {
                     chatHistoryStore.storeMessageMetadata(deps.sessionIdRef.current, next);

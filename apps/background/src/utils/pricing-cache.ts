@@ -5,8 +5,13 @@
  * Run: pnpm generate-pricing-cache
  *
  * When useLivePricingData is false, the extension uses this cached data
- * instead of making external API calls to OpenRouter.
+ * instead of making external API calls to Helicone and OpenRouter.
  */
+
+export interface CachedProviderData {
+  models: string[];
+  pricing: Record<string, { inputPerToken: number; outputPerToken: number }>;
+}
 
 export interface CachedOpenRouterGroup {
   id: string;
@@ -17,6 +22,7 @@ export interface CachedOpenRouterGroup {
 export interface CachedPricingData {
   generatedAt: string;
   version: number;
+  helicone: Record<string, CachedProviderData>;
   openRouter: {
     groups: CachedOpenRouterGroup[];
     pricing: Record<string, { inputPerToken: number; outputPerToken: number }>;
@@ -24,10 +30,1166 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-14 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-15 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-14T14:28:26.243Z',
-  version: 2,
+  generatedAt: '2026-03-15T22:25:04.865Z',
+  version: 1,
+  helicone: {
+    openai: {
+      models: [
+        'ada',
+        'ada-batch',
+        'babbage',
+        'babbage-batch',
+        'chatgpt-4o-latest',
+        'chatgpt-4o-latest-batch',
+        'codex-mini-latest',
+        'codex-mini-latest-batch',
+        'curie',
+        'curie-batch',
+        'davinci',
+        'davinci-batch',
+        'ft:gpt-3.5-turbo-',
+        'ft:gpt-4o-2024-08-06:',
+        'ft:gpt-4o-mini-2024-07-18:',
+        'gpt-3.5-turbo',
+        'gpt-3.5-turbo-0125',
+        'gpt-3.5-turbo-0125-batch',
+        'gpt-3.5-turbo-0301',
+        'gpt-3.5-turbo-0301-batch',
+        'gpt-3.5-turbo-0613',
+        'gpt-3.5-turbo-0613-batch',
+        'gpt-3.5-turbo-1106',
+        'gpt-3.5-turbo-1106-batch',
+        'gpt-3.5-turbo-16k-0613',
+        'gpt-3.5-turbo-16k-0613-batch',
+        'gpt-3.5-turbo-batch',
+        'gpt-3.5-turbo-instruct',
+        'gpt-3.5-turbo-instruct-0914',
+        'gpt-3.5-turbo-instruct-0914-batch',
+        'gpt-3.5-turbo-instruct-batch',
+        'gpt-35-turbo',
+        'gpt-35-turbo-16k',
+        'gpt-35-turbo-16k-0613',
+        'gpt-35-turbo-16k-0613-batch',
+        'gpt-35-turbo-16k-batch',
+        'gpt-35-turbo-batch',
+        'gpt-4',
+        'gpt-4-0125-preview',
+        'gpt-4-0125-preview-batch',
+        'gpt-4-0314',
+        'gpt-4-0314-batch',
+        'gpt-4-0613',
+        'gpt-4-0613-batch',
+        'gpt-4-1106-preview',
+        'gpt-4-1106-preview-batch',
+        'gpt-4-1106-vision-preview',
+        'gpt-4-1106-vision-preview-batch',
+        'gpt-4-32k',
+        'gpt-4-32k-0314',
+        'gpt-4-32k-0314-batch',
+        'gpt-4-32k-0613',
+        'gpt-4-32k-0613-batch',
+        'gpt-4-32k-batch',
+        'gpt-4-batch',
+        'gpt-4-turbo',
+        'gpt-4-turbo-0125-preview',
+        'gpt-4-turbo-0125-preview-batch',
+        'gpt-4-turbo-2024-04-09',
+        'gpt-4-turbo-2024-04-09-batch',
+        'gpt-4-turbo-batch',
+        'gpt-4-vision-preview',
+        'gpt-4-vision-preview-batch',
+        'gpt-4.1',
+        'gpt-4.1-2025-04-14',
+        'gpt-4.1-2025-04-14-batch',
+        'gpt-4.1-batch',
+        'gpt-4.1-mini',
+        'gpt-4.1-mini-2025-04-14',
+        'gpt-4.1-mini-2025-04-14-batch',
+        'gpt-4.1-mini-batch',
+        'gpt-4.1-nano',
+        'gpt-4.1-nano-2025-04-14',
+        'gpt-4.1-nano-2025-04-14-batch',
+        'gpt-4.1-nano-batch',
+        'gpt-4o',
+        'gpt-4o-2024-05-13',
+        'gpt-4o-2024-05-13-batch',
+        'gpt-4o-2024-08-06',
+        'gpt-4o-2024-08-06-batch',
+        'gpt-4o-2024-11-20',
+        'gpt-4o-2024-11-20-batch',
+        'gpt-4o-batch',
+        'gpt-4o-mini',
+        'gpt-4o-mini-2024-07-18',
+        'gpt-4o-mini-2024-07-18-batch',
+        'gpt-4o-mini-2024-07-18.ft-',
+        'gpt-4o-mini-batch',
+        'gpt-4o-mini-realtime',
+        'gpt-4o-mini-realtime-batch',
+        'gpt-4o-realtime',
+        'gpt-4o-realtime-batch',
+        'gpt-4o-search-preview',
+        'gpt-4o-search-preview-batch',
+        'gpt-5',
+        'gpt-5-2025-08-07',
+        'gpt-5-2025-08-07-batch',
+        'gpt-5-batch',
+        'gpt-5-chat-latest',
+        'gpt-5-chat-latest-batch',
+        'gpt-5-mini',
+        'gpt-5-mini-2025-08-07',
+        'gpt-5-mini-2025-08-07-batch',
+        'gpt-5-mini-batch',
+        'gpt-5-nano',
+        'gpt-5-nano-2025-08-07',
+        'gpt-5-nano-2025-08-07-batch',
+        'gpt-5-nano-batch',
+        'gpt-5.1',
+        'gpt-5.1-batch',
+        'gpt-5.1-chat-latest',
+        'gpt-5.1-chat-latest-batch',
+        'gpt-5.1-codex',
+        'gpt-5.1-codex-batch',
+        'gpt-5.1-codex-mini',
+        'gpt-5.1-codex-mini-batch',
+        'gpt-5.2',
+        'gpt-5.2-2025-12-11',
+        'gpt-5.2-2025-12-11-batch',
+        'gpt-5.2-batch',
+        'gpt-5.2-chat-latest',
+        'gpt-5.2-chat-latest-batch',
+        'gpt-5.2-pro',
+        'gpt-5.2-pro-batch',
+        'o1',
+        'o1-2024-12-17',
+        'o1-2024-12-17-batch',
+        'o1-batch',
+        'o1-mini',
+        'o1-mini-2024-09-12',
+        'o1-mini-2024-09-12-batch',
+        'o1-mini-batch',
+        'o1-preview',
+        'o1-preview-2024-09-12',
+        'o1-preview-2024-09-12-batch',
+        'o1-preview-batch',
+        'o1-pro',
+        'o1-pro-batch',
+        'o3-2025-04-16',
+        'o3-2025-04-16-batch',
+        'o3-mini',
+        'o3-mini-2025-01-31',
+        'o3-mini-2025-01-31-batch',
+        'o3-mini-batch',
+        'o3-pro',
+        'o3-pro-batch',
+        'o4-mini',
+        'o4-mini-2025-04-16',
+        'o4-mini-2025-04-16-batch',
+        'o4-mini-batch',
+        'openai/gpt-4o-mini-search-preview',
+        'openai/gpt-4o-mini-search-preview-batch',
+        'text-ada-001',
+        'text-ada-001-batch',
+        'text-curie-001',
+        'text-curie-001-batch',
+        'text-davinci-001',
+        'text-davinci-001-batch',
+        'text-davinci-002',
+        'text-davinci-002-batch',
+        'text-davinci-003',
+        'text-davinci-003-batch',
+        'text-embedding-3-large',
+        'text-embedding-3-large-batch',
+        'text-embedding-3-small',
+        'text-embedding-3-small-batch',
+        'text-embedding-ada',
+        'text-embedding-ada-002',
+        'text-embedding-ada-002-batch',
+        'text-embedding-ada-002-v2',
+        'text-embedding-ada-002-v2-batch',
+        'text-embedding-ada-batch',
+      ],
+      pricing: {
+        ada: {
+          inputPerToken: 4.0000000000000003e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'ada-batch': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        babbage: {
+          inputPerToken: 5e-7,
+          outputPerToken: 5e-7,
+        },
+        'babbage-batch': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 2.5e-7,
+        },
+        'chatgpt-4o-latest': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'chatgpt-4o-latest-batch': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.0000075,
+        },
+        'codex-mini-latest': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000006,
+        },
+        'codex-mini-latest-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000003,
+        },
+        curie: {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000002,
+        },
+        'curie-batch': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000001,
+        },
+        davinci: {
+          inputPerToken: 0.00002,
+          outputPerToken: 0.00002,
+        },
+        'davinci-batch': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00001,
+        },
+        'ft:gpt-3.5-turbo-': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000006,
+        },
+        'ft:gpt-4o-2024-08-06:': {
+          inputPerToken: 0.00000375,
+          outputPerToken: 0.000015,
+        },
+        'ft:gpt-4o-mini-2024-07-18:': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000012,
+        },
+        'gpt-3.5-turbo': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-0125': {
+          inputPerToken: 5e-7,
+          outputPerToken: 0.0000015,
+        },
+        'gpt-3.5-turbo-0125-batch': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 7.5e-7,
+        },
+        'gpt-3.5-turbo-0301': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-0301-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-3.5-turbo-0613': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-0613-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-3.5-turbo-1106': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-1106-batch': {
+          inputPerToken: 5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-3.5-turbo-16k-0613': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000004,
+        },
+        'gpt-3.5-turbo-16k-0613-batch': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-3.5-turbo-instruct': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-instruct-0914': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-3.5-turbo-instruct-0914-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-3.5-turbo-instruct-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-35-turbo': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-35-turbo-16k': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000004,
+        },
+        'gpt-35-turbo-16k-0613': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000004,
+        },
+        'gpt-35-turbo-16k-0613-batch': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-35-turbo-16k-batch': {
+          inputPerToken: 0.0000015,
+          outputPerToken: 0.000002,
+        },
+        'gpt-35-turbo-batch': {
+          inputPerToken: 7.5e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-4': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-0125-preview': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-0125-preview-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-0314': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-0314-batch': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-0613': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-0613-batch': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-1106-preview': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-1106-preview-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-1106-vision-preview': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-1106-vision-preview-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-32k': {
+          inputPerToken: 0.00006,
+          outputPerToken: 0.00012,
+        },
+        'gpt-4-32k-0314': {
+          inputPerToken: 0.00006,
+          outputPerToken: 0.00012,
+        },
+        'gpt-4-32k-0314-batch': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-32k-0613': {
+          inputPerToken: 0.00006,
+          outputPerToken: 0.00012,
+        },
+        'gpt-4-32k-0613-batch': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-32k-batch': {
+          inputPerToken: 0.00003,
+          outputPerToken: 0.00006,
+        },
+        'gpt-4-batch': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-turbo': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-turbo-0125-preview': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-turbo-0125-preview-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-turbo-2024-04-09': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-turbo-2024-04-09-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-turbo-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4-vision-preview': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00003,
+        },
+        'gpt-4-vision-preview-batch': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4.1': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000008,
+        },
+        'gpt-4.1-2025-04-14': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000008,
+        },
+        'gpt-4.1-2025-04-14-batch': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000004,
+        },
+        'gpt-4.1-batch': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000004,
+        },
+        'gpt-4.1-mini': {
+          inputPerToken: 4.0000000000000003e-7,
+          outputPerToken: 0.0000016000000000000001,
+        },
+        'gpt-4.1-mini-2025-04-14': {
+          inputPerToken: 4.0000000000000003e-7,
+          outputPerToken: 0.0000016000000000000001,
+        },
+        'gpt-4.1-mini-2025-04-14-batch': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 8.000000000000001e-7,
+        },
+        'gpt-4.1-mini-batch': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 8.000000000000001e-7,
+        },
+        'gpt-4.1-nano': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gpt-4.1-nano-2025-04-14': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gpt-4.1-nano-2025-04-14-batch': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        'gpt-4.1-nano-batch': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        'gpt-4o': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.00001,
+        },
+        'gpt-4o-2024-05-13': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'gpt-4o-2024-05-13-batch': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.0000075,
+        },
+        'gpt-4o-2024-08-06': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.00001,
+        },
+        'gpt-4o-2024-08-06-batch': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.000005,
+        },
+        'gpt-4o-2024-11-20': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.00001,
+        },
+        'gpt-4o-2024-11-20-batch': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.000005,
+        },
+        'gpt-4o-batch': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.000005,
+        },
+        'gpt-4o-mini': {
+          inputPerToken: 1.5e-7,
+          outputPerToken: 6e-7,
+        },
+        'gpt-4o-mini-2024-07-18': {
+          inputPerToken: 1.5e-7,
+          outputPerToken: 6e-7,
+        },
+        'gpt-4o-mini-2024-07-18-batch': {
+          inputPerToken: 7.5e-8,
+          outputPerToken: 3e-7,
+        },
+        'gpt-4o-mini-2024-07-18.ft-': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000012,
+        },
+        'gpt-4o-mini-batch': {
+          inputPerToken: 7.5e-8,
+          outputPerToken: 3e-7,
+        },
+        'gpt-4o-mini-realtime': {
+          inputPerToken: 6e-7,
+          outputPerToken: 0.0000024,
+        },
+        'gpt-4o-mini-realtime-batch': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000012,
+        },
+        'gpt-4o-realtime': {
+          inputPerToken: 0.000004,
+          outputPerToken: 0.000016,
+        },
+        'gpt-4o-realtime-batch': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000008,
+        },
+        'gpt-4o-search-preview': {
+          inputPerToken: 0.0000025,
+          outputPerToken: 0.00001,
+        },
+        'gpt-4o-search-preview-batch': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5-2025-08-07': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5-2025-08-07-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5-chat-latest': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5-chat-latest-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5-mini': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 0.000002,
+        },
+        'gpt-5-mini-2025-08-07': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 0.000002,
+        },
+        'gpt-5-mini-2025-08-07-batch': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-5-mini-batch': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-5-nano': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gpt-5-nano-2025-08-07': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gpt-5-nano-2025-08-07-batch': {
+          inputPerToken: 2.5000000000000002e-8,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        'gpt-5-nano-batch': {
+          inputPerToken: 2.5000000000000002e-8,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        'gpt-5.1': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5.1-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5.1-chat-latest': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5.1-chat-latest-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5.1-codex': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gpt-5.1-codex-batch': {
+          inputPerToken: 6.25e-7,
+          outputPerToken: 0.000005,
+        },
+        'gpt-5.1-codex-mini': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 0.000002,
+        },
+        'gpt-5.1-codex-mini-batch': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 0.000001,
+        },
+        'gpt-5.2': {
+          inputPerToken: 0.00000175,
+          outputPerToken: 0.000014,
+        },
+        'gpt-5.2-2025-12-11': {
+          inputPerToken: 0.00000175,
+          outputPerToken: 0.000014,
+        },
+        'gpt-5.2-2025-12-11-batch': {
+          inputPerToken: 8.75e-7,
+          outputPerToken: 0.000007,
+        },
+        'gpt-5.2-batch': {
+          inputPerToken: 8.75e-7,
+          outputPerToken: 0.000007,
+        },
+        'gpt-5.2-chat-latest': {
+          inputPerToken: 0.00000175,
+          outputPerToken: 0.000014,
+        },
+        'gpt-5.2-chat-latest-batch': {
+          inputPerToken: 8.75e-7,
+          outputPerToken: 0.000007,
+        },
+        'gpt-5.2-pro': {
+          inputPerToken: 0.000021,
+          outputPerToken: 0.000168,
+        },
+        'gpt-5.2-pro-batch': {
+          inputPerToken: 0.0000105,
+          outputPerToken: 0.000084,
+        },
+        o1: {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00006,
+        },
+        'o1-2024-12-17': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00006,
+        },
+        'o1-2024-12-17-batch': {
+          inputPerToken: 0.0000075,
+          outputPerToken: 0.00003,
+        },
+        'o1-batch': {
+          inputPerToken: 0.0000075,
+          outputPerToken: 0.00003,
+        },
+        'o1-mini': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o1-mini-2024-09-12': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o1-mini-2024-09-12-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'o1-mini-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'o1-preview': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00006,
+        },
+        'o1-preview-2024-09-12': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.00006,
+        },
+        'o1-preview-2024-09-12-batch': {
+          inputPerToken: 0.0000075,
+          outputPerToken: 0.00003,
+        },
+        'o1-preview-batch': {
+          inputPerToken: 0.0000075,
+          outputPerToken: 0.00003,
+        },
+        'o1-pro': {
+          inputPerToken: 0.00015,
+          outputPerToken: 0.0006,
+        },
+        'o1-pro-batch': {
+          inputPerToken: 0.000075,
+          outputPerToken: 0.0003,
+        },
+        'o3-2025-04-16': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000008,
+        },
+        'o3-2025-04-16-batch': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000004,
+        },
+        'o3-mini': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o3-mini-2025-01-31': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o3-mini-2025-01-31-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'o3-mini-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'o3-pro': {
+          inputPerToken: 0.00002,
+          outputPerToken: 0.00008,
+        },
+        'o3-pro-batch': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00004,
+        },
+        'o4-mini': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o4-mini-2025-04-16': {
+          inputPerToken: 0.0000011,
+          outputPerToken: 0.0000044,
+        },
+        'o4-mini-2025-04-16-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'o4-mini-batch': {
+          inputPerToken: 5.5e-7,
+          outputPerToken: 0.0000022,
+        },
+        'openai/gpt-4o-mini-search-preview': {
+          inputPerToken: 1.5e-7,
+          outputPerToken: 6e-7,
+        },
+        'openai/gpt-4o-mini-search-preview-batch': {
+          inputPerToken: 7.5e-8,
+          outputPerToken: 3e-7,
+        },
+        'text-ada-001': {
+          inputPerToken: 4.0000000000000003e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'text-ada-001-batch': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 2.0000000000000002e-7,
+        },
+        'text-curie-001': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000002,
+        },
+        'text-curie-001-batch': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000001,
+        },
+        'text-davinci-001': {
+          inputPerToken: 0.00002,
+          outputPerToken: 0.00002,
+        },
+        'text-davinci-001-batch': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00001,
+        },
+        'text-davinci-002': {
+          inputPerToken: 0.00002,
+          outputPerToken: 0.00002,
+        },
+        'text-davinci-002-batch': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00001,
+        },
+        'text-davinci-003': {
+          inputPerToken: 0.00002,
+          outputPerToken: 0.00002,
+        },
+        'text-davinci-003-batch': {
+          inputPerToken: 0.00001,
+          outputPerToken: 0.00001,
+        },
+        'text-embedding-3-large': {
+          inputPerToken: 1.3e-7,
+          outputPerToken: 0,
+        },
+        'text-embedding-3-large-batch': {
+          inputPerToken: 6.5e-8,
+          outputPerToken: 0,
+        },
+        'text-embedding-3-small': {
+          inputPerToken: 2e-8,
+          outputPerToken: 0,
+        },
+        'text-embedding-3-small-batch': {
+          inputPerToken: 1e-8,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada-002': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada-002-batch': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada-002-v2': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada-002-v2-batch': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 0,
+        },
+        'text-embedding-ada-batch': {
+          inputPerToken: 5.0000000000000004e-8,
+          outputPerToken: 0,
+        },
+      },
+    },
+    anthropic: {
+      models: [
+        'claude-2',
+        'claude-2.0',
+        'claude-3-5-haiku-20241022',
+        'claude-3-5-sonnet-20240620',
+        'claude-3-5-sonnet-20241022',
+        'claude-3-7-sonnet-20250219',
+        'claude-3-haiku-20240307',
+        'claude-3-opus-20240229',
+        'claude-3-sonnet-20240229',
+        'claude-haiku-4-5-20251001',
+        'claude-instant-1',
+        'claude-instant-1.2',
+        'claude-opus-4-1-20250805',
+        'claude-opus-4-20250514',
+        'claude-opus-4-5',
+        'claude-opus-4-6',
+        'claude-sonnet-4-20250514',
+        'claude-sonnet-4-5-20250929',
+        'claude-sonnet-4-6',
+        'claude-sonnet-4-6-20260217',
+        'claude-v1',
+      ],
+      pricing: {
+        'claude-2': {
+          inputPerToken: 0.000008,
+          outputPerToken: 0.000024,
+        },
+        'claude-2.0': {
+          inputPerToken: 0.00001102,
+          outputPerToken: 0.00003268,
+        },
+        'claude-3-5-haiku-20241022': {
+          inputPerToken: 8.000000000000001e-7,
+          outputPerToken: 0.000004,
+        },
+        'claude-3-5-sonnet-20240620': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-3-5-sonnet-20241022': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-3-7-sonnet-20250219': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-3-haiku-20240307': {
+          inputPerToken: 2.5e-7,
+          outputPerToken: 0.00000125,
+        },
+        'claude-3-opus-20240229': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.000075,
+        },
+        'claude-3-sonnet-20240229': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-haiku-4-5-20251001': {
+          inputPerToken: 0.000001,
+          outputPerToken: 0.000005,
+        },
+        'claude-instant-1': {
+          inputPerToken: 0.0000016299999999999999,
+          outputPerToken: 0.000055100000000000004,
+        },
+        'claude-instant-1.2': {
+          inputPerToken: 0.0000016299999999999999,
+          outputPerToken: 0.00000551,
+        },
+        'claude-opus-4-1-20250805': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.000075,
+        },
+        'claude-opus-4-20250514': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.000075,
+        },
+        'claude-opus-4-5': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000025,
+        },
+        'claude-opus-4-6': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000025,
+        },
+        'claude-sonnet-4-20250514': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-sonnet-4-5-20250929': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-sonnet-4-6': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-sonnet-4-6-20260217': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-v1': {
+          inputPerToken: 0.000008,
+          outputPerToken: 0.000024,
+        },
+      },
+    },
+    gemini: {
+      models: [
+        'claude-3-5-haiku',
+        'claude-3-5-sonnet',
+        'claude-3-7-sonnet',
+        'claude-3-opus',
+        'gemini-1.0-pro',
+        'gemini-1.0-pro-vision-001',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-image',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash-lite-preview-06-17',
+        'gemini-2.5-flash-preview',
+        'gemini-2.5-flash-preview-image',
+        'gemini-2.5-pro',
+        'gemini-2.5-pro-exp-03-25',
+        'gemini-2.5-pro-preview',
+        'gemini-3-flash-preview',
+        'gemini-3-pro-preview',
+        'gemini-3.1-pro-preview',
+        'gemini-flash-1.5-8b',
+        'gemini-pro',
+      ],
+      pricing: {
+        'claude-3-5-haiku': {
+          inputPerToken: 8.000000000000001e-7,
+          outputPerToken: 0.000004,
+        },
+        'claude-3-5-sonnet': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-3-7-sonnet': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'claude-3-opus': {
+          inputPerToken: 0.000015,
+          outputPerToken: 0.000075,
+        },
+        'gemini-1.0-pro': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 3.75e-7,
+        },
+        'gemini-1.0-pro-vision-001': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 3.75e-7,
+        },
+        'gemini-1.5-flash': {
+          inputPerToken: 3.5e-7,
+          outputPerToken: 0.0000010500000000000001,
+        },
+        'gemini-1.5-pro': {
+          inputPerToken: 0.0000035,
+          outputPerToken: 0.0000105,
+        },
+        'gemini-2.0-flash': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gemini-2.0-flash-lite': {
+          inputPerToken: 7.5e-8,
+          outputPerToken: 3e-7,
+        },
+        'gemini-2.5-flash': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000025,
+        },
+        'gemini-2.5-flash-image': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000025,
+        },
+        'gemini-2.5-flash-lite': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gemini-2.5-flash-lite-preview-06-17': {
+          inputPerToken: 1.0000000000000001e-7,
+          outputPerToken: 4.0000000000000003e-7,
+        },
+        'gemini-2.5-flash-preview': {
+          inputPerToken: 1.5e-7,
+          outputPerToken: 6e-7,
+        },
+        'gemini-2.5-flash-preview-image': {
+          inputPerToken: 3e-7,
+          outputPerToken: 0.0000025,
+        },
+        'gemini-2.5-pro': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gemini-2.5-pro-exp-03-25': {
+          inputPerToken: 0,
+          outputPerToken: 0,
+        },
+        'gemini-2.5-pro-preview': {
+          inputPerToken: 0.00000125,
+          outputPerToken: 0.00001,
+        },
+        'gemini-3-flash-preview': {
+          inputPerToken: 5e-7,
+          outputPerToken: 0.000003,
+        },
+        'gemini-3-pro-preview': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000012,
+        },
+        'gemini-3.1-pro-preview': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.000012,
+        },
+        'gemini-flash-1.5-8b': {
+          inputPerToken: 3.75e-8,
+          outputPerToken: 1.5e-7,
+        },
+        'gemini-pro': {
+          inputPerToken: 1.25e-7,
+          outputPerToken: 3.75e-7,
+        },
+      },
+    },
+    grok: {
+      models: [
+        'grok-2-1212',
+        'grok-2-vision-1212',
+        'grok-3',
+        'grok-3-mini',
+        'grok-4',
+        'grok-4-fast',
+        'grok-beta',
+        'grok-code-fast-1',
+        'grok-vision-beta',
+      ],
+      pricing: {
+        'grok-2-1212': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.00001,
+        },
+        'grok-2-vision-1212': {
+          inputPerToken: 0.000002,
+          outputPerToken: 0.00001,
+        },
+        'grok-3': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'grok-3-mini': {
+          inputPerToken: 3e-7,
+          outputPerToken: 5e-7,
+        },
+        'grok-4': {
+          inputPerToken: 0.000003,
+          outputPerToken: 0.000015,
+        },
+        'grok-4-fast': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 5e-7,
+        },
+        'grok-beta': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+        'grok-code-fast-1': {
+          inputPerToken: 2.0000000000000002e-7,
+          outputPerToken: 0.0000015,
+        },
+        'grok-vision-beta': {
+          inputPerToken: 0.000005,
+          outputPerToken: 0.000015,
+        },
+      },
+    },
+  },
   openRouter: {
     groups: [
       {
@@ -602,10 +1764,15 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'z-ai/glm-4.7',
           'z-ai/glm-4.7-flash',
           'z-ai/glm-5',
+          'z-ai/glm-5-turbo',
         ],
       },
     ],
     pricing: {
+      'z-ai/glm-5-turbo': {
+        inputPerToken: 9.6e-7,
+        outputPerToken: 0.0000032,
+      },
       'x-ai/grok-4.20-multi-agent-beta': {
         inputPerToken: 0.000002,
         outputPerToken: 0.000006,
@@ -1880,6 +3047,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'z-ai/glm-5-turbo': 202752,
       'x-ai/grok-4.20-multi-agent-beta': 2000000,
       'x-ai/grok-4.20-beta': 2000000,
       'openrouter/hunter-alpha': 1048576,

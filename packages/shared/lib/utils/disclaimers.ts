@@ -28,7 +28,10 @@ export const INLINE_CHAT_DISCLAIMER =
 
 export const LIVE_PRICING_DISCLAIMER_TITLE = 'Model & Pricing Data';
 
-export const LIVE_PRICING_DISCLAIMER_MESSAGE = `Warpsurf can use live model and pricing data from the OpenRouter API (openrouter.ai) to show up to date available models and more accurate cost estimates.
+export const LIVE_PRICING_DISCLAIMER_MESSAGE = `Warpsurf can use live model and pricing data from external APIs (OpenRouter and Helicone) to show up to date available models and more accurate costs estimates:
+
+• OpenRouter API (openrouter.ai) - Model listings and pricing
+• Helicone API (helicone.ai) - Model listings and pricing for OpenAI, Anthropic, Google, and xAI
 
 Choose how you'd like to retrieve this data:`;
 

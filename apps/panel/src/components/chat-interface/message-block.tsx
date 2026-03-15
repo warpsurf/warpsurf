@@ -24,7 +24,7 @@ import { AttachmentChip, InlineAttachmentGallery } from './attachment-preview';
 
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
 const EstimationPopUp = lazy(() => import('../modals/estimation-popup'));
-import WorkflowGraph from '../multiagent-visualization/visualization-graph';
+import WorkflowGraph, { planItemsToGraph } from '../multiagent-visualization/visualization-graph';
 
 const ACTOR_TINTS: Record<string, { dark: string; light: string }> = {
   [Actors.USER]: { dark: 'text-slate-200', light: 'text-green-900' },
@@ -774,21 +774,33 @@ export default function MessageBlock({
           {/* Expansion panels: always renderable regardless of working state */}
           {isAgentAggregate && !collapsed && expandedTab === 'plan' && (
             <>
-              {workflowGraph ? (
-                <div className="mt-2 clear-both">
-                  <div className="flex items-center justify-end mb-1">
-                    {onOpenWorkflowFullScreen && (
-                      <button
-                        type="button"
-                        className={`text-[10px] font-medium rounded-lg px-2 py-0.5 transition-colors ${isDarkMode ? 'bg-[#1d1d1a] hover:bg-[#252522] border border-[#2f2f29] text-slate-300' : 'bg-[#f7f7f5] hover:bg-[#ededeb] border border-[#deded7] text-gray-600'}`}
-                        onClick={onOpenWorkflowFullScreen}>
-                        Full screen
-                      </button>
+              {(() => {
+                const graphData =
+                  workflowGraph || (planItems && planItems.length > 0 ? planItemsToGraph(planItems) : null);
+                if (!graphData) return null;
+                return (
+                  <div className="mt-2 clear-both">
+                    {workflowGraph && onOpenWorkflowFullScreen && (
+                      <div className="flex items-center justify-end mb-1">
+                        <button
+                          type="button"
+                          className={`text-[10px] font-medium rounded-lg px-2 py-0.5 transition-colors ${isDarkMode ? 'bg-[#1d1d1a] hover:bg-[#252522] border border-[#2f2f29] text-slate-300' : 'bg-[#f7f7f5] hover:bg-[#ededeb] border border-[#deded7] text-gray-600'}`}
+                          onClick={onOpenWorkflowFullScreen}>
+                          Full screen
+                        </button>
+                      </div>
                     )}
+                    <WorkflowGraph
+                      graph={graphData}
+                      compact
+                      laneInfo={workflowGraph ? workflowLaneInfo : undefined}
+                      isDarkMode={isDarkMode}
+                    />
                   </div>
-                  <WorkflowGraph graph={workflowGraph} compact laneInfo={workflowLaneInfo} isDarkMode={isDarkMode} />
-                </div>
-              ) : planItems && planItems.length > 0 ? (
+                );
+              })()}
+              {/* Previous text-based plan display (replaced by graph visualization above):
+              {planItems && planItems.length > 0 && !workflowGraph ? (
                 <div
                   className={`mt-2 rounded-md border p-2 text-xs clear-both ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
                   <div className="space-y-0.5">
@@ -815,6 +827,7 @@ export default function MessageBlock({
                   </div>
                 </div>
               ) : null}
+              */}
             </>
           )}
           {isAgentAggregate &&
