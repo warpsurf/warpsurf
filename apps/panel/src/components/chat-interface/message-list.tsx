@@ -161,10 +161,35 @@ export default memo(function MessageList({
             onApproveEstimation,
             onCancelEstimation,
             messageAttachments: resolvedAttachments,
-            planItems: isCurrentRunRoot || isFallbackLastAgent ? planItems : undefined,
-            workflowGraph: isCurrentRunRoot || isFallbackLastAgent ? workflowGraph : undefined,
-            workflowLaneInfo: isCurrentRunRoot || isFallbackLastAgent ? workflowLaneInfo : undefined,
-            onOpenWorkflowFullScreen: isCurrentRunRoot || isFallbackLastAgent ? onOpenWorkflowFullScreen : undefined,
+            planItems: (() => {
+              const shouldPass =
+                isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
+              if (index === lastAgentIndex && typeof console !== 'undefined') {
+                console.log('[Plan Routing] lastAgent decision', {
+                  messageId,
+                  isCurrentRunRoot,
+                  isFallbackLastAgent,
+                  activeAggregateMessageId,
+                  lastAgentIndex,
+                  shouldPass,
+                  hasPlanItems: !!planItems,
+                  planCount: planItems?.length,
+                });
+              }
+              return shouldPass ? planItems : undefined;
+            })(),
+            workflowGraph:
+              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
+                ? workflowGraph
+                : undefined,
+            workflowLaneInfo:
+              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
+                ? workflowLaneInfo
+                : undefined,
+            onOpenWorkflowFullScreen:
+              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
+                ? onOpenWorkflowFullScreen
+                : undefined,
           };
 
           const isUserMessage = message.actor === Actors.USER;
