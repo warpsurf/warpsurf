@@ -1,5 +1,26 @@
 type Status = 'not_started' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | 'obsolete' | undefined;
 
+const PLAN_STATUS_MAP: Record<string, string> = {
+  done: 'completed',
+  current: 'running',
+  skipped: 'skipped',
+  pending: 'not_started',
+};
+
+export function planItemsToGraph(items: Array<{ text: string; status: string }>) {
+  const nodes = items.map((item, i) => ({
+    id: i + 1,
+    label: item.text,
+    status: PLAN_STATUS_MAP[item.status] || 'not_started',
+  }));
+  const edges = items.slice(0, -1).map((_, i) => ({ from: i + 1, to: i + 2 }));
+  const positions: Record<number, { x: number; y: number; width?: number }> = {};
+  nodes.forEach((n, i) => {
+    positions[n.id] = { x: i, y: 0 };
+  });
+  return { nodes, edges, positions };
+}
+
 const STATUS_COLORS = {
   light: {
     not_started: { bg: '#e8eef4', text: '#5a7290', border: '#b0c4d8' },
@@ -60,8 +81,6 @@ export default function WorkflowGraph({
   const positions = graph.positions || {};
   const scaleX = 210;
   const scaleY = compact ? 52 : 110;
-  const marginX = 120;
-  const marginY = compact ? 32 : 80;
   const nodeHeight = compact ? 36 : 44;
   const nodeRadius = 10;
   const fontSize = compact ? 9 : 10;
@@ -71,8 +90,12 @@ export default function WorkflowGraph({
   const rawMaxY = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.y) || 0));
   const maxX = Number.isFinite(rawMaxX) ? rawMaxX : 0;
   const maxY = Number.isFinite(rawMaxY) ? rawMaxY : 0;
-  const width = Math.max(900, (maxX + 5) * scaleX + marginX);
-  const height = Math.max(compact ? 220 : 450, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
+  const hasMultipleLanes = maxY > 0;
+  const marginX = hasMultipleLanes ? 120 : 20;
+  const marginY = compact ? 32 : 80;
+  const minHeight = compact ? (hasMultipleLanes ? 220 : 80) : 450;
+  const width = Math.max(hasMultipleLanes ? 900 : 400, (maxX + 5) * scaleX + marginX);
+  const height = Math.max(minHeight, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
 
   const nodeWidths: Record<number, number> = {};
   for (const n of graph.nodes) {
@@ -96,32 +119,11 @@ export default function WorkflowGraph({
         background: isDarkMode ? '#111c28' : '#f5f8fb',
       }}>
       <div
-        className="px-3 py-2 flex items-center justify-between border-b"
-        style={{
-          borderColor: isDarkMode ? '#2d4054' : '#b0c4d8',
-          background: isDarkMode ? '#162030' : '#edf2f7',
-        }}>
-        <span className="text-xs font-semibold tracking-wide" style={{ color: isDarkMode ? '#8da4be' : '#3d6b8e' }}>
-          {'\u2693'} Plan
-        </span>
-        <div className="flex items-center gap-3 text-[9px]" style={{ color: isDarkMode ? '#5a7a94' : '#7a9ab5' }}>
-          {(['completed', 'running', 'failed', 'not_started', 'cancelled', 'obsolete'] as const).map(status => (
-            <span key={status} className="inline-flex items-center gap-1">
-              <span
-                className="rounded-sm"
-                style={{ width: 8, height: 8, background: statusColors[status].border, display: 'inline-block' }}
-              />
-              {status === 'not_started' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div
         className="relative"
         style={{
           overflowX: 'auto',
           overflowY: compact ? 'auto' : 'visible',
-          maxHeight: compact ? 260 : undefined,
+          maxHeight: compact ? (hasMultipleLanes ? 260 : 100) : undefined,
           padding: '8px',
         }}>
         <svg width={width} height={height}>
@@ -134,34 +136,35 @@ export default function WorkflowGraph({
             </marker>
           </defs>
 
-          {/* Lane labels */}
-          {sortedLanes.map(yVal => {
-            const y = yVal * scaleY + marginY;
-            const info = laneInfo[yVal] || { label: `Crew ${yVal + 1}` };
-            const label = String(info.label || `Crew ${yVal + 1}`);
-            return (
-              <g key={`lane-${yVal}`}>
-                <rect
-                  x={4}
-                  y={y - 10}
-                  rx={8}
-                  width={Math.max(64, label.length * 5.5 + 16)}
-                  height={20}
-                  fill={info.color || (isDarkMode ? '#2a5a7e' : '#3d6b8e')}
-                  opacity={0.9}
-                />
-                <text
-                  x={4 + Math.max(64, label.length * 5.5 + 16) / 2}
-                  y={y + 4}
-                  textAnchor="middle"
-                  fontSize={laneFontSize}
-                  fill="#fff"
-                  fontWeight="500">
-                  {label}
-                </text>
-              </g>
-            );
-          })}
+          {/* Lane labels (hidden for single-lane graphs) */}
+          {hasMultipleLanes &&
+            sortedLanes.map(yVal => {
+              const y = yVal * scaleY + marginY;
+              const info = laneInfo[yVal] || { label: `Crew ${yVal + 1}` };
+              const label = String(info.label || `Crew ${yVal + 1}`);
+              return (
+                <g key={`lane-${yVal}`}>
+                  <rect
+                    x={4}
+                    y={y - 10}
+                    rx={8}
+                    width={Math.max(64, label.length * 5.5 + 16)}
+                    height={20}
+                    fill={info.color || (isDarkMode ? '#2a5a7e' : '#3d6b8e')}
+                    opacity={0.9}
+                  />
+                  <text
+                    x={4 + Math.max(64, label.length * 5.5 + 16) / 2}
+                    y={y + 4}
+                    textAnchor="middle"
+                    fontSize={laneFontSize}
+                    fill="#fff"
+                    fontWeight="500">
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
 
           {/* Edges */}
           {(graph.edges || []).map((e: any, i: number) => {
