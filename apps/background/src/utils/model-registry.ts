@@ -184,6 +184,14 @@ class ModelRegistry {
 
     for (const [model, pricing] of Object.entries(CACHED_PRICING_DATA.openRouter.pricing)) {
       this.openRouterPricing.set(model, pricing);
+      // Index stripped names so direct-provider lookups work without prefix iteration
+      const slashIdx = model.indexOf('/');
+      if (slashIdx > 0) {
+        const stripped = model.substring(slashIdx + 1);
+        if (!this.heliconePricing.has(stripped)) {
+          this.heliconePricing.set(stripped, pricing);
+        }
+      }
     }
     if (CACHED_PRICING_DATA.openRouter.contextLengths) {
       for (const [model, length] of Object.entries(CACHED_PRICING_DATA.openRouter.contextLengths)) {
@@ -287,7 +295,12 @@ class ModelRegistry {
         const inputCost = parseFloat(model.pricing?.prompt);
         const outputCost = parseFloat(model.pricing?.completion);
         if (!isNaN(inputCost) && !isNaN(outputCost)) {
-          this.openRouterPricing.set(model.id, { inputPerToken: inputCost, outputPerToken: outputCost });
+          const pricing = { inputPerToken: inputCost, outputPerToken: outputCost };
+          this.openRouterPricing.set(model.id, pricing);
+          const stripped = model.id.substring(model.id.indexOf('/') + 1);
+          if (!this.heliconePricing.has(stripped)) {
+            this.heliconePricing.set(stripped, pricing);
+          }
         }
 
         if (typeof model.context_length === 'number' && model.context_length > 0) {
