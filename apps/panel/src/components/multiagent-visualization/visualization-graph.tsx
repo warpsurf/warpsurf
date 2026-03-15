@@ -111,6 +111,26 @@ export default function WorkflowGraph({
   Object.values(positions).forEach((p: any) => lanes.add(p?.y ?? 0));
   const sortedLanes = Array.from(lanes).sort((a, b) => a - b);
 
+  const STATUS_LABELS: Record<string, string> = {
+    not_started: 'Pending',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+    skipped: 'Skipped',
+    obsolete: 'Obsolete',
+  };
+  const activeStatuses = [
+    ...new Set(
+      graph.nodes.map((n: any) => {
+        const raw = (n.status as string) || 'not_started';
+        if (raw === 'pending' || raw === 'not_started') return 'not_started';
+        if (raw === 'dispatched') return 'running';
+        return raw;
+      }),
+    ),
+  ].filter((s): s is keyof typeof statusColors => s in statusColors);
+
   return (
     <div
       className="rounded-xl border overflow-hidden"
@@ -270,6 +290,23 @@ export default function WorkflowGraph({
             );
           })}
         </svg>
+      </div>
+      <div
+        className="flex items-center gap-3 px-3 py-1.5 border-t flex-wrap"
+        style={{
+          borderColor: isDarkMode ? '#2d4054' : '#b0c4d8',
+          color: isDarkMode ? '#5a7a94' : '#7a9ab5',
+          fontSize: 9,
+        }}>
+        {activeStatuses.map(status => (
+          <span key={status} className="inline-flex items-center gap-1">
+            <span
+              className="rounded-sm"
+              style={{ width: 7, height: 7, background: statusColors[status].border, display: 'inline-block' }}
+            />
+            {STATUS_LABELS[status] || status}
+          </span>
+        ))}
       </div>
     </div>
   );
