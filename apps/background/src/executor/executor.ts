@@ -996,7 +996,7 @@ export class Executor {
         // execute the navigation step
         if (!done) {
           done = await this.navigate();
-          if (context.plan && !done) await this.emitPlanState();
+          if (context.plan) await this.emitPlanState();
         }
 
         // Break early if done and validator is not enabled
@@ -1049,6 +1049,10 @@ export class Executor {
       }
 
       if (done) {
+        if (context.plan) {
+          context.markPlanComplete();
+          await this.emitPlanState();
+        }
         // Prefer the final done action's text as the user-visible completion message
         let finalDoneText: string | undefined;
         try {

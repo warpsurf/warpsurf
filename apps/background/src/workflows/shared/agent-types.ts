@@ -174,6 +174,16 @@ export class AgentContext {
     this.currentPlanIndex = 0;
   }
 
+  /** Mark all plan items as done (call on task completion). */
+  markPlanComplete(): void {
+    if (!this.plan) return;
+    for (const item of this.plan) {
+      if (item.status === 'current' || item.status === 'pending') {
+        item.status = 'done';
+      }
+    }
+  }
+
   /** Advance the plan to a new index, marking intermediate steps done. */
   advancePlan(newIndex: number): void {
     if (!this.plan) return;
