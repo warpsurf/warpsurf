@@ -140,6 +140,8 @@ export default memo(function MessageList({
           const resolvedAttachments = attachmentIds.map((id: string) => sessionAttachments[id]).filter(Boolean);
 
           const showAnyPreview = showPreviewHere || showFinalPreviewHere;
+          const shouldReceivePlan =
+            isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
           const messageBlockProps = {
             message,
             isSameActor: index > 0 && messages[index - 1].actor === message.actor,
@@ -161,35 +163,10 @@ export default memo(function MessageList({
             onApproveEstimation,
             onCancelEstimation,
             messageAttachments: resolvedAttachments,
-            planItems: (() => {
-              const shouldPass =
-                isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
-              if (index === lastAgentIndex && typeof console !== 'undefined') {
-                console.log('[Plan Routing] lastAgent decision', {
-                  messageId,
-                  isCurrentRunRoot,
-                  isFallbackLastAgent,
-                  activeAggregateMessageId,
-                  lastAgentIndex,
-                  shouldPass,
-                  hasPlanItems: !!planItems,
-                  planCount: planItems?.length,
-                });
-              }
-              return shouldPass ? planItems : undefined;
-            })(),
-            workflowGraph:
-              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
-                ? workflowGraph
-                : undefined,
-            workflowLaneInfo:
-              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
-                ? workflowLaneInfo
-                : undefined,
-            onOpenWorkflowFullScreen:
-              isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex)
-                ? onOpenWorkflowFullScreen
-                : undefined,
+            planItems: shouldReceivePlan ? planItems : undefined,
+            workflowGraph: shouldReceivePlan ? workflowGraph : undefined,
+            workflowLaneInfo: shouldReceivePlan ? workflowLaneInfo : undefined,
+            onOpenWorkflowFullScreen: shouldReceivePlan ? onOpenWorkflowFullScreen : undefined,
           };
 
           const isUserMessage = message.actor === Actors.USER;
