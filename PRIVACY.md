@@ -35,8 +35,8 @@ The warpsurf browser history feature is disabled by default. If you enable the "
 ## External Services (disabled by default)
 
 For model pricing and availability information, when enabled, warpsurf contacts:
-- Helicone API (helicone.ai) - for pricing data
-- OpenRouter API (openrouter.ai) - for model listings
+- Helicone API (helicone.ai) - for model listings and pricing (direct providers)
+- OpenRouter API (openrouter.ai) - for model listings and pricing (all providers)
 
 These requests do not include any user data. This feature is disabled by default; cached pricing data is used instead.
 
