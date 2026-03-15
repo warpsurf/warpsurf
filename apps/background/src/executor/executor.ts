@@ -966,8 +966,19 @@ export class Executor {
                 : [];
 
             if (planSteps.length > 0) {
+              const isNewPlan = !context.plan;
+              logger.info('[Plan SetPlan]', {
+                step,
+                hadPrevPlan: !isNewPlan,
+                prevCount: context.plan?.length,
+                newCount: planSteps.length,
+                userTriggered: hasLiveUserMessages,
+                newTexts: planSteps.map((s: string) => s.substring(0, 50)),
+              });
               context.setPlan(planSteps);
-              await this.emitPlanState();
+              // Reset the UI snapshot when this is the first plan or a user-triggered replan;
+              // routine periodic replans only update statuses on the existing snapshot.
+              await this.emitPlanState(isNewPlan || hasLiveUserMessages);
             }
 
             if (webTask === undefined) {
@@ -1142,11 +1153,20 @@ export class Executor {
     }
   }
 
-  /** Emit current plan state to UI (empty details to avoid polluting trace/aggregate content). */
-  private async emitPlanState(): Promise<void> {
+  /** Emit current plan state to UI (empty details to avoid polluting trace/aggregate content).
+   *  @param planReset When true, signals the UI to replace its snapshot (e.g. user-triggered replan). */
+  private async emitPlanState(planReset = false): Promise<void> {
     if (!this.context.plan) return;
+    const planSnapshot = this.context.plan.map(item => ({ text: item.text, status: item.status }));
+    logger.info('[Plan Emit]', {
+      count: planSnapshot.length,
+      planReset,
+      statuses: planSnapshot.map(p => p.status),
+      texts: planSnapshot.map(p => p.text.substring(0, 50)),
+    });
     await this.context.emitEvent(Actors.AGENT_PLANNER, ExecutionState.STEP_OK, '', {
-      plan: this.context.plan.map(item => ({ text: item.text, status: item.status })),
+      plan: planSnapshot,
+      ...(planReset ? { planReset: true } : {}),
     });
   }
 
