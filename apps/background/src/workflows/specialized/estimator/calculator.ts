@@ -2,7 +2,7 @@
  * Workflow Estimation Calculator
  *
  * Pure functions for calculating costs and summarizing estimations.
- * Uses the cost calculator (backed by OpenRouter pricing data) for accurate pricing.
+ * Uses the existing Helicone-based cost calculator for accurate pricing.
  * Integrates latency estimates for realistic time estimates.
  */
 
@@ -13,6 +13,7 @@ import { getModelLatency } from '@src/utils/latency-calculator';
 /**
  * Calculate cost for a given number of tokens and model
  * Assumes 75% input tokens, 25% output tokens as a rough heuristic
+ * Uses the existing Helicone-based cost calculator for accurate pricing
  *
  * @param totalTokens - Total number of tokens (input + output)
  * @param modelName - Name of the model
@@ -23,6 +24,7 @@ export function calculateTokenCost(totalTokens: number, modelName: string): numb
   const inputTokens = Math.round(totalTokens * 0.75);
   const outputTokens = Math.round(totalTokens * 0.25);
 
+  // Use the existing cost calculator which has Helicone pricing data
   return calculateCost(modelName, inputTokens, outputTokens);
 }
 

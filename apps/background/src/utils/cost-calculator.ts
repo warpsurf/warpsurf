@@ -1,8 +1,8 @@
 /**
  * LLM Cost Calculator
  *
- * Thin wrapper around model-registry.ts which fetches pricing from the
- * OpenRouter API. Returns -1 when pricing is unavailable (displayed as "—" in UI).
+ * Thin wrapper around model-registry.ts which fetches pricing from
+ * Helicone and OpenRouter APIs. Returns -1 when pricing is unavailable (displayed as "—" in UI).
  */
 import { getModelPricing, initializeModelRegistry, getModelRegistryStats } from './model-registry';
 
