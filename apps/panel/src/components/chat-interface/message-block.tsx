@@ -777,6 +777,16 @@ export default function MessageBlock({
               {(() => {
                 const graphData =
                   workflowGraph || (planItems && planItems.length > 0 ? planItemsToGraph(planItems) : null);
+                if (typeof console !== 'undefined') {
+                  console.log('[Plan Tab] Render', {
+                    hasPlanItems: !!planItems,
+                    planItemsCount: planItems?.length,
+                    hasWorkflowGraph: !!workflowGraph,
+                    hasGraphData: !!graphData,
+                    planTexts: planItems?.map(p => p.text?.substring(0, 40)),
+                    planStatuses: planItems?.map(p => p.status),
+                  });
+                }
                 if (!graphData) return null;
                 return (
                   <div className="mt-2 clear-both">
