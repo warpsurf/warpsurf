@@ -61,7 +61,7 @@ function wrapLabel(text: string, maxChars: number): string[] {
     }
   }
   if (current) lines.push(current);
-  return lines.slice(0, 4);
+  return lines;
 }
 
 export default function WorkflowGraph({
@@ -81,12 +81,14 @@ export default function WorkflowGraph({
   const positions = graph.positions || {};
   const scaleX = 210;
   const scaleY = compact ? 52 : 110;
-  const nodeHeight = compact ? 36 : 44;
+  const baseNodeHeight = compact ? 36 : 44;
   const nodeRadius = 10;
   const fontSize = compact ? 9 : 10;
+  const lineHeight = compact ? 10 : 12;
   const laneFontSize = 9;
   const charWidth = compact ? 5.2 : 5.8;
   const nodePad = 20;
+  const nodeVertPad = 12;
   const edgeGap = compact ? 24 : 36;
 
   const rawMaxY = Math.max(0, ...Object.values(positions).map((p: any) => Number(p?.y) || 0));
@@ -95,21 +97,25 @@ export default function WorkflowGraph({
   const marginX = hasMultipleLanes ? 120 : 16;
   const marginY = compact ? 32 : 80;
 
-  // Compute dynamic node widths from label text
+  // Compute dynamic node widths and heights from label text
   const nodeWidths: Record<number, number> = {};
+  const nodeHeights: Record<number, number> = {};
   const wrappedLabels: Record<number, string[]> = {};
   for (const n of graph.nodes) {
     const label = n.label || String(n.id);
     if (hasMultipleLanes) {
       const p = positions[n.id] || { width: 1 };
       const posWidth = Math.max(150, (p.width || 1) * Math.floor(scaleX * 0.7));
-      wrappedLabels[n.id] = wrapLabel(label, Math.max(12, Math.floor((posWidth - 16) / charWidth)));
+      const lines = wrapLabel(label, Math.max(12, Math.floor((posWidth - 16) / charWidth)));
+      wrappedLabels[n.id] = lines;
       nodeWidths[n.id] = posWidth;
+      nodeHeights[n.id] = Math.max(baseNodeHeight, lines.length * lineHeight + nodeVertPad);
     } else {
       const lines = wrapLabel(label, 28);
       const longest = Math.max(...lines.map(l => l.length));
       wrappedLabels[n.id] = lines;
       nodeWidths[n.id] = Math.max(60, longest * charWidth + nodePad);
+      nodeHeights[n.id] = Math.max(baseNodeHeight, lines.length * lineHeight + nodeVertPad);
     }
   }
 
@@ -134,9 +140,11 @@ export default function WorkflowGraph({
   }
 
   const rightEdge = Math.max(...graph.nodes.map((n: any) => (nodeXPos[n.id] || 0) + (nodeWidths[n.id] || 0)));
-  const minHeight = compact ? (hasMultipleLanes ? 220 : 80) : 450;
   const width = rightEdge + marginX;
-  const height = Math.max(minHeight, (maxY + (compact ? 1.5 : 3)) * scaleY + marginY);
+  const height = Math.max(
+    marginY + Math.max(...graph.nodes.map((n: any) => nodeHeights[n.id] || baseNodeHeight)) + marginY,
+    (maxY + (compact ? 1.5 : 3)) * scaleY + marginY,
+  );
 
   const edgeColor = EDGE_COLORS[theme];
   const statusColors = STATUS_COLORS[theme];
@@ -178,7 +186,7 @@ export default function WorkflowGraph({
         style={{
           overflowX: 'auto',
           overflowY: compact ? 'auto' : 'visible',
-          maxHeight: compact ? (hasMultipleLanes ? 260 : 100) : undefined,
+          maxHeight: compact ? (hasMultipleLanes ? 260 : undefined) : undefined,
           padding: '8px',
         }}>
         <svg width={width} height={height}>
@@ -269,6 +277,7 @@ export default function WorkflowGraph({
             const x = nodeXPos[n.id] || 0;
             const y = (p.y || 0) * scaleY + marginY;
             const w = nodeWidths[n.id];
+            const h = nodeHeights[n.id] || baseNodeHeight;
             const rawStatus = (n.status as string) || 'not_started';
             const status: Status =
               rawStatus === 'pending' || rawStatus === 'not_started'
@@ -279,15 +288,17 @@ export default function WorkflowGraph({
             const colors = statusColors[status || 'not_started'] || statusColors['not_started'];
             const isRunning = status === 'running';
             const lines = wrappedLabels[n.id] || wrapLabel(n.label || String(n.id), 20);
+            const textBlockHeight = (lines.length - 1) * lineHeight;
+            const textStartY = y - textBlockHeight / 2;
 
             return (
               <g key={n.id}>
                 {isRunning && (
                   <rect
                     x={x - 1}
-                    y={y - nodeHeight / 2 - 1}
+                    y={y - h / 2 - 1}
                     width={w + 2}
-                    height={nodeHeight + 2}
+                    height={h + 2}
                     rx={nodeRadius + 1}
                     fill="none"
                     stroke={colors.border}
@@ -298,9 +309,9 @@ export default function WorkflowGraph({
                 )}
                 <rect
                   x={x}
-                  y={y - nodeHeight / 2}
+                  y={y - h / 2}
                   width={w}
-                  height={nodeHeight}
+                  height={h}
                   rx={nodeRadius}
                   fill={colors.bg}
                   stroke={colors.border}
@@ -308,13 +319,13 @@ export default function WorkflowGraph({
                 />
                 <text
                   x={x + w / 2}
-                  y={y - (lines.length > 1 ? (lines.length - 1) * 4 : 0) + 1}
+                  y={textStartY + 1}
                   textAnchor="middle"
                   fontSize={fontSize}
                   fill={colors.text}
                   fontWeight="500">
                   {lines.map((line, idx) => (
-                    <tspan key={idx} x={x + w / 2} dy={idx === 0 ? 0 : 11}>
+                    <tspan key={idx} x={x + w / 2} dy={idx === 0 ? 0 : lineHeight}>
                       {line}
                     </tspan>
                   ))}
