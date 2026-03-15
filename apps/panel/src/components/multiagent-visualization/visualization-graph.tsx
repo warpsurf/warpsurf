@@ -170,7 +170,7 @@ export default function WorkflowGraph({
     obsolete: 'Obsolete',
   };
   const activeStatuses = [
-    ...new Set(
+    ...new Set<string>(
       graph.nodes.map((n: any) => {
         const raw = (n.status as string) || 'not_started';
         if (raw === 'pending' || raw === 'not_started') return 'not_started';
