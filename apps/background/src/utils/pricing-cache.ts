@@ -24,9 +24,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-14 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-15 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-14T14:28:26.243Z',
+  generatedAt: '2026-03-15T16:18:37.282Z',
   version: 2,
   openRouter: {
     groups: [
@@ -602,10 +602,15 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'z-ai/glm-4.7',
           'z-ai/glm-4.7-flash',
           'z-ai/glm-5',
+          'z-ai/glm-5-turbo',
         ],
       },
     ],
     pricing: {
+      'z-ai/glm-5-turbo': {
+        inputPerToken: 9.6e-7,
+        outputPerToken: 0.0000032,
+      },
       'x-ai/grok-4.20-multi-agent-beta': {
         inputPerToken: 0.000002,
         outputPerToken: 0.000006,
@@ -1880,6 +1885,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'z-ai/glm-5-turbo': 202752,
       'x-ai/grok-4.20-multi-agent-beta': 2000000,
       'x-ai/grok-4.20-beta': 2000000,
       'openrouter/hunter-alpha': 1048576,

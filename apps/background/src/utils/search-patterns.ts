@@ -7,7 +7,7 @@
  * Maps normalized domains to search URL templates.
  * Use {q} as placeholder for the search query.
  *
- * Generated: 2026-03-14T14:28:27.986Z
+ * Generated: 2026-03-15T16:18:40.885Z
  * Total patterns: 1053
  */
 
