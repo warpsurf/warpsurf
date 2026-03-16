@@ -32,7 +32,7 @@ export interface CachedPricingData {
 
 // Cache generated on 2026-03-16 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-16T11:42:35.288Z',
+  generatedAt: '2026-03-16T17:46:39.506Z',
   version: 1,
   helicone: {
     openai: {
@@ -1837,8 +1837,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00000208,
       },
       'qwen/qwen3.5-flash-02-23': {
-        inputPerToken: 1e-7,
-        outputPerToken: 4e-7,
+        inputPerToken: 6.5e-8,
+        outputPerToken: 2.6e-7,
       },
       'liquid/lfm-2-24b-a2b': {
         inputPerToken: 3e-8,
@@ -2233,8 +2233,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 8.8e-7,
       },
       'qwen/qwen3-max': {
-        inputPerToken: 0.0000012,
-        outputPerToken: 0.000006,
+        inputPerToken: 7.8e-7,
+        outputPerToken: 0.0000039,
       },
       'qwen/qwen3-coder-plus': {
         inputPerToken: 6.5e-7,
@@ -2713,8 +2713,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.0000016,
       },
       'qwen/qwen-vl-max': {
-        inputPerToken: 8e-7,
-        outputPerToken: 0.0000032,
+        inputPerToken: 5.2e-7,
+        outputPerToken: 0.00000208,
       },
       'qwen/qwen-turbo': {
         inputPerToken: 3.25e-8,
@@ -2725,8 +2725,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 8e-7,
       },
       'qwen/qwen-plus': {
-        inputPerToken: 4e-7,
-        outputPerToken: 0.0000012,
+        inputPerToken: 2.6e-7,
+        outputPerToken: 7.8e-7,
       },
       'qwen/qwen-max': {
         inputPerToken: 0.00000104,
