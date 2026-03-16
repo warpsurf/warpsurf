@@ -543,8 +543,8 @@ export class TaskManager extends EventEmitter {
       await this.tabGroups.applyTabColor(createdTabId, task, this.tasks);
 
       const settings = await generalSettingsStore.getSettings();
-      const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
-      await this.mirrors.setupMirroring(task, createdTabId, executor, visionEnabled);
+      const showPreviews = settings.showTabPreviews ?? true;
+      await this.mirrors.setupMirroring(task, createdTabId, executor, showPreviews);
 
       this.emit('tab-created', {
         taskId: task.id,
@@ -614,10 +614,8 @@ export class TaskManager extends EventEmitter {
     await this.tabGroups.applyTabColor(tabId, task, this.tasks);
 
     const settings = await generalSettingsStore.getSettings();
-    const visionEnabled = (settings.showTabPreviews ?? true) || !!settings.useVision;
-    await this.mirrors.setupMirroring(task, tabId, executor, visionEnabled);
-    // Ensure mirror has the updated color from applyTabColor
-    this.tabMirrorService.updateMirrorColor(tabId, task.color);
+    const showPreviews = settings.showTabPreviews ?? true;
+    await this.mirrors.setupMirroring(task, tabId, executor, showPreviews);
 
     this.notifyDashboard('agent-status-update', { agentId: task.id, status: 'running', tabId });
 
@@ -914,9 +912,10 @@ export class TaskManager extends EventEmitter {
 
   async pauseMirroring(tabId: number, ms: number = 3000): Promise<void> {
     const task = Array.from(this.tasks.values()).find(t => t.tabId === tabId);
-    if (task) {
-      await this.mirrors.pauseAndResume(tabId, task, ms);
-    }
+    if (!task) return;
+    const settings = await generalSettingsStore.getSettings();
+    if (!(settings.showTabPreviews ?? true)) return;
+    await this.mirrors.pauseAndResume(tabId, task, ms);
   }
 
   setSingleAgentExecutor(
@@ -952,7 +951,11 @@ export class TaskManager extends EventEmitter {
     this.updateBadge();
   }
 
-  private setupSingleAgentMirroring(task: Task, executor: Executor, tabId: number): void {
+  private async setupSingleAgentMirroring(task: Task, executor: Executor, tabId: number): Promise<void> {
+    const settings = await generalSettingsStore.getSettings();
+    const showPreviews = settings.showTabPreviews ?? true;
+    if (!showPreviews) return;
+
     this.tabMirrorService.registerScreenshotProvider(tabId, async () => {
       if (task.status !== 'running') return undefined;
       try {
@@ -974,7 +977,6 @@ export class TaskManager extends EventEmitter {
             task.parentSessionId || task.id,
             task.workerIndex,
           );
-          // Ensure mirror has the updated color from applyTabColor
           this.tabMirrorService.updateMirrorColor(tabId, task.color);
           task.mirroringStarted = true;
 
@@ -1017,7 +1019,7 @@ export class TaskManager extends EventEmitter {
 
   private async handleSingleAgentTabCreated(task: Task, executor: Executor, newTabId: number): Promise<void> {
     if (task.status !== 'running') return;
-    if (!(await tabExists(newTabId))) return; // Tab closed before setup
+    if (!(await tabExists(newTabId))) return;
 
     if (task.tabId && task.tabId !== newTabId) {
       this.mirrors.stopMirroring(task.tabId);
@@ -1025,6 +1027,10 @@ export class TaskManager extends EventEmitter {
     task.tabId = newTabId;
 
     await this.tabGroups.applyTabColor(newTabId, task, this.tasks);
+
+    const settings = await generalSettingsStore.getSettings();
+    const showPreviews = settings.showTabPreviews ?? true;
+    if (!showPreviews) return;
 
     this.tabMirrorService.registerScreenshotProvider(newTabId, async () => {
       if (task.status !== 'running') return undefined;
@@ -1043,13 +1049,12 @@ export class TaskManager extends EventEmitter {
       task.parentSessionId || task.id,
       task.workerIndex,
     );
-    // Ensure mirror has the updated color from applyTabColor
     this.tabMirrorService.updateMirrorColor(newTabId, task.color);
     task.mirroringStarted = true;
 
     if (this.sidePanelPort) {
       setTimeout(async () => {
-        if (!(await tabExists(newTabId))) return; // Tab closed
+        if (!(await tabExists(newTabId))) return;
         const mirrors = this.tabMirrorService.getCurrentMirrors();
         const mirrorData = mirrors.find((m: any) => m.tabId === newTabId);
         if (mirrorData) {

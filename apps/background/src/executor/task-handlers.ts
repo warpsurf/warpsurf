@@ -711,25 +711,28 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         // Restart mirroring on the current tab
         if (currentTabId && currentTabId > 0) {
           const captureTabId = currentTabId;
-          (taskManager as any).tabMirrorService?.registerScreenshotProvider?.(captureTabId, async () => {
-            try {
-              const data =
-                (await existing.captureTabScreenshot?.(captureTabId)) ||
-                (await existing.captureCurrentPageScreenshot?.());
-              return data ? `data:image/jpeg;base64,${data}` : undefined;
-            } catch {
-              return undefined;
-            }
-          });
-          (taskManager as any).tabMirrorService?.startMirroring?.(
-            captureTabId,
-            task.id,
-            task.color,
-            task.parentSessionId || task.id,
-            task.workerIndex,
-          );
-          task.mirroringStarted = true;
           task.tabId = captureTabId;
+          const mirrorSettings = await generalSettingsStore.getSettings();
+          if (mirrorSettings.showTabPreviews ?? true) {
+            (taskManager as any).tabMirrorService?.registerScreenshotProvider?.(captureTabId, async () => {
+              try {
+                const data =
+                  (await existing.captureTabScreenshot?.(captureTabId)) ||
+                  (await existing.captureCurrentPageScreenshot?.());
+                return data ? `data:image/jpeg;base64,${data}` : undefined;
+              } catch {
+                return undefined;
+              }
+            });
+            (taskManager as any).tabMirrorService?.startMirroring?.(
+              captureTabId,
+              task.id,
+              task.color,
+              task.parentSessionId || task.id,
+              task.workerIndex,
+            );
+            task.mirroringStarted = true;
+          }
         }
       }
     } catch {}

@@ -1,6 +1,6 @@
 {
   "name": "warpsurf",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "description": "Browser copilot for Chrome and Edge",
   "license": "Apache-2.0",
   "repository": {
@@ -15,7 +15,7 @@
     "build": "pnpm clean:bundle && turbo ready && turbo build",
     "build:dev": "cross-env LOG_LEVEL=debug pnpm -w run build",
     "build:store": "(pnpm generate-pricing-cache || true) && (pnpm generate-latency-cache || true) && pnpm clean:bundle && turbo ready && cross-env __STORE__=true LOG_LEVEL=error turbo build",
-    "build:api": "pnpm clean:bundle && turbo ready && cross-env __API__=true turbo build",
+    "build:api": "pnpm clean:bundle && turbo ready && cross-env __API__=true __STORE__=true __ENABLE_SITE_SKILLS__=false turbo build",
     "build:test": "pnpm clean:bundle && turbo ready && cross-env __API__=true __TEST__=true turbo build",
     "build:legacy-nav": "pnpm clean:bundle && turbo ready && cross-env __LEGACY_NAVIGATION__=true turbo build",
     "build:no-skills": "pnpm clean:bundle && turbo ready && cross-env __ENABLE_SITE_SKILLS__=false turbo build",
@@ -27,6 +27,7 @@
     "zip:store": "pnpm build:store && cross-env __STORE__=true pnpm -F zipper zip",
     "zip:store-no-skills": "pnpm build:store-no-skills && cross-env __STORE__=true pnpm -F zipper zip",
     "zip:store-legacy": "pnpm build:store-legacy && cross-env __STORE__=true pnpm -F zipper zip",
+    "zip:api": "pnpm build:api && cross-env __API__=true pnpm -F zipper zip",
     "dev": "turbo ready && cross-env __DEV__=true turbo watch dev --concurrency 20",
     "type-check": "turbo type-check",
     "lint": "turbo lint --continue -- --fix --cache --cache-location node_modules/.cache/.eslintcache",
