@@ -13,24 +13,22 @@ export class MirrorCoordinator {
     this.tabMirrorService.setDashboardPort(port);
   }
 
-  async setupMirroring(task: Task, tabId: number, executor: Executor, visionEnabled: boolean): Promise<void> {
+  async setupMirroring(task: Task, tabId: number, executor: Executor, showTabPreviews = true): Promise<void> {
     if (task.tabId && task.tabId !== tabId) {
       this.tabMirrorService.stopMirroring(task.tabId);
     }
     task.tabId = tabId;
 
-    if (visionEnabled) {
-      this.registerScreenshotProvider(tabId, executor, task);
-      try {
-        this.tabMirrorService.reserveDebuggerForPuppeteer(tabId, true);
-      } catch {}
-    }
+    if (!showTabPreviews) return;
+
+    this.registerScreenshotProvider(tabId, executor, task);
+    try {
+      this.tabMirrorService.reserveDebuggerForPuppeteer(tabId, true);
+    } catch {}
 
     const sessionId = task.parentSessionId || task.id;
     this.tabMirrorService.startMirroring(tabId, task.id, task.color, sessionId, task.workerIndex);
-    // Ensure mirror has the correct color (may have been updated by applyTabColor)
     this.tabMirrorService.updateMirrorColor(tabId, task.color);
-
     this.sendInitialMirrorUpdate(tabId, sessionId);
   }
 
