@@ -119,6 +119,10 @@ Warpsurf's multi-agent workflow decomposes complex tasks into a DAG of subtasks 
 
 Warpsurf agents are encouraged to use a [pattern database](https://github.com/warpsurf/search-urls) to resolve direct search URLs for popular sites, skipping search box interactions and landing on results in a single navigation. This reduces the number of agent actions and improves speed.
 
+### SDKs
+
+Control warpsurf agents programmatically from your own code with the [warpsurf Python SDK](https://github.com/warpsurf/warpsurf-python-sdk).
+
 ## Installation & Usage
 
 warpsurf supports Chrome and Microsoft Edge browsers.
