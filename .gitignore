@@ -92,7 +92,6 @@ website/
 ## Skills (not yet production-ready)
 live_data/skills/
 
-## API
-apps/background/src/api/
+## SDK (standalone repos)
 sdk/
 examples/
