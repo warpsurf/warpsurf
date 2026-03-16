@@ -18,6 +18,22 @@ import { globalTokenTracker } from '../utils/token-tracker';
 
 const logger = createLogger('LocalAPI');
 
+const PROVIDER_ALIASES: Record<string, string> = {
+  google: 'gemini',
+  'google-ai': 'gemini',
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'gemini',
+  grok: 'grok',
+  openrouter: 'openrouter',
+  custom_openai: 'custom_openai',
+  custom: 'custom_openai',
+};
+
+function normalizeProvider(provider: string): string {
+  return PROVIDER_ALIASES[provider.toLowerCase()] ?? provider;
+}
+
 class LocalAPI {
   private taskManager: TaskManager | null = null;
 
@@ -61,7 +77,8 @@ class LocalAPI {
 
     const startTime = Date.now();
     const taskId = options.taskId || `api-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const { provider, modelName, apiKey, baseUrl, parameters, thinkingLevel } = options.config;
+    const { modelName, apiKey, baseUrl, parameters, thinkingLevel } = options.config;
+    const provider = normalizeProvider(options.config.provider);
     const workflow = options.workflow || 'auto';
 
     // 1. Accept disclaimers (required for API mode)
@@ -125,8 +142,24 @@ class LocalAPI {
     (globalThis as any).__evalPartialUsage = null;
     (globalThis as any).__evalPartialOutput = '';
 
+    // Completion promise — resolves when a terminal event arrives through the
+    // virtual port.  handleNewTask dispatches asynchronously, so without this
+    // we'd return before the task actually runs.
+    let resolveCompletion!: (terminal: string) => void;
+    const completionPromise = new Promise<string>(resolve => {
+      resolveCompletion = resolve;
+    });
+
     const virtualPort = this.createVirtualPort((event: any) => {
-      // Debug: log all terminal events to see what we're receiving
+      // Handle error messages from handleNewTask (e.g. triage failure, missing provider)
+      if (event?.type === 'error') {
+        logger.info('[API] Error event:', event.error);
+        capturedResponse = event.error || 'Unknown error';
+        resolveCompletion('task.fail');
+        return;
+      }
+
+      // Log terminal events for diagnostics
       if (event?.state?.startsWith('task.')) {
         logger.info(
           '[API] Terminal event:',
@@ -137,6 +170,10 @@ class LocalAPI {
           !!event?.data?.summary,
           event?.data?.summary,
         );
+        // Resolve the completion promise on any terminal task state
+        if (event.state === 'task.ok' || event.state === 'task.fail' || event.state === 'task.cancel') {
+          resolveCompletion(event.state);
+        }
       }
 
       // Capture stream chunks to build the response (chat/search workflows)
@@ -154,14 +191,11 @@ class LocalAPI {
           details,
           timestamp: event?.timestamp || Date.now(),
         });
-        // For agent workflows, prioritize "Cached findings" as the result (contains the actual output)
         if (status === 'ok' && details) {
           if (details.startsWith('Cached findings:')) {
-            // This is the meaningful output from cache actions
             lastActionResult = details;
             (globalThis as any).__evalPartialOutput = details;
           } else if (!lastActionResult || !lastActionResult.startsWith('Cached findings:')) {
-            // Only update if we don't have a cached finding yet
             lastActionResult = details;
             (globalThis as any).__evalPartialOutput = details;
           }
@@ -215,6 +249,8 @@ class LocalAPI {
       }
     });
 
+    const TASK_TIMEOUT_MS = 300_000; // 5 minutes
+
     try {
       let currentExecutor: any = null;
       await handleNewTask(
@@ -226,7 +262,6 @@ class LocalAPI {
           getCurrentExecutor: () => currentExecutor,
           setCurrentExecutor: (e: any) => {
             currentExecutor = e;
-            // Subscribe to executor events so we capture actions, usage, and trace
             if (e) {
               subscribeToExecutorEvents(e, () => virtualPort, this.taskManager, {
                 warning: (...args: any[]) => logger.info('[API-SW]', ...args),
@@ -236,6 +271,13 @@ class LocalAPI {
           },
         },
       );
+
+      // handleNewTask dispatches asynchronously — wait for a terminal event
+      const terminalState = await Promise.race([
+        completionPromise,
+        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), TASK_TIMEOUT_MS)),
+      ]);
+      logger.info('[API] Task finished with terminal state:', terminalState);
 
       // Use stream response for chat/search, or last action result for agent workflows
       const result = capturedResponse || lastActionResult || undefined;
@@ -270,9 +312,23 @@ class LocalAPI {
         capturedUsage.totalLatencyMs = capturedUsage.totalLatencyMs || elapsedMs;
       }
 
+      if (terminalState === 'timeout') {
+        return {
+          taskId,
+          status: 'error',
+          error: `Task did not complete within ${TASK_TIMEOUT_MS / 1000}s`,
+          result,
+          usage: capturedUsage,
+          trace: capturedTrace.length > 0 ? capturedTrace : undefined,
+        };
+      }
+
+      const finalStatus =
+        terminalState === 'task.fail' ? 'error' : terminalState === 'task.cancel' ? 'cancelled' : 'completed';
+
       return {
         taskId,
-        status: 'completed',
+        status: finalStatus as APIResult['status'],
         result,
         usage: capturedUsage,
         trace: capturedTrace.length > 0 ? capturedTrace : undefined,
