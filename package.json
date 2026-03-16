@@ -27,6 +27,7 @@
     "zip:store": "pnpm build:store && cross-env __STORE__=true pnpm -F zipper zip",
     "zip:store-no-skills": "pnpm build:store-no-skills && cross-env __STORE__=true pnpm -F zipper zip",
     "zip:store-legacy": "pnpm build:store-legacy && cross-env __STORE__=true pnpm -F zipper zip",
+    "zip:api": "pnpm build:api && cross-env __API__=true pnpm -F zipper zip",
     "dev": "turbo ready && cross-env __DEV__=true turbo watch dev --concurrency 20",
     "type-check": "turbo type-check",
     "lint": "turbo lint --continue -- --fix --cache --cache-location node_modules/.cache/.eslintcache",
