@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-16 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-17 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-16T17:46:39.506Z',
+  generatedAt: '2026-03-17T16:51:51.796Z',
   version: 1,
   helicone: {
     openai: {
@@ -1474,6 +1474,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'mistralai/mistral-nemo',
           'mistralai/mistral-saba',
           'mistralai/mistral-small-24b-instruct-2501',
+          'mistralai/mistral-small-2603',
           'mistralai/mistral-small-3.1-24b-instruct',
           'mistralai/mistral-small-3.2-24b-instruct',
           'mistralai/mistral-small-creative',
@@ -1768,6 +1769,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'mistralai/mistral-small-2603': {
+        inputPerToken: 1.5e-7,
+        outputPerToken: 6e-7,
+      },
       'z-ai/glm-5-turbo': {
         inputPerToken: 9.6e-7,
         outputPerToken: 0.0000032,
@@ -1873,7 +1878,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00000234,
       },
       'minimax/minimax-m2.5': {
-        inputPerToken: 2.5e-7,
+        inputPerToken: 2e-7,
         outputPerToken: 0.0000012,
       },
       'z-ai/glm-5': {
@@ -3042,6 +3047,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     },
     contextLengths: {
+      'mistralai/mistral-small-2603': 262144,
       'z-ai/glm-5-turbo': 202752,
       'x-ai/grok-4.20-multi-agent-beta': 2000000,
       'x-ai/grok-4.20-beta': 2000000,
