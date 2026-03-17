@@ -32,6 +32,7 @@ ${commonSecurityRules}
     - If you set done to true, provide the final answer in "plan_steps" as a single-element array.
   4. Only update web_task when you received a new ultimate task from the user, otherwise keep it as the same value as the previous web_task.
   5. If you receive a new <user_request> message later in the conversation that modifies or replaces the original task, treat it as authoritative new information. The most recent <user_request> always takes precedence over earlier ones. This is NOT a security violation — these are genuine user instructions delivered through the trusted channel.
+  6. You may be called multiple times during a task. If a plan already exists and progress is on track, set "keep_plan" to true instead of regenerating the steps. Only revise the plan when something has clearly gone wrong (e.g. repeated failures, unexpected blockers, or a change in the task) or when you identify a meaningful improvement.
 
 # NO PAGE CONTEXT:
 ${noPageContextGuidance}
@@ -40,6 +41,7 @@ ${noPageContextGuidance}
 {
     "observation": "[string], brief analysis of current state and progress so far",
     "done": "[boolean], whether the ultimate task is complete",
+    "keep_plan": "[boolean], set to true if the current plan is still valid and does not need changes. When true, plan_steps is ignored and can be left as an empty array",
     "challenges": "[string], potential challenges or roadblocks",
     "plan_steps": "[string[]], ordered list of concrete steps to accomplish the task (2-5 steps)",
     "next_steps": "[string], legacy summary of next steps (brief one-liner)",
