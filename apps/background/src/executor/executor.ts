@@ -6,7 +6,7 @@ import { SearchWorkflow } from '@src/workflows/search';
 import { NavigatorPrompt, PlannerPrompt, ValidatorPrompt } from '@src/workflows/agent';
 import { createLogger } from '@src/log';
 import { workflowLogger } from './workflow-logger';
-import { MessageManager, MessageManagerSettings } from '@src/workflows/shared/messages';
+import { MessageManager, MessageManagerSettings, wrapUserRequest } from '@src/workflows/shared/messages';
 import type BrowserContext from '../browser/context';
 import { ActionBuilder } from '@src/workflows/agent';
 import { EventManager } from '@src/workflows/shared/event';
@@ -903,7 +903,10 @@ export class Executor {
         const userMsgs = context.drainUserMessages();
         if (userMsgs.length > 0) {
           const combined = userMsgs.join('\n\n');
-          this.context.messageManager.addMessageWithTokens(new HumanMessage(`[USER INSTRUCTION]: ${combined}`));
+          const wrappedInstruction = wrapUserRequest(
+            `The user has sent a new live instruction that updates or replaces the current task:\n"""${combined}"""\nAdapt your plan to accommodate this new instruction.`,
+          );
+          this.context.messageManager.addMessageWithTokens(new HumanMessage(wrappedInstruction));
           // Notify UI that queued messages were consumed
           this.context.emitEvent(Actors.SYSTEM, ExecutionState.STEP_OK, '', {
             drainedMessages: userMsgs,
