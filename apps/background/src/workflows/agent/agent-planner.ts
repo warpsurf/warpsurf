@@ -21,6 +21,9 @@ export const plannerOutputSchema = z.object({
   observation: z.string(),
   challenges: z.string(),
   done: boolFromString(),
+  keep_plan: boolFromString()
+    .optional()
+    .describe('Set to true to keep the current plan unchanged. When true, plan_steps is ignored.'),
   plan_steps: z.array(z.string()).describe('Ordered list of concrete steps to accomplish the task.'),
   next_steps: z.string().describe('Legacy fallback — use plan_steps instead.'),
   reasoning: z.string(),
@@ -65,7 +68,9 @@ export class AgentPlanner extends BaseAgent<typeof plannerOutputSchema, PlannerO
       if (!modelOutput) {
         throw new Error('Failed to validate planner output');
       }
-      const stepsText = modelOutput.plan_steps?.join('; ') || modelOutput.next_steps || '';
+      const stepsText = modelOutput.keep_plan
+        ? '(keeping current plan)'
+        : modelOutput.plan_steps?.join('; ') || modelOutput.next_steps || '';
       this.context.emitEvent(Actors.AGENT_PLANNER, ExecutionState.STEP_OK, stepsText);
       logger.info('Planner output', JSON.stringify(modelOutput, null, 2));
 
