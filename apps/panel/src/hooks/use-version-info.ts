@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const releaseNotes =
-    'Python SDK for programmatic browser agent control, tab preview performance improvements, and refreshed data caches.';
+    'Send live follow-up messages to agents mid-workflow, improved plan stability, and refreshed caches.';
 
   useEffect(() => {
     try {
