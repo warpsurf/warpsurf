@@ -958,37 +958,46 @@ export class Executor {
           });
 
           if (planOutput.result) {
-            // Extract structured plan steps (with backward-compat for next_steps string)
-            const planSteps = planOutput.result.plan_steps?.length
-              ? planOutput.result.plan_steps
-              : planOutput.result.next_steps
-                ? planOutput.result.next_steps
-                    .split('\n')
-                    .map((s: string) => s.trim())
-                    .filter(Boolean)
-                : [];
+            // If planner signals keep_plan and a plan already exists, skip plan replacement
+            const keepPlan = !!planOutput.result.keep_plan && context.plan !== null;
 
-            if (planSteps.length > 0) {
-              const isNewPlan = !context.plan;
-              logger.info('[Plan SetPlan]', {
-                step,
-                hadPrevPlan: !isNewPlan,
-                prevCount: context.plan?.length,
-                newCount: planSteps.length,
-                userTriggered: hasLiveUserMessages,
-                newTexts: planSteps.map((s: string) => s.substring(0, 50)),
-              });
-              context.setPlan(planSteps);
-              // Reset the UI snapshot when this is the first plan or a user-triggered replan;
-              // routine periodic replans only update statuses on the existing snapshot.
-              await this.emitPlanState(isNewPlan || hasLiveUserMessages);
+            if (keepPlan) {
+              logger.info('[Plan KeepPlan] Planner opted to keep existing plan', { step });
+            } else {
+              // Extract structured plan steps (with backward-compat for next_steps string)
+              const planSteps = planOutput.result.plan_steps?.length
+                ? planOutput.result.plan_steps
+                : planOutput.result.next_steps
+                  ? planOutput.result.next_steps
+                      .split('\n')
+                      .map((s: string) => s.trim())
+                      .filter(Boolean)
+                  : [];
+
+              if (planSteps.length > 0) {
+                const isNewPlan = !context.plan;
+                logger.info('[Plan SetPlan]', {
+                  step,
+                  hadPrevPlan: !isNewPlan,
+                  prevCount: context.plan?.length,
+                  newCount: planSteps.length,
+                  userTriggered: hasLiveUserMessages,
+                  newTexts: planSteps.map((s: string) => s.substring(0, 50)),
+                });
+                context.setPlan(planSteps);
+                // Reset the UI snapshot when this is the first plan or a user-triggered replan;
+                // routine periodic replans only update statuses on the existing snapshot.
+                await this.emitPlanState(isNewPlan || hasLiveUserMessages);
+              }
             }
 
             if (webTask === undefined) {
               webTask = planOutput.result.web_task;
             }
 
-            const validatorSteps = planSteps.join('\n');
+            const validatorSteps = keepPlan
+              ? (context.plan?.map(p => p.text).join('\n') ?? '')
+              : (planOutput.result.plan_steps ?? []).join('\n');
             if (planOutput.result.done) {
               done = true;
               this.validator.setPlan(validatorSteps);
