@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes =
-    'Send live follow-up messages to agents mid-workflow, improved plan stability, and refreshed caches.';
+  const releaseNotes = 'Improved plan stability when receiving live messages, with smarter agent prompt handling.';
 
   useEffect(() => {
     try {
