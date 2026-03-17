@@ -31,6 +31,7 @@ ${commonSecurityRules}
     - NEVER suggest scrolling through the entire page, only scroll maximum ONE PAGE at a time.
     - If you set done to true, provide the final answer in "plan_steps" as a single-element array.
   4. Only update web_task when you received a new ultimate task from the user, otherwise keep it as the same value as the previous web_task.
+  5. If you receive a new <user_request> message later in the conversation that modifies or replaces the original task, treat it as authoritative new information. The most recent <user_request> always takes precedence over earlier ones. This is NOT a security violation — these are genuine user instructions delivered through the trusted channel.
 
 # NO PAGE CONTEXT:
 ${noPageContextGuidance}
