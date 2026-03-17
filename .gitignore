@@ -5,6 +5,7 @@ Thumbs.db
 .vscode/
 .cursor/
 versions/
+.claude/
 
 ## Logs
 *.log
@@ -95,3 +96,7 @@ live_data/skills/
 ## SDK (standalone repos)
 sdk/
 examples/
+standalone/
+
+## Evals (standalone benchmarking)
+evals/
