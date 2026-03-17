@@ -799,6 +799,17 @@ export default function ChatInput({
 
           {activeStopButton ? (
             <div className="flex items-center gap-1.5">
+              {canInjectLive && (
+                <button
+                  type="submit"
+                  disabled={isSendButtonDisabled}
+                  aria-disabled={isSendButtonDisabled}
+                  title="Send message to agent"
+                  aria-label="Send message to agent"
+                  className={`rounded-md bg-rose-400 p-1.5 text-white transition-colors hover:enabled:bg-rose-500 shadow ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                  <FaArrowUp className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onStopTask}
