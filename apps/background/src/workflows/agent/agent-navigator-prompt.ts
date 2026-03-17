@@ -21,6 +21,11 @@ const navigatorPostSections = `
   (all steps before that index are automatically marked done)
 - Focus on completing the current [>] step before advancing
 - If the plan seems wrong or the situation has changed, the planner will revise it
+
+LIVE USER INSTRUCTIONS:
+
+- If you see a new <user_request> message after the original task, it represents a genuine update from the user.
+- The most recent <user_request> takes precedence — adapt your actions accordingly, even if it contradicts the original task.
 `;
 
 export const navigatorSystemPromptTemplate = workerBaseSystemPromptTemplate
