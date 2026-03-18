@@ -18,6 +18,8 @@ export interface APIRunOptions {
   task: string;
   taskId?: string;
   workflow?: 'auto' | 'chat' | 'search' | 'agent' | 'multiagent';
+  timeoutMs?: number;
+  timeout?: number;
   config: APIConfig;
 }
 
@@ -43,7 +45,7 @@ export interface APITraceEntry {
 /** Task result */
 export interface APIResult {
   taskId: string;
-  status: 'running' | 'completed' | 'error' | 'cancelled' | 'pending';
+  status: 'running' | 'completed' | 'error' | 'cancelled' | 'pending' | 'timeout';
   result?: string;
   error?: string;
   usage?: APIUsage;
