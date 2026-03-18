@@ -133,9 +133,11 @@ class LocalAPI {
 
     // 5. Execute task and capture response + usage + trace from events
     let capturedResponse = '';
-    let lastActionResult = ''; // For agent workflows, capture last successful action
+    let finalTaskResult = '';
+    let partialActionResult = '';
     let capturedUsage: APIUsage | undefined;
     const capturedTrace: APITraceEntry[] = [];
+    const timeoutMs = this.resolveTimeoutMs(options);
 
     // Expose partial results to globalThis for timeout scenarios (eval harness can read these)
     (globalThis as any).__evalPartialTrace = capturedTrace;
@@ -170,6 +172,12 @@ class LocalAPI {
           !!event?.data?.summary,
           event?.data?.summary,
         );
+        if (event.state === 'task.ok') {
+          finalTaskResult = event?.data?.details || event?.data?.message || '';
+          if (finalTaskResult) {
+            (globalThis as any).__evalPartialOutput = finalTaskResult;
+          }
+        }
         // Resolve the completion promise on any terminal task state
         if (event.state === 'task.ok' || event.state === 'task.fail' || event.state === 'task.cancel') {
           resolveCompletion(event.state);
@@ -192,12 +200,14 @@ class LocalAPI {
           timestamp: event?.timestamp || Date.now(),
         });
         if (status === 'ok' && details) {
-          if (details.startsWith('Cached findings:')) {
-            lastActionResult = details;
-            (globalThis as any).__evalPartialOutput = details;
-          } else if (!lastActionResult || !lastActionResult.startsWith('Cached findings:')) {
-            lastActionResult = details;
-            (globalThis as any).__evalPartialOutput = details;
+          const shouldReplace =
+            !partialActionResult ||
+            (partialActionResult.startsWith('Cached findings:') && !details.startsWith('Cached findings:'));
+          if (shouldReplace) {
+            partialActionResult = details;
+            if (!finalTaskResult) {
+              (globalThis as any).__evalPartialOutput = details;
+            }
           }
         }
 
@@ -249,8 +259,6 @@ class LocalAPI {
       }
     });
 
-    const TASK_TIMEOUT_MS = 300_000; // 5 minutes
-
     try {
       let currentExecutor: any = null;
       await handleNewTask(
@@ -275,12 +283,11 @@ class LocalAPI {
       // handleNewTask dispatches asynchronously — wait for a terminal event
       const terminalState = await Promise.race([
         completionPromise,
-        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), TASK_TIMEOUT_MS)),
+        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), timeoutMs)),
       ]);
       logger.info('[API] Task finished with terminal state:', terminalState);
 
-      // Use stream response for chat/search, or last action result for agent workflows
-      const result = capturedResponse || lastActionResult || undefined;
+      const result = finalTaskResult || capturedResponse || partialActionResult || undefined;
 
       // Fallback: if no usage was captured via events, read directly from globalTokenTracker
       if (!capturedUsage) {
@@ -315,8 +322,8 @@ class LocalAPI {
       if (terminalState === 'timeout') {
         return {
           taskId,
-          status: 'error',
-          error: `Task did not complete within ${TASK_TIMEOUT_MS / 1000}s`,
+          status: 'timeout',
+          error: `Task did not complete within ${timeoutMs / 1000}s`,
           result,
           usage: capturedUsage,
           trace: capturedTrace.length > 0 ? capturedTrace : undefined,
@@ -372,10 +379,21 @@ class LocalAPI {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const status = await this.getStatus(taskId);
-      if (['completed', 'error', 'cancelled'].includes(status.status)) return status;
+      if (['completed', 'error', 'cancelled', 'timeout'].includes(status.status)) return status;
       await new Promise(r => setTimeout(r, 1000));
     }
-    return { taskId, status: 'error', error: 'Timeout' };
+    return { taskId, status: 'timeout', error: 'Timeout' };
+  }
+
+  private resolveTimeoutMs(options: APIRunOptions): number {
+    if (typeof options.timeoutMs === 'number' && isFinite(options.timeoutMs) && options.timeoutMs > 0) {
+      return options.timeoutMs;
+    }
+    // Backward compatibility for callers that still send timeout in seconds.
+    if (typeof options.timeout === 'number' && isFinite(options.timeout) && options.timeout > 0) {
+      return Math.round(options.timeout * 1000);
+    }
+    return 300_000;
   }
 
   private createVirtualPort(onMessage?: (event: any) => void): chrome.runtime.Port {
