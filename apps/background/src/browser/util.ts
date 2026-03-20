@@ -21,6 +21,7 @@ export function isUrlAllowed(url: string, allowList: string[], denyList: string[
     'chrome-extension://',
     'chrome://',
     'edge://',
+    'brave://',
     'javascript:',
     'data:',
     'file:',
@@ -100,6 +101,8 @@ export function isNewTabPage(url: string): boolean {
     url === 'chrome://new-tab-page' ||
     url === 'chrome://new-tab-page/' ||
     url === 'edge://newtab' ||
-    url === 'edge://newtab/'
+    url === 'edge://newtab/' ||
+    url === 'brave://newtab' ||
+    url === 'brave://newtab/'
   );
 }

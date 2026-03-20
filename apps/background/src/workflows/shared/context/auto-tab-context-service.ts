@@ -4,7 +4,15 @@ import { isUrlAllowedByFirewall, extractMultipleTabs } from './context-tab-extra
 
 const logger = createLogger('AutoTabContext');
 
-const RESTRICTED_PREFIXES = ['chrome://', 'chrome-extension://', 'about:', 'data:', 'javascript:'];
+const RESTRICTED_PREFIXES = [
+  'chrome://',
+  'chrome-extension://',
+  'about:',
+  'data:',
+  'javascript:',
+  'edge://',
+  'brave://',
+];
 
 /**
  * Check if a URL is restricted (chrome internal pages, etc.)
