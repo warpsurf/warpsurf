@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes =
-    'Smarter agent planner — more frequent plan checks with less overhead, replanning when it matters';
+  const releaseNotes = 'Added Brave browser support';
 
   useEffect(() => {
     try {
