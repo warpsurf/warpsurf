@@ -125,7 +125,7 @@ Control warpsurf agents programmatically from your own code with the [warpsurf P
 
 ## Installation & Usage
 
-warpsurf supports Chrome and Microsoft Edge browsers.
+warpsurf supports Chrome, Microsoft Edge, and Brave browsers.
 
 ### Option 1: Chrome Web Store (quick)
 
@@ -152,9 +152,16 @@ Download the `vX.Y.Z.zip` file from the latest warpsurf [GitHub release](https:/
 4. Click "Load unpacked"
 5. Select the unzipped folder
 
+#### Install (Brave)
+1. Unzip `vX.Y.Z.zip`.
+2. Navigate to brave://extensions
+3. Enable "Developer mode"
+4. Click "Load unpacked"
+5. Select the unzipped folder
+
 #### Updates
 1. Repeat the Download and Installation instructions.
-2. At chrome://extensions (or edge://extensions), click 'Update' and click the refresh icon on the warpsurf listing.
+2. At chrome://extensions (or edge://extensions or brave://extensions), click 'Update' and click the refresh icon on the warpsurf listing.
 
 ### Option 3: Manual GitHub Installation (most recent codebase)
 
@@ -169,8 +176,8 @@ pnpm install
 # Build the extension (this creates a dist dir)
 pnpm build:store
 
-## In Chrome or Edge:
-# 1. Navigate to chrome://extensions or edge://extensions
+## In Chrome, Edge, or Brave:
+# 1. Navigate to chrome://extensions, edge://extensions, or brave://extensions
 # 2. Enable "Developer mode"
 # 3. Click "Load unpacked"
 # 4. Select the dist folder
