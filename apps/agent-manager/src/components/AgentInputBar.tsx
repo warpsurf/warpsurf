@@ -9,6 +9,7 @@ import {
   type PendingAttachment,
 } from '@extension/shared/lib/utils/file-processor';
 import { ACCEPTED_MIME_TYPES } from '@extension/storage/lib/chat/types';
+import type { ContextTabInfo } from '@panel/components/chat-interface/types';
 import { TabContextSelector } from './TabContextSelector';
 
 type AgentType = 'auto' | 'chat' | 'search' | 'agent' | 'multiagent';
@@ -43,6 +44,7 @@ interface AgentInputBarProps {
   autoContextEnabled?: boolean;
   autoContextTabIds?: number[];
   onAutoContextToggle?: (enabled: boolean) => Promise<void>;
+  onContextTabsCapture?: (timestamp: number, contextTabs: ContextTabInfo[]) => void;
   onMicClick?: () => void;
   onMicStop?: () => void;
   isRecording?: boolean;
@@ -51,6 +53,9 @@ interface AgentInputBarProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
+  /** Lifted context tab state — when provided, tabs persist across sends */
+  contextTabIds?: number[];
+  onContextTabsChange?: (tabIds: number[]) => void;
 }
 
 export function AgentInputBar({
@@ -60,6 +65,7 @@ export function AgentInputBar({
   autoContextEnabled = false,
   autoContextTabIds = [],
   onAutoContextToggle,
+  onContextTabsCapture,
   onMicClick,
   onMicStop,
   isRecording = false,
@@ -68,14 +74,20 @@ export function AgentInputBar({
   audioLevel = 0,
   sttConfigured = false,
   onOpenVoiceSettings,
+  contextTabIds: externalContextTabIds,
+  onContextTabsChange,
 }: AgentInputBarProps) {
   const [text, setText] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<AgentType>('auto');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [manualContextTabIds, setManualContextTabIds] = useState<number[]>([]);
+  const [localContextTabIds, setLocalContextTabIds] = useState<number[]>([]);
+  const manualContextTabIds = externalContextTabIds ?? localContextTabIds;
+  const setManualContextTabIds = onContextTabsChange ?? setLocalContextTabIds;
   const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
   const workflowDropdownRef = useRef<HTMLDivElement>(null);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
 
   // Attachment state
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -86,10 +98,8 @@ export function AgentInputBar({
   // Remove closed tabs from manualContextTabIds regardless of whether TabContextSelector is mounted
   useEffect(() => {
     const handleTabRemoved = (tabId: number) => {
-      setManualContextTabIds(prev => {
-        if (!prev.includes(tabId)) return prev;
-        return prev.filter(id => id !== tabId);
-      });
+      if (!manualContextTabIds.includes(tabId)) return;
+      setManualContextTabIds(manualContextTabIds.filter((id: number) => id !== tabId));
     };
     chrome.tabs.onRemoved.addListener(handleTabRemoved);
     return () => chrome.tabs.onRemoved.removeListener(handleTabRemoved);
@@ -120,6 +130,39 @@ export function AgentInputBar({
   }, [showPlusMenu]);
 
   const selectedOption = AGENT_OPTIONS.find(o => o.type === selectedAgent) || AGENT_OPTIONS[0];
+
+  const slashItems = useMemo(
+    () => [
+      { label: '/chat – Switch to Chat', value: '/chat ', agent: 'chat' as AgentType },
+      { label: '/search – Switch to Search', value: '/search ', agent: 'search' as AgentType },
+      { label: '/agent – Switch to Agent', value: '/agent ', agent: 'agent' as AgentType },
+      { label: '/magent – Switch to Multi-Agent', value: '/magent ', agent: 'multiagent' as AgentType },
+    ],
+    [],
+  );
+
+  const detectAgentFromText = (t: string): AgentType | null => {
+    const trimmed = t.trim().toLowerCase();
+    if (trimmed.startsWith('/chat')) return 'chat';
+    if (trimmed.startsWith('/search')) return 'search';
+    if (trimmed.startsWith('/magent')) return 'multiagent';
+    if (trimmed.startsWith('/agent')) return 'agent';
+    return null;
+  };
+
+  const handleTextChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newText = e.target.value;
+      setText(newText);
+      const t = newText.trim().toLowerCase();
+      const isCommandPrefix = t.startsWith('/') && !/^\/(chat|search|agent|magent)\b\s/.test(t);
+      setShowSlashMenu(isCommandPrefix);
+      if (isCommandPrefix) setSlashIndex(0);
+      const detected = detectAgentFromText(newText);
+      if (detected && detected !== selectedAgent) setSelectedAgent(detected);
+    },
+    [selectedAgent],
+  );
 
   const isDisabled = useMemo(
     () =>
@@ -160,9 +203,37 @@ export function AgentInputBar({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      const trimmed = text.trim();
+      let cleanText = text.trim();
       const readyAttachments = pendingAttachments.filter(a => a.status === 'ready' && a.dataUrl).map(toAttachment);
-      if ((!trimmed && readyAttachments.length === 0) || isSubmitting) return;
+      if ((!cleanText && readyAttachments.length === 0) || isSubmitting) return;
+
+      // Slash command: if text is exactly a mode command, switch mode and stop
+      if (/^\/chat\s*$/.test(cleanText)) {
+        setSelectedAgent('chat');
+        setText('');
+        setShowSlashMenu(false);
+        return;
+      }
+      if (/^\/search\s*$/.test(cleanText)) {
+        setSelectedAgent('search');
+        setText('');
+        setShowSlashMenu(false);
+        return;
+      }
+      if (/^\/agent\s*$/.test(cleanText)) {
+        setSelectedAgent('agent');
+        setText('');
+        setShowSlashMenu(false);
+        return;
+      }
+      if (/^\/magent\s*$/.test(cleanText)) {
+        setSelectedAgent('multiagent');
+        setText('');
+        setShowSlashMenu(false);
+        return;
+      }
+      // Strip leading mode prefix if followed by content
+      cleanText = cleanText.replace(/^\/(chat|search|agent|magent)\b\s*/i, '');
 
       setIsSubmitting(true);
       try {
@@ -174,15 +245,40 @@ export function AgentInputBar({
           allContextTabIds = manualContextTabIds;
         }
 
+        // Capture context tab metadata (mirrors side panel chat-input.tsx)
+        const timestamp = Date.now();
+        if (onContextTabsCapture && allContextTabIds.length > 0) {
+          try {
+            const allTabs = await chrome.tabs.query({ currentWindow: true });
+            const contextTabsInfo: ContextTabInfo[] = [];
+            for (const tabId of allContextTabIds) {
+              const tab = allTabs.find(t => t.id === tabId);
+              if (tab) {
+                contextTabsInfo.push({
+                  id: tabId,
+                  title: tab.title || 'Untitled',
+                  favIconUrl: tab.favIconUrl || undefined,
+                  url: tab.url || undefined,
+                });
+              }
+            }
+            if (contextTabsInfo.length > 0) {
+              onContextTabsCapture(timestamp, contextTabsInfo);
+            }
+          } catch {
+            // Ignore errors in capturing tab info
+          }
+        }
+
         await onSendMessage(
-          trimmed,
+          cleanText,
           selectedAgent,
           allContextTabIds.length > 0 ? allContextTabIds : undefined,
           readyAttachments.length > 0 ? readyAttachments : undefined,
         );
         setText('');
-        setManualContextTabIds([]);
-        setExcludedAutoTabIds([]);
+        setShowSlashMenu(false);
+        // Don't reset context tabs — they persist across sends (mirrors side panel)
         setPendingAttachments([]);
       } finally {
         setIsSubmitting(false);
@@ -193,6 +289,7 @@ export function AgentInputBar({
       selectedAgent,
       isSubmitting,
       onSendMessage,
+      onContextTabsCapture,
       manualContextTabIds,
       autoContextEnabled,
       autoContextTabIds,
@@ -203,12 +300,36 @@ export function AgentInputBar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (showSlashMenu) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSlashIndex(i => (i + 1) % slashItems.length);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSlashIndex(i => (i - 1 + slashItems.length) % slashItems.length);
+          return;
+        }
+        if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+          e.preventDefault();
+          const item = slashItems[slashIndex];
+          setText(item.value);
+          setSelectedAgent(item.agent);
+          setShowSlashMenu(false);
+          return;
+        }
+        if (e.key === 'Escape') {
+          setShowSlashMenu(false);
+          return;
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSubmit(e);
       }
     },
-    [handleSubmit],
+    [handleSubmit, showSlashMenu, slashIndex, slashItems],
   );
 
   const [isDragging, setIsDragging] = useState(false);
@@ -247,7 +368,7 @@ export function AgentInputBar({
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-violet-400 hover:border-violet-400'}`}>
       <textarea
         value={text}
-        onChange={e => setText(e.target.value)}
+        onChange={handleTextChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         disabled={disabled}
@@ -259,6 +380,29 @@ export function AgentInputBar({
             : 'bg-transparent text-gray-800 placeholder-gray-400'
         } ${disabled ? 'cursor-not-allowed' : ''}`}
       />
+
+      {/* Slash command menu */}
+      {showSlashMenu && (
+        <div
+          role="menu"
+          aria-label="Slash commands"
+          className={`mx-3 mb-1 overflow-hidden rounded-md border text-sm shadow ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-gray-200 bg-white text-gray-800'}`}>
+          {slashItems.map((it, i) => (
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              className={`block w-full px-2 py-1 text-left ${i === slashIndex ? (isDarkMode ? 'bg-slate-800' : 'bg-gray-100') : ''}`}
+              onClick={() => {
+                setText(it.value);
+                setSelectedAgent(it.agent);
+                setShowSlashMenu(false);
+              }}>
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Pending attachments */}
       {pendingAttachments.length > 0 && (
@@ -326,6 +470,18 @@ export function AgentInputBar({
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
               <FaPlus className="w-3 h-3" />
+              {(manualContextTabIds.length > 0 ||
+                pendingAttachments.length > 0 ||
+                (autoContextEnabled &&
+                  autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id)).length > 0)) && (
+                <span
+                  className={`ml-1 rounded-full px-1 text-[9px] font-bold ${isDarkMode ? 'bg-violet-500 text-white' : 'bg-violet-400 text-white'}`}>
+                  {(autoContextEnabled
+                    ? autoContextTabIds.filter(id => !excludedAutoTabIds.includes(id)).length +
+                      manualContextTabIds.filter(id => !autoContextTabIds.includes(id)).length
+                    : manualContextTabIds.length) + pendingAttachments.filter(a => a.status === 'ready').length}
+                </span>
+              )}
             </button>
             {showPlusMenu && (
               <div
@@ -397,7 +553,7 @@ export function AgentInputBar({
             </button>
             {workflowDropdownOpen && (
               <div
-                className={`absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border shadow-lg ${
+                className={`absolute right-0 bottom-full z-50 mb-1 w-40 rounded-lg border shadow-lg ${
                   isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
                 }`}>
                 {AGENT_OPTIONS.map(option => (
