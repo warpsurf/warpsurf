@@ -155,7 +155,12 @@ export default memo(function MessageList({
             isAgentWorking:
               isAgentWorking &&
               !metadata?.isCompleted &&
-              (activeAggregateMessageId ? isCurrentRunRoot : isFallbackLastAgent),
+              (message.content === 'Showing progress...' ||
+                (activeAggregateMessageId
+                  ? isCurrentRunRoot
+                  : isFallbackLastAgent ||
+                    index === lastAgentIndex ||
+                    (lastAgentIndex === -1 && index === messages.length - 1))),
             onTakeControl,
             pinnedMessageIds,
             pendingEstimation,
