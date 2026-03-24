@@ -116,6 +116,14 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
 
       switch (message.type) {
         case 'new_task': {
+          const sessionId = String(message.taskId || '');
+          // Subscribe side panel to event bus so it receives events even when
+          // other consumers (e.g. agent manager) also subscribe to this session.
+          // Without this, the side panel relies on the legacyPort fallback which
+          // is bypassed once any proper subscriber exists.
+          if (sessionId) {
+            taskManager.subscribePortToSession(`side-panel:${sessionId}`, port, sessionId);
+          }
           await handleNewTask(message, {
             taskManager,
             logger,
@@ -126,6 +134,10 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
           return;
         }
         case 'follow_up_task': {
+          const followUpSessionId = String(message.taskId || '');
+          if (followUpSessionId) {
+            taskManager.subscribePortToSession(`side-panel:${followUpSessionId}`, port, followUpSessionId);
+          }
           await handleFollowUpTask(message, {
             taskManager,
             logger,
@@ -333,6 +345,9 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               safePostMessage(port, { type: 'error', error: 'Missing sessionId or query for workflow v2' });
               return;
             }
+
+            // Subscribe side panel to event bus for this session
+            taskManager.subscribePortToSession(`side-panel:${sessionId}`, port, sessionId);
 
             // Merge manual context tabs with auto-context tabs (if feature enabled and not already merged by UI)
             let contextTabIds: number[] = manualContextTabIds;
@@ -601,6 +616,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                   bufferedEvents, // Include buffered events
                 },
               });
+              // Subscribe for live events
+              taskManager.subscribePortToSession(`side-panel:${activeSessionId}`, port, activeSessionId);
             } else if (getCurrentExecutor()) {
               const executor = getCurrentExecutor();
               const sessionId = (executor as any)?.context?.taskId;
@@ -615,6 +632,8 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
                     bufferedEvents,
                   },
                 });
+                // Subscribe for live events
+                taskManager.subscribePortToSession(`side-panel:${sessionId}`, port, sessionId);
               }
             } else {
               // No active workflow - restore saved view state
@@ -1330,6 +1349,9 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               if (wf) workflowGraph = wf.getCurrentGraph?.() || null;
             } catch {}
 
+            // Register port as subscriber for live events going forward
+            taskManager.subscribePortToSession(`side-panel:${sessionId}`, port, String(sessionId));
+
             safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType, workflowGraph });
             return;
           } catch (e) {
@@ -1384,6 +1406,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
   port.onDisconnect.addListener(async () => {
     logger.info('Side panel disconnected');
     setCurrentPort(null);
+    taskManager.eventBus.unsubscribePort(port);
     taskManager.setSidePanelPort(undefined);
   });
 }
