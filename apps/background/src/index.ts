@@ -17,6 +17,7 @@ import { attachSidePanelPortHandlers } from './ports/side-panel';
 import { attachDashboardPortHandlers } from './ports/dashboard';
 import { attachAgentManagerPortHandlers } from './ports/agent-manager';
 import { workflowLogger } from './executor/workflow-logger';
+import { SessionEventBus } from './events/session-event-bus';
 
 import { registerCryptoHandlers } from './crypto';
 import { extractMultipleTabs, isUrlAllowedByFirewall } from './workflows/shared/context/context-tab-extractor';
@@ -41,12 +42,17 @@ const runningWorkflowSessionIds = new Set<string>();
 // Track active MultiAgentWorkflow instances by sessionId for robust cancellation
 const workflowsBySession = new Map<string, MultiAgentWorkflow>();
 const MAX_EVENT_BUFFER_SIZE = 500; // Prevent memory bloat
+const eventBus = new SessionEventBus(MAX_EVENT_BUFFER_SIZE);
 
 // Initialize task manager for parallel execution
 const taskManager = new TaskManager({
   maxConcurrentTasks: 3, // Allow up to 3 parallel agents
+  eventBus,
 });
-taskManager.setEventBuffering(MAX_EVENT_BUFFER_SIZE);
+
+// Allow TabMirrorService to publish mirror updates through the event bus
+// so all subscribers (side panel + agent manager) receive live previews.
+taskManager.tabMirrorService.setEventBus(eventBus);
 
 // Setup side panel behavior
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error => console.error(error));
@@ -372,6 +378,12 @@ chrome.runtime.onConnect.addListener(async port => {
       taskManager,
       logger,
       setAgentManagerPort: (p: chrome.runtime.Port | undefined) => taskManager.tabMirrorService.setAgentManagerPort(p),
+      runningWorkflowSessionIds,
+      workflowsBySession,
+      getCurrentExecutor: () => currentExecutor,
+      setCurrentExecutor: (e: any | null) => {
+        currentExecutor = e;
+      },
     });
     return;
   }
