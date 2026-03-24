@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Added Brave browser support';
+  const releaseNotes = 'Inline chat view in Agent Manager with session event bus and full view mode';
 
   useEffect(() => {
     try {
