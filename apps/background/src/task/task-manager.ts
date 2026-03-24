@@ -27,6 +27,7 @@ import { trajectoryPersistence } from './trajectory-persistence';
 import { globalTokenTracker } from '../utils/token-tracker';
 import { sessionLogArchive } from '../utils/session-log-archive';
 import { titleGenerator } from '../services/title-generator';
+import { SessionEventBus } from '../events/session-event-bus';
 
 const DASHBOARD_RUNNING_KEY = 'agent_dashboard_running';
 const DASHBOARD_COMPLETED_KEY = 'agent_dashboard_completed';
@@ -57,6 +58,7 @@ export interface Task {
 interface TaskManagerOptions {
   maxConcurrentTasks: number;
   dashboardPort?: chrome.runtime.Port;
+  eventBus?: SessionEventBus;
 }
 
 function mirrorToPreview(m: any) {
@@ -83,8 +85,7 @@ export class TaskManager extends EventEmitter {
   private tabGroups: TabGroupService;
   private mirrors: MirrorCoordinator;
   private workers: WorkerSessionManager;
-  private eventBufferBySession = new Map<string, any[]>();
-  private eventBufferMaxSize = 0;
+  public eventBus: SessionEventBus;
   private streamBuffers = new Map<
     string,
     { sessionId: string; actor: string; content: string; timestamp: number; finalized?: boolean }
@@ -138,7 +139,7 @@ export class TaskManager extends EventEmitter {
         if (title) {
           task.name = title;
           this.notifyDashboard('agent-title-update', { sessionId, title });
-          this.sidePanelPort?.postMessage({ type: 'title-update', sessionId, title });
+          this.eventBus.publish(sessionId, { type: 'title-update', sessionId, title });
           this.tabMirrorService.notifyAgentManager('agent-title-update', { sessionId, title });
         }
       })
@@ -219,11 +220,13 @@ export class TaskManager extends EventEmitter {
   constructor(options: TaskManagerOptions) {
     super();
     this.dashboardPort = options.dashboardPort;
+    this.eventBus = options.eventBus || new SessionEventBus();
     this.tabMirrorService = new TabMirrorService();
 
     this.queue = new TaskQueue(options.maxConcurrentTasks);
     this.tabGroups = new TabGroupService();
     this.mirrors = new MirrorCoordinator(this.tabMirrorService);
+    this.mirrors.setEventBus(this.eventBus);
     this.workers = new WorkerSessionManager(() => this.tasks, this.mirrors, this.tabGroups);
     this.workers.setForwardEventHandler((task, event) => this.forwardEventToPanel(task, event));
 
@@ -237,13 +240,14 @@ export class TaskManager extends EventEmitter {
     });
   }
 
-  setEventBuffering(maxSize: number): void {
-    this.eventBufferMaxSize = Math.max(0, Number(maxSize) || 0);
+  /** @deprecated Use eventBus constructor option instead */
+  setEventBuffering(_maxSize: number): void {
+    // Buffer size is now set via SessionEventBus constructor
   }
 
   clearEventBuffer(sessionId?: string): void {
+    this.eventBus.clearEventBuffer(sessionId);
     if (!sessionId) {
-      this.eventBufferBySession.clear();
       this.streamBuffers.clear();
       this.streamMessageKeys.clear();
       this.lastStreamMessageBySession.clear();
@@ -251,7 +255,6 @@ export class TaskManager extends EventEmitter {
       return;
     }
     const sid = String(sessionId);
-    this.eventBufferBySession.delete(sid);
     try {
       for (const key of this.streamBuffers.keys()) {
         if (key.startsWith(`${sid}:`)) this.streamBuffers.delete(key);
@@ -271,12 +274,7 @@ export class TaskManager extends EventEmitter {
   }
 
   getBufferedEvents(sessionId: string, afterEventId?: string | null): any[] {
-    const sid = String(sessionId || '');
-    if (!sid) return [];
-    const list = this.eventBufferBySession.get(sid) || [];
-    if (!afterEventId) return [...list];
-    const idx = list.findIndex(e => String(e?.eventId || e?.data?.eventId || '') === String(afterEventId));
-    return idx >= 0 ? list.slice(idx + 1) : [...list];
+    return this.eventBus.getBufferedEvents(sessionId, afterEventId);
   }
 
   setMaxConcurrentTasks(max: number): void {
@@ -723,13 +721,8 @@ export class TaskManager extends EventEmitter {
       eventId,
     };
 
-    this.bufferEvent(sessionId, outbound);
-
-    // Forward to panel
-    if (!this.sidePanelPort) return;
-    try {
-      this.sidePanelPort.postMessage(outbound);
-    } catch {}
+    this.eventBus.bufferEvent(sessionId, outbound);
+    this.eventBus.publish(sessionId, outbound);
   }
 
   private propagateGroupId(task: Task, executor: Executor): void {
@@ -764,6 +757,7 @@ export class TaskManager extends EventEmitter {
 
   setSidePanelPort(port: chrome.runtime.Port | undefined): void {
     this.sidePanelPort = port;
+    this.eventBus.setLegacyPort(port);
     this.mirrors.setSidePanelPort(port);
     this.tabGroups.setSidePanelPort(port);
 
@@ -980,19 +974,15 @@ export class TaskManager extends EventEmitter {
           this.tabMirrorService.updateMirrorColor(tabId, task.color);
           task.mirroringStarted = true;
 
-          if (this.sidePanelPort) {
-            setTimeout(() => {
-              const mirrors = this.tabMirrorService.getCurrentMirrors();
-              const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
-              if (mirrorData) {
-                const sessionId = task.parentSessionId || task.id;
-                this.sidePanelPort?.postMessage({
-                  type: 'tab-mirror-update',
-                  data: { ...mirrorData, sessionId },
-                });
-              }
-            }, 500);
-          }
+          setTimeout(() => {
+            const mirrors = this.tabMirrorService.getCurrentMirrors();
+            const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
+            if (mirrorData) {
+              const sessionId = task.parentSessionId || task.id;
+              const msg = { type: 'tab-mirror-update', data: { ...mirrorData, sessionId } };
+              this.eventBus.publish(sessionId, msg);
+            }
+          }, 500);
         } catch {}
       })
       .catch(() => {});
@@ -1052,17 +1042,16 @@ export class TaskManager extends EventEmitter {
     this.tabMirrorService.updateMirrorColor(newTabId, task.color);
     task.mirroringStarted = true;
 
-    if (this.sidePanelPort) {
-      setTimeout(async () => {
-        if (!(await tabExists(newTabId))) return;
-        const mirrors = this.tabMirrorService.getCurrentMirrors();
-        const mirrorData = mirrors.find((m: any) => m.tabId === newTabId);
-        if (mirrorData) {
-          const sessionId = task.parentSessionId || task.id;
-          this.sidePanelPort?.postMessage({ type: 'tab-mirror-update', data: { ...mirrorData, sessionId } });
-        }
-      }, 1000);
-    }
+    setTimeout(async () => {
+      if (!(await tabExists(newTabId))) return;
+      const mirrors = this.tabMirrorService.getCurrentMirrors();
+      const mirrorData = mirrors.find((m: any) => m.tabId === newTabId);
+      if (mirrorData) {
+        const sessionId = task.parentSessionId || task.id;
+        const msg = { type: 'tab-mirror-update', data: { ...mirrorData, sessionId } };
+        this.eventBus.publish(sessionId, msg);
+      }
+    }, 1000);
   }
 
   private async handleTaskCompletion(task: Task, event: any): Promise<void> {
@@ -1232,20 +1221,12 @@ export class TaskManager extends EventEmitter {
     return `${sid}:${timestamp}:${hashed}`;
   }
 
-  private bufferEvent(sessionId: string, event: any): void {
-    if (this.eventBufferMaxSize <= 0) return;
-    const sid = String(sessionId || '');
-    if (!sid) return;
-    const list = this.eventBufferBySession.get(sid) || [];
-    const eventId = String(event?.eventId || event?.data?.eventId || '');
-    if (eventId && list.some(e => String(e?.eventId || e?.data?.eventId || '') === eventId)) {
-      return;
-    }
-    list.push(event);
-    if (list.length > this.eventBufferMaxSize) {
-      list.splice(0, list.length - this.eventBufferMaxSize);
-    }
-    this.eventBufferBySession.set(sid, list);
+  subscribePortToSession(subscriberId: string, port: chrome.runtime.Port, sessionId: string): void {
+    this.eventBus.subscribe({ id: subscriberId, port, sessionId });
+  }
+
+  unsubscribeFromSession(subscriberId: string): void {
+    this.eventBus.unsubscribe(subscriberId);
   }
 
   private async persistStreamSummary(sessionId: string, summary: any): Promise<void> {
