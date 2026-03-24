@@ -188,28 +188,32 @@ ${request}`;
         // Try to parse JSON from the response
         const jsonMatch = response.content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          logger.info(`Parsed auto result: ${JSON.stringify(parsed)}`);
-          if (parsed.action && ['request_more_info', 'chat', 'search', 'agent', 'tool'].includes(parsed.action)) {
-            // Enforce no 'request_more_info' usage
-            const normalizedAction = parsed.action === 'request_more_info' ? 'chat' : parsed.action;
-            const result: AutoResult = {
-              action: normalizedAction as AutoAction,
-              confidence: parsed.confidence || 0.8,
-              reasoning: parsed.reasoning,
-            };
-            if (normalizedAction === 'tool') {
-              result.afterTool = ['chat', 'search', 'agent', 'none'].includes(parsed.after_tool)
-                ? parsed.after_tool
-                : 'none';
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            logger.info(`Parsed auto result: ${JSON.stringify(parsed)}`);
+            if (parsed.action && ['request_more_info', 'chat', 'search', 'agent', 'tool'].includes(parsed.action)) {
+              // Enforce no 'request_more_info' usage
+              const normalizedAction = parsed.action === 'request_more_info' ? 'chat' : parsed.action;
+              const result: AutoResult = {
+                action: normalizedAction as AutoAction,
+                confidence: parsed.confidence || 0.8,
+                reasoning: parsed.reasoning,
+              };
+              if (normalizedAction === 'tool') {
+                result.afterTool = ['chat', 'search', 'agent', 'none'].includes(parsed.after_tool)
+                  ? parsed.after_tool
+                  : 'none';
+              }
+              if (normalizedAction === 'agent' && Array.isArray(parsed.expected_sites)) {
+                result.expectedSites = parsed.expected_sites.filter(
+                  (s: unknown) => typeof s === 'string' && s.length > 0,
+                );
+                console.log(`[Skills] Parsed expectedSites: ${result.expectedSites?.join(', ')}`);
+              }
+              return result;
             }
-            if (normalizedAction === 'agent' && Array.isArray(parsed.expected_sites)) {
-              result.expectedSites = parsed.expected_sites.filter(
-                (s: unknown) => typeof s === 'string' && s.length > 0,
-              );
-              console.log(`[Skills] Parsed expectedSites: ${result.expectedSites?.join(', ')}`);
-            }
-            return result;
+          } catch (parseError) {
+            logger.warning(`Failed to parse auto JSON: ${parseError}`);
           }
         }
       }
