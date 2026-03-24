@@ -38,6 +38,12 @@ export class TabMirrorService {
   private tabWorkerIndex: Map<number, number> = new Map();
   private tabColor: Map<number, string> = new Map();
   private previewLogInterval?: NodeJS.Timeout;
+  private eventBus?: { hasSubscribers(sessionId: string): boolean; publish(sessionId: string, event: any): void };
+
+  /** Allow the event bus to receive mirror updates for all subscribers (not just dashboardPort) */
+  setEventBus(bus: { hasSubscribers(sessionId: string): boolean; publish(sessionId: string, event: any): void }): void {
+    this.eventBus = bus;
+  }
   // In-memory cache for last screenshots when sessions complete (for Agent Manager display)
   private cachedSessionScreenshots: Map<
     string,
@@ -330,13 +336,20 @@ export class TabMirrorService {
     this.reservedByPuppeteer.delete(tabId);
     this.tabWorkerIndex.delete(tabId);
     this.tabColor.delete(tabId);
+    let stoppedSessionId: string | undefined;
     for (const [sid, set] of this.sessionToTabs) {
+      if (set.has(tabId)) stoppedSessionId = sid;
       set.delete(tabId);
       if (this.sessionActiveTab.get(sid) === tabId) this.sessionActiveTab.delete(sid);
     }
-    if (this.dashboardPort) {
-      safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: null });
-      safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: this.getActiveMirrors() });
+    const stopUpdate = { type: 'tab-mirror-update', data: null };
+    const stopBatch = { type: 'tab-mirror-batch', data: this.getActiveMirrors() };
+    if (stoppedSessionId && this.eventBus?.hasSubscribers(stoppedSessionId)) {
+      this.eventBus.publish(stoppedSessionId, stopUpdate);
+      this.eventBus.publish(stoppedSessionId, stopBatch);
+    } else if (this.dashboardPort) {
+      safePostMessage(this.dashboardPort, stopUpdate);
+      safePostMessage(this.dashboardPort, stopBatch);
     }
   }
 
@@ -351,14 +364,14 @@ export class TabMirrorService {
       const active = this.sessionActiveTab.get(sid);
       if (active !== undefined && active !== tabId) return;
     }
-    if (this.dashboardPort) {
-      const active = this.getActiveMirrors();
-      const uniqueAgents = new Set(active.map(m => m.agentId));
-      if (uniqueAgents.size <= 1) {
-        safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: mirror });
-      } else {
-        safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: active });
-      }
+    const active = this.getActiveMirrors();
+    const uniqueAgents = new Set(active.map(m => m.agentId));
+    const colorMsg =
+      uniqueAgents.size <= 1 ? { type: 'tab-mirror-update', data: mirror } : { type: 'tab-mirror-batch', data: active };
+    if (sid && this.eventBus?.hasSubscribers(sid)) {
+      this.eventBus.publish(sid, colorMsg);
+    } else if (this.dashboardPort) {
+      safePostMessage(this.dashboardPort, colorMsg);
     }
   }
 
@@ -652,14 +665,22 @@ export class TabMirrorService {
           return;
         }
       }
-      if (this.dashboardPort) {
-        const active = this.getActiveMirrors();
-        const uniqueAgents = new Set(active.map(m => m.agentId));
+      const active = this.getActiveMirrors();
+      const uniqueAgents = new Set(active.map(m => m.agentId));
+      const updateMsg =
+        uniqueAgents.size <= 1
+          ? { type: 'tab-mirror-update', data: mirrorData }
+          : { type: 'tab-mirror-batch', data: active };
+      // Publish through event bus when subscribers exist (covers both side panel
+      // and agent manager). Fall back to dashboardPort for backward compat when
+      // no event bus subscribers are registered yet.
+      if (sessionId && this.eventBus?.hasSubscribers(sessionId)) {
+        this.eventBus.publish(sessionId, updateMsg);
         if (uniqueAgents.size <= 1) {
-          safePostMessage(this.dashboardPort, { type: 'tab-mirror-update', data: mirrorData });
-        } else {
-          safePostMessage(this.dashboardPort, { type: 'tab-mirror-batch', data: active });
+          this.eventBus.publish(sessionId, { type: 'tab-mirror-batch', data: active });
         }
+      } else if (this.dashboardPort) {
+        safePostMessage(this.dashboardPort, updateMsg);
       }
     } catch (e: any) {
       // Catch-all for any remaining errors - check if tab-related
