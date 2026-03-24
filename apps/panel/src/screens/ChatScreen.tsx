@@ -3,6 +3,7 @@ import { Actors } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import type { FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { INLINE_CHAT_DISCLAIMER } from '@extension/shared/lib/utils/disclaimers';
+import { FiExternalLink } from 'react-icons/fi';
 import MessageList from '../components/chat-interface/message-list';
 import ChatInput from '../components/chat-interface/chat-input';
 import AvailableChatSection from '../components/chat-interface/available-chat-section';
@@ -116,6 +117,7 @@ export interface ChatScreenProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
+  onOpenInFullView?: () => void;
 }
 
 export function ChatScreen(props: ChatScreenProps) {
@@ -386,6 +388,18 @@ export function ChatScreen(props: ChatScreenProps) {
             <>
               <div
                 className={`relative flex-1 min-h-0 overflow-x-hidden overflow-y-auto p-2 messages-scroll ${isDarkMode ? 'bg-slate-900/80' : ''}`}>
+                {messages.length > 0 && props.onOpenInFullView && (
+                  <div className="flex justify-end px-2 pt-1 pb-0">
+                    <button
+                      type="button"
+                      onClick={props.onOpenInFullView}
+                      title="Open in full view"
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-colors ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-600 hover:bg-black/5'}`}>
+                      <FiExternalLink className="h-3 w-3" />
+                      Full view
+                    </button>
+                  </div>
+                )}
                 <MessageList
                   messages={messages}
                   isDarkMode={isDarkMode}
@@ -459,9 +473,7 @@ export function ChatScreen(props: ChatScreenProps) {
                       })();
                     } catch {}
                   }}
-                  isAgentWorking={
-                    isJobActive && (currentTaskAgentType === 'agent' || currentTaskAgentType === 'multiagent')
-                  }
+                  isAgentWorking={isJobActive}
                   pinnedMessageIds={pinnedMessageIds}
                   onPinMessage={handlePinMessage}
                   onQuoteMessage={handleQuoteMessage}
@@ -613,7 +625,7 @@ export function ChatScreen(props: ChatScreenProps) {
                 })();
               } catch {}
             }}
-            isAgentWorking={isJobActive && (currentTaskAgentType === 'agent' || currentTaskAgentType === 'multiagent')}
+            isAgentWorking={isJobActive}
             pinnedMessageIds={pinnedMessageIds}
             onPinMessage={handlePinMessage}
             onQuoteMessage={handleQuoteMessage}
