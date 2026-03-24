@@ -1,11 +1,17 @@
 import { safePostMessage } from '@extension/shared/lib/utils';
 import type { Task } from '../task/task-manager';
 import { logPortMessage } from '../test/instrumentation';
+import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
+import { warningsSettingsStore, chatHistoryStore, Actors } from '@extension/storage';
 
 export type AgentManagerDeps = {
   taskManager: any;
   logger: { info: Function; error: Function };
   setAgentManagerPort: (p: chrome.runtime.Port | undefined) => void;
+  runningWorkflowSessionIds: Set<string>;
+  workflowsBySession: Map<string, any>;
+  getCurrentExecutor: () => any | null;
+  setCurrentExecutor: (e: any | null) => void;
 };
 
 interface AgentData {
@@ -323,36 +329,77 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
           break;
         }
 
-        case 'start-new-task': {
-          const { task, agentType, contextTabIds } = message;
+        case 'start-new-task':
+        case 'start-task-inline': {
+          const { task, agentType, contextTabIds, attachments } = message;
           if (!task || typeof task !== 'string') {
             safePostMessage(port, { type: 'error', error: 'Missing task' });
             return;
           }
 
-          // Generate session ID for the new task
-          const sessionId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-          // Store pending action for sidepanel to pick up
-          // forceNewSession ensures this creates a new chat, not appending to existing
-          await chrome.storage.session.set({
-            pendingAction: {
-              prompt: task,
-              autoStart: true,
-              workflowType: agentType || 'auto',
-              sessionId,
-              forceNewSession: true,
-              contextTabIds: contextTabIds || undefined,
-            },
-          });
-
-          // Open sidepanel to start the task
-          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (activeTab?.windowId) {
-            await chrome.sidePanel.open({ windowId: activeTab.windowId });
+          // Check first-run disclaimer
+          try {
+            const w = await warningsSettingsStore.getWarnings();
+            if (!w.hasAcceptedFirstRun) {
+              safePostMessage(port, {
+                type: 'error',
+                error: 'Please accept the liability disclaimer in the extension to continue.',
+              });
+              return;
+            }
+          } catch {
+            safePostMessage(port, {
+              type: 'error',
+              error: 'Please accept the liability disclaimer in the extension to continue.',
+            });
+            return;
           }
 
-          safePostMessage(port, { type: 'task-started', sessionId });
+          // Use client-provided sessionId (mirrors side panel where sessionId is
+          // generated client-side before dispatch). Fall back to generating one
+          // for backward compat with start-new-task.
+          const sessionId = message.sessionId || `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+          // Persist user message so both agent manager and side panel can load it
+          chatHistoryStore
+            .addMessage(sessionId, {
+              actor: Actors.USER,
+              content: task,
+              timestamp: Date.now(),
+            } as any)
+            .catch(() => {});
+
+          // Subscribe this port to receive live events for the new task
+          taskManager.subscribePortToSession(`agent-manager:${sessionId}`, port, sessionId);
+
+          // Confirm session started BEFORE awaiting handleNewTask (which awaits
+          // the full executor run). The client needs the sessionId immediately so
+          // event handlers can match incoming events to the current session.
+          safePostMessage(port, { type: 'task-started-inline', sessionId });
+
+          // Get active tab for context
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          const tabId = activeTab?.id || -1;
+
+          // Start the task using the same handler as side panel
+          await handleNewTask(
+            {
+              type: 'new_task',
+              task,
+              taskId: sessionId,
+              tabId,
+              agentType: agentType || 'auto',
+              contextTabIds: contextTabIds || [],
+              attachments: attachments || [],
+            },
+            {
+              taskManager,
+              logger,
+              getCurrentPort: () => port,
+              getCurrentExecutor: deps.getCurrentExecutor,
+              setCurrentExecutor: deps.setCurrentExecutor,
+            },
+          );
           break;
         }
 
@@ -400,6 +447,133 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
           break;
         }
 
+        case 'subscribe-to-session': {
+          const { sessionId, lastEventId } = message;
+          if (!sessionId) {
+            safePostMessage(port, { type: 'error', error: 'Missing sessionId' });
+            break;
+          }
+          logger.info(`[AgentManager] Subscribing to session ${sessionId}`);
+
+          // 1. Send current trajectory state from memory (includes events not yet persisted)
+          let trajectoryState: any = null;
+          try {
+            trajectoryState = taskManager.trajectoryService?.getTrajectoryState?.(sessionId) || null;
+            if (trajectoryState) {
+              safePostMessage(port, {
+                type: 'trajectory_state',
+                sessionId,
+                data: {
+                  rootId: trajectoryState.rootId,
+                  traceItems: trajectoryState.traceItems,
+                  workerItems: trajectoryState.workerItems,
+                  isCompleted: trajectoryState.isCompleted,
+                  finalPreview: trajectoryState.finalPreview,
+                  finalPreviewBatch: trajectoryState.finalPreviewBatch,
+                },
+              });
+            }
+          } catch (e) {
+            logger.error('[AgentManager] Failed to send trajectory_state:', e);
+          }
+
+          // 2. Send buffered events for this session (skip if completed)
+          const isCompleted = !!trajectoryState?.isCompleted;
+          try {
+            const sessionEvents = !isCompleted
+              ? taskManager.getBufferedEvents?.(String(sessionId), lastEventId) || []
+              : [];
+            if (sessionEvents.length > 0) {
+              safePostMessage(port, {
+                type: 'buffered_session_events',
+                sessionId,
+                events: sessionEvents,
+              });
+            }
+          } catch {}
+
+          // 3. Send current mirrors for this session
+          try {
+            const allMirrors = taskManager.getAllMirrors?.() || [];
+            const sessionMirrors = allMirrors.filter((m: any) => {
+              const mirrorSessionId = m?.sessionId;
+              return mirrorSessionId && String(mirrorSessionId) === String(sessionId);
+            });
+            if (sessionMirrors.length > 0) {
+              safePostMessage(port, { type: 'tab-mirror-batch', data: sessionMirrors });
+            }
+          } catch {}
+
+          // 4. Determine session state
+          let agentType: string | null = null;
+          try {
+            const task = taskManager.getTask?.(String(sessionId));
+            agentType = task?.agentType || (deps.getCurrentExecutor() as any)?.manualAgentType || null;
+            if (deps.runningWorkflowSessionIds.has(String(sessionId))) agentType = 'multiagent';
+          } catch {}
+
+          const isRunning =
+            deps.runningWorkflowSessionIds.has(String(sessionId)) ||
+            String((deps.getCurrentExecutor() as any)?.context?.taskId || '') === String(sessionId) ||
+            String(taskManager.getTask?.(String(sessionId))?.status || '') === 'running';
+
+          let workflowGraph = null;
+          try {
+            const wf = deps.workflowsBySession.get(String(sessionId));
+            if (wf) workflowGraph = wf.getCurrentGraph?.() || null;
+          } catch {}
+
+          // 5. Register port as subscriber for live events
+          taskManager.subscribePortToSession(`agent-manager:${sessionId}`, port, String(sessionId));
+
+          safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType, workflowGraph });
+          break;
+        }
+
+        case 'unsubscribe-from-session': {
+          const { sessionId } = message;
+          if (sessionId) {
+            taskManager.unsubscribeFromSession(`agent-manager:${sessionId}`);
+          }
+          break;
+        }
+
+        case 'follow-up-inline': {
+          const { sessionId, task: followUpText, agentType, contextTabIds, attachments } = message;
+          if (!followUpText || !sessionId) {
+            safePostMessage(port, { type: 'error', error: 'Missing task or sessionId' });
+            break;
+          }
+
+          // Persist follow-up user message
+          chatHistoryStore
+            .addMessage(sessionId, {
+              actor: Actors.USER,
+              content: followUpText,
+              timestamp: Date.now(),
+            } as any)
+            .catch(() => {});
+
+          await handleFollowUpTask(
+            {
+              type: 'follow_up_task',
+              task: followUpText,
+              taskId: sessionId,
+              agentType,
+              contextTabIds,
+              attachments,
+            },
+            {
+              taskManager,
+              logger,
+              getCurrentPort: () => port,
+              getCurrentExecutor: deps.getCurrentExecutor,
+              setCurrentExecutor: deps.setCurrentExecutor,
+            },
+          );
+          break;
+        }
+
         case 'speech_to_text': {
           if (!message.audio) {
             safePostMessage(port, { type: 'speech_to_text_error', error: 'No audio data received' });
@@ -432,6 +606,7 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
 
   port.onDisconnect.addListener(() => {
     logger.info('[AgentManager] Disconnected');
+    taskManager.eventBus.unsubscribePort(port);
     setAgentManagerPort(undefined);
     taskManager.tabMirrorService.setAgentManagerPort(undefined);
   });
