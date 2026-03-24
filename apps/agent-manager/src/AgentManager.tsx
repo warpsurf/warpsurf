@@ -5,10 +5,19 @@ import { AgentGallery } from '@src/components/AgentGallery';
 import { AgentInputBar } from '@src/components/AgentInputBar';
 import { useAutoTabContextPrivacyGate } from '@src/hooks/use-auto-tab-context-privacy-gate';
 import { generalSettingsStore, warningsSettingsStore, speechToTextModelStore } from '@extension/storage';
-import { useSpeechToText, MicrophonePermissionOverlay } from '@extension/shared';
+import {
+  useSpeechToText,
+  MicrophonePermissionOverlay,
+  PER_CHAT_DISCLAIMER_MESSAGE,
+  PER_CHAT_DISCLAIMER_EXTRA_NOTE,
+} from '@extension/shared';
 import type { AgentData } from '@src/types';
 import logoImage from '/warpsurflogo.png';
 import { AGENT_ACTIVITY_THRESHOLDS } from '@extension/shared/lib/utils';
+import { ChatView, ConversationSidebar, DisclaimerModal } from '@src/components/chat';
+import { formatUsd } from '@panel/components/chat-interface/message-list';
+
+type ViewMode = 'gallery' | 'chat';
 
 export default function AgentManager() {
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -16,41 +25,49 @@ export default function AgentManager() {
   const [autoContextTabIds, setAutoContextTabIds] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('gallery');
+  const [showPerChatDisclaimer, setShowPerChatDisclaimer] = useState(false);
+  const pendingTaskRef = useRef<{
+    task: string;
+    agentType?: string;
+    contextTabIds?: number[];
+    attachments?: any[];
+  } | null>(null);
 
   // Privacy gate for auto-tab context
   const { promptAutoTabContextPrivacy, resetAutoTabContextPrivacy, autoTabContextPrivacyModal } =
     useAutoTabContextPrivacyGate(isDarkMode);
 
-  // Detect dark mode preference (manual setting or system preference)
+  // Detect dark mode preference
   useEffect(() => {
     const getSystemPreference = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-
     const checkDarkMode = async () => {
       try {
         const settings = await generalSettingsStore.getSettings();
         const themeMode = settings.themeMode || 'auto';
-
         setIsDarkMode(themeMode === 'dark' ? true : themeMode === 'light' ? false : getSystemPreference());
       } catch {
         setIsDarkMode(getSystemPreference());
       }
     };
-
     checkDarkMode();
-
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     mediaQuery.addEventListener('change', checkDarkMode);
-
     let unsubscribe: (() => void) | undefined;
     try {
       unsubscribe = generalSettingsStore.subscribe(checkDarkMode);
     } catch {}
-
     return () => {
       mediaQuery.removeEventListener('change', checkDarkMode);
       unsubscribe?.();
     };
   }, []);
+
+  // Sync dark/light class on <html> for CSS overrides (liquid-glass, etc.)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    document.documentElement.classList.toggle('light', !isDarkMode);
+  }, [isDarkMode]);
 
   // Load and refresh auto-context state
   const autoContextEnabledRef = useRef(autoContextEnabled);
@@ -65,7 +82,6 @@ export default function AgentManager() {
         const warnings = await warningsSettingsStore.getWarnings();
         const enabled = !!(settings.enableAutoTabContext && warnings.hasAcceptedAutoTabContextPrivacyWarning);
         setAutoContextEnabled(enabled);
-
         if (enabled) {
           const tabs = await chrome.tabs.query({ currentWindow: true });
           const restricted = ['chrome://', 'chrome-extension://', 'about:', 'data:', 'javascript:'];
@@ -78,18 +94,13 @@ export default function AgentManager() {
         }
       } catch {}
     };
-
     loadAutoContextState();
-
-    // Refresh on tab changes
     const handleTabChange = () => {
       if (autoContextEnabledRef.current) loadAutoContextState();
     };
     chrome.tabs.onCreated?.addListener(handleTabChange);
     chrome.tabs.onRemoved?.addListener(handleTabChange);
     chrome.tabs.onUpdated?.addListener(handleTabChange);
-
-    // Subscribe to settings changes
     let unsubGeneral: (() => void) | undefined;
     let unsubWarnings: (() => void) | undefined;
     try {
@@ -98,7 +109,6 @@ export default function AgentManager() {
     try {
       unsubWarnings = warningsSettingsStore.subscribe(loadAutoContextState);
     } catch {}
-
     return () => {
       chrome.tabs.onCreated?.removeListener(handleTabChange);
       chrome.tabs.onRemoved?.removeListener(handleTabChange);
@@ -112,7 +122,6 @@ export default function AgentManager() {
     };
   }, []);
 
-  // Handle auto-context toggle (with privacy gate)
   const handleAutoContextToggle = useCallback(
     async (enabled: boolean) => {
       if (enabled) {
@@ -126,8 +135,45 @@ export default function AgentManager() {
     [promptAutoTabContextPrivacy, resetAutoTabContextPrivacy],
   );
 
-  const { agents, sendNewTask, openSidepanelToSession, isConnected, portRef, addPortListener, removePortListener } =
-    useAgentManagerConnection();
+  const {
+    agents,
+    sendNewTask,
+    openSidepanelToSession,
+    isConnected,
+    portRef,
+    addPortListener,
+    removePortListener,
+    chatSession,
+    subscribeToSession,
+    unsubscribeFromSession,
+    startTaskInline,
+    sendFollowUpInline,
+    needsPerChatDisclaimer,
+    mirrorPreview,
+    mirrorPreviewBatch,
+    activeAggregateMessageId,
+    setPendingContextTabs,
+    // Task control
+    handleStopTask,
+    handlePauseTask,
+    handleResumeTask,
+    handleKillSwitch,
+    handleInjectLiveMessage,
+    handleHandBackControl,
+    isStopping,
+    isPaused,
+    showStopButton,
+    showCloseTabs,
+    setShowCloseTabs,
+    showEmergencyStop,
+    workerTabGroups,
+    setWorkerTabGroups,
+    sessionStats,
+    currentTaskAgentType,
+    messageMetadata,
+    agentTraceRootIdRef,
+    sessionIdRef,
+  } = useAgentManagerConnection();
 
   // Speech-to-text
   const [sttConfigured, setSttConfigured] = useState(false);
@@ -162,7 +208,6 @@ export default function AgentManager() {
     }, []),
   });
 
-  // Wire STT port messages through the connection's listener system
   useEffect(() => {
     const listener = (message: any) => {
       if (message?.type === 'speech_to_text_result') stt.handleSttResult(message.text || '');
@@ -171,6 +216,26 @@ export default function AgentManager() {
     addPortListener(listener);
     return () => removePortListener(listener);
   }, [stt.handleSttResult, stt.handleSttError, addPortListener, removePortListener]);
+
+  // Check for pending session from side panel view switch (on mount + storage change)
+  useEffect(() => {
+    const checkPending = () => {
+      chrome.storage.local.get('pending_agent_manager_session').then(result => {
+        const sessionId = result.pending_agent_manager_session;
+        if (sessionId) {
+          chrome.storage.local.remove('pending_agent_manager_session');
+          subscribeToSession(sessionId);
+          setViewMode('chat');
+        }
+      });
+    };
+    checkPending();
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.pending_agent_manager_session?.newValue) checkPending();
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [subscribeToSession]);
 
   // Filter agents by search query
   const filteredAgents = useMemo(() => {
@@ -181,7 +246,6 @@ export default function AgentManager() {
     );
   }, [agents, searchQuery]);
 
-  // Delete all agents from storage
   const handleDeleteAll = useCallback(async () => {
     await chrome.storage.local.set({
       agent_dashboard_running: [],
@@ -190,51 +254,31 @@ export default function AgentManager() {
     setShowDeleteConfirm(false);
   }, []);
 
-  // Delete a specific agent from storage
   const handleDeleteAgent = useCallback(async (agent: AgentData) => {
-    console.log('[AgentManager Debug] handleDeleteAgent called', {
-      sessionId: agent.sessionId,
-      taskDescription: agent.taskDescription?.substring(0, 50),
-    });
     try {
       const [running, completed] = await Promise.all([
         chrome.storage.local.get('agent_dashboard_running'),
         chrome.storage.local.get('agent_dashboard_completed'),
       ]);
-      console.log('[AgentManager Debug] Current storage state', {
-        runningCount: (running.agent_dashboard_running || []).length,
-        completedCount: (completed.agent_dashboard_completed || []).length,
-      });
       const filteredRunning = (running.agent_dashboard_running || []).filter(
         (a: any) => a.sessionId !== agent.sessionId,
       );
       const filteredCompleted = (completed.agent_dashboard_completed || []).filter(
         (a: any) => a.sessionId !== agent.sessionId,
       );
-      console.log('[AgentManager Debug] After filtering', {
-        filteredRunningCount: filteredRunning.length,
-        filteredCompletedCount: filteredCompleted.length,
-        removedFromRunning: (running.agent_dashboard_running || []).length - filteredRunning.length,
-        removedFromCompleted: (completed.agent_dashboard_completed || []).length - filteredCompleted.length,
-      });
       await chrome.storage.local.set({
         agent_dashboard_running: filteredRunning,
         agent_dashboard_completed: filteredCompleted,
       });
-      console.log('[AgentManager Debug] Storage updated successfully');
-      // Also remove persisted preview cache for this session
       try {
         await chrome.storage.local.remove(`preview_cache_${agent.sessionId}`);
-        console.log('[AgentManager Debug] Preview cache removed');
-      } catch (cacheErr) {
-        console.warn('[AgentManager Debug] Failed to remove preview cache:', cacheErr);
-      }
+      } catch {}
     } catch (err) {
-      console.error('[AgentManager Debug] Error in handleDeleteAgent:', err);
+      console.error('[AgentManager] Error in handleDeleteAgent:', err);
     }
   }, []);
 
-  // Categorize agents into Active, Recent, and More
+  // Categorize agents
   const { activeAgents, recentAgents, moreAgents } = useMemo(() => {
     const now = Date.now();
     const active: AgentData[] = [];
@@ -246,19 +290,11 @@ export default function AgentManager() {
       const lastActivity = agent.preview?.lastUpdated || agent.endTime || agent.startTime || 0;
       const isWithinRecentWindow = now - lastActivity < AGENT_ACTIVITY_THRESHOLDS.ACTIVE_MS;
 
-      // Active: currently running status only
-      if (isRunningStatus) {
-        active.push(agent);
-      } else if (isWithinRecentWindow) {
-        // Recent: not running, but last activity within 15 minutes
-        recent.push(agent);
-      } else {
-        // More: everything else
-        more.push(agent);
-      }
+      if (isRunningStatus) active.push(agent);
+      else if (isWithinRecentWindow) recent.push(agent);
+      else more.push(agent);
     }
 
-    // Sort each category by activity (needs_input first for active, then by time)
     const sortByActivity = (a: AgentData, b: AgentData) => {
       if (a.status === 'needs_input' && b.status !== 'needs_input') return -1;
       if (b.status === 'needs_input' && a.status !== 'needs_input') return 1;
@@ -274,23 +310,191 @@ export default function AgentManager() {
     return { activeAgents: active, recentAgents: recent, moreAgents: more };
   }, [filteredAgents]);
 
-  const handleSendMessage = useCallback(
-    async (text: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => {
-      await sendNewTask(text, agentType, contextTabIds, attachments);
+  // Store context tabs for the next user message (mirrors side panel flow)
+  const handleContextTabsCapture = useCallback(
+    (_timestamp: number, contextTabs: any[]) => {
+      setPendingContextTabs(contextTabs);
     },
-    [sendNewTask],
+    [setPendingContextTabs],
   );
 
+  // Handle sending a new task (with per-chat disclaimer gate)
+  const handleSendMessage = useCallback(
+    async (text: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => {
+      const needsDisclaimer = await needsPerChatDisclaimer();
+      if (needsDisclaimer) {
+        pendingTaskRef.current = { task: text, agentType, contextTabIds, attachments };
+        setShowPerChatDisclaimer(true);
+        return;
+      }
+      startTaskInline(text, agentType, contextTabIds, attachments);
+      setViewMode('chat');
+    },
+    [needsPerChatDisclaimer, startTaskInline],
+  );
+
+  const handleDisclaimerAccept = useCallback(() => {
+    setShowPerChatDisclaimer(false);
+    const pending = pendingTaskRef.current;
+    pendingTaskRef.current = null;
+    if (pending) {
+      startTaskInline(pending.task, pending.agentType, pending.contextTabIds, pending.attachments);
+      setViewMode('chat');
+    }
+  }, [startTaskInline]);
+
+  // Select an agent from the gallery -> open chat view
   const handleSelectAgent = useCallback(
     (agent: AgentData) => {
-      openSidepanelToSession(agent.sessionId);
+      subscribeToSession(agent.sessionId);
+      setViewMode('chat');
     },
-    [openSidepanelToSession],
+    [subscribeToSession],
   );
+
+  // Chat view: close -> gallery
+  const handleCloseChat = useCallback(() => {
+    unsubscribeFromSession();
+    setViewMode('gallery');
+  }, [unsubscribeFromSession]);
+
+  // Chat view: open in side panel
+  const handleOpenInSidePanel = useCallback(() => {
+    const sid = chatSession.sessionId;
+    if (sid) {
+      openSidepanelToSession(sid);
+      unsubscribeFromSession();
+      setViewMode('gallery');
+    }
+  }, [chatSession.sessionId, openSidepanelToSession, unsubscribeFromSession]);
+
+  // Chat view: send follow-up
+  const handleChatSendMessage = useCallback(
+    (
+      text: string,
+      agentType?: string,
+      contextTabIds?: number[],
+      _contextMenuAction?: string,
+      _skipAutoContext?: boolean,
+      attachments?: any[],
+    ) => {
+      if (chatSession.sessionId) {
+        sendFollowUpInline(text, agentType, contextTabIds, attachments);
+      }
+    },
+    [chatSession.sessionId, sendFollowUpInline],
+  );
+
+  // Sidebar: switch session
+  const handleSidebarSelectSession = useCallback(
+    (sessionId: string) => {
+      unsubscribeFromSession();
+      subscribeToSession(sessionId);
+    },
+    [unsubscribeFromSession, subscribeToSession],
+  );
+
+  // Sidebar: new chat -> gallery
+  const handleSidebarNewChat = useCallback(() => {
+    unsubscribeFromSession();
+    setViewMode('gallery');
+  }, [unsubscribeFromSession]);
 
   const openSettings = useCallback(() => {
     chrome.runtime.openOptionsPage();
   }, []);
+
+  // Find the agent data for the current chat session (for metrics)
+  const currentAgent = useMemo(() => {
+    if (!chatSession.sessionId) return null;
+    return agents.find(a => a.sessionId === chatSession.sessionId) || null;
+  }, [agents, chatSession.sessionId]);
+
+  if (viewMode === 'chat') {
+    return (
+      <div className={`h-screen flex ${isDarkMode ? 'bg-[#121210] text-slate-200' : 'bg-[#f7f7f5] text-gray-900'}`}>
+        <ConversationSidebar
+          agents={agents}
+          activeSessionId={chatSession.sessionId}
+          isDarkMode={isDarkMode}
+          onSelectSession={handleSidebarSelectSession}
+          onNewChat={handleSidebarNewChat}
+        />
+        <ChatView
+          sessionTitle={chatSession.sessionTitle}
+          messages={chatSession.messages}
+          isDarkMode={isDarkMode}
+          isRunning={chatSession.isRunning}
+          jobSummaries={chatSession.jobSummaries}
+          metadataByMessageId={chatSession.metadataByMessageId}
+          inlinePreview={mirrorPreview}
+          inlinePreviewBatch={mirrorPreviewBatch}
+          activeAggregateMessageId={activeAggregateMessageId}
+          onSendMessage={handleChatSendMessage}
+          onClose={handleCloseChat}
+          onOpenInSidePanel={handleOpenInSidePanel}
+          disabled={!isConnected}
+          // Task control
+          showStopButton={showStopButton}
+          onStopTask={handleStopTask}
+          isPaused={isPaused}
+          onPauseTask={handlePauseTask}
+          onResumeTask={handleResumeTask}
+          onHandBackControl={handleHandBackControl}
+          isStopping={isStopping}
+          showEmergencyStop={showEmergencyStop}
+          onEmergencyStop={handleKillSwitch}
+          isAgentModeActive={currentTaskAgentType === 'agent' || currentTaskAgentType === 'multiagent'}
+          onInjectLiveMessage={handleInjectLiveMessage}
+          // Close tabs
+          showCloseTabs={showCloseTabs}
+          workerTabGroups={workerTabGroups}
+          sessionIdForCleanup={chatSession.sessionId}
+          onClosedTabs={() => {
+            setShowCloseTabs(false);
+            setWorkerTabGroups([]);
+          }}
+          // Session stats / debug
+          sessionStats={sessionStats}
+          formatUsd={formatUsd}
+          currentSessionId={chatSession.sessionId}
+          agentTraceRootIdRef={agentTraceRootIdRef}
+          currentTaskAgentType={currentTaskAgentType}
+          messageMetadata={messageMetadata}
+          portRef={portRef}
+          // Context
+          autoContextEnabled={autoContextEnabled}
+          autoContextTabIds={autoContextTabIds}
+          onAutoContextToggle={handleAutoContextToggle}
+          onContextTabsCapture={handleContextTabsCapture}
+          // Speech-to-text
+          onMicClick={stt.handleMicClick}
+          onMicStop={stt.stopRecording}
+          isRecording={stt.isRecording}
+          isProcessingSpeech={stt.isProcessing}
+          recordingDurationMs={stt.recordingDurationMs}
+          audioLevel={stt.audioLevel}
+          sttConfigured={sttConfigured}
+          onOpenVoiceSettings={() => {
+            try {
+              chrome.storage.local.set({ 'settings.pendingTab': 'voice' });
+              chrome.runtime.openOptionsPage();
+            } catch {}
+          }}
+        />
+        {/* Per-chat disclaimer */}
+        {showPerChatDisclaimer && (
+          <DisclaimerModal
+            isDarkMode={isDarkMode}
+            message={PER_CHAT_DISCLAIMER_MESSAGE}
+            extraNote={PER_CHAT_DISCLAIMER_EXTRA_NOTE}
+            onAccept={handleDisclaimerAccept}
+          />
+        )}
+        {autoTabContextPrivacyModal}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -300,7 +504,7 @@ export default function AgentManager() {
         className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-[#2f2f29] bg-[#181816]' : 'border-[#deded7] bg-[#fbfbf9]'}`}>
         <div className="flex items-center gap-3">
           <img src={logoImage} alt="Warpsurf" className="h-8 w-8" />
-          <h1 className="text-lg font-semibold tracking-tight">Agent manager</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Warpsurf</h1>
           {!isConnected && <span className="text-xs text-amber-500 ml-2">Connecting...</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -354,6 +558,7 @@ export default function AgentManager() {
           autoContextEnabled={autoContextEnabled}
           autoContextTabIds={autoContextTabIds}
           onAutoContextToggle={handleAutoContextToggle}
+          onContextTabsCapture={handleContextTabsCapture}
           onMicClick={stt.handleMicClick}
           onMicStop={stt.stopRecording}
           isRecording={stt.isRecording}
@@ -404,6 +609,16 @@ export default function AgentManager() {
           searchQuery={searchQuery}
         />
       </main>
+
+      {/* Per-chat disclaimer */}
+      {showPerChatDisclaimer && (
+        <DisclaimerModal
+          isDarkMode={isDarkMode}
+          message={PER_CHAT_DISCLAIMER_MESSAGE}
+          extraNote={PER_CHAT_DISCLAIMER_EXTRA_NOTE}
+          onAccept={handleDisclaimerAccept}
+        />
+      )}
 
       {/* Privacy modal */}
       {autoTabContextPrivacyModal}
