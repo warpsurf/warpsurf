@@ -217,8 +217,9 @@ export default function AgentManager() {
     return () => removePortListener(listener);
   }, [stt.handleSttResult, stt.handleSttError, addPortListener, removePortListener]);
 
-  // Check for pending session from side panel view switch (on mount + storage change)
+  // Check for pending session from side panel view switch (on mount + storage change + connection ready)
   useEffect(() => {
+    if (!isConnected) return;
     const checkPending = () => {
       chrome.storage.local.get('pending_agent_manager_session').then(result => {
         const sessionId = result.pending_agent_manager_session;
@@ -235,7 +236,7 @@ export default function AgentManager() {
     };
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, [subscribeToSession]);
+  }, [subscribeToSession, isConnected]);
 
   // Filter agents by search query
   const filteredAgents = useMemo(() => {
