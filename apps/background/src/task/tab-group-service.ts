@@ -6,7 +6,7 @@ import { ExecutionState, Actors, EventType } from '../workflows/shared/event/typ
  * Set to `true` once the Chrome bug that renders an empty grey box
  * for tab-group titles is fixed upstream.
  */
-export const ENABLE_TAB_GROUP_TITLES = false;
+export const ENABLE_TAB_GROUP_TITLES = true;
 
 const TAB_GROUP_COLORS = [
   'blue',
@@ -202,6 +202,7 @@ export class TabGroupService {
 
     const updatedGroup = await chrome.tabGroups.update(groupId, {
       color: colorName as chrome.tabGroups.Color,
+      ...(ENABLE_TAB_GROUP_TITLES ? { title } : {}),
     });
 
     const finalColorName = (updatedGroup?.color || colorName) as unknown as string;
