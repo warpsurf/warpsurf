@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useRef, useEffect } from 'react';
 import type { Message, RequestSummary, MessageMetadataValue } from '@extension/storage';
+import { Actors } from '@extension/storage';
 import { FiArrowLeft, FiExternalLink } from 'react-icons/fi';
-import MessageList from '@panel/components/chat-interface/message-list';
+import { formatDay } from '@panel/utils';
+const MessageBlock = lazy(() => import('@panel/components/chat-interface/message-block'));
 import ChatInput from '@panel/components/chat-interface/chat-input';
 import type {
   MessageMetadata,
@@ -124,6 +126,13 @@ export default function ChatView({
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages.length]);
+
   return (
     <div className="flex-1 flex flex-col h-full min-w-0">
       {/* Header */}
@@ -161,28 +170,58 @@ export default function ChatView({
         </button>
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          {messages.length === 0 ? (
-            <div
-              className={`flex flex-col items-center justify-center py-16 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+      {/* Messages — rendered directly without Virtuoso */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto messages-scroll" data-msg-count={messages.length}>
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4">
+            <div className={`${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
               <p className="text-sm">No messages yet</p>
             </div>
-          ) : (
-            <MessageList
-              messages={messages}
-              isDarkMode={isDarkMode}
-              scrollParent={scrollRef.current}
-              jobSummaries={jobSummaries}
-              metadataByMessageId={metadataByMessageId as Record<string, MessageMetadata>}
-              isAgentWorking={isRunning}
-              activeAggregateMessageId={activeAggregateMessageId}
-              inlinePreview={inlinePreview}
-              inlinePreviewBatch={inlinePreviewBatch}
-            />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="max-w-full px-2 py-2">
+            <Suspense fallback={null}>
+              {messages.map((message, index) => {
+                const messageId = `${message.timestamp}-${message.actor}`;
+                const metadata = (metadataByMessageId as Record<string, MessageMetadata>)[messageId];
+                const isUserMessage = message.actor === Actors.USER;
+                const prevIsUser = index > 0 && messages[index - 1].actor === Actors.USER;
+                const needsExtraSpace = index > 0 && isUserMessage !== prevIsUser;
+                const prevTs = index > 0 ? messages[index - 1].timestamp : undefined;
+                const showDivider =
+                  !prevTs || new Date(prevTs).toDateString() !== new Date(message.timestamp).toDateString();
+
+                return (
+                  <div key={messageId} className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                    {showDivider && (
+                      <div className="my-2 flex items-center gap-2">
+                        <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
+                        <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                          {formatDay(message.timestamp)}
+                        </div>
+                        <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
+                      </div>
+                    )}
+                    <MessageBlock
+                      message={message}
+                      isSameActor={index > 0 && messages[index - 1].actor === message.actor}
+                      isDarkMode={isDarkMode}
+                      jobSummary={jobSummaries[messageId]}
+                      metadata={metadata}
+                      isAgentAggregate={!!metadata?.traceItems}
+                      isAgentWorking={
+                        isRunning &&
+                        !metadata?.isCompleted &&
+                        index === messages.length - 1 &&
+                        message.actor !== Actors.USER
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </Suspense>
+          </div>
+        )}
       </div>
 
       {/* Input — uses the same ChatInput as the side panel */}
