@@ -522,6 +522,8 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
         if (rootContent) {
           const rootTs = Number(rootMsg?.timestamp || 0);
           finalMessages = finalMessages.filter((m: any) => {
+            // Never filter out the root message itself
+            if (`${m.timestamp}-${m.actor}` === effectiveRootId) return true;
             const actor = String(m?.actor || '');
             const isSystem = actor === Actors.SYSTEM || actor.toLowerCase() === 'system';
             if (!isSystem) return true;
