@@ -168,8 +168,8 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
         <button
           type="button"
           onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('agent-manager/index.html') })}
-          title="Agent manager"
-          aria-label="Agent manager"
+          title="Warpsurf"
+          aria-label="Warpsurf"
           className={`${iconButtonClass} relative`}>
           <FiCommand className="h-4 w-4" />
           {(props.runningAgentsCount ?? 0) > 0 && (
@@ -336,7 +336,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = props => {
                   }}
                   className={`${props.isDarkMode ? 'hover:bg-slate-700/70' : 'hover:bg-gray-100'} mt-1 flex w-full items-center gap-2 rounded px-3 py-2`}>
                   <FiCommand className="h-4 w-4" />
-                  Agent manager
+                  Warpsurf
                 </button>
               )}
               {hiddenKeys.includes('settings') && (

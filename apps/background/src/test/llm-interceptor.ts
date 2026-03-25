@@ -114,8 +114,112 @@ function createMockGeminiResponse(mock: MockResponse['response']): Response {
   });
 }
 
-function createMockResponse(url: string, mock: MockResponse['response']): Response {
+// ── Streaming mock responses (SSE format) ──────────────────────────────
+
+function createStreamingOpenAIResponse(mock: MockResponse['response']): Response {
+  const chunks = [
+    `data: ${JSON.stringify({
+      id: `chatcmpl-test-${Date.now()}`,
+      object: 'chat.completion.chunk',
+      choices: [{ index: 0, delta: { role: 'assistant', content: mock.content }, finish_reason: null }],
+    })}\n\n`,
+    `data: ${JSON.stringify({
+      id: `chatcmpl-test-${Date.now()}`,
+      object: 'chat.completion.chunk',
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      usage: mock.usage || { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+    })}\n\n`,
+    'data: [DONE]\n\n',
+  ];
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  });
+}
+
+function createStreamingAnthropicResponse(mock: MockResponse['response']): Response {
+  const events = [
+    `event: message_start\ndata: ${JSON.stringify({
+      type: 'message_start',
+      message: {
+        id: `msg-test-${Date.now()}`,
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        model: mock.model || 'claude-3-5-sonnet-test',
+        usage: { input_tokens: mock.usage?.prompt_tokens || 100, output_tokens: 0 },
+      },
+    })}\n\n`,
+    `event: content_block_start\ndata: ${JSON.stringify({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    })}\n\n`,
+    `event: content_block_delta\ndata: ${JSON.stringify({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'text_delta', text: mock.content },
+    })}\n\n`,
+    `event: content_block_stop\ndata: ${JSON.stringify({
+      type: 'content_block_stop',
+      index: 0,
+    })}\n\n`,
+    `event: message_delta\ndata: ${JSON.stringify({
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn' },
+      usage: { output_tokens: mock.usage?.completion_tokens || 50 },
+    })}\n\n`,
+    `event: message_stop\ndata: ${JSON.stringify({ type: 'message_stop' })}\n\n`,
+  ];
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const ev of events) controller.enqueue(encoder.encode(ev));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  });
+}
+
+function createStreamingGeminiResponse(mock: MockResponse['response']): Response {
+  // Gemini uses streamGenerateContent which returns newline-delimited JSON
+  const body = JSON.stringify([
+    {
+      candidates: [{ content: { parts: [{ text: mock.content }], role: 'model' }, finishReason: 'STOP' }],
+      usageMetadata: {
+        promptTokenCount: mock.usage?.prompt_tokens || 100,
+        candidatesTokenCount: mock.usage?.completion_tokens || 50,
+      },
+    },
+  ]);
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function createMockResponse(url: string, mock: MockResponse['response'], streaming = false): Response {
   const provider = detectProvider(url);
+  if (streaming) {
+    switch (provider) {
+      case 'anthropic':
+        return createStreamingAnthropicResponse(mock);
+      case 'gemini':
+        return createStreamingGeminiResponse(mock);
+      default:
+        return createStreamingOpenAIResponse(mock);
+    }
+  }
   switch (provider) {
     case 'anthropic':
       return createMockAnthropicResponse(mock);
@@ -157,17 +261,19 @@ export function setupLLMInterceptor(): void {
       capturedRequests.push(request);
       if (capturedRequests.length > 100) capturedRequests.shift();
 
+      const isStreaming = !!(body as any)?.stream;
+
       // Check for matching mock
       for (const mock of mockResponses) {
         const matches = typeof mock.pattern === 'string' ? url.includes(mock.pattern) : mock.pattern.test(url);
         if (matches) {
-          return createMockResponse(url, mock.response);
+          return createMockResponse(url, mock.response, isStreaming);
         }
       }
 
       // If no mock and we're in strict test mode, return a default mock
       if ((globalThis as any).__testStrictMock) {
-        return createMockResponse(url, { content: '[MOCKED] No specific mock configured' });
+        return createMockResponse(url, { content: '[MOCKED] No specific mock configured' }, isStreaming);
       }
     }
 

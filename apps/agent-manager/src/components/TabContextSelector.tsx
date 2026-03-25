@@ -155,14 +155,27 @@ export function TabContextSelector({
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const dropdownWidth = 320;
+    const dropdownMaxHeight = 272; // max-h-64 = 16rem = 256px + some padding
     const gap = 4;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropdownWidth - 8));
 
-    setDropdownStyle({
-      position: 'fixed',
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - dropdownWidth - 8)),
-      top: rect.bottom + gap,
-      zIndex: 99999,
-    });
+    // Open above if not enough space below
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < dropdownMaxHeight && rect.top > spaceBelow) {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        bottom: window.innerHeight - rect.top + gap,
+        zIndex: 99999,
+      });
+    } else {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        top: rect.bottom + gap,
+        zIndex: 99999,
+      });
+    }
   }, []);
 
   useEffect(() => {

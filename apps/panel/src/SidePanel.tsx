@@ -721,6 +721,28 @@ const SidePanel = () => {
     return () => document.removeEventListener('force-new-session', handler as EventListener);
   }, [handleNewChat]);
 
+  // Open current session in agent manager and close side panel
+  const handleOpenInAgentManager = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    await chrome.storage.local.set({ pending_agent_manager_session: sid });
+    // Focus existing agent manager tab or create one
+    const agentManagerUrl = chrome.runtime.getURL('agent-manager/index.html');
+    try {
+      const tabs = await chrome.tabs.query({ url: agentManagerUrl });
+      if (tabs.length > 0 && tabs[0].id) {
+        await chrome.tabs.update(tabs[0].id, { active: true });
+        if (tabs[0].windowId) await chrome.windows.update(tabs[0].windowId, { focused: true });
+      } else {
+        await chrome.tabs.create({ url: agentManagerUrl });
+      }
+    } catch {
+      await chrome.tabs.create({ url: agentManagerUrl });
+    }
+    // Reset side panel to default state
+    handleNewChat();
+  }, [handleNewChat]);
+
   // Persist panel view state for restoration on reopen
   useEffect(() => {
     const viewMode = showHistory ? 'history' : showDashboard ? 'dashboard' : 'chat';
@@ -1070,6 +1092,7 @@ const SidePanel = () => {
                   chrome.runtime.openOptionsPage();
                 } catch {}
               }}
+              onOpenInFullView={handleOpenInAgentManager}
             />
           )}
         </div>

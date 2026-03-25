@@ -1,5 +1,6 @@
 import type { Message } from '@extension/storage';
 import { useMemo, useState, useRef, useEffect, lazy, Suspense, CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Actors } from '@extension/storage';
 import { FiCopy, FiClock, FiUser } from 'react-icons/fi';
 import {
@@ -155,6 +156,8 @@ export default function MessageBlock({
   const [copied, setCopied] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<'above' | 'below'>('below');
   const [tabContextTooltipPosition, setTabContextTooltipPosition] = useState<'above' | 'below'>('below');
+  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+  const [tabContextRect, setTabContextRect] = useState<DOMRect | null>(null);
   const tooltipTriggerRef = useRef<HTMLDivElement>(null);
   const tabContextTriggerRef = useRef<HTMLSpanElement>(null);
   const [pricingCacheStatus, setPricingCacheStatus] = useState<{
@@ -244,7 +247,9 @@ export default function MessageBlock({
   );
   const isActiveWorkflow = !!(
     !metadata?.isCompleted &&
-    (isProgress || currentPhase || (isAgentAggregate && (isAgentWorking || statusHint)))
+    ((isProgress && statusHint) ||
+      (isAgentWorking && (isProgress || currentPhase)) ||
+      (isAgentAggregate && (isAgentWorking || statusHint)))
   );
   const isAgentMessage = message.actor !== Actors.USER && message.actor !== Actors.SYSTEM;
   const useDynamicColor = !!agentColorHex && isAgentMessage;
@@ -311,6 +316,7 @@ export default function MessageBlock({
         onMouseEnter={() => {
           if (tooltipTriggerRef.current) {
             const rect = tooltipTriggerRef.current.getBoundingClientRect();
+            setTooltipRect(rect);
             let parent = tooltipTriggerRef.current.parentElement;
             let containerBottom = window.innerHeight;
             while (parent) {
@@ -338,56 +344,69 @@ export default function MessageBlock({
           <FiClock size={10} />
           <span>{jobSummary.latency}s</span>
         </span>
-        {showTooltip && (
-          <span
-            className={`absolute left-0 rounded-lg text-[11px] z-[1000] shadow-lg backdrop-blur-sm min-w-[180px] max-w-[280px] ${isDarkMode ? 'bg-slate-800/98 text-slate-200 border border-slate-600/50' : 'bg-white/98 text-gray-700 border border-gray-200/70'} ${tooltipPosition === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-            {tooltipPosition === 'above' ? (
-              <span
-                className={`absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent ${isDarkMode ? 'border-t-slate-800/98' : 'border-t-white/98'}`}
-              />
-            ) : (
-              <span
-                className={`absolute bottom-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent ${isDarkMode ? 'border-b-slate-800/98' : 'border-b-white/98'}`}
-              />
-            )}
-            <span className="block px-3 py-2 space-y-1.5">
-              {jobSummary.modelName && (
-                <span className="flex justify-between gap-3 pb-1 border-b border-gray-200/30">
-                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Model:</span>
-                  <span className="font-medium text-right">
-                    {jobSummary.provider || 'Unknown'} ({jobSummary.modelName})
-                  </span>
-                </span>
+        {showTooltip &&
+          tooltipRect &&
+          createPortal(
+            <span
+              style={{
+                position: 'fixed',
+                left: tooltipRect.left,
+                ...(tooltipPosition === 'above'
+                  ? { bottom: window.innerHeight - tooltipRect.top + 8 }
+                  : { top: tooltipRect.bottom + 8 }),
+              }}
+              className={`rounded-lg text-[11px] z-[9999] shadow-lg backdrop-blur-sm min-w-[180px] max-w-[280px] pointer-events-none ${isDarkMode ? 'bg-slate-800/98 text-slate-200 border border-slate-600/50' : 'bg-white/98 text-gray-700 border border-gray-200/70'}`}>
+              {tooltipPosition === 'above' ? (
+                <span
+                  className={`absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent ${isDarkMode ? 'border-t-slate-800/98' : 'border-t-white/98'}`}
+                />
+              ) : (
+                <span
+                  className={`absolute bottom-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent ${isDarkMode ? 'border-b-slate-800/98' : 'border-b-white/98'}`}
+                />
               )}
-              <span className="flex justify-between gap-3">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Input:</span>
-                <span className="font-medium">{jobSummary.inputTokens.toLocaleString()}</span>
-              </span>
-              <span className="flex justify-between gap-3">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Output:</span>
-                <span className="font-medium">{jobSummary.outputTokens.toLocaleString()}</span>
-              </span>
-              <span className="flex justify-between gap-3">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Latency:</span>
-                <span className="font-medium">{jobSummary.latency}s</span>
-              </span>
-              <span className="flex justify-between gap-3">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Cost Est:</span>
-                <span className="font-medium">{formatUsd(jobSummary.cost)}</span>
-              </span>
-              <span className="flex justify-between gap-3">
-                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>API Calls:</span>
-                <span className="font-medium">{jobSummary.apiCalls}</span>
-              </span>
-              <span className={`block text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                Costs estimated without prompt caching
-                {pricingCacheStatus?.isUsingCache && pricingCacheStatus.cacheDate && (
-                  <span> | Using pricing data from {new Date(pricingCacheStatus.cacheDate).toLocaleDateString()}</span>
+              <span className="block px-3 py-2 space-y-1.5">
+                {jobSummary.modelName && (
+                  <span className="flex justify-between gap-3 pb-1 border-b border-gray-200/30">
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Model:</span>
+                    <span className="font-medium text-right">
+                      {jobSummary.provider || 'Unknown'} ({jobSummary.modelName})
+                    </span>
+                  </span>
                 )}
+                <span className="flex justify-between gap-3">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Input:</span>
+                  <span className="font-medium">{jobSummary.inputTokens.toLocaleString()}</span>
+                </span>
+                <span className="flex justify-between gap-3">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Output:</span>
+                  <span className="font-medium">{jobSummary.outputTokens.toLocaleString()}</span>
+                </span>
+                <span className="flex justify-between gap-3">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Latency:</span>
+                  <span className="font-medium">{jobSummary.latency}s</span>
+                </span>
+                <span className="flex justify-between gap-3">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>Cost Est:</span>
+                  <span className="font-medium">{formatUsd(jobSummary.cost)}</span>
+                </span>
+                <span className="flex justify-between gap-3">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>API Calls:</span>
+                  <span className="font-medium">{jobSummary.apiCalls}</span>
+                </span>
+                <span className={`block text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Costs estimated without prompt caching
+                  {pricingCacheStatus?.isUsingCache && pricingCacheStatus.cacheDate && (
+                    <span>
+                      {' '}
+                      | Using pricing data from {new Date(pricingCacheStatus.cacheDate).toLocaleDateString()}
+                    </span>
+                  )}
+                </span>
               </span>
-            </span>
-          </span>
-        )}
+            </span>,
+            document.body,
+          )}
       </span>
     ) : null;
 
@@ -405,6 +424,7 @@ export default function MessageBlock({
         onMouseEnter={() => {
           if (tabContextTriggerRef.current) {
             const rect = tabContextTriggerRef.current.getBoundingClientRect();
+            setTabContextRect(rect);
             let parent = tabContextTriggerRef.current.parentElement;
             let containerBottom = window.innerHeight;
             while (parent) {
@@ -432,54 +452,67 @@ export default function MessageBlock({
             {contextTabs.length} tab{contextTabs.length > 1 ? 's' : ''}
           </span>
         </span>
-        {showTabContextTooltip && (
-          <span
-            className={`absolute left-0 rounded-lg text-[11px] z-[1000] shadow-lg backdrop-blur-sm min-w-[200px] max-w-[300px] ${isDarkMode ? 'bg-slate-800/98 text-slate-200 border border-slate-600/50' : 'bg-white/98 text-gray-700 border border-gray-200/70'} ${tabContextTooltipPosition === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-            {tabContextTooltipPosition === 'above' ? (
-              <span
-                className={`absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent ${isDarkMode ? 'border-t-slate-800/98' : 'border-t-white/98'}`}
-              />
-            ) : (
-              <span
-                className={`absolute bottom-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent ${isDarkMode ? 'border-b-slate-800/98' : 'border-b-white/98'}`}
-              />
-            )}
-            <span className="block px-3 py-2">
-              <span
-                className={`block text-[10px] font-medium mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                Tab Context
-              </span>
-              <span className="block space-y-1.5">
-                {contextTabs.map((tab, idx) => (
-                  <span key={tab.id || idx} className="flex items-center gap-2">
-                    {tab.favIconUrl ? (
-                      <img
-                        src={tab.favIconUrl}
-                        alt=""
-                        className="w-4 h-4 flex-shrink-0 rounded-sm"
-                        onError={e => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
+        {showTabContextTooltip &&
+          tabContextRect &&
+          createPortal(
+            <span
+              style={{
+                position: 'fixed',
+                left: tabContextRect.left,
+                ...(tabContextTooltipPosition === 'above'
+                  ? { bottom: window.innerHeight - tabContextRect.top + 8 }
+                  : { top: tabContextRect.bottom + 8 }),
+              }}
+              className={`rounded-lg text-[11px] z-[9999] shadow-lg backdrop-blur-sm min-w-[200px] max-w-[300px] pointer-events-none ${isDarkMode ? 'bg-slate-800/98 text-slate-200 border border-slate-600/50' : 'bg-white/98 text-gray-700 border border-gray-200/70'}`}>
+              {tabContextTooltipPosition === 'above' ? (
+                <span
+                  className={`absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent ${isDarkMode ? 'border-t-slate-800/98' : 'border-t-white/98'}`}
+                />
+              ) : (
+                <span
+                  className={`absolute bottom-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent ${isDarkMode ? 'border-b-slate-800/98' : 'border-b-white/98'}`}
+                />
+              )}
+              <span className="block px-3 py-2">
+                <span
+                  className={`block text-[10px] font-medium mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Tab Context
+                </span>
+                <span className="block space-y-1.5">
+                  {contextTabs.map((tab, idx) => (
+                    <span key={tab.id || idx} className="flex items-center gap-2">
+                      {tab.favIconUrl ? (
+                        <img
+                          src={tab.favIconUrl}
+                          alt=""
+                          className="w-4 h-4 flex-shrink-0 rounded-sm"
+                          onError={e => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className={`w-4 h-4 flex-shrink-0 rounded-sm flex items-center justify-center ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>
+                          <FaFileAlt size={8} className={isDarkMode ? 'text-slate-400' : 'text-gray-400'} />
+                        </span>
+                      )}
                       <span
-                        className={`w-4 h-4 flex-shrink-0 rounded-sm flex items-center justify-center ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>
-                        <FaFileAlt size={8} className={isDarkMode ? 'text-slate-400' : 'text-gray-400'} />
+                        className={`flex-1 truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}
+                        title={tab.title}>
+                        {truncateTabTitle(tab.title)}
                       </span>
-                    )}
-                    <span
-                      className={`flex-1 truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}
-                      title={tab.title}>
-                      {truncateTabTitle(tab.title)}
                     </span>
-                  </span>
-                ))}
+                  ))}
+                </span>
               </span>
-            </span>
-          </span>
-        )}
+            </span>,
+            document.body,
+          )}
       </span>
     ) : null;
+
+  // Hide stale "Showing progress..." messages once the workflow is no longer active
+  if (isProgress && !isActiveWorkflow) return null;
 
   return (
     <div className={`group flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -693,7 +726,7 @@ export default function MessageBlock({
                         </CodeBlock>
                       ),
                     }}>
-                    {content}
+                    {isProgress ? lastTrace?.content || '' : content}
                   </MarkdownRenderer>
                 </Suspense>
               )}

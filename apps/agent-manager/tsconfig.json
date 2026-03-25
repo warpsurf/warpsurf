@@ -3,7 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["src/*"]
+      "@src/*": ["src/*"],
+      "@panel/*": ["../panel/src/*"]
     },
     "types": ["chrome", "../../vite-env.d.ts"]
   },

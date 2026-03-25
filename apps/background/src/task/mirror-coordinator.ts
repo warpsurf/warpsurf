@@ -2,11 +2,17 @@ import { createLogger } from '../log';
 import type { TabMirrorService } from '../tabs/tab-mirror';
 import type { Task } from './task-manager';
 import type { Executor } from '../executor/executor';
+import type { SessionEventBus } from '../events/session-event-bus';
 
 export class MirrorCoordinator {
   private sidePanelPort?: chrome.runtime.Port;
+  private eventBus?: SessionEventBus;
 
   constructor(private tabMirrorService: TabMirrorService) {}
+
+  setEventBus(bus: SessionEventBus): void {
+    this.eventBus = bus;
+  }
 
   setSidePanelPort(port?: chrome.runtime.Port): void {
     this.sidePanelPort = port;
@@ -103,11 +109,8 @@ export class MirrorCoordinator {
   }
 
   private sendInitialMirrorUpdate(tabId: number, sessionId: string): void {
-    if (!this.sidePanelPort) return;
-
     setTimeout(() => {
       try {
-        // Skip if this tab is no longer the active one for its session
         if (!this.tabMirrorService.isActiveTabForSession(tabId, sessionId)) return;
 
         const mirrors =
@@ -115,13 +118,17 @@ export class MirrorCoordinator {
         const mirrorData = mirrors.find((m: any) => m.tabId === tabId);
 
         if (mirrorData) {
-          this.sidePanelPort?.postMessage({
-            type: 'tab-mirror-update',
-            data: { ...mirrorData, sessionId },
-          });
-
+          const updateMsg = { type: 'tab-mirror-update', data: { ...mirrorData, sessionId } };
           const batch = mirrors.map((m: any) => ({ ...m, sessionId }));
-          this.sidePanelPort?.postMessage({ type: 'tab-mirror-batch', data: batch });
+          const batchMsg = { type: 'tab-mirror-batch', data: batch };
+
+          if (this.eventBus?.hasSubscribers(sessionId)) {
+            this.eventBus.publish(sessionId, updateMsg);
+            this.eventBus.publish(sessionId, batchMsg);
+          } else if (this.sidePanelPort) {
+            this.sidePanelPort.postMessage(updateMsg);
+            this.sidePanelPort.postMessage(batchMsg);
+          }
         }
       } catch {}
     }, 800);
