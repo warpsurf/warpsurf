@@ -425,7 +425,30 @@ export const createSystemHandler: EventHandlerCreator = deps => {
             const hasAggregate = !!deps.agentTraceRootIdRef.current;
             const cancelKey = `${deps.sessionIdRef.current || data?.taskId || 'unknown'}:cancelled`;
             const summaryData = parseJobSummary(data);
-            if (!isAgentV2 && !hasAggregate && !deps.processedJobSummariesRef.current.has(cancelKey)) {
+            if (!isAgentV2 && hasAggregate) {
+              // Update aggregate root content in-place (before refs are cleared)
+              const rootId = deps.agentTraceRootIdRef.current as string;
+              deps.setMessages((prev: any[]) =>
+                prev.map((m: any) =>
+                  `${m.timestamp}-${m.actor}` === rootId ? { ...m, content: 'Task cancelled' } : m,
+                ),
+              );
+              markAggregateComplete(deps);
+              try {
+                const sid = deps.sessionIdRef.current;
+                if (sid) {
+                  const sepIdx = rootId.indexOf('-');
+                  chatHistoryStore
+                    .updateMessageContent(
+                      sid,
+                      rootId.substring(sepIdx + 1),
+                      Number(rootId.substring(0, sepIdx)),
+                      'Task cancelled',
+                    )
+                    .catch(() => {});
+                }
+              } catch {}
+            } else if (!isAgentV2 && !deps.processedJobSummariesRef.current.has(cancelKey)) {
               deps.appendMessage({ actor: Actors.SYSTEM, content: 'Task cancelled', timestamp });
               deps.processedJobSummariesRef.current.add(cancelKey);
             }

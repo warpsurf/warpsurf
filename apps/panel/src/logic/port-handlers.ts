@@ -18,22 +18,21 @@ let lastErrorTime = 0;
 const MULTIAGENT_ACTORS = new Set(['multiagent', 'captain', 'planner', 'quartermaster', 'commodore', 'crew']);
 
 function persistCancelledContent(deps: any): void {
-  if (!deps.lastAgentMessageRef?.current) return;
-  const rootMsgId = `${deps.lastAgentMessageRef.current.timestamp}-${deps.lastAgentMessageRef.current.actor}`;
+  const target = deps.lastAgentMessageRef?.current;
+  const rootMsgId = target ? `${target.timestamp}-${target.actor}` : deps.agentTraceRootIdRef?.current;
+  if (!rootMsgId) return;
   deps.setMessages?.((prev: any[]) =>
     prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootMsgId ? { ...m, content: 'Task cancelled' } : m)),
   );
   try {
     const sid = deps.sessionIdRef?.current;
     if (sid) {
-      chatHistoryStore
-        .updateMessageContent(
-          sid,
-          deps.lastAgentMessageRef.current.actor,
-          deps.lastAgentMessageRef.current.timestamp,
-          'Task cancelled',
-        )
-        .catch(() => {});
+      const sepIdx = rootMsgId.indexOf('-');
+      const actor = rootMsgId.substring(sepIdx + 1);
+      const timestamp = Number(rootMsgId.substring(0, sepIdx));
+      if (actor && timestamp) {
+        chatHistoryStore.updateMessageContent(sid, actor, timestamp, 'Task cancelled').catch(() => {});
+      }
     }
   } catch {}
 }
@@ -450,10 +449,13 @@ export function createPanelHandlers(deps: any): any {
       const text = (message as any)?.data?.text || '';
       if (text) {
         const ts = Date.now();
-        const isAgentV2 = deps.getCurrentTaskAgentType?.() === 'multiagent';
         const hasAggregate = !!deps.agentTraceRootIdRef.current;
-        if (isAgentV2 && hasAggregate) {
+        if (hasAggregate) {
           const rootId = deps.agentTraceRootIdRef.current as string;
+          const isAgentV2 = deps.getCurrentTaskAgentType?.() === 'multiagent';
+          const traceActor = isAgentV2
+            ? deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT
+            : deps.lastAgentMessageRef.current?.actor || Actors.AGENT_NAVIGATOR;
           deps.setMessages((prev: any) =>
             prev.map((m: any) => (`${m.timestamp}-${m.actor}` === rootId ? { ...m, content: text } : m)),
           );
@@ -465,10 +467,7 @@ export function createPanelHandlers(deps: any): any {
               [rootId]: {
                 ...existing,
                 finalAnswerContent: text,
-                traceItems: [
-                  ...traceItems,
-                  { actor: deps.lastAgentMessageRef.current?.actor || Actors.MULTIAGENT, content: text, timestamp: ts },
-                ],
+                traceItems: [...traceItems, { actor: traceActor, content: text, timestamp: ts }],
               },
             } as any;
             try {
@@ -631,8 +630,10 @@ export function createPanelHandlers(deps: any): any {
         const s = (message as any)?.data?.summary;
         if (sid && s && deps.getCurrentTaskAgentType?.() === 'multiagent') {
           const target = deps.lastAgentMessageRef.current;
-          if (target) {
-            const messageId = `${target.timestamp}-${target.actor}`;
+          // Fall back to agentTraceRootIdRef — reliably set from trajectory_state
+          // even when lastAgentMessageRef is null (e.g. agent manager joins mid-run).
+          const messageId = target ? `${target.timestamp}-${target.actor}` : deps.agentTraceRootIdRef.current;
+          if (messageId) {
             const rawEndedCost = Number(s.totalCost);
             const endedCost = rawEndedCost < 0 ? -1 : isFinite(rawEndedCost) ? rawEndedCost : 0;
             const requestSummary = {
@@ -1173,6 +1174,10 @@ export function createPanelHandlers(deps: any): any {
           if (rootId) update[rootId] = { ...prev[rootId], isCompleted: true };
           return update;
         });
+        // Clear live preview so no blank preview box lingers
+        deps.setMirrorPreview?.(null);
+        deps.setMirrorPreviewBatch?.([]);
+        deps.setHasFirstPreview?.(false);
         deps.agentTraceRootIdRef && (deps.agentTraceRootIdRef.current = null);
         deps.agentTraceActiveRef && (deps.agentTraceActiveRef.current = false);
         deps.setAgentTraceRootId?.(null);
