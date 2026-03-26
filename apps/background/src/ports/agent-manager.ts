@@ -2,7 +2,21 @@ import { safePostMessage } from '@extension/shared/lib/utils';
 import type { Task } from '../task/task-manager';
 import { logPortMessage } from '../test/instrumentation';
 import { handleNewTask, handleFollowUpTask } from '../executor/task-handlers';
-import { warningsSettingsStore, chatHistoryStore, Actors } from '@extension/storage';
+import {
+  warningsSettingsStore,
+  chatHistoryStore,
+  Actors,
+  agentModelStore,
+  AgentNameEnum,
+  getDefaultDisplayNameFromProviderId,
+  generalSettingsStore,
+} from '@extension/storage';
+import type { Attachment } from '@extension/storage/lib/chat/types';
+import { toStorableAttachment } from '@extension/shared/lib/utils';
+import { MultiAgentWorkflow } from '../workflows/multiagent/multiagent-workflow';
+import { createChatModel } from '../workflows/models/factory';
+import { getAllProvidersDecrypted } from '../crypto';
+import { mergeContextTabIds } from '../workflows/shared/context/auto-tab-context-service';
 
 export type AgentManagerDeps = {
   taskManager: any;
@@ -381,14 +395,110 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
           const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
           const tabId = activeTab?.id || -1;
 
-          // Start the task using the same handler as side panel
+          const effectiveType = agentType || 'auto';
+
+          // Multiagent: start the orchestrator directly (mirrors side-panel start_multi_agent_workflow_v2)
+          if (effectiveType === 'multiagent') {
+            try {
+              let ctxTabIds: number[] = Array.isArray(contextTabIds) ? contextTabIds : [];
+              try {
+                ctxTabIds = await mergeContextTabIds(ctxTabIds);
+              } catch {}
+
+              if (deps.runningWorkflowSessionIds.has(sessionId)) break;
+
+              const providers = await getAllProvidersDecrypted();
+              const agentModels = await agentModelStore.getAllAgentModels();
+              const plannerCfg =
+                agentModels[AgentNameEnum.MultiagentPlanner] ||
+                agentModels[AgentNameEnum.AgentPlanner] ||
+                agentModels[AgentNameEnum.AgentNavigator];
+              if (!plannerCfg) {
+                safePostMessage(port, { type: 'error', error: 'Please set a Planner model in Settings' });
+                break;
+              }
+              const plannerProvider = providers[plannerCfg.provider];
+              if (!plannerProvider) {
+                const name = getDefaultDisplayNameFromProviderId(plannerCfg.provider);
+                safePostMessage(port, { type: 'error', error: `Provider '${name}' not configured.` });
+                break;
+              }
+              const plannerLLM = createChatModel(plannerProvider, plannerCfg);
+              const settings = await generalSettingsStore.getSettings();
+              const maxWorkers = Math.max(1, Math.min(32, settings?.maxWorkerAgents ?? 3));
+
+              const orchestrator = new MultiAgentWorkflow(taskManager, () => port, String(sessionId), { maxWorkers });
+              if (ctxTabIds.length > 0) orchestrator.setContextTabIds(ctxTabIds);
+              const maAttachments: Attachment[] = Array.isArray(attachments) ? attachments : [];
+              if (maAttachments.length > 0) {
+                try {
+                  const storableMap: Record<string, Attachment> = {};
+                  for (const a of maAttachments) storableMap[a.id] = toStorableAttachment(a);
+                  await chatHistoryStore.storeAttachments(sessionId, storableMap);
+                } catch {}
+                try {
+                  (orchestrator as any).setAttachments?.(maAttachments);
+                } catch {}
+              }
+              try {
+                const refinerCfg = agentModels[AgentNameEnum.MultiagentRefiner];
+                if (refinerCfg && providers[refinerCfg.provider]) {
+                  (orchestrator as any).setRefinerModel(createChatModel(providers[refinerCfg.provider], refinerCfg));
+                }
+              } catch {}
+
+              deps.runningWorkflowSessionIds.add(sessionId);
+              deps.workflowsBySession.set(sessionId, orchestrator);
+
+              try {
+                const startTime = Date.now();
+                const result = await chrome.storage.local.get('agent_dashboard_running');
+                const arr = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
+                const filtered = arr.filter((a: any) => String(a.sessionId) !== sessionId);
+                filtered.push({
+                  sessionId,
+                  sessionTitle: task.substring(0, 80),
+                  taskDescription: `multiagent: ${task.substring(0, 120)}`,
+                  startTime,
+                  agentType: 'multiagent',
+                  status: 'running',
+                  lastUpdate: startTime,
+                });
+                await chrome.storage.local.set({ agent_dashboard_running: filtered });
+              } catch {}
+
+              safePostMessage(port, { type: 'workflow_started', data: { sessionId } });
+              (async () => {
+                try {
+                  await orchestrator.start(task, plannerLLM);
+                } catch (e) {
+                  safePostMessage(port, {
+                    type: 'workflow_ended',
+                    data: { sessionId, ok: false, error: e instanceof Error ? e.message : 'Workflow failed' },
+                  });
+                } finally {
+                  deps.runningWorkflowSessionIds.delete(sessionId);
+                  deps.workflowsBySession.delete(sessionId);
+                }
+              })();
+            } catch (e) {
+              logger.error('[AgentManager] multiagent start failed:', e);
+              safePostMessage(port, {
+                type: 'error',
+                error: e instanceof Error ? e.message : 'Failed to start multi-agent workflow',
+              });
+            }
+            break;
+          }
+
+          // All other types: use the standard executor path
           await handleNewTask(
             {
               type: 'new_task',
               task,
               taskId: sessionId,
               tabId,
-              agentType: agentType || 'auto',
+              agentType: effectiveType,
               contextTabIds: contextTabIds || [],
               attachments: attachments || [],
             },
@@ -590,6 +700,136 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
             safePostMessage(port, {
               type: 'speech_to_text_error',
               error: e instanceof Error ? e.message : 'Transcription failed',
+            });
+          }
+          break;
+        }
+
+        case 'cancel_task': {
+          const requestId = message.requestId;
+          const id = String(message.sessionId || message.taskId || '').trim();
+          if (!id) {
+            safePostMessage(port, {
+              type: 'cancel_task_result',
+              requestId,
+              sessionId: id,
+              success: false,
+              error: 'Missing sessionId',
+            });
+            break;
+          }
+          try {
+            try {
+              const { markSessionCancelled, cancelEstimation } = await import('../executor/task-handlers');
+              markSessionCancelled(id);
+              cancelEstimation(id);
+            } catch {}
+            let wf = deps.workflowsBySession.get(id);
+            if (!wf) {
+              for (const [sid, workflow] of deps.workflowsBySession.entries()) {
+                if (sid.includes(id) || id.includes(sid)) {
+                  wf = workflow;
+                  break;
+                }
+              }
+            }
+            if (wf) {
+              await wf.cancelAll();
+              deps.workflowsBySession.delete(id);
+              for (const [key, w] of deps.workflowsBySession.entries()) {
+                if (w === wf) deps.workflowsBySession.delete(key);
+              }
+              try {
+                await (taskManager as any).cancelAllForParentSession?.(id);
+              } catch {}
+              try {
+                await (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id);
+              } catch {}
+              safePostMessage(port, {
+                type: 'cancel_task_result',
+                requestId,
+                sessionId: id,
+                success: true,
+                workflowCancelled: true,
+                taskCancelled: false,
+              });
+            } else {
+              await taskManager.cancelTask(id);
+              try {
+                await (taskManager as any).cancelAllForParentSession?.(id);
+              } catch {}
+              try {
+                (taskManager as any).tabMirrorService?.freezeMirrorsForSession?.(id);
+              } catch {}
+              safePostMessage(port, {
+                type: 'cancel_task_result',
+                requestId,
+                sessionId: id,
+                success: true,
+                workflowCancelled: false,
+                taskCancelled: true,
+              });
+            }
+          } catch (e) {
+            logger.error('[AgentManager] cancel_task failed:', e);
+            safePostMessage(port, {
+              type: 'cancel_task_result',
+              requestId,
+              sessionId: id,
+              success: false,
+              error: e instanceof Error ? e.message : 'Failed to cancel',
+            });
+          }
+          break;
+        }
+
+        case 'pause_task': {
+          const sid = String(message.sessionId || '');
+          const wf = sid ? deps.workflowsBySession.get(sid) : undefined;
+          if (wf) {
+            try {
+              await wf.pauseAll();
+            } catch {}
+          }
+          break;
+        }
+
+        case 'resume_task': {
+          const sid = String(message.sessionId || '');
+          const wf = sid ? deps.workflowsBySession.get(sid) : undefined;
+          if (wf) {
+            try {
+              await wf.resumeAll(message.userMessage);
+            } catch {}
+          }
+          break;
+        }
+
+        case 'kill_all': {
+          try {
+            logger.info('[AgentManager] Received kill_all command');
+            const { handleKillAll } = await import('../killswitch/handler');
+            await handleKillAll({
+              port,
+              logger,
+              taskManager,
+              workflowsBySession: deps.workflowsBySession,
+              runningWorkflowSessionIds: deps.runningWorkflowSessionIds,
+              getCurrentExecutor: deps.getCurrentExecutor,
+              setCurrentExecutor: deps.setCurrentExecutor,
+              setCurrentWorkflow: () => {},
+            });
+          } catch (e) {
+            logger.error('[AgentManager] kill_all failed:', e);
+            safePostMessage(port, {
+              type: 'kill_all_complete',
+              data: {
+                success: false,
+                killedWorkflows: 0,
+                killedTasks: 0,
+                killedMirrors: 0,
+                error: e instanceof Error ? e.message : 'Killswitch failed',
+              },
             });
           }
           break;
