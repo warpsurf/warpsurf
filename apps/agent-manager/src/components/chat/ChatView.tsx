@@ -1,9 +1,10 @@
-import { lazy, Suspense, useRef, useEffect } from 'react';
+import { lazy, Suspense, useRef, useEffect, useState } from 'react';
 import type { Message, RequestSummary, MessageMetadataValue } from '@extension/storage';
 import { Actors } from '@extension/storage';
 import { FiArrowLeft, FiExternalLink } from 'react-icons/fi';
 import { formatDay } from '@panel/utils';
 const MessageBlock = lazy(() => import('@panel/components/chat-interface/message-block'));
+import PreviewPanel from '@panel/components/chat-interface/preview-panel';
 import ChatInput from '@panel/components/chat-interface/chat-input';
 import type {
   MessageMetadata,
@@ -11,6 +12,10 @@ import type {
   InlinePreviewBatch,
   ContextTabInfo,
 } from '@panel/components/chat-interface/types';
+
+const hasPreviewContent = (p: any): boolean => !!(p?.screenshot || p?.url);
+const hasBatchContent = (batch: any): boolean =>
+  Array.isArray(batch) && batch.length > 0 && batch.some(hasPreviewContent);
 
 interface ChatViewProps {
   sessionTitle: string;
@@ -73,6 +78,11 @@ interface ChatViewProps {
   audioLevel?: number;
   sttConfigured?: boolean;
   onOpenVoiceSettings?: () => void;
+  // Plan
+  planItems?: Array<{ text: string; status: string }>;
+  workflowGraph?: any;
+  workflowLaneInfo?: Record<number, { label: string; color?: string }>;
+  onOpenWorkflowFullScreen?: () => void;
 }
 
 export default function ChatView({
@@ -123,8 +133,13 @@ export default function ChatView({
   audioLevel,
   sttConfigured,
   onOpenVoiceSettings,
+  planItems,
+  workflowGraph,
+  workflowLaneInfo,
+  onOpenWorkflowFullScreen,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -181,44 +196,138 @@ export default function ChatView({
         ) : (
           <div className="max-w-full px-2 py-2">
             <Suspense fallback={null}>
-              {messages.map((message, index) => {
-                const messageId = `${message.timestamp}-${message.actor}`;
-                const metadata = (metadataByMessageId as Record<string, MessageMetadata>)[messageId];
-                const isUserMessage = message.actor === Actors.USER;
-                const prevIsUser = index > 0 && messages[index - 1].actor === Actors.USER;
-                const needsExtraSpace = index > 0 && isUserMessage !== prevIsUser;
-                const prevTs = index > 0 ? messages[index - 1].timestamp : undefined;
-                const showDivider =
-                  !prevTs || new Date(prevTs).toDateString() !== new Date(message.timestamp).toDateString();
+              {(() => {
+                const lastAgentIndex = (() => {
+                  for (let i = messages.length - 1; i >= 0; i--) {
+                    if (messages[i].actor !== Actors.USER && messages[i].actor !== Actors.SYSTEM) return i;
+                  }
+                  return -1;
+                })();
+                const rootMeta = activeAggregateMessageId
+                  ? (metadataByMessageId as Record<string, MessageMetadata>)[activeAggregateMessageId]
+                  : undefined;
+                const hasLivePreview = hasPreviewContent(inlinePreview) || hasBatchContent(inlinePreviewBatch);
+                const togglePreviewCollapsed = () => setIsPreviewCollapsed(prev => !prev);
 
-                return (
-                  <div key={messageId} className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
-                    {showDivider && (
-                      <div className="my-2 flex items-center gap-2">
-                        <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
-                        <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                          {formatDay(message.timestamp)}
-                        </div>
-                        <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
+                return messages.map((message, index) => {
+                  const messageId = `${message.timestamp}-${message.actor}`;
+                  const metadata = (metadataByMessageId as Record<string, MessageMetadata>)[messageId];
+                  const isUserMessage = message.actor === Actors.USER;
+                  const prevIsUser = index > 0 && messages[index - 1].actor === Actors.USER;
+                  const needsExtraSpace = index > 0 && isUserMessage !== prevIsUser;
+                  const prevTs = index > 0 ? messages[index - 1].timestamp : undefined;
+                  const showDivider =
+                    !prevTs || new Date(prevTs).toDateString() !== new Date(message.timestamp).toDateString();
+
+                  const isCurrentRunRoot = activeAggregateMessageId === messageId;
+                  const isFallbackLastAgent =
+                    !activeAggregateMessageId &&
+                    hasLivePreview &&
+                    (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
+                  const showPreviewHere = hasLivePreview && (isCurrentRunRoot || isFallbackLastAgent);
+
+                  const effectiveMeta = metadata || rootMeta;
+                  const hasFinalPreview =
+                    hasPreviewContent(effectiveMeta?.finalPreview) || hasBatchContent(effectiveMeta?.finalPreviewBatch);
+                  const showFinalPreviewHere =
+                    !showPreviewHere &&
+                    hasFinalPreview &&
+                    effectiveMeta?.isCompleted &&
+                    (isCurrentRunRoot || index === lastAgentIndex);
+
+                  const shouldReceivePlan =
+                    isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
+
+                  const agentColorHex = metadata?.agentColor || (isCurrentRunRoot ? inlinePreview?.color : undefined);
+
+                  const dateDivider = showDivider ? (
+                    <div className="my-2 flex items-center gap-2">
+                      <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
+                      <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        {formatDay(message.timestamp)}
                       </div>
-                    )}
+                      <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'}`} />
+                    </div>
+                  ) : null;
+
+                  const messageBlockEl = (
                     <MessageBlock
                       message={message}
                       isSameActor={index > 0 && messages[index - 1].actor === message.actor}
                       isDarkMode={isDarkMode}
                       jobSummary={jobSummaries[messageId]}
-                      metadata={metadata}
-                      isAgentAggregate={!!metadata?.traceItems}
+                      metadata={metadata || (showPreviewHere ? rootMeta : undefined)}
+                      isAgentAggregate={!!(metadata?.traceItems || (showPreviewHere && rootMeta?.traceItems))}
                       isAgentWorking={
                         isRunning &&
                         !metadata?.isCompleted &&
-                        index === messages.length - 1 &&
-                        message.actor !== Actors.USER
+                        (message.content === 'Showing progress...' ||
+                          (activeAggregateMessageId
+                            ? isCurrentRunRoot
+                            : isFallbackLastAgent || index === lastAgentIndex))
                       }
+                      hasPreviewPanel={showPreviewHere || showFinalPreviewHere}
+                      planItems={shouldReceivePlan ? planItems || undefined : undefined}
+                      workflowGraph={shouldReceivePlan ? workflowGraph : undefined}
+                      workflowLaneInfo={shouldReceivePlan ? workflowLaneInfo : undefined}
+                      onOpenWorkflowFullScreen={shouldReceivePlan ? onOpenWorkflowFullScreen : undefined}
                     />
-                  </div>
-                );
-              })}
+                  );
+
+                  if (showPreviewHere) {
+                    return (
+                      <div key={messageId} className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                        {dateDivider}
+                        <div className="flex gap-2">
+                          <div className="flex-1 min-w-0">{messageBlockEl}</div>
+                          <div className="w-1/3 flex-shrink-0">
+                            <PreviewPanel
+                              inlinePreview={inlinePreview ?? null}
+                              inlinePreviewBatch={inlinePreviewBatch || []}
+                              agentColorHex={agentColorHex}
+                              isPaused={!!isPaused}
+                              isPreviewCollapsed={isPreviewCollapsed}
+                              isDarkMode={isDarkMode}
+                              onTogglePreviewCollapsed={togglePreviewCollapsed}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (showFinalPreviewHere) {
+                    const finalMeta = metadata || rootMeta;
+                    return (
+                      <div key={messageId} className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                        {dateDivider}
+                        <div className="flex gap-2">
+                          <div className="flex-1 min-w-0">{messageBlockEl}</div>
+                          <div className="w-1/3 flex-shrink-0">
+                            <PreviewPanel
+                              inlinePreview={finalMeta?.finalPreview || null}
+                              inlinePreviewBatch={finalMeta?.finalPreviewBatch || []}
+                              agentColorHex={agentColorHex}
+                              isPaused={false}
+                              isPreviewCollapsed={isPreviewCollapsed}
+                              isDarkMode={isDarkMode}
+                              onTogglePreviewCollapsed={togglePreviewCollapsed}
+                              readOnly
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={messageId} className={needsExtraSpace ? 'mt-2' : 'mt-0.5'}>
+                      {dateDivider}
+                      {messageBlockEl}
+                    </div>
+                  );
+                });
+              })()}
             </Suspense>
           </div>
         )}
