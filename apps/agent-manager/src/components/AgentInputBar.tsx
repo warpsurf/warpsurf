@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FaBrain, FaSearch, FaRobot, FaRandom, FaChevronDown, FaArrowUp, FaPlus } from 'react-icons/fa';
 import { FiPaperclip } from 'react-icons/fi';
 import { MicrophoneButton } from '@extension/shared';
@@ -85,7 +86,9 @@ export function AgentInputBar({
   const setManualContextTabIds = onContextTabsChange ?? setLocalContextTabIds;
   const [excludedAutoTabIds, setExcludedAutoTabIds] = useState<number[]>([]);
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
+  const [workflowDropdownPosition, setWorkflowDropdownPosition] = useState({ top: 0, right: 0 });
   const workflowDropdownRef = useRef<HTMLDivElement>(null);
+  const workflowButtonRef = useRef<HTMLButtonElement>(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
 
@@ -107,7 +110,12 @@ export function AgentInputBar({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
+      if (
+        workflowDropdownRef.current &&
+        !workflowDropdownRef.current.contains(e.target as Node) &&
+        workflowButtonRef.current &&
+        !workflowButtonRef.current.contains(e.target as Node)
+      ) {
         setWorkflowDropdownOpen(false);
       }
     };
@@ -115,6 +123,13 @@ export function AgentInputBar({
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [workflowDropdownOpen]);
+
+  useEffect(() => {
+    if (workflowDropdownOpen && workflowButtonRef.current) {
+      const rect = workflowButtonRef.current.getBoundingClientRect();
+      setWorkflowDropdownPosition({ top: rect.top - 8, right: window.innerWidth - rect.right });
+    }
   }, [workflowDropdownOpen]);
 
   useEffect(() => {
@@ -537,8 +552,9 @@ export function AgentInputBar({
         </div>
 
         <div className="flex items-center gap-2">
-          <div ref={workflowDropdownRef} className="relative">
+          <div className="relative">
             <button
+              ref={workflowButtonRef}
               type="button"
               onClick={() => setWorkflowDropdownOpen(!workflowDropdownOpen)}
               disabled={disabled}
@@ -551,34 +567,43 @@ export function AgentInputBar({
               {selectedOption.icon}
               <FaChevronDown className={`w-2 h-2 transition-transform ${workflowDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-            {workflowDropdownOpen && (
-              <div
-                className={`absolute right-0 bottom-full z-50 mb-1 w-40 rounded-lg border shadow-lg ${
-                  isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
-                }`}>
-                {AGENT_OPTIONS.map(option => (
-                  <button
-                    key={option.type}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAgent(option.type);
-                      setWorkflowDropdownOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
-                      selectedAgent === option.type
-                        ? isDarkMode
-                          ? 'bg-violet-600/30 text-violet-300'
-                          : 'bg-violet-50 text-violet-700'
-                        : isDarkMode
-                          ? 'text-slate-200 hover:bg-slate-700'
-                          : 'text-gray-700 hover:bg-gray-50'
-                    }`}>
-                    {option.icon}
-                    <span>{option.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {workflowDropdownOpen &&
+              createPortal(
+                <div
+                  ref={workflowDropdownRef}
+                  style={{
+                    position: 'fixed',
+                    top: workflowDropdownPosition.top,
+                    right: workflowDropdownPosition.right,
+                    transform: 'translateY(-100%)',
+                  }}
+                  className={`w-40 rounded-lg border shadow-lg z-[9999] ${
+                    isDarkMode ? 'border-slate-600 bg-slate-800' : 'border-gray-200 bg-white'
+                  }`}>
+                  {AGENT_OPTIONS.map(option => (
+                    <button
+                      key={option.type}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAgent(option.type);
+                        setWorkflowDropdownOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                        selectedAgent === option.type
+                          ? isDarkMode
+                            ? 'bg-violet-600/30 text-violet-300'
+                            : 'bg-violet-50 text-violet-700'
+                          : isDarkMode
+                            ? 'text-slate-200 hover:bg-slate-700'
+                            : 'text-gray-700 hover:bg-gray-50'
+                      }`}>
+                      {option.icon}
+                      <span>{option.name}</span>
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              )}
           </div>
 
           <button
