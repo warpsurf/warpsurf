@@ -501,7 +501,6 @@ export class MultiAgentWorkflow {
   private emitSeq = 0;
 
   private emit(type: string, data: any): void {
-    const port = this.getPort();
     if (import.meta.env.DEV) {
       logger.info(`[emit] ${type}`, data?.message || data?.text || '');
     }
@@ -525,10 +524,24 @@ export class MultiAgentWorkflow {
       }
     }
 
-    if (port) {
-      safePostMessage(port as any, { type, data });
-    } else if (import.meta.env.DEV) {
-      logger.warning(`[emit] No port available for ${type} — message dropped`);
+    // Publish via the SessionEventBus so all subscribers (side panel + agent manager) receive it.
+    const eventBus = this.taskManager?.eventBus;
+    if (eventBus) {
+      const outbound = { type, data };
+      // Only buffer state-summarizing events (graph, plan, ended); transient
+      // progress messages are replayed via trajectory_state on subscription.
+      if (type !== 'workflow_progress') {
+        eventBus.bufferEvent(this.sessionId, outbound);
+      }
+      eventBus.publish(this.sessionId, outbound);
+    } else {
+      // Fallback to direct port if event bus unavailable
+      const port = this.getPort();
+      if (port) {
+        safePostMessage(port as any, { type, data });
+      } else if (import.meta.env.DEV) {
+        logger.warning(`[emit] No port or event bus available for ${type} — message dropped`);
+      }
     }
   }
 
