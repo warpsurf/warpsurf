@@ -60,6 +60,7 @@ interface UseAgentManagerConnectionResult {
   messageMetadata: Record<string, any>;
   agentTraceRootIdRef: React.MutableRefObject<string | null>;
   sessionIdRef: React.MutableRefObject<string | null>;
+  currentPlan: Array<{ text: string; status: string }> | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +96,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   const [isPaused, setIsPaused] = useState(false);
   const [showStopButton, setShowStopButton] = useState(false);
   const [showCloseTabs, setShowCloseTabs] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<Array<{ text: string; status: string }> | null>(null);
   const [showEmergencyStop, setShowEmergencyStop] = useState(true);
   const [sessionStats, setSessionStats] = useState<any>({
     totalRequests: 0,
@@ -215,6 +217,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     setCurrentSessionId: NOOP,
     setShowDashboard: NOOP,
     setShowHistory: NOOP,
+    setCurrentPlan,
     // Value params
     currentTaskAgentType,
     workerTabGroups,
@@ -270,7 +273,8 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
 
       if (type === 'buffered_session_events') {
         for (const event of message.events || []) {
-          if (event.type === 'execution') {
+          const et = event?.type;
+          if (et === 'execution') {
             const d = event.data || {};
             h.onExecution?.({
               type: 'execution',
@@ -280,6 +284,10 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
               timestamp: event.timestamp || Date.now(),
               eventId: event?.eventId || d?.eventId,
             } as any);
+          } else if (et && et !== 'buffered_session_events') {
+            // Route non-execution buffered events (workflow_progress, final_answer, etc.)
+            // Guard: skip nested buffered_session_events to prevent recursion.
+            routeMessage(event);
           }
         }
         return;
@@ -511,6 +519,26 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
           }
         }
       }
+      // Reconstruct stale content for ALL completed aggregate roots (not just the current one).
+      // Earlier runs in the same session may have placeholder content like "Initializing browser agent...".
+      if (savedMetadata) {
+        rawMessages = rawMessages.map((m: any) => {
+          const mid = `${m.timestamp}-${m.actor}`;
+          if (mid === effectiveRootId) return m; // already handled above
+          const meta = (savedMetadata as any)?.[mid];
+          if (!meta?.isCompleted || !Array.isArray(meta.traceItems) || meta.traceItems.length === 0) return m;
+          const content = String(m.content ?? '').trim();
+          if (!isStaleContent(content)) return m;
+          const finalAnswer = meta.finalAnswerContent;
+          if (finalAnswer && typeof finalAnswer === 'string' && finalAnswer.trim()) {
+            return { ...m, content: finalAnswer.trim() };
+          }
+          const items = meta.traceItems as Array<{ actor: string; content: string }>;
+          const last = [...items].reverse().find(t => t.content?.trim() && !isStaleContent(t.content));
+          return last ? { ...m, content: last.content } : m;
+        });
+      }
+
       if (effectiveRootId) rawMessages = reorderLiveInjected(rawMessages, effectiveRootId);
 
       let finalMessages = dedupeMessages(rawMessages);
@@ -538,6 +566,14 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
 
       if (finalMessages.length > 0) {
         setMessages(prev => (prev.length >= finalMessages.length ? prev : finalMessages));
+      }
+
+      // Restore plan from persisted metadata
+      const storedPlan = (savedMetadata as any)?.__workflowPlanItems;
+      if (Array.isArray(storedPlan) && storedPlan.length > 0) {
+        setCurrentPlan(storedPlan);
+      } else {
+        setCurrentPlan(null);
       }
     } catch {}
   }, []);
@@ -936,6 +972,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     messageMetadata,
     agentTraceRootIdRef,
     sessionIdRef,
+    currentPlan,
     setPendingContextTabs: useCallback((tabs: any[] | null) => {
       pendingContextTabsRef.current = tabs;
     }, []),
