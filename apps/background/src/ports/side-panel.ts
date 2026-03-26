@@ -1260,6 +1260,13 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
             return;
           }
         }
+        case 'unsubscribe_from_session': {
+          const { sessionId } = message;
+          if (sessionId) {
+            taskManager.unsubscribeFromSession(`side-panel:${sessionId}`);
+          }
+          return;
+        }
         case 'subscribe_to_session': {
           // When sidepanel navigates to a session, send trajectory state, buffered events, and mirrors
           try {

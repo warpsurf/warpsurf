@@ -135,6 +135,7 @@ export function usePanelHandlers(params: {
         const prevSid = sessionIdRef.current;
         if (prevSid && portRef.current?.name === 'side-panel-connection') {
           portRef.current.postMessage({ type: 'stop_all_mirroring_for_session', sessionId: prevSid });
+          portRef.current.postMessage({ type: 'unsubscribe_from_session', sessionId: prevSid });
         }
       } catch {}
 
