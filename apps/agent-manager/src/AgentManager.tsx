@@ -16,6 +16,8 @@ import logoImage from '/warpsurflogo.png';
 import { AGENT_ACTIVITY_THRESHOLDS } from '@extension/shared/lib/utils';
 import { ChatView, ConversationSidebar, DisclaimerModal } from '@src/components/chat';
 import { formatUsd } from '@panel/components/chat-interface/message-list';
+import WorkflowGraphModal from '@panel/components/multiagent-visualization/visualization-modal';
+import { ErrorBoundary } from '@panel/components/error-boundary';
 
 type ViewMode = 'gallery' | 'chat';
 
@@ -173,6 +175,7 @@ export default function AgentManager() {
     messageMetadata,
     agentTraceRootIdRef,
     sessionIdRef,
+    currentPlan,
   } = useAgentManagerConnection();
 
   // Speech-to-text
@@ -411,6 +414,59 @@ export default function AgentManager() {
     return agents.find(a => a.sessionId === chatSession.sessionId) || null;
   }, [agents, chatSession.sessionId]);
 
+  // Workflow graph from metadata and computed lane info (mirrors SidePanel)
+  const workflowGraph = (messageMetadata as any)?.__workflowGraph || undefined;
+  const laneColorByLaneRef = useRef(new Map<number, string>());
+  const computedLaneInfo = useMemo(() => {
+    try {
+      const graph: any = (messageMetadata as any).__workflowGraph;
+      const positions = (graph && graph.positions) || {};
+      if (!Array.isArray(workerTabGroups) || workerTabGroups.length === 0) return {};
+      const lanes: Record<number, { label: string; color?: string }> = {};
+      const defaultColor = '#A78BFA';
+      const rootId = agentTraceRootIdRef.current;
+      const meta: any = rootId ? messageMetadata[rootId] : null;
+      const mapping: Array<{ workerId: string; sessionId: string }> = Array.isArray(meta?.workerSessionMap)
+        ? meta.workerSessionMap
+        : [];
+      const groupByWorkerId = new Map();
+      for (const m of mapping) {
+        const g = workerTabGroups.find((x: any) => String(x.taskId) === String(m.sessionId));
+        if (g) groupByWorkerId.set(String(m.workerId), g);
+      }
+      for (const [, pos] of Object.entries(positions as any)) {
+        const lane = (pos as any)?.y || 0;
+        if (!(lane in lanes)) {
+          const label = `Crew ${lane + 1}`;
+          const mapped = groupByWorkerId.get(String(lane + 1));
+          const groupColor =
+            mapped?.color ||
+            workerTabGroups.find((g: any) =>
+              String(g?.name || '')
+                .trim()
+                .endsWith(String(lane + 1)),
+            )?.color;
+          const finalColor =
+            groupColor && groupColor !== defaultColor
+              ? groupColor
+              : laneColorByLaneRef.current.get(lane) || defaultColor;
+          try {
+            laneColorByLaneRef.current.set(lane, finalColor);
+          } catch {}
+          lanes[lane] = { label, color: finalColor };
+        }
+      }
+      return lanes;
+    } catch {
+      return {};
+    }
+    // agentTraceRootIdRef.current is read inside but the ref identity never
+    // changes; messageMetadata already triggers recomputation when rootId data updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageMetadata, workerTabGroups]);
+
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+
   if (viewMode === 'chat') {
     return (
       <div className={`h-screen flex ${isDarkMode ? 'bg-[#121210] text-slate-200' : 'bg-[#f7f7f5] text-gray-900'}`}>
@@ -447,6 +503,11 @@ export default function AgentManager() {
           onEmergencyStop={handleKillSwitch}
           isAgentModeActive={currentTaskAgentType === 'agent' || currentTaskAgentType === 'multiagent'}
           onInjectLiveMessage={handleInjectLiveMessage}
+          // Plan
+          planItems={currentPlan || undefined}
+          workflowGraph={workflowGraph}
+          workflowLaneInfo={computedLaneInfo}
+          onOpenWorkflowFullScreen={() => setShowWorkflowModal(true)}
           // Close tabs
           showCloseTabs={showCloseTabs}
           workerTabGroups={workerTabGroups}
@@ -493,6 +554,18 @@ export default function AgentManager() {
           />
         )}
         {autoTabContextPrivacyModal}
+        {showWorkflowModal && workflowGraph && (
+          <ErrorBoundary
+            resetKey={chatSession.sessionId ?? ''}
+            fallback={<div className="text-xs text-red-400 p-2">Graph error</div>}>
+            <WorkflowGraphModal
+              graph={workflowGraph}
+              laneInfo={computedLaneInfo}
+              isDarkMode={isDarkMode}
+              onClose={() => setShowWorkflowModal(false)}
+            />
+          </ErrorBoundary>
+        )}
       </div>
     );
   }
