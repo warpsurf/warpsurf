@@ -721,7 +721,7 @@ const SidePanel = () => {
     return () => document.removeEventListener('force-new-session', handler as EventListener);
   }, [handleNewChat]);
 
-  // Open current session in agent manager and close side panel
+  // Open current session in agent manager (keep side panel on same session)
   const handleOpenInAgentManager = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -739,9 +739,7 @@ const SidePanel = () => {
     } catch {
       await chrome.tabs.create({ url: agentManagerUrl });
     }
-    // Reset side panel to default state
-    handleNewChat();
-  }, [handleNewChat]);
+  }, []);
 
   // Persist panel view state for restoration on reopen
   useEffect(() => {
