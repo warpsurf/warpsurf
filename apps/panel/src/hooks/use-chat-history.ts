@@ -272,6 +272,25 @@ export function useChatHistory({
             }
           }
         }
+        // Reconstruct stale content for ALL completed aggregate roots (not just the current one).
+        if (savedMetadata) {
+          rawMessages = rawMessages.map((m: any) => {
+            const mid = `${m.timestamp}-${m.actor}`;
+            if (mid === effectiveRootId) return m;
+            const meta = (savedMetadata as any)?.[mid];
+            if (!meta?.isCompleted || !Array.isArray(meta.traceItems) || meta.traceItems.length === 0) return m;
+            const content = String(m.content ?? '').trim();
+            if (!isStaleContent(content)) return m;
+            const finalAnswer = meta.finalAnswerContent;
+            if (finalAnswer && typeof finalAnswer === 'string' && finalAnswer.trim()) {
+              return { ...m, content: finalAnswer.trim() };
+            }
+            const items = meta.traceItems as Array<{ actor: string; content: string }>;
+            const last = [...items].reverse().find(t => t.content?.trim() && !isStaleContent(t.content));
+            return last ? { ...m, content: last.content } : m;
+          });
+        }
+
         if (effectiveRootId) rawMessages = reorderLiveInjected(rawMessages, effectiveRootId);
 
         let finalMessages = dedupeMessages(rawMessages);
