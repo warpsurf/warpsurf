@@ -224,6 +224,7 @@ export default memo(function MessageList({
                       isPreviewCollapsed={isPreviewCollapsed}
                       isDarkMode={isDarkMode}
                       onTogglePreviewCollapsed={onTogglePreviewCollapsed}
+                      onOpenPreviewTab={onOpenPreviewTab}
                       readOnly
                     />
                   </div>

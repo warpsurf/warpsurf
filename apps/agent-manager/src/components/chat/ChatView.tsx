@@ -83,6 +83,9 @@ interface ChatViewProps {
   workflowGraph?: any;
   workflowLaneInfo?: Record<number, { label: string; color?: string }>;
   onOpenWorkflowFullScreen?: () => void;
+  // Preview
+  onOpenPreviewTab?: (tabId?: number) => void | Promise<void>;
+  onTakeControl?: (tabId?: number) => void | Promise<void>;
 }
 
 export default function ChatView({
@@ -137,6 +140,8 @@ export default function ChatView({
   workflowGraph,
   workflowLaneInfo,
   onOpenWorkflowFullScreen,
+  onOpenPreviewTab,
+  onTakeControl,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
@@ -289,6 +294,8 @@ export default function ChatView({
                               isPreviewCollapsed={isPreviewCollapsed}
                               isDarkMode={isDarkMode}
                               onTogglePreviewCollapsed={togglePreviewCollapsed}
+                              onOpenPreviewTab={onOpenPreviewTab}
+                              onTakeControl={onTakeControl}
                             />
                           </div>
                         </div>
@@ -312,6 +319,7 @@ export default function ChatView({
                               isPreviewCollapsed={isPreviewCollapsed}
                               isDarkMode={isDarkMode}
                               onTogglePreviewCollapsed={togglePreviewCollapsed}
+                              onOpenPreviewTab={onOpenPreviewTab}
                               readOnly
                             />
                           </div>
