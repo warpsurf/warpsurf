@@ -58,6 +58,9 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
       ...(workerId != null && { workerId }),
       ...(eventId && { eventId }),
     };
+    // In multiagent, the aggregate root is managed by onWorkflowProgress.
+    // The navigator handler should only add trace items, not create/update messages.
+    const isMultiagent = deps.getCurrentTaskAgentType?.() === 'multiagent';
 
     switch (state) {
       case ExecutionState.TAB_CREATED:
@@ -87,7 +90,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
 
       case ExecutionState.STEP_START:
         setIsAgentModeActive(true);
-        if (!deps.agentTraceRootIdRef.current) {
+        if (!isMultiagent && !deps.agentTraceRootIdRef.current) {
           createAggregateRoot(Actors.AGENT_NAVIGATOR, content || 'Initializing browser agent...', timestamp, deps, {
             statusHint: 'navigating',
           });
@@ -100,14 +103,14 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             deps,
             traceExtra,
           );
-          if (content) updateAggregateRootContent(content, deps);
+          if (content && !isMultiagent) updateAggregateRootContent(content, deps);
         }
         break;
 
       case ExecutionState.STEP_OK:
         if (deps.agentTraceRootIdRef.current && content) {
           addTraceItem(Actors.AGENT_NAVIGATOR, `${content}${workerSuffix}${nameSuffix}`, timestamp, deps, traceExtra);
-          updateAggregateRootContent(content, deps);
+          if (!isMultiagent) updateAggregateRootContent(content, deps);
         }
         break;
 
@@ -116,7 +119,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
         if (deps.agentTraceRootIdRef.current) {
           const failContent = `Navigator failed: ${content || ''}${workerSuffix}${nameSuffix}`;
           addTraceItem(Actors.AGENT_NAVIGATOR, failContent, timestamp, deps, traceExtra);
-          if (content) updateAggregateRootContent(content, deps);
+          if (content && !isMultiagent) updateAggregateRootContent(content, deps);
         }
         break;
 
@@ -134,7 +137,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             deps,
             traceExtra,
           );
-          if (content) updateAggregateRootContent(content, deps);
+          if (content && !isMultiagent) updateAggregateRootContent(content, deps);
         }
         break;
 
@@ -148,7 +151,7 @@ export const createNavigatorHandler: EventHandlerCreator = deps => {
             deps,
             traceExtra,
           );
-          if (content) updateAggregateRootContent(content, deps);
+          if (content && !isMultiagent) updateAggregateRootContent(content, deps);
         }
         logger.log('[Panel] Navigator action added to aggregate trace');
         break;

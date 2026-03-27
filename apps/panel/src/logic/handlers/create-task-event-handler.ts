@@ -129,6 +129,24 @@ export function createTaskEventHandler(deps: TaskEventHandlerDeps) {
     if (state === ExecutionState.TASK_START || state === ExecutionState.TASK_OK || state === ExecutionState.TASK_FAIL) {
       logger.log('[Panel] Received event:', { actor, state, content: content?.substring?.(0, 100) });
     }
+
+    // In multiagent workflows, worker executors emit events with actor-specific
+    // types (SEARCH, CHAT, AGENT_NAVIGATOR, etc.). Message-creating handlers
+    // (search, chat, tool, planner, validator) must be skipped to avoid standalone
+    // message blocks for each crew worker. The navigator handler is allowed through
+    // because it records crew interactions (sites visited, actions taken) as trace
+    // items in the trajectory Details section.
+    const isMultiagent = deps.getCurrentTaskAgentType?.() === 'multiagent';
+    if (
+      isMultiagent &&
+      actor !== Actors.SYSTEM &&
+      actor !== Actors.AUTO &&
+      actor !== Actors.ESTIMATOR &&
+      actor !== Actors.AGENT_NAVIGATOR
+    ) {
+      return;
+    }
+
     const handler = handlers[actor as string];
     if (!handler) {
       logger.error('Unknown actor', actor);

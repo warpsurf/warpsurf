@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import { Actors, chatHistoryStore } from '@extension/storage';
 import type { Attachment } from '@extension/storage/lib/chat/types';
 import favoritesStorage from '@extension/storage/lib/prompt/favorites';
-import { dedupeMessages, reorderLiveInjected } from '../utils';
+import { dedupeMessages, reorderLiveInjected, mergeMetadata } from '../utils';
 
 type ChatSessionMeta = { id: string; title: string; createdAt: number; updatedAt: number };
 
@@ -122,8 +122,13 @@ export function useChatHistory({
               : false,
           });
 
-          setRequestSummaries(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {});
-          setMessageMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {});
+          setRequestSummaries(prev => ({
+            ...(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {}),
+            ...prev,
+          }));
+          setMessageMetadata(prev =>
+            mergeMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {}, prev),
+          );
           try {
             if (restoredRootId && lastEventIdBySessionRef) {
               const traceItems = (savedMetadata as any)?.[restoredRootId]?.traceItems || [];
@@ -314,6 +319,24 @@ export function useChatHistory({
               return Math.abs(ts - rootTs) > 10000;
             });
           }
+        }
+
+        // For multiagent sessions, filter out standalone crew worker messages
+        const isMultiagentSession =
+          savedMetadata?.__sessionRootId &&
+          ((savedMetadata as any)[savedMetadata.__sessionRootId]?.workerItems?.length > 0 ||
+            (savedMetadata as any)[savedMetadata.__sessionRootId]?.workerSessionMap?.length > 0);
+        if (isMultiagentSession && effectiveRootId) {
+          finalMessages = finalMessages.filter((m: any) => {
+            const mid = `${m.timestamp}-${m.actor}`;
+            if (mid === effectiveRootId) return true;
+            const actor = String(m.actor || '');
+            if (actor === Actors.USER) return true;
+            if (actor === Actors.SYSTEM || actor.toLowerCase() === 'system') return true;
+            if (actor === Actors.MULTIAGENT) return true;
+            if (actor === Actors.ESTIMATOR) return true;
+            return false;
+          });
         }
 
         // Set messages and common state
