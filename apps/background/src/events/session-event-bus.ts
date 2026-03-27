@@ -11,14 +11,9 @@ export class SessionEventBus {
   private sessionIndex = new Map<string, Set<string>>();
   private eventBufferBySession = new Map<string, any[]>();
   private maxBufferSize: number;
-  private legacyPort?: chrome.runtime.Port;
 
   constructor(maxBufferSize = 500) {
     this.maxBufferSize = Math.max(0, maxBufferSize);
-  }
-
-  setLegacyPort(port: chrome.runtime.Port | undefined): void {
-    this.legacyPort = port;
   }
 
   subscribe(sub: Subscriber): void {
@@ -65,12 +60,9 @@ export class SessionEventBus {
           this.unsubscribe(id);
         }
       }
-    } else if (this.legacyPort) {
-      // Backward compat: forward to legacy side panel port when no subscribers
-      try {
-        this.legacyPort.postMessage(event);
-      } catch {}
     }
+    // Events with no subscribers are dropped here but are separately
+    // buffered via bufferEvent() so late-joining subscribers can replay them.
   }
 
   hasSubscribers(sessionId: string): boolean {

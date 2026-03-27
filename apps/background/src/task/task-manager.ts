@@ -757,7 +757,6 @@ export class TaskManager extends EventEmitter {
 
   setSidePanelPort(port: chrome.runtime.Port | undefined): void {
     this.sidePanelPort = port;
-    this.eventBus.setLegacyPort(port);
     this.mirrors.setSidePanelPort(port);
     this.tabGroups.setSidePanelPort(port);
 
