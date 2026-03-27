@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes =
-    'Multiagent workflow orchestration with plan tracking, preview panel, and session handoff in Agent Manager';
+  const releaseNotes = 'Fixes for switching between panel and full-screen views';
 
   useEffect(() => {
     try {
