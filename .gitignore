@@ -101,3 +101,4 @@ standalone/
 ## Evals (standalone benchmarking)
 evals/
 autoresearch/
+autoresearch-dry/
