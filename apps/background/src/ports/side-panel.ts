@@ -1356,7 +1356,7 @@ export function attachSidePanelPortHandlers(port: chrome.runtime.Port, deps: Sid
               if (wf) workflowGraph = wf.getCurrentGraph?.() || null;
             } catch {}
 
-            // Register port as subscriber for live events going forward
+            // Register side panel as subscriber for live events
             taskManager.subscribePortToSession(`side-panel:${sessionId}`, port, String(sessionId));
 
             safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType, workflowGraph });

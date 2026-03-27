@@ -17,6 +17,7 @@ import { MultiAgentWorkflow } from '../workflows/multiagent/multiagent-workflow'
 import { createChatModel } from '../workflows/models/factory';
 import { getAllProvidersDecrypted } from '../crypto';
 import { mergeContextTabIds } from '../workflows/shared/context/auto-tab-context-service';
+import { focusTab, takeControl } from '../tabs/control-handlers';
 
 export type AgentManagerDeps = {
   taskManager: any;
@@ -633,7 +634,7 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
             if (wf) workflowGraph = wf.getCurrentGraph?.() || null;
           } catch {}
 
-          // 5. Register port as subscriber for live events
+          // 5. Register agent-manager port as subscriber for live events
           taskManager.subscribePortToSession(`agent-manager:${sessionId}`, port, String(sessionId));
 
           safePostMessage(port, { type: 'session_subscribed', sessionId, isRunning, agentType, workflowGraph });
@@ -831,6 +832,21 @@ export function attachAgentManagerPortHandlers(port: chrome.runtime.Port, deps: 
                 error: e instanceof Error ? e.message : 'Killswitch failed',
               },
             });
+          }
+          break;
+        }
+
+        case 'focus_tab': {
+          await focusTab(Number(message.tabId), port, logger);
+          break;
+        }
+
+        case 'take_control': {
+          try {
+            await takeControl(Number(message.tabId), deps.getCurrentExecutor(), logger);
+            safePostMessage(port, { type: 'success' });
+          } catch (e) {
+            safePostMessage(port, { type: 'error', error: e instanceof Error ? e.message : 'Failed to take control' });
           }
           break;
         }
