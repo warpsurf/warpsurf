@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Actors, warningsSettingsStore, chatHistoryStore } from '@extension/storage';
 import type { Message, RequestSummary, MessageMetadataValue } from '@extension/storage';
 import { useEventSetup } from '@panel/hooks/use-event-setup';
-import { dedupeMessages, reorderLiveInjected } from '@panel/utils';
+import { dedupeMessages, reorderLiveInjected, mergeMetadata } from '@panel/utils';
 import type { AgentData, PreviewData } from '@src/types';
 
 interface ChatSessionState {
@@ -296,6 +296,20 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       if (type === 'trajectory_state') {
         const { sessionId: sid, data } = message;
         if (String(sid) === String(sessionIdRef.current) && data?.rootId) {
+          // Set rootId and lastAgentMessage refs immediately so event handlers
+          // (onWorkflowEnded, etc.) can key summaries correctly even before
+          // loadInitialData completes.
+          if (!agentTraceRootIdRef.current) {
+            agentTraceRootIdRef.current = data.rootId;
+            setActiveAggregateMessageId(data.rootId);
+            const sepIdx = data.rootId.indexOf('-');
+            if (sepIdx > 0) {
+              lastAgentMessageRef.current = {
+                timestamp: Number(data.rootId.substring(0, sepIdx)),
+                actor: data.rootId.substring(sepIdx + 1),
+              };
+            }
+          }
           setMessageMetadata((prev: any) => {
             const { rootId } = data;
             const effectiveId =
@@ -388,6 +402,43 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
         return;
       }
 
+      if (type === 'cancel_task_result') {
+        h.onCancelTaskResult?.(message);
+        return;
+      }
+      if (type === 'kill_all_complete') {
+        h.onKillAllComplete?.(message);
+        return;
+      }
+      if (type === 'worker_session_created') {
+        h.onWorkerSessionCreated?.(message);
+        return;
+      }
+      if (type === 'tab-mirror-batch-for-cleanup') {
+        h.onTabMirrorBatchForCleanup?.(message);
+        return;
+      }
+      if (type === 'tabs-closed') {
+        h.onTabsClosed?.(message);
+        return;
+      }
+      if (type === 'live_message_queued') {
+        h.onLiveMessageQueued?.(message);
+        return;
+      }
+      if (type === 'token_log') {
+        (h as any).onTokenLog?.(message);
+        return;
+      }
+      if (type === 'speech_to_text_result') {
+        (h as any).onSpeechToTextResult?.(message);
+        return;
+      }
+      if (type === 'speech_to_text_error') {
+        (h as any).onSpeechToTextError?.(message);
+        return;
+      }
+
       if (type === 'task_complete' || type === 'task_completed' || type === 'task_error') {
         setIsJobActive(false);
         jobActiveRef.current = false;
@@ -414,12 +465,14 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       const savedMetadata: any = loadedMetadata && typeof loadedMetadata === 'object' ? loadedMetadata : {};
       const savedSummaries: any = loadedSummaries && typeof loadedSummaries === 'object' ? loadedSummaries : {};
       const hasMessages = session && session.messages.length > 0;
-
       // Restore rootId and metadata
       let effectiveRootId: string | null = (savedMetadata as any)?.__sessionRootId || null;
 
-      setRequestSummaries(savedSummaries);
-      setMessageMetadata(savedMetadata);
+      setRequestSummaries(prev => {
+        // Merge: storage data as base, preserve any live data already set by trajectory_state
+        return { ...savedSummaries, ...prev };
+      });
+      setMessageMetadata(prev => mergeMetadata(savedMetadata, prev));
       if (loadedStats) setSessionStats(loadedStats);
 
       // Reconcile rootId: if stored rootId doesn't match any loaded message,
@@ -564,6 +617,27 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
         }
       }
 
+      // For multiagent sessions, filter out standalone crew worker messages that
+      // were persisted by the executor pipeline. Only USER, the aggregate root,
+      // and SYSTEM messages should be visible — crew output lives in trace items.
+      const isMultiagentSession =
+        savedMetadata?.__sessionRootId &&
+        (savedMetadata[savedMetadata.__sessionRootId]?.workerItems?.length > 0 ||
+          savedMetadata[savedMetadata.__sessionRootId]?.workerSessionMap?.length > 0);
+      if (isMultiagentSession && effectiveRootId) {
+        finalMessages = finalMessages.filter((m: any) => {
+          const mid = `${m.timestamp}-${m.actor}`;
+          if (mid === effectiveRootId) return true;
+          const actor = String(m.actor || '');
+          if (actor === Actors.USER) return true;
+          if (actor === Actors.SYSTEM || actor.toLowerCase() === 'system') return true;
+          if (actor === Actors.MULTIAGENT) return true;
+          if (actor === Actors.ESTIMATOR) return true;
+          // Filter out crew worker output messages (navigator, search, chat, etc.)
+          return false;
+        });
+      }
+
       if (finalMessages.length > 0) {
         setMessages(prev => (prev.length >= finalMessages.length ? prev : finalMessages));
       }
@@ -691,6 +765,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     (sid: string) => {
       if (!portRef.current) return;
       const agent = agents.find(a => a.sessionId === sid);
+      // If agent isn't in the gallery yet (e.g. switching from side panel before
+      // gallery loads), assume running — the background's session_subscribed will
+      // confirm the actual state.
+      const isRunningAgent = agent ? agent.status === 'running' || agent.status === 'needs_input' : true;
+      const agentType = agent?.agentType || null;
 
       resetRunState();
       processedJobSummariesRef.current.clear();
@@ -704,9 +783,18 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       setRequestSummaries({});
       setMirrorPreview(null);
       setMirrorPreviewBatch([]);
-      setIsJobActive(false);
-      jobActiveRef.current = false;
-      setCurrentTaskAgentType(null);
+
+      // Pre-set job state from agent gallery data to avoid race conditions.
+      // The background's session_subscribed response will confirm/correct these.
+      if (isRunningAgent) {
+        setIsJobActive(true);
+        jobActiveRef.current = true;
+        setShowStopButton(true);
+      } else {
+        setIsJobActive(false);
+        jobActiveRef.current = false;
+      }
+      setCurrentTaskAgentType(agentType);
 
       loadInitialData(sid);
       portRef.current.postMessage({ type: 'subscribe-to-session', sessionId: sid });
@@ -766,13 +854,15 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
         totalCost: 0,
         avgLatencyPerRequest: 0,
       });
+      const effectiveAgentType = agentType || 'auto';
       setIsJobActive(true);
       jobActiveRef.current = true;
+      setCurrentTaskAgentType(effectiveAgentType);
       portRef.current.postMessage({
         type: 'start-task-inline',
         task,
         sessionId: sid,
-        agentType: agentType || 'auto',
+        agentType: effectiveAgentType,
         contextTabIds,
         attachments,
       });
