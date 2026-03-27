@@ -567,9 +567,18 @@ export default class BrowserContext {
     // chrome.tabs.create() defaults to the last-focused window, which may be a
     // popup, devtools, or other non-normal window where tab groups are not supported.
     const createOpts: chrome.tabs.CreateProperties = { url, active: false };
+    let activeTabBefore: { tabId: number; windowId: number } | null = null;
     try {
       const normalWin = await chrome.windows.getLastFocused({ windowTypes: ['normal'] as any }).catch(() => null);
-      if (normalWin?.id) createOpts.windowId = normalWin.id;
+      if (normalWin?.id) {
+        createOpts.windowId = normalWin.id;
+        // Remember which tab the user is currently on so we can restore it
+        // if tab creation / debugger attach steals focus.
+        try {
+          const [active] = await chrome.tabs.query({ active: true, windowId: normalWin.id });
+          if (active?.id) activeTabBefore = { tabId: active.id, windowId: normalWin.id };
+        } catch {}
+      }
     } catch {}
     const tab = await chrome.tabs.create(createOpts);
     if (!tab.id) throw new Error('No tab ID available');
@@ -607,6 +616,17 @@ export default class BrowserContext {
     try {
       await this.resolveVisibleGroupId();
     } catch {}
+
+    // Restore the user's active tab if focus was stolen by tab creation,
+    // tab-group assignment, or debugger attach.
+    if (activeTabBefore) {
+      try {
+        const current = await chrome.tabs.query({ active: true, windowId: activeTabBefore.windowId });
+        if (current[0]?.id !== activeTabBefore.tabId) {
+          await chrome.tabs.update(activeTabBefore.tabId, { active: true });
+        }
+      } catch {}
+    }
 
     return page;
   }
