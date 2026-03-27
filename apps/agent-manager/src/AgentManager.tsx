@@ -421,11 +421,14 @@ export default function AgentManager() {
     try {
       const graph: any = (messageMetadata as any).__workflowGraph;
       const positions = (graph && graph.positions) || {};
-      if (!Array.isArray(workerTabGroups) || workerTabGroups.length === 0) return {};
+      if (Object.keys(positions).length === 0) return {};
       const lanes: Record<number, { label: string; color?: string }> = {};
       const defaultColor = '#A78BFA';
       const rootId = agentTraceRootIdRef.current;
       const meta: any = rootId ? messageMetadata[rootId] : null;
+      // Use persisted workerColorMap as primary colour source (survives view switches).
+      // Fall back to live workerTabGroups for running sessions.
+      const colorMap: Record<string, string> = meta?.workerColorMap || {};
       const mapping: Array<{ workerId: string; sessionId: string }> = Array.isArray(meta?.workerSessionMap)
         ? meta.workerSessionMap
         : [];
@@ -438,21 +441,22 @@ export default function AgentManager() {
         const lane = (pos as any)?.y || 0;
         if (!(lane in lanes)) {
           const label = `Crew ${lane + 1}`;
-          const mapped = groupByWorkerId.get(String(lane + 1));
+          const wid = String(lane + 1);
+          const metaColor = colorMap[wid];
+          const mapped = groupByWorkerId.get(wid);
           const groupColor =
             mapped?.color ||
             workerTabGroups.find((g: any) =>
               String(g?.name || '')
                 .trim()
-                .endsWith(String(lane + 1)),
+                .endsWith(wid),
             )?.color;
           const finalColor =
-            groupColor && groupColor !== defaultColor
-              ? groupColor
-              : laneColorByLaneRef.current.get(lane) || defaultColor;
-          try {
-            laneColorByLaneRef.current.set(lane, finalColor);
-          } catch {}
+            metaColor ||
+            (groupColor && groupColor !== defaultColor ? groupColor : null) ||
+            laneColorByLaneRef.current.get(lane) ||
+            defaultColor;
+          laneColorByLaneRef.current.set(lane, finalColor);
           lanes[lane] = { label, color: finalColor };
         }
       }
@@ -460,8 +464,6 @@ export default function AgentManager() {
     } catch {
       return {};
     }
-    // agentTraceRootIdRef.current is read inside but the ref identity never
-    // changes; messageMetadata already triggers recomputation when rootId data updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageMetadata, workerTabGroups]);
 
@@ -508,6 +510,19 @@ export default function AgentManager() {
           workflowGraph={workflowGraph}
           workflowLaneInfo={computedLaneInfo}
           onOpenWorkflowFullScreen={() => setShowWorkflowModal(true)}
+          // Preview
+          onOpenPreviewTab={tabId => {
+            if (typeof tabId !== 'number') return;
+            try {
+              portRef.current?.postMessage({ type: 'focus_tab', tabId });
+            } catch {}
+          }}
+          onTakeControl={tabId => {
+            if (typeof tabId !== 'number') return;
+            try {
+              portRef.current?.postMessage({ type: 'take_control', tabId });
+            } catch {}
+          }}
           // Close tabs
           showCloseTabs={showCloseTabs}
           workerTabGroups={workerTabGroups}

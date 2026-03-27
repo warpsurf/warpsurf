@@ -721,7 +721,10 @@ const SidePanel = () => {
     return () => document.removeEventListener('force-new-session', handler as EventListener);
   }, [handleNewChat]);
 
-  // Open current session in agent manager (keep side panel on same session)
+  // Open current session in agent manager — hand off the session completely.
+  // The side panel unsubscribes from the EventBus so only one view processes
+  // live events, preventing duplicate messages, duplicate crew workers, and
+  // race conditions. The side panel resets to a clean state.
   const handleOpenInAgentManager = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -739,7 +742,10 @@ const SidePanel = () => {
     } catch {
       await chrome.tabs.create({ url: agentManagerUrl });
     }
-  }, []);
+    // Hand off: unsubscribe side panel and reset to new chat so only the
+    // agent manager processes events for this session.
+    handleNewChat();
+  }, [handleNewChat]);
 
   // Persist panel view state for restoration on reopen
   useEffect(() => {
@@ -756,11 +762,12 @@ const SidePanel = () => {
     try {
       const graph: any = (messageMetadata as any).__workflowGraph;
       const positions = (graph && graph.positions) || {};
-      if (!Array.isArray(workerTabGroups) || workerTabGroups.length === 0) return {};
+      if (Object.keys(positions).length === 0) return {};
       const lanes: Record<number, { label: string; color?: string }> = {};
       const defaultColor = '#A78BFA';
       const rootId = agentTraceRootIdRef.current;
       const meta: any = rootId ? messageMetadata[rootId] : null;
+      const colorMap: Record<string, string> = meta?.workerColorMap || {};
       const mapping: Array<{ workerId: string; sessionId: string }> = Array.isArray(meta?.workerSessionMap)
         ? meta.workerSessionMap
         : [];
@@ -773,21 +780,22 @@ const SidePanel = () => {
         const lane = (pos as any)?.y || 0;
         if (!(lane in lanes)) {
           const label = `Crew ${lane + 1}`;
-          const mapped = groupByWorkerId.get(String(lane + 1));
+          const wid = String(lane + 1);
+          const metaColor = colorMap[wid];
+          const mapped = groupByWorkerId.get(wid);
           const groupColor =
             mapped?.color ||
             workerTabGroups.find((g: any) =>
               String(g?.name || '')
                 .trim()
-                .endsWith(String(lane + 1)),
+                .endsWith(wid),
             )?.color;
-          let finalColor =
-            groupColor && groupColor !== defaultColor
-              ? groupColor
-              : laneColorByLaneRef.current.get(lane) || defaultColor;
-          try {
-            laneColorByLaneRef.current.set(lane, finalColor);
-          } catch {}
+          const finalColor =
+            metaColor ||
+            (groupColor && groupColor !== defaultColor ? groupColor : null) ||
+            laneColorByLaneRef.current.get(lane) ||
+            defaultColor;
+          laneColorByLaneRef.current.set(lane, finalColor);
           lanes[lane] = { label, color: finalColor };
         }
       }
