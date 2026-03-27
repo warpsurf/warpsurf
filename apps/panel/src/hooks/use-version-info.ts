@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 export function useVersionInfo() {
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-  const releaseNotes = 'Inline chat view in Agent Manager with session event bus and full view mode';
+  const releaseNotes =
+    'Multiagent workflow orchestration with plan tracking, preview panel, and session handoff in Agent Manager';
 
   useEffect(() => {
     try {
