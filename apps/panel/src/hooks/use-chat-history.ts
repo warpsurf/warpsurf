@@ -122,11 +122,11 @@ export function useChatHistory({
               : false,
           });
 
-          setRequestSummaries(prev => ({
+          setRequestSummaries((prev: any) => ({
             ...(savedSummaries && typeof savedSummaries === 'object' ? savedSummaries : {}),
             ...prev,
           }));
-          setMessageMetadata(prev =>
+          setMessageMetadata((prev: any) =>
             mergeMetadata(savedMetadata && typeof savedMetadata === 'object' ? savedMetadata : {}, prev),
           );
           try {
