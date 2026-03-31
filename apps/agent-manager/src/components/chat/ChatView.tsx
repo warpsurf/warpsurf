@@ -3,6 +3,7 @@ import type { Message, RequestSummary, MessageMetadataValue } from '@extension/s
 import { Actors } from '@extension/storage';
 import { FiArrowLeft, FiExternalLink } from 'react-icons/fi';
 import { formatDay } from '@panel/utils';
+import { TypewriterText } from '@src/components/TypewriterText';
 const MessageBlock = lazy(() => import('@panel/components/chat-interface/message-block'));
 import PreviewPanel from '@panel/components/chat-interface/preview-panel';
 import ChatInput from '@panel/components/chat-interface/chat-input';
@@ -19,6 +20,8 @@ const hasBatchContent = (batch: any): boolean =>
 
 interface ChatViewProps {
   sessionTitle: string;
+  sessionTitleAnimating?: boolean;
+  onTitleAnimationComplete?: () => void;
   messages: Message[];
   isDarkMode: boolean;
   isRunning: boolean;
@@ -90,6 +93,8 @@ interface ChatViewProps {
 
 export default function ChatView({
   sessionTitle,
+  sessionTitleAnimating,
+  onTitleAnimationComplete,
   messages,
   isDarkMode,
   isRunning,
@@ -171,7 +176,11 @@ export default function ChatView({
           </button>
           <div className="min-w-0 flex items-center gap-2">
             <h2 className={`text-sm font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
-              {sessionTitle || 'Chat'}
+              <TypewriterText
+                text={sessionTitle || 'Chat'}
+                animate={!!sessionTitleAnimating}
+                onComplete={onTitleAnimationComplete}
+              />
             </h2>
             {isRunning && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />}
           </div>
@@ -208,8 +217,15 @@ export default function ChatView({
                   }
                   return -1;
                 })();
-                const rootMeta = activeAggregateMessageId
-                  ? (metadataByMessageId as Record<string, MessageMetadata>)[activeAggregateMessageId]
+                // Check whether the activeAggregateMessageId actually matches a rendered message.
+                // If not (e.g. trajectory_state set a rootId before the message was loaded),
+                // treat it as unset so the fallback can attach the preview to the last message.
+                const rootIdMatchesMessage = activeAggregateMessageId
+                  ? messages.some(m => `${m.timestamp}-${m.actor}` === activeAggregateMessageId)
+                  : false;
+                const effectiveAggregateId = rootIdMatchesMessage ? activeAggregateMessageId : null;
+                const rootMeta = effectiveAggregateId
+                  ? (metadataByMessageId as Record<string, MessageMetadata>)[effectiveAggregateId]
                   : undefined;
                 const hasLivePreview = hasPreviewContent(inlinePreview) || hasBatchContent(inlinePreviewBatch);
                 const togglePreviewCollapsed = () => setIsPreviewCollapsed(prev => !prev);
@@ -224,9 +240,9 @@ export default function ChatView({
                   const showDivider =
                     !prevTs || new Date(prevTs).toDateString() !== new Date(message.timestamp).toDateString();
 
-                  const isCurrentRunRoot = activeAggregateMessageId === messageId;
+                  const isCurrentRunRoot = effectiveAggregateId === messageId;
                   const isFallbackLastAgent =
-                    !activeAggregateMessageId &&
+                    !effectiveAggregateId &&
                     hasLivePreview &&
                     (index === lastAgentIndex || (lastAgentIndex === -1 && index === messages.length - 1));
                   const showPreviewHere = hasLivePreview && (isCurrentRunRoot || isFallbackLastAgent);
@@ -241,7 +257,7 @@ export default function ChatView({
                     (isCurrentRunRoot || index === lastAgentIndex);
 
                   const shouldReceivePlan =
-                    isCurrentRunRoot || isFallbackLastAgent || (!activeAggregateMessageId && index === lastAgentIndex);
+                    isCurrentRunRoot || isFallbackLastAgent || (!effectiveAggregateId && index === lastAgentIndex);
 
                   const agentColorHex = metadata?.agentColor || (isCurrentRunRoot ? inlinePreview?.color : undefined);
 
