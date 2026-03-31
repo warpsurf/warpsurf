@@ -176,6 +176,7 @@ export default function AgentManager() {
     agentTraceRootIdRef,
     sessionIdRef,
     currentPlan,
+    setSessionTitleAnimating,
   } = useAgentManagerConnection();
 
   // Speech-to-text
@@ -223,15 +224,14 @@ export default function AgentManager() {
   // Check for pending session from side panel view switch (on mount + storage change + connection ready)
   useEffect(() => {
     if (!isConnected) return;
-    const checkPending = () => {
-      chrome.storage.local.get('pending_agent_manager_session').then(result => {
-        const sessionId = result.pending_agent_manager_session;
-        if (sessionId) {
-          chrome.storage.local.remove('pending_agent_manager_session');
-          subscribeToSession(sessionId);
-          setViewMode('chat');
-        }
-      });
+    const checkPending = async () => {
+      const result = await chrome.storage.local.get('pending_agent_manager_session');
+      const sessionId = result.pending_agent_manager_session;
+      if (sessionId) {
+        chrome.storage.local.remove('pending_agent_manager_session');
+        await subscribeToSession(sessionId);
+        setViewMode('chat');
+      }
     };
     checkPending();
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
@@ -349,8 +349,8 @@ export default function AgentManager() {
 
   // Select an agent from the gallery -> open chat view
   const handleSelectAgent = useCallback(
-    (agent: AgentData) => {
-      subscribeToSession(agent.sessionId);
+    async (agent: AgentData) => {
+      await subscribeToSession(agent.sessionId);
       setViewMode('chat');
     },
     [subscribeToSession],
@@ -391,9 +391,9 @@ export default function AgentManager() {
 
   // Sidebar: switch session
   const handleSidebarSelectSession = useCallback(
-    (sessionId: string) => {
+    async (sessionId: string) => {
       unsubscribeFromSession();
-      subscribeToSession(sessionId);
+      await subscribeToSession(sessionId);
     },
     [unsubscribeFromSession, subscribeToSession],
   );
@@ -481,6 +481,8 @@ export default function AgentManager() {
         />
         <ChatView
           sessionTitle={chatSession.sessionTitle}
+          sessionTitleAnimating={chatSession.sessionTitleAnimating}
+          onTitleAnimationComplete={() => setSessionTitleAnimating(false)}
           messages={chatSession.messages}
           isDarkMode={isDarkMode}
           isRunning={chatSession.isRunning}
