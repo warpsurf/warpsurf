@@ -10,6 +10,7 @@ interface ChatSessionState {
   messages: Message[];
   isRunning: boolean;
   sessionTitle: string;
+  sessionTitleAnimating: boolean;
   jobSummaries: Record<string, RequestSummary>;
   metadataByMessageId: Record<string, MessageMetadataValue>;
 }
@@ -31,7 +32,7 @@ interface UseAgentManagerConnectionResult {
   addPortListener: (listener: (message: any) => void) => void;
   removePortListener: (listener: (message: any) => void) => void;
   chatSession: ChatSessionState;
-  subscribeToSession: (sessionId: string) => void;
+  subscribeToSession: (sessionId: string) => Promise<void>;
   unsubscribeFromSession: () => void;
   startTaskInline: (task: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => void;
   sendFollowUpInline: (text: string, agentType?: string, contextTabIds?: number[], attachments?: any[]) => void;
@@ -61,6 +62,7 @@ interface UseAgentManagerConnectionResult {
   agentTraceRootIdRef: React.MutableRefObject<string | null>;
   sessionIdRef: React.MutableRefObject<string | null>;
   currentPlan: Array<{ text: string; status: string }> | null;
+  setSessionTitleAnimating: (animating: boolean) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,10 +79,21 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   // ─── Chat Session Identity ──────────────────────────────────────────
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState('');
+  const [sessionTitleAnimating, setSessionTitleAnimating] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // Sync chat view title from agents array when the active session's title changes
+  useEffect(() => {
+    if (!sessionId) return;
+    const agent = agents.find(a => a.sessionId === sessionId);
+    if (agent?.sessionTitle && agent.sessionTitle !== sessionTitle) {
+      setSessionTitleAnimating(true);
+      setSessionTitle(agent.sessionTitle);
+    }
+  }, [agents, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Chat Session State (consumed by useEventSetup) ─────────────────
   const [messages, setMessages] = useState<Message[]>([]);
@@ -272,10 +285,21 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       }
 
       if (type === 'buffered_session_events') {
+        const currentSid = sessionIdRef.current;
         for (const event of message.events || []) {
+          // Session gate: skip events that arrived for a different session
+          if (currentSid && sessionIdRef.current !== currentSid) break;
           const et = event?.type;
           if (et === 'execution') {
             const d = event.data || {};
+            // Per-event session gate (mirrors the 'execution' handler above)
+            const possibleIds = [d?.taskId, d?.parentSessionId, d?.sessionId].filter(Boolean);
+            if (
+              currentSid &&
+              possibleIds.length > 0 &&
+              !possibleIds.some((id: any) => String(id) === String(currentSid))
+            )
+              continue;
             h.onExecution?.({
               type: 'execution',
               actor: event.actor || d?.actor || Actors.SYSTEM,
@@ -387,15 +411,28 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       }
 
       if (type === 'title-update') {
-        if (message.sessionId === sessionIdRef.current) setSessionTitle(message.title || '');
-        (h as any).onTitleUpdate?.(message);
+        if (message.sessionId === sessionIdRef.current) {
+          setSessionTitleAnimating(true);
+          setSessionTitle(message.title || '');
+          (h as any).onTitleUpdate?.(message);
+        }
         return;
       }
 
       if (type === 'task-started-inline') {
-        if (message.sessionId) {
-          setSessionId(message.sessionId);
-          sessionIdRef.current = message.sessionId;
+        // Only accept if sessionId matches what we expect (client-generated)
+        // or if we have no session yet. Prevents stale responses from
+        // overwriting the current session during rapid switching.
+        const incomingSid = message.sessionId;
+        if (incomingSid) {
+          const current = sessionIdRef.current;
+          if (!current || current === incomingSid) {
+            setSessionId(incomingSid);
+            sessionIdRef.current = incomingSid;
+          } else {
+            // Stale response for a different session — ignore entirely
+            return;
+          }
         }
         setIsJobActive(true);
         jobActiveRef.current = true;
@@ -639,7 +676,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       }
 
       if (finalMessages.length > 0) {
-        setMessages(prev => (prev.length >= finalMessages.length ? prev : finalMessages));
+        setMessages(finalMessages);
       }
 
       // Restore plan from persisted metadata
@@ -694,6 +731,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
                   : { ...agent, sessionTitle: title, titleAnimating: agent.sessionTitle !== title },
               ),
             );
+            // Also update the chat view title if this is the active session
+            if (agentSessionId === sessionIdRef.current) {
+              setSessionTitleAnimating(true);
+              setSessionTitle(title);
+            }
           }
         }
 
@@ -728,6 +770,43 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
               };
             }),
           );
+
+          // Also populate chat view mirror preview from previews-update as a
+          // fallback. This ensures the chat view gets preview data even if the
+          // event bus subscription was lost (e.g. after port reconnection) or
+          // if tab-mirror-update/batch events haven't arrived yet.
+          const activeSid = sessionIdRef.current;
+          if (activeSid && jobActiveRef.current) {
+            const sessionPreviews = previews.filter(
+              (p: any) => p.sessionId && String(p.sessionId) === String(activeSid),
+            );
+            if (sessionPreviews.length > 1) {
+              // Multiagent: build batch
+              const batch = sessionPreviews.map((p: any) => ({
+                url: p.url,
+                title: p.title,
+                screenshot: p.screenshot,
+                tabId: p.tabId,
+                color: p.color,
+                agentId: p.agentId,
+              }));
+              setMirrorPreviewBatch(batch);
+              setMirrorPreview(null);
+            } else if (sessionPreviews.length === 1) {
+              const p = sessionPreviews[0];
+              setMirrorPreview((prev: any) => {
+                // Only update if we have newer/different data
+                if (prev?.screenshot === p.screenshot && prev?.url === p.url) return prev;
+                return {
+                  url: p.url || prev?.url,
+                  title: p.title || prev?.title,
+                  screenshot: p.screenshot || prev?.screenshot,
+                  tabId: p.tabId || prev?.tabId,
+                  color: p.color || prev?.color,
+                };
+              });
+            }
+          }
         }
       });
 
@@ -738,6 +817,13 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       });
 
       port.postMessage({ type: 'get-agents' });
+
+      // Re-subscribe to the active session after reconnection so mirror
+      // updates resume (port disconnect kills the event bus subscription).
+      const activeSid = sessionIdRef.current;
+      if (activeSid) {
+        port.postMessage({ type: 'subscribe-to-session', sessionId: activeSid });
+      }
     } catch (e) {
       setIsConnected(false);
       reconnectTimeoutRef.current = window.setTimeout(() => connect(), 2000);
@@ -762,14 +848,42 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
   // ─── Session Management ─────────────────────────────────────────────
 
   const subscribeToSession = useCallback(
-    (sid: string) => {
+    async (sid: string) => {
       if (!portRef.current) return;
-      const agent = agents.find(a => a.sessionId === sid);
+
+      // Unsubscribe from the previous session to prevent stale event bus
+      // subscriptions from accumulating in the background.
+      const prevSid = sessionIdRef.current;
+      if (prevSid && prevSid !== sid) {
+        try {
+          portRef.current.postMessage({ type: 'unsubscribe-from-session', sessionId: prevSid });
+        } catch {}
+      }
+
+      let agent = agents.find(a => a.sessionId === sid);
+
       // If agent isn't in the gallery yet (e.g. switching from side panel before
-      // gallery loads), assume running — the background's session_subscribed will
-      // confirm the actual state.
-      const isRunningAgent = agent ? agent.status === 'running' || agent.status === 'needs_input' : true;
-      const agentType = agent?.agentType || null;
+      // gallery loads), check dashboard storage as fallback.
+      let isRunningAgent: boolean;
+      let agentType: string | null;
+      if (agent) {
+        isRunningAgent = agent.status === 'running' || agent.status === 'needs_input';
+        agentType = agent.agentType || null;
+      } else {
+        // Fallback: check chrome storage (matches side panel approach)
+        agentType = null;
+        try {
+          const result = await chrome.storage.local.get('agent_dashboard_running');
+          const running = Array.isArray(result.agent_dashboard_running) ? result.agent_dashboard_running : [];
+          const entry = running.find((a: any) => String(a.sessionId) === String(sid));
+          isRunningAgent = !!entry;
+          if (entry?.agentType) agentType = entry.agentType;
+        } catch {
+          isRunningAgent = false;
+        }
+        // Bail out if session changed during async storage lookup
+        if (sessionIdRef.current && sessionIdRef.current !== sid) return;
+      }
 
       resetRunState();
       processedJobSummariesRef.current.clear();
@@ -778,6 +892,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       setSessionId(sid);
       sessionIdRef.current = sid;
       setSessionTitle(agent?.sessionTitle || agent?.taskDescription?.substring(0, 60) || '');
+      setSessionTitleAnimating(false);
       setMessages([]);
       setMessageMetadata({});
       setRequestSummaries({});
@@ -796,8 +911,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       }
       setCurrentTaskAgentType(agentType);
 
-      loadInitialData(sid);
-      portRef.current.postMessage({ type: 'subscribe-to-session', sessionId: sid });
+      // Load stored messages/metadata BEFORE subscribing to live events,
+      // matching the side panel's ordering. This prevents buffered events
+      // from injecting intermediate messages before the initial data is set.
+      await loadInitialData(sid);
+      portRef.current?.postMessage({ type: 'subscribe-to-session', sessionId: sid });
     },
     [agents, resetRunState, loadInitialData],
   );
@@ -813,6 +931,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     setSessionId(null);
     sessionIdRef.current = null;
     setSessionTitle('');
+    setSessionTitleAnimating(false);
     setMessages([]);
     setMessageMetadata({});
     setRequestSummaries({});
@@ -1019,10 +1138,11 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
       messages,
       isRunning: isJobActive,
       sessionTitle,
+      sessionTitleAnimating,
       jobSummaries: requestSummaries as Record<string, RequestSummary>,
       metadataByMessageId: messageMetadata as Record<string, MessageMetadataValue>,
     }),
-    [sessionId, messages, isJobActive, sessionTitle, requestSummaries, messageMetadata],
+    [sessionId, messages, isJobActive, sessionTitle, sessionTitleAnimating, requestSummaries, messageMetadata],
   );
 
   return {
@@ -1063,6 +1183,7 @@ export function useAgentManagerConnection(): UseAgentManagerConnectionResult {
     agentTraceRootIdRef,
     sessionIdRef,
     currentPlan,
+    setSessionTitleAnimating,
     setPendingContextTabs: useCallback((tabs: any[] | null) => {
       pendingContextTabsRef.current = tabs;
     }, []),
