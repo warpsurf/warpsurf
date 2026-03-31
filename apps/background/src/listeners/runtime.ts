@@ -1,15 +1,31 @@
 import { canInjectScripts, injectBuildDomTree } from '../utils/injection';
 import { safePostMessage, safeStorageRemove } from '@extension/shared/lib/utils';
+import type { MultiAgentWorkflow } from '../workflows/multiagent/multiagent-workflow';
 
 type Deps = {
   logger: { info: Function; error: Function };
   browserContext: { cleanup: () => Promise<void>; removeAttachedPage: (tabId: number) => void };
   getCurrentExecutor: () => any | null;
+  setCurrentExecutor: (e: any | null) => void;
+  setCurrentWorkflow: (wf: any | null) => void;
   getCurrentPort: () => chrome.runtime.Port | null;
+  taskManager: any;
+  workflowsBySession: Map<string, MultiAgentWorkflow>;
+  runningWorkflowSessionIds: Set<string>;
 };
 
 export function attachRuntimeListeners(deps: Deps): void {
-  const { logger, browserContext, getCurrentExecutor, getCurrentPort } = deps;
+  const {
+    logger,
+    browserContext,
+    getCurrentExecutor,
+    setCurrentExecutor,
+    setCurrentWorkflow,
+    getCurrentPort,
+    taskManager,
+    workflowsBySession,
+    runningWorkflowSessionIds,
+  } = deps;
 
   chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     try {
@@ -26,14 +42,32 @@ export function attachRuntimeListeners(deps: Deps): void {
   chrome.debugger.onDetach.addListener(async (_source, reason) => {
     try {
       if (reason === 'canceled_by_user') {
-        const executor = getCurrentExecutor() as any;
-        executor?.cancel?.();
-        await browserContext.cleanup();
+        logger.info('[DEBUGGER_CANCEL] User cancelled debugger banner — triggering killswitch');
+        const { handleKillAll } = await import('../killswitch/handler');
+        const agentManagerPort = taskManager?.tabMirrorService?.getAgentManagerPort?.();
+        const port = getCurrentPort();
+        await handleKillAll({
+          port: port as chrome.runtime.Port,
+          logger,
+          taskManager,
+          workflowsBySession,
+          runningWorkflowSessionIds,
+          getCurrentExecutor,
+          setCurrentExecutor,
+          setCurrentWorkflow,
+          agentManagerPort,
+        });
       }
     } catch (error) {
-      if (import.meta.env.DEV) {
-        logger.error('Debugger detach handler error:', error);
-      }
+      // Fallback: if killswitch fails, still try to cancel executor and cleanup
+      logger.error('[DEBUGGER_CANCEL] Killswitch failed, attempting fallback cleanup:', error);
+      try {
+        const executor = getCurrentExecutor() as any;
+        executor?.cancel?.();
+      } catch {}
+      try {
+        await browserContext.cleanup();
+      } catch {}
     }
   });
 
