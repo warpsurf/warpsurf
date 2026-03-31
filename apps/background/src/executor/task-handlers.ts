@@ -384,18 +384,31 @@ export async function handleNewTask(message: any, deps: Deps) {
     browserContext.setContextTabs(contextTabIds);
     deps.logger.info(`[handleNewTask] Set ${contextTabIds.length} context tabs for session ${sessionId}`);
 
-    // Create a tab group for context tabs immediately with appropriate styling
+    // Create a tab group for context tabs immediately with appropriate styling.
+    // Only group HTTP(S) tabs — non-HTTP schemes (data:, chrome:, etc.) can hang
+    // or corrupt tab state when passed to chrome.tabs.group.
     try {
-      const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-      const groupTitle = isWebAgent ? 'Crew' : 'Reference';
-      const groupColor = isWebAgent ? 'blue' : 'grey';
-      await chrome.tabGroups.update(groupId, { color: groupColor });
-      if (isWebAgent) {
-        (browserContext as any)._preferredGroupId = groupId;
+      const groupableTabs: number[] = [];
+      for (const tid of contextTabIds) {
+        try {
+          const t = await chrome.tabs.get(tid);
+          if (t.url && (t.url.startsWith('http://') || t.url.startsWith('https://'))) {
+            groupableTabs.push(tid);
+          }
+        } catch {}
       }
-      deps.logger.info(
-        `[handleNewTask] Created tab group ${groupId} (${groupTitle}) for ${contextTabIds.length} context tabs`,
-      );
+      if (groupableTabs.length > 0) {
+        const groupId = await chrome.tabs.group({ tabIds: groupableTabs });
+        const groupTitle = isWebAgent ? 'Crew' : 'Reference';
+        const groupColor = isWebAgent ? 'blue' : 'grey';
+        await chrome.tabGroups.update(groupId, { color: groupColor });
+        if (isWebAgent) {
+          (browserContext as any)._preferredGroupId = groupId;
+        }
+        deps.logger.info(
+          `[handleNewTask] Created tab group ${groupId} (${groupTitle}) for ${groupableTabs.length} context tabs`,
+        );
+      }
     } catch (e) {
       deps.logger.error('[handleNewTask] Failed to create tab group for context tabs:', e);
     }
@@ -652,21 +665,29 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
         // Also update executor context for prompt injection
         existing.setContextTabIds?.(contextTabIds);
 
-        // Add context tabs to the existing group if one exists
+        // Add context tabs to the existing group if one exists.
+        // Only group HTTP(S) tabs — non-HTTP schemes can hang chrome.tabs.group.
         try {
-          const existingTask = (taskManager as any).getTask?.(sessionId);
-          if (existingTask?.groupId) {
-            await chrome.tabs.group({ tabIds: contextTabIds, groupId: existingTask.groupId });
-            logger.info(
-              `[handleFollowUpTask] Added ${contextTabIds.length} context tabs to existing group ${existingTask.groupId}`,
-            );
-          } else {
-            // No existing group, create one
-            const groupId = await chrome.tabs.group({ tabIds: contextTabIds });
-            await chrome.tabGroups.update(groupId, { color: 'blue' });
-            // Set preferred group directly to avoid redundant moveContextTabsToGroup call
-            (browserContext as any)._preferredGroupId = groupId;
-            logger.info(`[handleFollowUpTask] Created new tab group ${groupId} for context tabs`);
+          const groupable: number[] = [];
+          for (const tid of contextTabIds) {
+            try {
+              const t = await chrome.tabs.get(tid);
+              if (t.url && (t.url.startsWith('http://') || t.url.startsWith('https://'))) groupable.push(tid);
+            } catch {}
+          }
+          if (groupable.length > 0) {
+            const existingTask = (taskManager as any).getTask?.(sessionId);
+            if (existingTask?.groupId) {
+              await chrome.tabs.group({ tabIds: groupable, groupId: existingTask.groupId });
+              logger.info(
+                `[handleFollowUpTask] Added ${groupable.length} context tabs to existing group ${existingTask.groupId}`,
+              );
+            } else {
+              const groupId = await chrome.tabs.group({ tabIds: groupable });
+              await chrome.tabGroups.update(groupId, { color: 'blue' });
+              (browserContext as any)._preferredGroupId = groupId;
+              logger.info(`[handleFollowUpTask] Created new tab group ${groupId} for context tabs`);
+            }
           }
         } catch (e) {
           logger.error('[handleFollowUpTask] Failed to group context tabs:', e);
@@ -797,6 +818,12 @@ export async function handleFollowUpTask(message: any, deps: Deps) {
       }
     } catch (e) {
       logger.warning('[handleFollowUpTask] Failed to stop mirroring:', e);
+    }
+
+    // Update context tabs on the executor so chat/search workflows can use them
+    if (contextTabIds.length > 0) {
+      existing.setContextTabIds?.(contextTabIds);
+      logger.info(`[handleFollowUpTask] Set ${contextTabIds.length} context tabs for chat/search follow-up`);
     }
 
     // Attach follow-up file/image attachments to the executor context
