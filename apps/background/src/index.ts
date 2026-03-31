@@ -64,7 +64,16 @@ attachRuntimeListeners({
   logger,
   browserContext,
   getCurrentExecutor: () => currentExecutor,
+  setCurrentExecutor: (e: any | null) => {
+    currentExecutor = e;
+  },
+  setCurrentWorkflow: (wf: any | null) => {
+    currentWorkflow = wf;
+  },
   getCurrentPort: () => currentPort,
+  taskManager,
+  workflowsBySession,
+  runningWorkflowSessionIds,
 });
 
 // Setup context menus for quick actions
