@@ -39,24 +39,34 @@ export function attachRuntimeListeners(deps: Deps): void {
     }
   });
 
+  // Guard: onDetach fires once per attached tab — only run killswitch once
+  let killswitchInFlight = false;
+
   chrome.debugger.onDetach.addListener(async (_source, reason) => {
     try {
       if (reason === 'canceled_by_user') {
+        if (killswitchInFlight) return;
+        killswitchInFlight = true;
+
         logger.info('[DEBUGGER_CANCEL] User cancelled debugger banner — triggering killswitch');
-        const { handleKillAll } = await import('../killswitch/handler');
-        const agentManagerPort = taskManager?.tabMirrorService?.getAgentManagerPort?.();
-        const port = getCurrentPort();
-        await handleKillAll({
-          port: port as chrome.runtime.Port,
-          logger,
-          taskManager,
-          workflowsBySession,
-          runningWorkflowSessionIds,
-          getCurrentExecutor,
-          setCurrentExecutor,
-          setCurrentWorkflow,
-          agentManagerPort,
-        });
+        try {
+          const { handleKillAll } = await import('../killswitch/handler');
+          const agentManagerPort = taskManager?.tabMirrorService?.getAgentManagerPort?.();
+          const port = getCurrentPort();
+          await handleKillAll({
+            port: port as chrome.runtime.Port,
+            logger,
+            taskManager,
+            workflowsBySession,
+            runningWorkflowSessionIds,
+            getCurrentExecutor,
+            setCurrentExecutor,
+            setCurrentWorkflow,
+            agentManagerPort,
+          });
+        } finally {
+          killswitchInFlight = false;
+        }
       }
     } catch (error) {
       // Fallback: if killswitch fails, still try to cancel executor and cleanup
