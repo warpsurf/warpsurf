@@ -356,6 +356,11 @@ export class TaskManager extends EventEmitter {
     this.emit('task-cancelled', task);
     this.updateBadge();
 
+    // Clear global executor reference so new tasks aren't blocked by stale state
+    try {
+      task.onExecutorFinished?.();
+    } catch {}
+
     await this.processQueue();
   }
 
