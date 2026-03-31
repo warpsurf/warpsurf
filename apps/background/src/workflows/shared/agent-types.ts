@@ -260,7 +260,7 @@ export class AgentContext {
 
   async stop() {
     this.stopped = true;
-    setTimeout(() => this.controller.abort(), 300);
+    this.controller.abort();
   }
 }
 
