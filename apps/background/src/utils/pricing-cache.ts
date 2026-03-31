@@ -30,9 +30,9 @@ export interface CachedPricingData {
   };
 }
 
-// Cache generated on 2026-03-27 - Update by running: pnpm generate-pricing-cache
+// Cache generated on 2026-03-31 - Update by running: pnpm generate-pricing-cache
 export const CACHED_PRICING_DATA: CachedPricingData = {
-  generatedAt: '2026-03-27T11:23:35.231Z',
+  generatedAt: '2026-03-31T13:46:00.468Z',
   version: 1,
   helicone: {
     openai: {
@@ -1371,6 +1371,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
           'google/gemma-3-27b-it',
           'google/gemma-3-4b-it',
           'google/gemma-3n-e4b-it',
+          'google/lyria-3-clip-preview',
+          'google/lyria-3-pro-preview',
         ],
       },
       {
@@ -1396,7 +1398,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       {
         id: 'kwaipilot',
         displayName: 'Kwaipilot',
-        models: ['kwaipilot/kat-coder-pro'],
+        models: ['kwaipilot/kat-coder-pro-v2'],
       },
       {
         id: 'liquid',
@@ -1668,6 +1670,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         models: ['reka/reka-edge'],
       },
       {
+        id: 'rekaai',
+        displayName: 'Rekaai',
+        models: ['rekaai/reka-flash-3'],
+      },
+      {
         id: 'relace',
         displayName: 'Relace',
         models: ['relace/relace-apply-3', 'relace/relace-search'],
@@ -1767,6 +1774,18 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       },
     ],
     pricing: {
+      'google/lyria-3-pro-preview': {
+        inputPerToken: 0,
+        outputPerToken: 0,
+      },
+      'google/lyria-3-clip-preview': {
+        inputPerToken: 0,
+        outputPerToken: 0,
+      },
+      'kwaipilot/kat-coder-pro-v2': {
+        inputPerToken: 3e-7,
+        outputPerToken: 0.0000012,
+      },
       'reka/reka-edge': {
         inputPerToken: 1e-7,
         outputPerToken: 1e-7,
@@ -1896,8 +1915,8 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 0.00000234,
       },
       'minimax/minimax-m2.5': {
-        inputPerToken: 2e-7,
-        outputPerToken: 0.00000117,
+        inputPerToken: 1.8e-7,
+        outputPerToken: 0.0000011,
       },
       'z-ai/glm-5': {
         inputPerToken: 7.2e-7,
@@ -1924,7 +1943,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         outputPerToken: 3e-7,
       },
       'moonshotai/kimi-k2.5': {
-        inputPerToken: 4.5e-7,
+        inputPerToken: 4.2e-7,
         outputPerToken: 0.0000022,
       },
       'upstage/solar-pro-3': {
@@ -2106,10 +2125,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openai/gpt-5.1-codex-mini': {
         inputPerToken: 2.5e-7,
         outputPerToken: 0.000002,
-      },
-      'kwaipilot/kat-coder-pro': {
-        inputPerToken: 2.07e-7,
-        outputPerToken: 8.28e-7,
       },
       'moonshotai/kimi-k2-thinking': {
         inputPerToken: 4.7e-7,
@@ -2655,6 +2670,10 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
       },
+      'rekaai/reka-flash-3': {
+        inputPerToken: 1e-7,
+        outputPerToken: 2e-7,
+      },
       'google/gemma-3-27b-it': {
         inputPerToken: 8e-8,
         outputPerToken: 1.6e-7,
@@ -2867,13 +2886,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.7e-7,
         outputPerToken: 4.3e-7,
       },
-      'meta-llama/llama-3.2-1b-instruct': {
-        inputPerToken: 2.7e-8,
-        outputPerToken: 2e-7,
-      },
       'meta-llama/llama-3.2-3b-instruct': {
         inputPerToken: 5.1e-8,
         outputPerToken: 3.4e-7,
+      },
+      'meta-llama/llama-3.2-1b-instruct': {
+        inputPerToken: 2.7e-8,
+        outputPerToken: 2e-7,
       },
       'meta-llama/llama-3.2-11b-vision-instruct': {
         inputPerToken: 4.9e-8,
@@ -2883,13 +2902,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.2e-7,
         outputPerToken: 3.9e-7,
       },
-      'cohere/command-r-08-2024': {
-        inputPerToken: 1.5e-7,
-        outputPerToken: 6e-7,
-      },
       'cohere/command-r-plus-08-2024': {
         inputPerToken: 0.0000025,
         outputPerToken: 0.00001,
+      },
+      'cohere/command-r-08-2024': {
+        inputPerToken: 1.5e-7,
+        outputPerToken: 6e-7,
       },
       'sao10k/l3.1-euryale-70b': {
         inputPerToken: 8.5e-7,
@@ -2923,11 +2942,11 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 2e-8,
         outputPerToken: 4e-8,
       },
-      'openai/gpt-4o-mini': {
+      'openai/gpt-4o-mini-2024-07-18': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
-      'openai/gpt-4o-mini-2024-07-18': {
+      'openai/gpt-4o-mini': {
         inputPerToken: 1.5e-7,
         outputPerToken: 6e-7,
       },
@@ -2947,13 +2966,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 1.4e-7,
         outputPerToken: 1.4e-7,
       },
-      'openai/gpt-4o': {
-        inputPerToken: 0.0000025,
-        outputPerToken: 0.00001,
-      },
       'openai/gpt-4o-2024-05-13': {
         inputPerToken: 0.000005,
         outputPerToken: 0.000015,
+      },
+      'openai/gpt-4o': {
+        inputPerToken: 0.0000025,
+        outputPerToken: 0.00001,
       },
       'meta-llama/llama-3-8b-instruct': {
         inputPerToken: 3e-8,
@@ -2983,13 +3002,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.000002,
         outputPerToken: 0.000006,
       },
-      'openai/gpt-3.5-turbo-0613': {
-        inputPerToken: 0.000001,
-        outputPerToken: 0.000002,
-      },
       'openai/gpt-4-turbo-preview': {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
+      },
+      'openai/gpt-3.5-turbo-0613': {
+        inputPerToken: 0.000001,
+        outputPerToken: 0.000002,
       },
       'mistralai/mixtral-8x7b-instruct': {
         inputPerToken: 5.4e-7,
@@ -3007,13 +3026,13 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 0.00001,
         outputPerToken: 0.00003,
       },
-      'mistralai/mistral-7b-instruct-v0.1': {
-        inputPerToken: 1.1e-7,
-        outputPerToken: 1.9e-7,
-      },
       'openai/gpt-3.5-turbo-instruct': {
         inputPerToken: 0.0000015,
         outputPerToken: 0.000002,
+      },
+      'mistralai/mistral-7b-instruct-v0.1': {
+        inputPerToken: 1.1e-7,
+        outputPerToken: 1.9e-7,
       },
       'openai/gpt-3.5-turbo-16k': {
         inputPerToken: 0.000003,
@@ -3031,20 +3050,23 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
         inputPerToken: 6e-8,
         outputPerToken: 6e-8,
       },
-      'openai/gpt-3.5-turbo': {
-        inputPerToken: 5e-7,
-        outputPerToken: 0.0000015,
+      'openai/gpt-4-0314': {
+        inputPerToken: 0.00003,
+        outputPerToken: 0.00006,
       },
       'openai/gpt-4': {
         inputPerToken: 0.00003,
         outputPerToken: 0.00006,
       },
-      'openai/gpt-4-0314': {
-        inputPerToken: 0.00003,
-        outputPerToken: 0.00006,
+      'openai/gpt-3.5-turbo': {
+        inputPerToken: 5e-7,
+        outputPerToken: 0.0000015,
       },
     },
     contextLengths: {
+      'google/lyria-3-pro-preview': 1048576,
+      'google/lyria-3-clip-preview': 1048576,
+      'kwaipilot/kat-coder-pro-v2': 256000,
       'reka/reka-edge': 16384,
       'xiaomi/mimo-v2-omni': 262144,
       'xiaomi/mimo-v2-pro': 1048576,
@@ -3130,7 +3152,6 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openai/gpt-5.1-chat': 128000,
       'openai/gpt-5.1-codex': 400000,
       'openai/gpt-5.1-codex-mini': 400000,
-      'kwaipilot/kat-coder-pro': 256000,
       'moonshotai/kimi-k2-thinking': 131072,
       'amazon/nova-premier-v1': 1000000,
       'perplexity/sonar-pro-search': 200000,
@@ -3267,6 +3288,7 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'cohere/command-a': 256000,
       'openai/gpt-4o-mini-search-preview': 128000,
       'openai/gpt-4o-search-preview': 128000,
+      'rekaai/reka-flash-3': 65536,
       'google/gemma-3-27b-it': 131072,
       'thedrummer/skyfall-36b-v2': 32768,
       'perplexity/sonar-reasoning-pro': 128000,
@@ -3320,12 +3342,12 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'inflection/inflection-3-productivity': 8000,
       'inflection/inflection-3-pi': 8000,
       'thedrummer/rocinante-12b': 32768,
-      'meta-llama/llama-3.2-1b-instruct': 60000,
       'meta-llama/llama-3.2-3b-instruct': 80000,
+      'meta-llama/llama-3.2-1b-instruct': 60000,
       'meta-llama/llama-3.2-11b-vision-instruct': 131072,
       'qwen/qwen-2.5-72b-instruct': 32768,
-      'cohere/command-r-08-2024': 128000,
       'cohere/command-r-plus-08-2024': 128000,
+      'cohere/command-r-08-2024': 128000,
       'sao10k/l3.1-euryale-70b': 131072,
       'nousresearch/hermes-3-llama-3.1-70b': 131072,
       'nousresearch/hermes-3-llama-3.1-405b': 131072,
@@ -3334,14 +3356,14 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'meta-llama/llama-3.1-8b-instruct': 16384,
       'meta-llama/llama-3.1-70b-instruct': 131072,
       'mistralai/mistral-nemo': 131072,
-      'openai/gpt-4o-mini': 128000,
       'openai/gpt-4o-mini-2024-07-18': 128000,
+      'openai/gpt-4o-mini': 128000,
       'google/gemma-2-27b-it': 8192,
       'google/gemma-2-9b-it': 8192,
       'sao10k/l3-euryale-70b': 8192,
       'nousresearch/hermes-2-pro-llama-3-8b': 8192,
-      'openai/gpt-4o': 128000,
       'openai/gpt-4o-2024-05-13': 128000,
+      'openai/gpt-4o': 128000,
       'meta-llama/llama-3-8b-instruct': 8192,
       'meta-llama/llama-3-70b-instruct': 8192,
       'mistralai/mixtral-8x22b-instruct': 65536,
@@ -3349,21 +3371,21 @@ export const CACHED_PRICING_DATA: CachedPricingData = {
       'openai/gpt-4-turbo': 128000,
       'anthropic/claude-3-haiku': 200000,
       'mistralai/mistral-large': 128000,
-      'openai/gpt-3.5-turbo-0613': 4095,
       'openai/gpt-4-turbo-preview': 128000,
+      'openai/gpt-3.5-turbo-0613': 4095,
       'mistralai/mixtral-8x7b-instruct': 32768,
       'alpindale/goliath-120b': 6144,
       'openrouter/auto': 2000000,
       'openai/gpt-4-1106-preview': 128000,
-      'mistralai/mistral-7b-instruct-v0.1': 2824,
       'openai/gpt-3.5-turbo-instruct': 4095,
+      'mistralai/mistral-7b-instruct-v0.1': 2824,
       'openai/gpt-3.5-turbo-16k': 16385,
       'mancer/weaver': 8000,
       'undi95/remm-slerp-l2-13b': 6144,
       'gryphe/mythomax-l2-13b': 4096,
-      'openai/gpt-3.5-turbo': 16385,
-      'openai/gpt-4': 8191,
       'openai/gpt-4-0314': 8191,
+      'openai/gpt-4': 8191,
+      'openai/gpt-3.5-turbo': 16385,
     },
   },
 };
