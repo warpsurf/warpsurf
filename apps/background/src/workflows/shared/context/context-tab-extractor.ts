@@ -15,6 +15,25 @@ export interface TabContent {
   extractedAt: number;
 }
 
+/** Race a promise against a timeout. Resolves to the result or rejects on timeout. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      v => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      e => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+const EXTRACTION_TIMEOUT_MS = 10_000;
+
 /** Simple hash for change detection */
 function hashContent(content: string): string {
   let hash = 0;
@@ -108,10 +127,16 @@ export async function extractTabContent(tabId: number, forceRefresh = false): Pr
       return null;
     }
 
-    // Extract markdown and DOM tree in parallel for better performance
+    // Extract markdown and DOM tree in parallel with timeout protection.
+    // Content script injection can hang on certain pages; the timeout prevents
+    // a single unresponsive tab from blocking the entire extraction pipeline.
     const [markdownResult, domResult] = await Promise.allSettled([
-      getMarkdownContent(tabId),
-      getClickableElements(tabId, tab.url!, false, -1, 0, false),
+      withTimeout(getMarkdownContent(tabId), EXTRACTION_TIMEOUT_MS, `getMarkdownContent(${tabId})`),
+      withTimeout(
+        getClickableElements(tabId, tab.url!, false, -1, 0, false),
+        EXTRACTION_TIMEOUT_MS,
+        `getClickableElements(${tabId})`,
+      ),
     ]);
 
     let markdown = '';
