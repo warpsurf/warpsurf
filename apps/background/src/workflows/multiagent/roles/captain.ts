@@ -234,7 +234,7 @@ export class Captain {
 
     const final = this.state.plan.getFinalSubtask();
     if (final && subtaskId === final.id) {
-      return this.finalize(output.text);
+      return this.finalize(output.text || this.buildFinalAnswer());
     }
 
     if (this.state.isAllDone()) {
@@ -577,7 +577,7 @@ export class Captain {
     if (this.cancelled || this.paused || this.captainCallInFlight) return undefined;
 
     this.captainStepCount++;
-    if (this.captainStepCount > MAX_CAPTAIN_STEPS) {
+    if (this.captainStepCount > MAX_CAPTAIN_STEPS && this.state.busyCrew.size === 0) {
       logger.warning(`Captain step limit (${MAX_CAPTAIN_STEPS}) reached — finalizing`);
       this.finalize(this.buildFinalAnswer());
       return undefined;
@@ -606,11 +606,14 @@ export class Captain {
 
       if (hadUserMessages) await this.resumeRunningCrews();
 
-      // Stale state detection: finalize if no progress across consecutive calls
+      // Stale state detection: finalize if no progress across consecutive calls.
+      // Only trigger when no subtasks are actively running — a running subtask may
+      // still produce output even though the state fingerprint hasn't changed.
       const fp = this.buildStateFingerprint();
+      const hasRunning = this.state.busyCrew.size > 0;
       if (fp === this.lastStateFingerprint) {
         this.staleCount++;
-        if (this.staleCount >= STALE_THRESHOLD) {
+        if (this.staleCount >= STALE_THRESHOLD && !hasRunning) {
           logger.warning(`No state change after ${STALE_THRESHOLD} captain steps — finalizing`);
           this.finalize(this.buildFinalAnswer());
           return decision;
@@ -716,7 +719,6 @@ export class Captain {
   private async finalize(answer: string): Promise<void> {
     if (this.cancelled) return;
     this.stopPollingLoop();
-    if (import.meta.env.DEV) logger.info(`[finalize] answer length=${answer.length}`);
 
     await Promise.allSettled(
       Array.from(this.state.crewSessionIds.values()).map(sid => this.crew.endSession(sid, 'completed')),
@@ -745,11 +747,11 @@ export class Captain {
       if (out) parts.push(out);
       if (parts.join('\n\n').length > 4000) break;
     }
-    return parts.join('\n\n').trim() || 'Workflow completed successfully.';
+    return parts.join('\n\n').trim();
   }
 
   private async abort(reason: string): Promise<void> {
-    if (import.meta.env.DEV) logger.info(`[abort] reason="${reason}"`);
+    logger.info(`[Captain.abort] reason="${reason}"`);
     this.cancelled = true;
     this.stopPollingLoop();
     this.abortController.abort();

@@ -146,11 +146,15 @@ class LocalAPI {
     let partialActionResult = '';
     let capturedUsage: APIUsage | undefined;
     const capturedTrace: APITraceEntry[] = [];
+    let taskFinished = false; // Set true after completionPromise resolves; prevents cancel events from stomping output
 
     // Expose partial results to globalThis for timeout scenarios (eval harness can read these)
     (globalThis as any).__evalPartialTrace = capturedTrace;
     (globalThis as any).__evalPartialUsage = null;
     (globalThis as any).__evalPartialOutput = '';
+    (globalThis as any).__evalTaskId = taskId;
+    (globalThis as any).__evalWorkflow = workflow;
+    (globalThis as any).__tokenTracker = globalTokenTracker;
 
     // Completion promise — resolves when a terminal event arrives through the
     // virtual port.  handleNewTask dispatches asynchronously, so without this
@@ -256,7 +260,7 @@ class LocalAPI {
           totalInputTokens: s.totalInputTokens || 0,
           totalOutputTokens: s.totalOutputTokens || 0,
           totalLatencyMs: s.totalLatencyMs || 0,
-          totalCost: s.totalCost || 0,
+          totalCost: s.totalCost >= 0 ? s.totalCost : 0,
           apiCallCount: s.apiCallCount || 0,
           provider: s.provider || '',
           modelName: s.modelName || '',
@@ -305,9 +309,11 @@ class LocalAPI {
             }
             return;
           }
-          if (event?.type === 'final_answer' && event?.data?.text) {
-            finalTaskResult = event.data.text;
-            (globalThis as any).__evalPartialOutput = finalTaskResult;
+          if (event?.type === 'final_answer') {
+            if (event?.data?.text) {
+              finalTaskResult = event.data.text;
+              (globalThis as any).__evalPartialOutput = finalTaskResult;
+            }
           }
           // Capture multiagent orchestration events into trace (skip generic 'multiagent' status duplicates)
           // Use a sequence counter to preserve ordering when timestamps are identical
@@ -341,8 +347,38 @@ class LocalAPI {
               actor: 'quartermaster',
             });
           }
-          // Delegate to original handler for standard events
-          if (typeof origHandler === 'function') origHandler(event);
+          // For multiagent, only delegate error events to the generic handler.
+          // Do NOT delegate task.* or act.ok events — the generic handler would
+          // overwrite finalTaskResult with crew subtask data, clobbering the
+          // actual answer captured from 'final_answer' above.
+          if (event?.type === 'error') {
+            if (typeof origHandler === 'function') origHandler(event);
+          }
+          // Capture partial output from crew actions for timeout/empty-answer fallback.
+          // Don't overwrite after task finished (cancel events from cleanup would stomp output).
+          // Also filter out noise strings that are system messages, not research output.
+          if (!taskFinished) {
+            const details = event?.data?.details || event?.data?.message || '';
+            const isNoise = !details || /^(Task cancelled|Task completed|Navigating|Action:)/i.test(details);
+            if (event?.state === 'act.ok' && !isNoise && !finalTaskResult) {
+              partialActionResult = details;
+              (globalThis as any).__evalPartialOutput = details;
+            }
+          }
+          // Capture usage summary from terminal events
+          if (event?.data?.summary) {
+            const s = event.data.summary;
+            capturedUsage = {
+              totalInputTokens: s.totalInputTokens || 0,
+              totalOutputTokens: s.totalOutputTokens || 0,
+              totalLatencyMs: s.totalLatencyMs || 0,
+              totalCost: s.totalCost >= 0 ? s.totalCost : 0,
+              apiCallCount: s.apiCallCount || 0,
+              provider: s.provider || '',
+              modelName: s.modelName || '',
+            };
+            (globalThis as any).__evalPartialUsage = capturedUsage;
+          }
         };
 
         (async () => {
@@ -381,8 +417,36 @@ class LocalAPI {
         new Promise<string>(resolve => setTimeout(() => resolve('timeout'), timeoutMs)),
       ]);
       logger.info('[API] Task finished with terminal state:', terminalState);
+      taskFinished = true;
 
-      const result = finalTaskResult || capturedResponse || partialActionResult || undefined;
+      // For multiagent, if no proper answer was captured, collect the latest
+      // memory from each crew worker as a meaningful fallback.
+      let crewMemoryFallback: string | undefined;
+      if (workflow === 'multiagent' && !finalTaskResult) {
+        try {
+          const allTokens = (globalTokenTracker as any)?.getTokensForTask?.(taskId) || [];
+          // Group by workerIndex, keep the latest memory per worker
+          const latestByWorker = new Map<number, string>();
+          for (const t of allTokens) {
+            const resp = t?.response;
+            if (!resp) continue;
+            const parsed = typeof resp === 'string' ? JSON.parse(resp) : resp;
+            const mem = parsed?.current_state?.memory;
+            if (mem && typeof mem === 'string' && mem.length > 30) {
+              const wIdx = t.workerIndex ?? 0;
+              latestByWorker.set(wIdx, mem);
+            }
+          }
+          if (latestByWorker.size > 0) {
+            const parts = [...latestByWorker.values()];
+            crewMemoryFallback = parts.join('\n\n').slice(0, 4000);
+          }
+        } catch {}
+      }
+      const result = finalTaskResult || crewMemoryFallback || capturedResponse || partialActionResult || undefined;
+      if (result) {
+        (globalThis as any).__evalPartialOutput = result;
+      }
 
       // Fallback: if no usage was captured via events, read directly from globalTokenTracker
       if (!capturedUsage) {
