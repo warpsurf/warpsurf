@@ -416,8 +416,12 @@ class LocalAPI {
           // Normalize role: navigator → crew (the multiagent role name)
           let role = (t.role || 'unknown').toLowerCase().replace(/-/g, '_');
           if (role === 'navigator') role = 'crew';
-          // Only include the response — request/metadata is noise
-          const response = t.response;
+          // Only include the response, stripping duplicated fields
+          let response = t.response;
+          if (response && typeof response === 'object') {
+            const { response: _dup, done: _done, search_queries: _sq, ...clean } = response;
+            response = clean;
+          }
           capturedTrace.push({
             action: role,
             status: 'ok',
