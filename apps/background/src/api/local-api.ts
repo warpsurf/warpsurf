@@ -15,6 +15,9 @@ import {
 import { handleNewTask } from '../executor/task-handlers';
 import { subscribeToExecutorEvents } from '../workflows/shared/subscribe-to-executor-events';
 import { globalTokenTracker } from '../utils/token-tracker';
+import { MultiAgentWorkflow } from '../workflows/multiagent';
+import { createChatModel } from '../workflows/models';
+import { getAllProvidersDecrypted, getAllAgentModelsDecrypted } from '../crypto/service';
 
 const logger = createLogger('LocalAPI');
 
@@ -131,13 +134,18 @@ class LocalAPI {
       await this.applyOverrides(overrides);
     }
 
+    // 4b. Sync responseTimeoutSeconds with SDK timeout so internal LLM calls don't expire early
+    const timeoutMs = this.resolveTimeoutMs(options);
+    await generalSettingsStore.updateSettings({
+      responseTimeoutSeconds: Math.ceil(timeoutMs / 1000),
+    });
+
     // 5. Execute task and capture response + usage + trace from events
     let capturedResponse = '';
     let finalTaskResult = '';
     let partialActionResult = '';
     let capturedUsage: APIUsage | undefined;
     const capturedTrace: APITraceEntry[] = [];
-    const timeoutMs = this.resolveTimeoutMs(options);
 
     // Expose partial results to globalThis for timeout scenarios (eval harness can read these)
     (globalThis as any).__evalPartialTrace = capturedTrace;
@@ -260,25 +268,80 @@ class LocalAPI {
     });
 
     try {
-      let currentExecutor: any = null;
-      await handleNewTask(
-        { type: 'new_task', task: options.task, taskId, tabId: undefined, agentType: workflow },
-        {
-          taskManager: this.taskManager,
-          logger,
-          getCurrentPort: () => virtualPort,
-          getCurrentExecutor: () => currentExecutor,
-          setCurrentExecutor: (e: any) => {
-            currentExecutor = e;
-            if (e) {
-              subscribeToExecutorEvents(e, () => virtualPort, this.taskManager, {
-                warning: (...args: any[]) => logger.info('[API-SW]', ...args),
-                debug: (...args: any[]) => logger.debug('[API-SW]', ...args),
-              });
+      if (workflow === 'multiagent') {
+        // Multiagent uses its own orchestrator instead of handleNewTask/Executor
+        const providers = await getAllProvidersDecrypted();
+        const agentModels = await getAllAgentModelsDecrypted();
+
+        const plannerCfg =
+          agentModels[AgentNameEnum.MultiagentPlanner] ||
+          agentModels[AgentNameEnum.AgentPlanner] ||
+          agentModels[AgentNameEnum.AgentNavigator];
+        if (!plannerCfg) throw new Error('Planner model not configured');
+
+        const plannerProvider = providers[plannerCfg.provider];
+        if (!plannerProvider) throw new Error(`Provider '${plannerCfg.provider}' not found`);
+
+        const plannerLLM = createChatModel(plannerProvider, plannerCfg);
+
+        const settings = await generalSettingsStore.getSettings();
+        const maxWorkers = Math.max(1, Math.min(32, settings?.maxWorkerAgents ?? 3));
+
+        const orchestrator = new MultiAgentWorkflow(this.taskManager!, () => virtualPort, taskId, { maxWorkers });
+
+        // Subscribe the virtual port for event delivery
+        this.taskManager!.subscribePortToSession?.(`api:${taskId}`, virtualPort as any, taskId);
+
+        // Listen for multiagent-specific events on the virtual port
+        const origHandler = (virtualPort as any).postMessage;
+        (virtualPort as any).postMessage = (event: any) => {
+          // Map multiagent events to terminal states
+          if (event?.type === 'workflow_ended') {
+            if (event.ok) {
+              resolveCompletion('task.ok');
+            } else {
+              capturedResponse = event.error || 'Workflow failed';
+              resolveCompletion('task.fail');
             }
+            return;
+          }
+          if (event?.type === 'final_answer' && event?.data?.text) {
+            finalTaskResult = event.data.text;
+            (globalThis as any).__evalPartialOutput = finalTaskResult;
+          }
+          // Delegate to original handler for standard events
+          if (typeof origHandler === 'function') origHandler(event);
+        };
+
+        (async () => {
+          try {
+            await orchestrator.start(options.task, plannerLLM);
+          } catch (e: any) {
+            capturedResponse = e?.message || 'Workflow failed';
+            resolveCompletion('task.fail');
+          }
+        })();
+      } else {
+        let currentExecutor: any = null;
+        await handleNewTask(
+          { type: 'new_task', task: options.task, taskId, tabId: undefined, agentType: workflow },
+          {
+            taskManager: this.taskManager,
+            logger,
+            getCurrentPort: () => virtualPort,
+            getCurrentExecutor: () => currentExecutor,
+            setCurrentExecutor: (e: any) => {
+              currentExecutor = e;
+              if (e) {
+                subscribeToExecutorEvents(e, () => virtualPort, this.taskManager, {
+                  warning: (...args: any[]) => logger.info('[API-SW]', ...args),
+                  debug: (...args: any[]) => logger.debug('[API-SW]', ...args),
+                });
+              }
+            },
           },
-        },
-      );
+        );
+      }
 
       // handleNewTask dispatches asynchronously — wait for a terminal event
       const terminalState = await Promise.race([

@@ -79,7 +79,7 @@ export async function createWorkerExecutor(input: WorkerExecutorFactoryInput): P
   const { prompt, sessionId, workerModelPrefers, systemMessageOverride, messageContext } = input;
 
   const providers = await getAllProvidersDecrypted();
-  const agentModels = await agentModelStore.getAllAgentModels();
+  const agentModels = await getAllAgentModelsDecrypted();
 
   const workerCfg =
     agentModels[workerModelPrefers || AgentNameEnum.AgentNavigator] || agentModels[AgentNameEnum.AgentNavigator];
