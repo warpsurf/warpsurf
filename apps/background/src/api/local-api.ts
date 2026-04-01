@@ -180,18 +180,18 @@ class LocalAPI {
           !!event?.data?.summary,
           event?.data?.summary,
         );
-        if (event.state === 'task.ok') {
+        // For multiagent workflows, ignore crew subtask terminal events — the
+        // proper signals are 'final_answer' and 'workflow_ended' handled above.
+        const isCrewEvent = event?.data?.parentSessionId != null;
+        const ignoreForMultiagent = workflow === 'multiagent' && isCrewEvent;
+        if (event.state === 'task.ok' && !ignoreForMultiagent) {
           finalTaskResult = event?.data?.details || event?.data?.message || '';
           if (finalTaskResult) {
             (globalThis as any).__evalPartialOutput = finalTaskResult;
           }
         }
-        // Resolve the completion promise on any terminal task state.
-        // For multiagent workflows, ignore crew subtask terminal events — the
-        // proper signal is the 'workflow_ended' event handled separately above.
         if (event.state === 'task.ok' || event.state === 'task.fail' || event.state === 'task.cancel') {
-          const isCrewEvent = event?.data?.parentSessionId != null;
-          if (workflow !== 'multiagent' || !isCrewEvent) {
+          if (!ignoreForMultiagent) {
             resolveCompletion(event.state);
           }
         }
@@ -442,6 +442,14 @@ class LocalAPI {
       } catch {}
 
       if (terminalState === 'timeout') {
+        // Kill the still-running workflow before returning so tabs don't accumulate
+        try {
+          await this.taskManager!.cancelAllForParentSession(taskId);
+          logger.info('[API] Cancelled timed-out task', taskId);
+        } catch (e) {
+          logger.error('[API] Failed to cancel timed-out task:', e);
+        }
+        await this.closeTaskTabs(taskId);
         return {
           taskId,
           status: 'timeout',
@@ -455,6 +463,7 @@ class LocalAPI {
       const finalStatus =
         terminalState === 'task.fail' ? 'error' : terminalState === 'task.cancel' ? 'cancelled' : 'completed';
 
+      await this.closeTaskTabs(taskId);
       return {
         taskId,
         status: finalStatus as APIResult['status'],
@@ -468,6 +477,7 @@ class LocalAPI {
       if (capturedUsage) {
         capturedUsage.totalLatencyMs = capturedUsage.totalLatencyMs || elapsedMs;
       }
+      await this.closeTaskTabs(taskId);
       return {
         taskId,
         status: 'error',
@@ -505,6 +515,24 @@ class LocalAPI {
       await new Promise(r => setTimeout(r, 1000));
     }
     return { taskId, status: 'timeout', error: 'Timeout' };
+  }
+
+  /** Close all tabs opened by a task (including subtask/crew tabs). */
+  private async closeTaskTabs(taskId: string): Promise<void> {
+    if (!this.taskManager) return;
+    try {
+      // Close the primary task's tab group
+      await this.taskManager.closeTaskGroup(taskId);
+      // Close tabs from any child tasks (multiagent crew workers)
+      const allTasks = this.taskManager.getAllTasks();
+      for (const t of allTasks) {
+        if (String((t as any).parentSessionId || '') === String(taskId)) {
+          await this.taskManager.closeTaskGroup(t.id);
+        }
+      }
+    } catch (e) {
+      logger.error('[API] Failed to close task tabs:', e);
+    }
   }
 
   private resolveTimeoutMs(options: APIRunOptions): number {
