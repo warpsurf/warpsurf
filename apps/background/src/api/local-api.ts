@@ -186,9 +186,14 @@ class LocalAPI {
             (globalThis as any).__evalPartialOutput = finalTaskResult;
           }
         }
-        // Resolve the completion promise on any terminal task state
+        // Resolve the completion promise on any terminal task state.
+        // For multiagent workflows, ignore crew subtask terminal events — the
+        // proper signal is the 'workflow_ended' event handled separately above.
         if (event.state === 'task.ok' || event.state === 'task.fail' || event.state === 'task.cancel') {
-          resolveCompletion(event.state);
+          const isCrewEvent = event?.data?.parentSessionId != null;
+          if (workflow !== 'multiagent' || !isCrewEvent) {
+            resolveCompletion(event.state);
+          }
         }
       }
 
