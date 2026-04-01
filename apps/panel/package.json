@@ -1,6 +1,6 @@
 {
   "name": "@warpsurf/panel",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "description": "Warpsurf side panel UI",
   "private": true,
   "sideEffects": true,
