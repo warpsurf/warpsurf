@@ -104,6 +104,9 @@ export class AgentContext {
   pendingUserMessages: string[];
   // On-demand screenshot captured by the 'screenshot' action (consumed by prompt builder)
   pendingScreenshot: string | null;
+  // Current action name and args set by the dispatch loop for trace enrichment
+  currentActionName: string | null;
+  currentActionArgs: Record<string, unknown> | null;
   // URLs collected for site skill injection
   private _skillUrls: Set<string>;
 
@@ -135,6 +138,8 @@ export class AgentContext {
     this.currentPlanIndex = 0;
     this.pendingUserMessages = [];
     this.pendingScreenshot = null;
+    this.currentActionName = null;
+    this.currentActionArgs = null;
     this.chatHistoryMessages = [];
     this.contextTabIds = [];
     this.attachments = [];
@@ -224,6 +229,11 @@ export class AgentContext {
       // Ignore - page may not be available
     }
 
+    // Auto-include the current tool name and args for act.* events (API trace only, not read by UI)
+    const isAction = state.startsWith('act.');
+    const toolField = isAction && this.currentActionName ? { toolName: this.currentActionName } : {};
+    const argsField = isAction && this.currentActionArgs ? { toolArgs: this.currentActionArgs } : {};
+
     const event = new AgentEvent(actor, state, {
       taskId: this.taskId,
       step: this.nSteps,
@@ -231,6 +241,8 @@ export class AgentContext {
       details: eventDetails,
       ...(pageUrl && { pageUrl }),
       ...(pageTitle && { pageTitle }),
+      ...toolField,
+      ...argsField,
       ...additionalData,
     });
     await this.eventManager.emit(event);

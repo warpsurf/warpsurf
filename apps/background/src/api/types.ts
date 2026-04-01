@@ -40,6 +40,12 @@ export interface APITraceEntry {
   status: 'start' | 'ok' | 'fail';
   details?: string;
   timestamp: number;
+  pageUrl?: string;
+  args?: Record<string, unknown>;
+  step?: number;
+  actor?: string;
+  workerId?: number;
+  taskId?: string;
 }
 
 /** Task result */

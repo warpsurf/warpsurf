@@ -684,6 +684,8 @@ export class AgentNavigator extends BaseAgent<z.ZodType, AgentNavigatorResult> {
         // Avoid mid-batch DOM refresh; rely on URL-change driven updates and next batch state capture
         // (Index-based actions proceed under the initial snapshot for this batch.)
 
+        this.context.currentActionName = actionName;
+        this.context.currentActionArgs = (actionArgs as Record<string, unknown>) ?? null;
         const indexArg = actionInstance.getIndexArg(actionArgs);
         const result = await actionInstance.call(actionArgs);
         if (result === undefined) {

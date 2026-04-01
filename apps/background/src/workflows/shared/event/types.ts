@@ -31,6 +31,10 @@ export interface EventData {
   tabId?: number;
   /** Optional action for action-related events */
   action?: string;
+  /** Tool name for API trace enrichment (not used by UI) */
+  toolName?: string;
+  /** Tool arguments for API trace enrichment (not used by UI) */
+  toolArgs?: Record<string, unknown>;
   /** Optional message for events that need to display messages */
   message?: string;
   /** Streaming: unique ID for this stream session */

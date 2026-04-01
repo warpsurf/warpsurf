@@ -197,17 +197,10 @@ class LocalAPI {
         capturedResponse += event.data.message;
         (globalThis as any).__evalPartialOutput = capturedResponse;
       }
-      // Capture action events for trajectory (agent workflows)
-      if (event?.state?.startsWith('act.')) {
-        const status = event.state === 'act.start' ? 'start' : event.state === 'act.ok' ? 'ok' : 'fail';
+      // Track partial action results for timeout scenarios (not added to trace)
+      if (event?.state === 'act.ok') {
         const details = event?.data?.details || event?.data?.message || '';
-        capturedTrace.push({
-          action: event?.data?.action || details,
-          status,
-          details,
-          timestamp: event?.timestamp || Date.now(),
-        });
-        if (status === 'ok' && details) {
+        if (details) {
           const shouldReplace =
             !partialActionResult ||
             (partialActionResult.startsWith('Cached findings:') && !details.startsWith('Cached findings:'));
@@ -297,10 +290,12 @@ class LocalAPI {
         (virtualPort as any).postMessage = (event: any) => {
           // Map multiagent events to terminal states
           if (event?.type === 'workflow_ended') {
-            if (event.ok) {
+            const ok = event?.data?.ok ?? event?.ok;
+            const error = event?.data?.error ?? event?.error;
+            if (ok) {
               resolveCompletion('task.ok');
             } else {
-              capturedResponse = event.error || 'Workflow failed';
+              capturedResponse = error || 'Workflow failed';
               resolveCompletion('task.fail');
             }
             return;
@@ -308,6 +303,38 @@ class LocalAPI {
           if (event?.type === 'final_answer' && event?.data?.text) {
             finalTaskResult = event.data.text;
             (globalThis as any).__evalPartialOutput = finalTaskResult;
+          }
+          // Capture multiagent orchestration events into trace (skip generic 'multiagent' status duplicates)
+          // Use a sequence counter to preserve ordering when timestamps are identical
+          if (event?.type === 'workflow_progress' && event?.data?.message && event?.data?.actor !== 'multiagent') {
+            let actor = event.data.actor;
+            if (actor === 'planner') actor = 'commodore';
+            capturedTrace.push({
+              action: 'workflow_progress',
+              status: 'ok',
+              details: event.data.message,
+              timestamp: Date.now(),
+              actor,
+              workerId: event.data.workerId,
+            });
+          }
+          if (event?.type === 'workflow_plan_dataset' && event?.data?.dataset) {
+            capturedTrace.push({
+              action: 'workflow_plan',
+              status: 'ok',
+              details: JSON.stringify(event.data.dataset),
+              timestamp: Date.now() + 1, // ensure after the "Plan created" progress message
+              actor: 'commodore',
+            });
+          }
+          if (event?.type === 'workflow_quartermaster_log' && event?.data?.log) {
+            capturedTrace.push({
+              action: 'workflow_schedule',
+              status: 'ok',
+              details: JSON.stringify(event.data.log),
+              timestamp: Date.now() + 2, // ensure after plan dataset
+              actor: 'quartermaster',
+            });
           }
           // Delegate to original handler for standard events
           if (typeof origHandler === 'function') origHandler(event);
@@ -381,6 +408,29 @@ class LocalAPI {
       if (capturedUsage) {
         capturedUsage.totalLatencyMs = capturedUsage.totalLatencyMs || elapsedMs;
       }
+
+      // Append LLM response records for each role
+      try {
+        const allTokens = (globalTokenTracker as any)?.getTokensForTask?.(taskId) || [];
+        for (const t of allTokens) {
+          // Normalize role: navigator → crew (the multiagent role name)
+          let role = (t.role || 'unknown').toLowerCase().replace(/-/g, '_');
+          if (role === 'navigator') role = 'crew';
+          // Only include the response — request/metadata is noise
+          const response = t.response;
+          capturedTrace.push({
+            action: role,
+            status: 'ok',
+            details: typeof response === 'string' ? response : JSON.stringify(response),
+            timestamp: t.timestamp || 0,
+            actor: role,
+            workerId: t.workerIndex,
+            taskId: t.taskId,
+          });
+        }
+        // Sort entire trace by timestamp so all entries are interleaved chronologically
+        capturedTrace.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      } catch {}
 
       if (terminalState === 'timeout') {
         return {
