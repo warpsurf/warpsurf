@@ -5,7 +5,9 @@ import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
 import { generalSettingsStore } from '@extension/storage';
 import { buildContextTabsSystemMessage } from '@src/workflows/shared/context/context-tab-injector';
 import { WorkflowType } from '@extension/shared/lib/workflows/types';
+import { convertZodToJsonSchema } from '@src/utils';
 import { commodoreSystemPrompt } from './commodore-prompt';
+import { commodorePlanSchema } from './commodore-schema';
 import { IncrementalPlanParser } from '../incremental-plan-parser';
 import type { TaskPlan, Subtask, SubtaskId } from '../multiagent-types';
 
@@ -22,7 +24,7 @@ interface CommodoreOptions {
  * Single LLM call, then done. No further involvement in execution.
  */
 export class Commodore {
-  /** Blocking plan creation (original path). */
+  /** Blocking plan creation. Prefers structured output; falls back to text-parse. */
   async createPlan(
     query: string,
     llm: any,
@@ -31,6 +33,16 @@ export class Commodore {
     options?: CommodoreOptions,
   ): Promise<TaskPlan> {
     logger.info('Creating plan...');
+    if (typeof llm?.withStructuredOutput === 'function') {
+      try {
+        return await this.createPlanStructured(query, llm, signal, options);
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (msg.toLowerCase().includes('abort') || msg.includes('timed out')) throw e;
+        logger.warning(`Structured-output plan failed (${msg}); falling back to text-parse path`);
+      }
+    }
+
     const timeoutMs = ((await generalSettingsStore.getSettings()).responseTimeoutSeconds ?? 120) * 1000;
     const { signal: combinedSignal, isTimeout, cleanup } = createTimeoutSignal(signal, timeoutMs);
     const msgs = await this.buildMessages(query, llm, options);
@@ -53,7 +65,53 @@ export class Commodore {
       throw e;
     }
 
-    return this.finalizePlan(content);
+    return this.finalizePlanFromText(content);
+  }
+
+  /**
+   * Structured-output path — the model API enforces schema conformance
+   * server-side, so the extension never has to parse prose. This is the
+   * preferred implementation when the adapter exposes withStructuredOutput.
+   */
+  private async createPlanStructured(
+    query: string,
+    llm: any,
+    signal?: AbortSignal,
+    options?: CommodoreOptions,
+  ): Promise<TaskPlan> {
+    const timeoutMs = ((await generalSettingsStore.getSettings()).responseTimeoutSeconds ?? 120) * 1000;
+    const { signal: combinedSignal, isTimeout, cleanup } = createTimeoutSignal(signal, timeoutMs);
+    const msgs = await this.buildMessages(query, llm, options);
+
+    const jsonSchema = convertZodToJsonSchema(commodorePlanSchema, 'commodore_plan', true);
+    const structured = llm.withStructuredOutput(jsonSchema, {
+      includeRaw: true,
+      name: 'commodore_plan',
+    });
+
+    let response: any;
+    try {
+      response = await structured.invoke(msgs as any, { signal: combinedSignal } as any);
+      cleanup();
+    } catch (e: any) {
+      cleanup();
+      if (isTimeout()) throw new Error(`Response timed out after ${timeoutMs / 1000} seconds`);
+      if (
+        String(e?.message || e)
+          .toLowerCase()
+          .includes('abort')
+      )
+        throw new Error('Cancelled by user');
+      throw e;
+    }
+
+    this.logUsage(response?.raw ?? response, llm, msgs, options);
+
+    const parsed = response?.parsed ?? response;
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Commodore structured output returned no parsed result');
+    }
+    return this.finalizePlanFromParsed(parsed as Record<string, unknown>);
   }
 
   /**
@@ -70,6 +128,12 @@ export class Commodore {
     options?: CommodoreOptions,
     onRootSubtask?: (subtask: Subtask) => void,
   ): Promise<TaskPlan> {
+    // Structured output is more reliable than streaming text-parse for a single
+    // planning call, so prefer it when the adapter supports it. UX regression
+    // (no token-by-token plan rendering) is acceptable for a <10 s call.
+    if (typeof llm?.withStructuredOutput === 'function') {
+      return this.createPlan(query, llm, maxWorkers, signal, options);
+    }
     if (typeof llm.invokeStreaming !== 'function') {
       return this.createPlan(query, llm, maxWorkers, signal, options);
     }
@@ -108,7 +172,7 @@ export class Commodore {
       msgs,
       options,
     );
-    return this.finalizePlan(parser.getFullContent());
+    return this.finalizePlanFromText(parser.getFullContent());
   }
 
   // --- Private helpers ---
@@ -148,8 +212,12 @@ export class Commodore {
     return msgs;
   }
 
-  private finalizePlan(content: string): TaskPlan {
+  private finalizePlanFromText(content: string): TaskPlan {
     const parsed = extractJsonFromModelOutput(content);
+    return this.finalizePlanFromParsed(parsed);
+  }
+
+  private finalizePlanFromParsed(parsed: Record<string, unknown>): TaskPlan {
     let plan = normalizePlannerJson(parsed);
     plan = optimizePlan(plan);
     const finals = plan.subtasks.filter(s => s.isFinal);

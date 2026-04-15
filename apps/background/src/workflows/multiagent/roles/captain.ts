@@ -3,7 +3,9 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { extractJsonFromModelOutput, wrapUntrustedContent } from '@src/workflows/shared/messages/utils';
 import { logLLMUsage, globalTokenTracker } from '@src/utils/token-tracker';
 import { generalSettingsStore } from '@extension/storage';
+import { convertZodToJsonSchema } from '@src/utils';
 import { captainSystemPrompt } from './captain-prompt';
+import { captainDecisionSchema } from './captain-schema';
 import { Quartermaster } from './quartermaster';
 import { Crew, type CrewResult } from './crew';
 import { CaptainState } from '../captain-state';
@@ -84,6 +86,7 @@ export class Captain {
 
   private captainActions: CaptainAction[];
   private actionNames: Set<string>;
+  private readonly decisionJsonSchema = convertZodToJsonSchema(captainDecisionSchema, 'captain_decision', true);
 
   constructor(
     state: CaptainState,
@@ -652,13 +655,43 @@ export class Captain {
     if (this.abortController.signal.aborted) controller.abort();
     this.abortController.signal.addEventListener('abort', () => controller.abort(), { once: true });
 
-    try {
-      const prevTaskId = (globalTokenTracker as any)?.getCurrentTaskId?.();
-      const prevRole = (globalTokenTracker as any)?.getCurrentRole?.();
-      (globalTokenTracker as any)?.setCurrentTaskId?.(this.sessionId);
-      (globalTokenTracker as any)?.setCurrentRole?.('captain');
+    const msgs = [new SystemMessage(captainSystemPrompt), new HumanMessage(userMessage)];
 
-      const msgs = [new SystemMessage(captainSystemPrompt), new HumanMessage(userMessage)];
+    const prevTaskId = (globalTokenTracker as any)?.getCurrentTaskId?.();
+    const prevRole = (globalTokenTracker as any)?.getCurrentRole?.();
+    (globalTokenTracker as any)?.setCurrentTaskId?.(this.sessionId);
+    (globalTokenTracker as any)?.setCurrentRole?.('captain');
+
+    try {
+      // Prefer structured output: the model API enforces the decision schema
+      // server-side, so we never have to parse free-form text. Falls back to
+      // the text-parse path if the adapter doesn't expose withStructuredOutput
+      // or if the structured call itself errors.
+      if (typeof this.llm?.withStructuredOutput === 'function') {
+        try {
+          const structured = this.llm.withStructuredOutput(this.decisionJsonSchema, {
+            includeRaw: true,
+            name: 'captain_decision',
+          });
+          const response = await structured.invoke(msgs as any, { signal: controller.signal } as any);
+          logLLMUsage(response?.raw ?? response, {
+            taskId: this.sessionId,
+            role: 'captain',
+            modelName: this.llm?.modelName || 'unknown',
+            inputMessages: msgs,
+          });
+          const parsed = response?.parsed ?? response;
+          if (parsed && typeof parsed === 'object') {
+            return parseDecision(parsed, this.actionNames);
+          }
+          logger.warning('Captain structured output returned no parsed result — falling back to text parse');
+        } catch (e: any) {
+          const msg = String(e?.message || e);
+          if (msg.toLowerCase().includes('abort')) throw e;
+          logger.warning(`Captain structured output failed (${msg}); falling back to text-parse path`);
+        }
+      }
+
       const res = await this.llm.invoke(msgs as any, { signal: controller.signal } as any);
       const content = typeof res?.content === 'string' ? res.content : JSON.stringify(res?.content ?? '');
       logLLMUsage(res, {
@@ -667,13 +700,11 @@ export class Captain {
         modelName: this.llm?.modelName || 'unknown',
         inputMessages: msgs,
       });
-
-      (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
-      (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
-
       const parsed = extractJsonFromModelOutput(content);
       return parseDecision(parsed, this.actionNames);
     } finally {
+      (globalTokenTracker as any)?.setCurrentTaskId?.(prevTaskId);
+      (globalTokenTracker as any)?.setCurrentRole?.(prevRole);
       clearTimeout(timeout);
     }
   }
